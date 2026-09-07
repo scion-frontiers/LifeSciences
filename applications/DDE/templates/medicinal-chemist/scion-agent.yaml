@@ -10,8 +10,8 @@ system_prompt: system-prompt.md
 #     DDE_PROJECT: /workspace/program-hr-mbc
 
 skills:
-  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/compound-property-profile"
-  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/admet-property-prediction"
-  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/sar-series-analysis"
-  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/structure-similarity-search"
-  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/artifact-conventions"
+  - uri: "https://github.com/scion-frontiers/LifeSciences/tree/DDE/applications/DDE/skills/compound-property-profile"
+  - uri: "https://github.com/scion-frontiers/LifeSciences/tree/DDE/applications/DDE/skills/admet-property-prediction"
+  - uri: "https://github.com/scion-frontiers/LifeSciences/tree/DDE/applications/DDE/skills/sar-series-analysis"
+  - uri: "https://github.com/scion-frontiers/LifeSciences/tree/DDE/applications/DDE/skills/structure-similarity-search"
+  - uri: "https://github.com/scion-frontiers/LifeSciences/tree/DDE/applications/DDE/skills/artifact-conventions"

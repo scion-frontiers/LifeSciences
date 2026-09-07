@@ -10,8 +10,8 @@ system_prompt: system-prompt.md
 #     DDE_PROJECT: /workspace/program-hr-mbc
 
 skills:
-  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/regulatory-variant-effect"
-  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/tournament-corpus"
-  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/target-genetic-evidence"
-  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/tissue-expression-profile"
-  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/artifact-conventions"
+  - uri: "https://github.com/scion-frontiers/LifeSciences/tree/DDE/applications/DDE/skills/regulatory-variant-effect"
+  - uri: "https://github.com/scion-frontiers/LifeSciences/tree/DDE/applications/DDE/skills/tournament-corpus"
+  - uri: "https://github.com/scion-frontiers/LifeSciences/tree/DDE/applications/DDE/skills/target-genetic-evidence"
+  - uri: "https://github.com/scion-frontiers/LifeSciences/tree/DDE/applications/DDE/skills/tissue-expression-profile"
+  - uri: "https://github.com/scion-frontiers/LifeSciences/tree/DDE/applications/DDE/skills/artifact-conventions"

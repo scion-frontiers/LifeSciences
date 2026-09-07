@@ -12,4 +12,4 @@ system_prompt: system-prompt.md
 skills:
   - uri: "gh://scion-frontiers/agent-team/artifact-durability"
   - uri: "gh://scion-frontiers/agent-team/agent-state-continuity"
-  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/artifact-conventions"
+  - uri: "https://github.com/scion-frontiers/LifeSciences/tree/DDE/applications/DDE/skills/artifact-conventions"

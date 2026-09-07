@@ -4,5 +4,5 @@ agent_instructions: agents.md
 system_prompt: system-prompt.md
 
 skills:
-  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/artifact-conventions"
-  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/site-generation"
+  - uri: "https://github.com/scion-frontiers/LifeSciences/tree/DDE/applications/DDE/skills/artifact-conventions"
+  - uri: "https://github.com/scion-frontiers/LifeSciences/tree/DDE/applications/DDE/skills/site-generation"
