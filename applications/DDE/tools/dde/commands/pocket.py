@@ -707,6 +707,7 @@ def analyze(
         metrics=metrics,
         assessment=assessment,
         mandatory_relays=relays,
+        suppress_warnings=as_json,
     )
 
     emit = Emitter(as_json=as_json, quiet=quiet)

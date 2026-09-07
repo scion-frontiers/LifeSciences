@@ -587,6 +587,7 @@ def analyze_cmd(
             threshold_provenance=thresholds.provenance,
             unresolved=thresholds.unresolved(),
             mandatory_relays=[],
+            suppress_warnings=as_json,
         )
         emit.data("assessment", assessment)
         emit.line(f"CID {cid}: NOT FOUND")
@@ -639,6 +640,7 @@ def analyze_cmd(
         threshold_provenance=thresholds.provenance,
         unresolved=thresholds.unresolved(),
         mandatory_relays=relays,
+        suppress_warnings=as_json,
     )
 
     # --- Output ---

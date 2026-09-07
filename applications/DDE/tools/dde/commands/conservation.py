@@ -547,6 +547,7 @@ def analyze_cmd(
         assessment=assessment,
         unresolved=thresholds.unresolved() or None,
         mandatory_relays=relays,
+        suppress_warnings=as_json,
     )
 
     emit.data("assessment", assessment)

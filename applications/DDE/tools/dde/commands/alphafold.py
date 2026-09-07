@@ -627,6 +627,7 @@ def analyze(
         metrics=metrics,
         assessment=assessment,
         mandatory_relays=fetch_relays,
+        suppress_warnings=as_json,
     )
 
     emit = Emitter(as_json=as_json, quiet=quiet)
@@ -1072,6 +1073,7 @@ def analyze_prediction(
         threshold_provenance=thresholds.provenance,
         metrics=metrics,
         assessment=assessment,
+        suppress_warnings=as_json,
     )
 
     emit = Emitter(as_json=as_json, quiet=quiet)
