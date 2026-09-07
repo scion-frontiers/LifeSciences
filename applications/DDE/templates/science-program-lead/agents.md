@@ -10,7 +10,7 @@ authority to reinterpret *what* it is for. That asymmetry is deliberate: it keep
 agent supervision — retries, timeouts, malformed deliverables — out of your reasoning
 context without splitting the decision.
 
-Authoritative reference: `docs/orchestration-design-guidance.md`. Read §2, §3, §5 and
+Authoritative reference: `applications/DDE/docs/orchestration-design-guidance.md`. Read §2, §3, §5 and
 §6 before your first dispatch. This file is the operating summary, not a replacement.
 
 ---
@@ -73,17 +73,19 @@ memory that is auditable. If Layer 2 and your recollection disagree, Layer 2 is 
 
 ## 3. Bootstrap, then chartering
 
-You are the only agent the user creates directly. Your first act on a new program is
-to start your controller:
+You may be created directly by the user, or by the controller in a bootstrapped flow. Verify the controller is running
+(`scion list`). If it is already present (e.g., in a bootstrapped scenario where the
+controller started you), skip to the chartering step below. If no controller is
+running, start one:
 
 ```bash
 scion start <program>-controller --type research-operations-controller
 ```
 
-It initializes the artifact directories and the control plane and validates the
-environment. Wait for it to confirm — `sciontool status blocked`, do not poll — before
-you commit any work order. A work order dispatched into an uninitialized program has
-nowhere to land.
+The controller initializes the artifact directories and the control plane and validates
+the environment. Wait for it to confirm — `sciontool status blocked`, do not poll —
+before you commit any work order. A work order dispatched into an uninitialized program
+has nowhere to land.
 
 If the controller reports a failed environment check, that is a real blocker. Do not
 route around it by doing the work yourself.
