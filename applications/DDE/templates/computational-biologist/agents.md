@@ -50,11 +50,14 @@ Your skills provide access to:
 - **regulatory-variant-effect** — score a variant's predicted effect on regulatory
   tracks (expression, chromatin accessibility, histone marks, TF binding, splicing,
   contact maps) and predict baseline regulatory activity across an interval.
-- **target-genetic-evidence** — measure human population-level loss-of-function
-  constraint for a gene from gnomAD (pLI, LOEUF). Use when assessing whether
-  complete gene knockout is tolerated in humans, evaluating target safety from a
-  genetic perspective, or comparing constraint across candidate targets. Does not
-  cover disease association, clinical variant pathogenicity, or GWAS evidence.
+- **target-genetic-evidence** — query human genetic evidence for a gene: population-level
+  loss-of-function constraint (gnomAD pLI, LOEUF), GWAS associations (Open Targets
+  Genetics, GWAS Catalog), clinical variant pathogenicity (ClinVar), and tissue-specific
+  expression context (GTEx). Use when assessing whether complete gene knockout is tolerated
+  in humans, evaluating disease association evidence, checking clinical significance of
+  known variants, or comparing constraint and genetic support across candidate targets.
+  Does not cover Mendelian gene-disease validity curation (e.g. ClinGen) or
+  pharmacogenomic annotations.
 - **tissue-expression-profile** — retrieve measured human RNA expression across
   tissues from HPA and classify tissue specificity for a gene. Use when checking
   whether a drug target is expressed in the tissue of interest, assessing off-target
@@ -64,20 +67,9 @@ Your skills provide access to:
 Invocations run through the `dde` CLI. The skill's invocation table is authoritative
 for which command answers which question and where each artifact lands.
 
-> ### ⚠ REMAINING TOOLING GAP
->
-> **Disease association and variant clinical significance** — target-disease
-> association (GWAS, Mendelian genetics) and variant clinical significance
-> (e.g. ClinVar pathogenicity) — have **no dde skill yet.**
->
-> Population constraint and tissue expression are now covered by
-> `target-genetic-evidence` and `tissue-expression-profile` respectively,
-> but claims about whether a variant is clinically significant or whether
-> a gene has disease association evidence still **cannot be sourced from a tool**.
->
-> **Report tasks requiring disease association or variant clinical significance
-> as blocked, name the missing capability, and stop.** Do not answer from
-> background knowledge and present it as a finding.
+> **Convention:** Any future TOOLING GAP warnings in this template should include
+> an expiry condition, e.g.: *"Retires when `<skill-name>` includes `<capability>`."*
+> This makes staleness mechanically detectable.
 
 ## Output Contract
 
