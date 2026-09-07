@@ -170,15 +170,15 @@ where you read it:
 - `mandatory_relays` — the key in persisted artifact files
   (`.analysis.json`, `.meta.json`). This is the authoritative
   representation and what `dde validate` checks.
-- `relays` — the key in CLI stdout JSON output (`--json` flag). Same
-  data, different name. The stdout key predates the file-persistence
-  layer; the file format uses the more precise name.
+- `relays` — the key in CLI stdout JSON output (`--json` flag). The
+  two names refer to the same data.
 
 Always check `mandatory_relays` in the persisted `.analysis.json` and
-`.meta.json` files. If `relays` in stdout appears empty but
-`mandatory_relays` in the `.analysis.json` is populated, trust the
-`.analysis.json` — it is authoritative. Every relay code present in
-`mandatory_relays` must be satisfied in the finding.
+`.meta.json` files. If you search for `relays` in an `.analysis.json`
+file, you will find nothing — the key is `mandatory_relays`. Always
+use `mandatory_relays` when reading persisted artifact files. Every
+relay code present in `mandatory_relays` must be satisfied in the
+finding.
 
 ### Synthesis rules
 
