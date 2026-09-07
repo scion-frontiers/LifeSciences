@@ -10,6 +10,22 @@ Read the rest if the preflight says it is not, or if anything fails.
 
 ---
 
+> **The DDE tools live on the `DDE` branch, not `main`.**
+> After cloning, you must check out `DDE` — the `main` branch does not
+> contain DDE tools content.
+>
+> ```bash
+> git clone -b DDE https://github.com/scion-frontiers/LifeSciences.git
+> ```
+>
+> Or, if you have already cloned:
+>
+> ```bash
+> git checkout DDE
+> ```
+
+---
+
 ## Fast path
 
 ```bash

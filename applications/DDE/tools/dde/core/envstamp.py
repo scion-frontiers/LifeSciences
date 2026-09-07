@@ -186,26 +186,39 @@ def source_commit(tree: Path | None = None) -> dict[str, object]:
         else [line[3:].strip() for line in inputs.splitlines() if line.strip()]
     )
 
-    # Reachability is checked against the remote-tracking ref this
+    # Reachability is checked against the remote-tracking refs this
     # container already has. That is a weaker claim than asking the
     # remote, and the weakness is stated rather than hidden: a stale
-    # origin/main can report a pushed commit as unreachable. The failure
+    # tracking ref can report a pushed commit as unreachable. The failure
     # direction is the safe one — it complains about a commit that is
     # fine, rather than passing one that nobody can fetch.
+    #
+    # All refs under refs/remotes/origin/ are walked, not just
+    # origin/main — the provisioning tree may live on any branch (e.g.
+    # origin/DDE), and restricting the check to main produces a false
+    # failure on a working environment (#45).
     on_origin: bool | None = None
     remote_ref: str | None = None
-    for ref in ("origin/main", "origin/HEAD"):
-        if _git("rev-parse", "--verify", "--quiet", ref, cwd=tree) is None:
-            continue
-        remote_ref = ref
-        probe = subprocess.run(
-            ["git", "merge-base", "--is-ancestor", head, ref],
-            cwd=str(tree),
-            capture_output=True,
-            text=True,
-        )
-        on_origin = probe.returncode == 0
-        break
+    refs_output = _git(
+        "for-each-ref", "--format=%(refname)", "refs/remotes/origin/", cwd=tree
+    )
+    if refs_output is not None:
+        refs = [r.strip() for r in refs_output.splitlines() if r.strip()]
+        on_origin = False
+        for ref in refs:
+            # Translate full refname to the short form git commands
+            # expect (e.g. "refs/remotes/origin/DDE" → "origin/DDE").
+            short_ref = ref.replace("refs/remotes/", "", 1)
+            probe = subprocess.run(
+                ["git", "merge-base", "--is-ancestor", head, short_ref],
+                cwd=str(tree),
+                capture_output=True,
+                text=True,
+            )
+            if probe.returncode == 0:
+                on_origin = True
+                remote_ref = short_ref
+                break
 
     return {
         "commit": head,
