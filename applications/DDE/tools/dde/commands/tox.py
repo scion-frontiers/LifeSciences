@@ -1852,6 +1852,7 @@ def analyze_cmd(
         assessment=assessment,
         unresolved=thresholds.unresolved() or None,
         mandatory_relays=relays or None,
+        suppress_warnings=as_json,
     )
 
     # --- Emit summary (bounded) ---

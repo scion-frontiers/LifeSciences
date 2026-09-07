@@ -447,6 +447,7 @@ def analyze_cmd(
         metrics=metrics,
         assessment=assessment,
         mandatory_relays=relays,
+        suppress_warnings=as_json,
     )
 
     emit.data("assessment", assessment)
