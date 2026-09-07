@@ -241,7 +241,21 @@ ERROR: <error output>
 REMEDY: <suggested fix>
 ```
 
-After sending the report, signal completion:
+---
+
+## Step 8. Retrospective
+
+Before marking this task complete, write a retrospective to `/scion-volumes/scratchpad/projects/<program>/retrospectives/<your-agent-name>-retro.md` covering:
+- What worked well
+- What did not work
+- What was confusing or underdocumented
+- Suggestions for improvement
+
+This is required — your agent will not be deleted until the retrospective exists.
+
+---
+
+After sending the readiness report and writing the retrospective, signal completion:
 
 ```bash
 sciontool status task_completed "Bootstrap environment provisioning"
