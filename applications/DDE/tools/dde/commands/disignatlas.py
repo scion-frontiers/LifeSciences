@@ -177,32 +177,21 @@ def _fetch_disignatlas(
 
     Returns (raw HTML bytes, artifact dict).
     """
-    import requests as _requests
-
     search_method = "gene_search" if mode == "gene" else "dataset_search"
     url = f"{DISIGNATLAS_BASE}/result"
 
-    _remedy = (
-        "The DisigNAtlas service at www.inbirg.com may be temporarily down. "
-        "Run dde doctor to check endpoint status. GEO search may provide "
-        "partial compensation for transcriptomics data."
-    )
     try:
         response = http.request(
             "GET", url, qps=DISIGNATLAS_QPS, timeout=120.0,
             params={"search_method": search_method, "query_content": query},
         )
-    except (_requests.ConnectionError, _requests.Timeout) as exc:
-        raise Refusal(
-            "DisigNAtlas endpoint is unreachable",
-            detail=f"{type(exc).__name__}: {exc}",
-            remedy=_remedy,
-        ) from exc
     except EndpointUnavailable as exc:
         raise Refusal(
             "DisigNAtlas endpoint is unreachable",
-            detail=exc.detail or exc.message,
-            remedy=_remedy,
+            detail=str(exc),
+            remedy="The DisigNAtlas service at www.inbirg.com may be temporarily "
+            "down. Run dde doctor to check endpoint status. GEO search may "
+            "provide partial compensation for transcriptomics data.",
         ) from exc
     raw = response.content
     html = response.text
