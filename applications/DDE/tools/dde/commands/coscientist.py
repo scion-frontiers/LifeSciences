@@ -682,6 +682,22 @@ def analyze(
     for idea in flagged[:5]:
         emit.line(f"  #{idea['ranking']} {idea['gene']}: {idea['advisories'][0]}")
 
+    # Advisory: suggest foundational-claim-check template when the leader
+    # has contradicted claims.  This is human-readable output only — does
+    # not change the analysis engine, scoring, or machine-readable data.
+    if (
+        per_idea
+        and per_idea[0]["n_contradicted_claims"] > 0
+        and verdict in ("leader-with-advisories", "no-clear-leader")
+    ):
+        emit.line("")
+        emit.line(
+            "Consider: foundational-claim-check template before full cohort"
+        )
+        emit.line(
+            "  See tools/templates/work-orders/foundational-claim-check.yaml"
+        )
+
     if recommendation["section"]:
         emit.line("")
         emit.line("--- Review Recommendation ---")

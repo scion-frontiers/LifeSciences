@@ -586,3 +586,69 @@ If `accept` stops at `validation_failed`:
 |-----------|---------|
 | Fix deliverables and retry | `dde workorder transition <ID> in_progress`, fix issues, `dde wo accept <ID>` |
 | Override eligible checks | `dde workorder override <ID> --reason "..." --evidence "..." --checks "..." --actor "..."` |
+
+---
+
+## 11. Work order templates
+
+Reusable YAML templates for common work-order patterns live in
+`tools/templates/work-orders/`. Each template is a complete, valid YAML file
+with `[PLACEHOLDER]` values that you copy and fill in before creating the work
+order.
+
+### Available templates
+
+| Template | File | Purpose |
+|----------|------|---------|
+| Foundational Claim Check | `tools/templates/work-orders/foundational-claim-check.yaml` | Fast-fail a single contradicted claim before committing a full validation cohort. |
+
+### Foundational Claim Check
+
+**What it is.** A lightweight, single work order that tests ONE foundational
+claim identified as contradicted during `dde coscientist analyze`. The outcome
+is binary: SUPPORTED or REFUTED.
+
+**When to use it.** After `dde coscientist analyze` flags contradicted claims
+on the recommended idea (verdict `leader-with-advisories`), instead of
+immediately dispatching a full validation cohort (e.g. 5 parallel work orders),
+dispatch this single claim-check first. It targets the most-contradicted
+foundational claim.
+
+**The fast-fail short-circuit rule.** The acceptance criteria in the template
+enforce a binary outcome:
+
+- **SUPPORTED** — the foundational claim holds. Proceed with the full
+  validation cohort as planned.
+- **REFUTED** — the foundational claim fails. Skip the full cohort, pivot to
+  the next candidate idea, and save the compute that would have been wasted on
+  a doomed cohort.
+
+The template's `alert_policy` requests a CRITICAL alert if the claim is
+directly refuted, so the coordinator can act immediately without waiting for the
+full analysis cycle.
+
+**Example workflow:**
+
+```
+1. dde coscientist analyze tournament.json
+   → Verdict: leader-with-advisories
+   → Leader: GENE_X (3 contradicted claims)
+
+2. Copy the foundational-claim-check template, fill in GENE_X details:
+   cp tools/templates/work-orders/foundational-claim-check.yaml \
+      wo-gene-x-claim-check.yaml
+   # Edit wo-gene-x-claim-check.yaml — fill in all [PLACEHOLDER] values
+
+3. dde workorder create --from wo-gene-x-claim-check.yaml --commit
+   → WO-007 created and committed
+
+4. Execute WO-007 (single specialist, fast turnaround)
+
+5a. Outcome: SUPPORTED
+    → Dispatch full validation cohort (WO-008 through WO-012)
+
+5b. Outcome: REFUTED
+    → Skip full cohort, pivot to runner-up idea
+```
+
+**Template location:** `tools/templates/work-orders/foundational-claim-check.yaml`
