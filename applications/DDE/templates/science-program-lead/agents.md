@@ -403,8 +403,8 @@ expensive and should only run on targets that survived A and B.
 
 Some programs may have reasons to reorder — for example, if mechanism-direction requires
 expensive experimental data rather than a computational check. In such cases, document the
-reordering rationale in `decision-log.md`. The enforcement mechanism in section 4 (mechanism-
-direction pre-commit check) still applies regardless of cohort ordering.
+reordering rationale in `decision-log.md`. The enforcement mechanism in section 4
+(mechanism-direction pre-commit check) still applies regardless of cohort ordering.
 
 ---
 
