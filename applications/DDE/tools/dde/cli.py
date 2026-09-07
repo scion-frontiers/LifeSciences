@@ -85,7 +85,7 @@ def cli(ctx: click.Context, project_override: str | None) -> None:
 @cli.command()
 @click.argument("directory", type=click.Path(file_okay=False))
 def init(directory: str) -> None:
-    """Create a program directory with a .dde/ marker and raw/ tree."""
+    """Create a program directory with full artifact layer structure."""
     root = init_project(directory)
     click.echo(f"Initialised dde program at {root}")
     click.echo(f"  export DDE_PROJECT={root}")

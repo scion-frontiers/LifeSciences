@@ -172,18 +172,21 @@ def _validate(root: Path, source: str) -> ProjectContext:
 
 def _write_if_missing(path: Path, content: str) -> None:
     """Write *content* to *path* only if the file does not already exist."""
+    if path.is_dir():
+        raise ProjectRootError(f"expected a file but found a directory: {path}")
     if not path.exists():
         path.write_text(content, encoding="utf-8")
 
 
-# Findings sub-disciplines mirroring the controller's standard taxonomy.
+# Findings sub-disciplines mirroring the canonical layout (dde-plan.md §findings).
 FINDINGS_SUBDIRS: list[str] = [
     "structural-biology",
     "computational-biology",
     "medicinal-chemistry",
-    "pharmacology",
-    "clinical-evidence",
-    "safety-tox",
+    "computational-chemistry",
+    "admet-dmpk",
+    "experimental-biology",
+    "regulatory",
 ]
 
 # Program-state skeleton files. Values are minimal Markdown headers
@@ -195,11 +198,12 @@ PROGRAM_STATE_FILES: dict[str, str] = {
     "open-questions.md": "# Open Questions\n\nOutstanding questions requiring resolution.\n",
 }
 
-# Gate stage directories created under gates/.
+# Gate stage directories created under gates/ (dde-plan.md §gates).
 GATE_STAGES: list[str] = [
-    "stage-1",
-    "stage-2",
-    "stage-3",
+    "stage1-intervention-validation",
+    "stage2-starting-matter-declaration",
+    "stage3-candidate-nomination",
+    "stage4-human-readiness-package",
 ]
 
 
