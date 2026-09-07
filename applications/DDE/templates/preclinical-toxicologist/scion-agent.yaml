@@ -4,10 +4,10 @@ agent_instructions: agents.md
 system_prompt: system-prompt.md
 
 skills:
-  - uri: "gh://ptone/project-venter/tissue-expression-profile"
-  - uri: "gh://ptone/project-venter/target-genetic-evidence"
-  - uri: "gh://ptone/project-venter/preclinical-safety-assessment"
-  - uri: "gh://ptone/project-venter/compound-property-profile"
-  - uri: "gh://ptone/project-venter/admet-property-prediction"
-  - uri: "gh://ptone/project-venter/in-vivo-pk-analysis"
-  - uri: "gh://ptone/project-venter/artifact-conventions"
+  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/tissue-expression-profile"
+  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/target-genetic-evidence"
+  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/preclinical-safety-assessment"
+  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/compound-property-profile"
+  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/admet-property-prediction"
+  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/in-vivo-pk-analysis"
+  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/artifact-conventions"

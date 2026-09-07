@@ -10,8 +10,8 @@ system_prompt: system-prompt.md
 #     DDE_PROJECT: /workspace/program-hr-mbc
 
 skills:
-  - uri: "gh://ptone/project-venter/regulatory-variant-effect"
-  - uri: "gh://ptone/project-venter/tournament-corpus"
-  - uri: "gh://ptone/project-venter/target-genetic-evidence"
-  - uri: "gh://ptone/project-venter/tissue-expression-profile"
-  - uri: "gh://ptone/project-venter/artifact-conventions"
+  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/regulatory-variant-effect"
+  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/tournament-corpus"
+  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/target-genetic-evidence"
+  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/tissue-expression-profile"
+  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/artifact-conventions"

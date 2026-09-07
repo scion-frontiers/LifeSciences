@@ -10,6 +10,6 @@ system_prompt: system-prompt.md
 #     DDE_PROJECT: /workspace/program-hr-mbc
 
 skills:
-  - uri: "gh://ptone/project-venter/citation-resolution"
-  - uri: "gh://ptone/project-venter/tournament-corpus"
-  - uri: "gh://ptone/project-venter/artifact-conventions"
+  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/citation-resolution"
+  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/tournament-corpus"
+  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/artifact-conventions"

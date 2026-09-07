@@ -4,7 +4,7 @@ agent_instructions: agents.md
 system_prompt: system-prompt.md
 
 skills:
-  - uri: "gh://ptone/project-venter/citation-resolution"
-  - uri: "gh://ptone/project-venter/bioactivity-landscape"
-  - uri: "gh://ptone/project-venter/in-vivo-pk-analysis"
-  - uri: "gh://ptone/project-venter/artifact-conventions"
+  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/citation-resolution"
+  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/bioactivity-landscape"
+  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/in-vivo-pk-analysis"
+  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/artifact-conventions"

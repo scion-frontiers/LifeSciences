@@ -10,7 +10,7 @@ system_prompt: system-prompt.md
 #     DDE_PROJECT: /workspace/program-hr-mbc
 
 skills:
-  - uri: "gh://ptone/project-venter/protein-structure-confidence"
-  - uri: "gh://ptone/project-venter/pocket-druggability"
-  - uri: "gh://ptone/project-venter/binding-mode-analysis"
-  - uri: "gh://ptone/project-venter/artifact-conventions"
+  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/protein-structure-confidence"
+  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/pocket-druggability"
+  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/binding-mode-analysis"
+  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/artifact-conventions"

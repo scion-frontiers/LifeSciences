@@ -43,9 +43,9 @@ Skip this step and proceed to Step 1.
 
 2. Clone the repository to the shared scratchpad volume:
 
-   **If `/scion-volumes/scratchpad/project-dde` already exists:** the clone from
+   **If `/scion-volumes/scratchpad/LifeSciences` already exists:** the clone from
    a previous container is still present on the shared volume. Skip the clone and
-   run `git -C /scion-volumes/scratchpad/project-dde pull` to freshen it.
+   run `git -C /scion-volumes/scratchpad/LifeSciences pull` to freshen it.
 
    If the pull fails, STOP and report the error. Nothing downstream can proceed
    without the tools directory.
@@ -53,7 +53,7 @@ Skip this step and proceed to Step 1.
    **Otherwise:**
 
    ```bash
-   gh repo clone ptone/project-dde /scion-volumes/scratchpad/project-dde
+   gh repo clone scion-frontiers/LifeSciences /scion-volumes/scratchpad/LifeSciences
    ```
 
    Clone to the scratchpad volume, not into `/workspace` — this ensures the clone
@@ -67,7 +67,7 @@ Skip this step and proceed to Step 1.
 3. Symlink the tools directory into the workspace:
 
    ```bash
-   ln -s /scion-volumes/scratchpad/project-dde/tools /workspace/tools
+   ln -s /scion-volumes/scratchpad/LifeSciences/applications/DDE/tools /workspace/tools
    ```
 
    Verify the link resolves:

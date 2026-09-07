@@ -603,8 +603,8 @@ system_prompt: system-prompt.md
 #     DDE_PROJECT: /workspace/program-hr-mbc
 
 skills:
-  - uri: "gh://ptone/project-venter/protein-structure-confidence"
-  - uri: "gh://ptone/project-venter/artifact-conventions"
+  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/protein-structure-confidence"
+  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/artifact-conventions"
 ```
 
 Note that `skills:` entries are non-optional by default — an unresolvable URI fails
@@ -659,7 +659,7 @@ still preventing a specialist from claiming a capability it has no way to exerci
 
 Agent templates reference skills through three mechanisms:
 
-1. **DDE skills** (shared across roles): `gh://ptone/project-venter/artifact-conventions` — the report format and linking conventions that all specialists follow. Skill names must match the directory names in `skills/` exactly.
+1. **DDE skills** (shared across roles): `gh://scion-frontiers/LifeSciences/applications/DDE/artifact-conventions` — the report format and linking conventions that all specialists follow. Skill names must match the directory names in `skills/` exactly.
 
 2. **Local template skills** (role-specific): Skills in the template's own `skills/` directory when a workflow is not reusable or published. Shared orchestration capabilities belong in `skills/` rather than copied between the Science Program Lead and the Research Operations Controller.
 

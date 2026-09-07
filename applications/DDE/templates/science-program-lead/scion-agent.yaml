@@ -12,5 +12,5 @@ system_prompt: system-prompt.md
 skills:
   - uri: "gh://scion-frontiers/agent-team/artifact-durability"
   - uri: "gh://scion-frontiers/agent-team/agent-state-continuity"
-  - uri: "gh://ptone/project-venter/artifact-conventions"
-  - uri: "gh://ptone/project-venter/program-state-management"
+  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/artifact-conventions"
+  - uri: "gh://scion-frontiers/LifeSciences/applications/DDE/program-state-management"
