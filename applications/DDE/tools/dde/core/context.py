@@ -170,8 +170,45 @@ def _validate(root: Path, source: str) -> ProjectContext:
     return ProjectContext(root=root, source=source)
 
 
+def _write_if_missing(path: Path, content: str) -> None:
+    """Write *content* to *path* only if the file does not already exist."""
+    if not path.exists():
+        path.write_text(content, encoding="utf-8")
+
+
+# Findings sub-disciplines mirroring the controller's standard taxonomy.
+FINDINGS_SUBDIRS: list[str] = [
+    "structural-biology",
+    "computational-biology",
+    "medicinal-chemistry",
+    "pharmacology",
+    "clinical-evidence",
+    "safety-tox",
+]
+
+# Program-state skeleton files. Values are minimal Markdown headers
+# explaining each file's purpose.
+PROGRAM_STATE_FILES: dict[str, str] = {
+    "active-series.md": "# Active Series\n\nTrack active chemical series under investigation.\n",
+    "liability-tracker.md": "# Liability Tracker\n\nRecord identified liabilities and their mitigation status.\n",
+    "decision-log.md": "# Decision Log\n\nChronological record of key program decisions.\n",
+    "open-questions.md": "# Open Questions\n\nOutstanding questions requiring resolution.\n",
+}
+
+# Gate stage directories created under gates/.
+GATE_STAGES: list[str] = [
+    "stage-1",
+    "stage-2",
+    "stage-3",
+]
+
+
 def init_project(path: str | os.PathLike) -> Path:
-    """Create a program directory with a `.dde/` marker."""
+    """Create a program directory with the full artifact layer structure.
+
+    The layout is idempotent: directories use ``exist_ok=True`` and
+    skeleton files are only written when they do not already exist.
+    """
     root = Path(path).expanduser().resolve()
     if _looks_like_dde_repo(root):
         raise ProjectRootError(
@@ -179,9 +216,42 @@ def init_project(path: str | os.PathLike) -> Path:
             remedy="choose a directory outside the repo",
         )
     (root / PROJECT_MARKER).mkdir(parents=True, exist_ok=True)
+
+    # --- Layer 0: raw artifact directories ---
     for rel in ARTIFACT_DIRS.values():
         (root / rel).mkdir(parents=True, exist_ok=True)
-    (root / "findings").mkdir(parents=True, exist_ok=True)
+
+    # --- Findings sub-disciplines (#50) ---
+    for subdir in FINDINGS_SUBDIRS:
+        (root / "findings" / subdir).mkdir(parents=True, exist_ok=True)
+
+    # --- Program state files (#50) ---
+    (root / "program-state").mkdir(parents=True, exist_ok=True)
+    for filename, header in PROGRAM_STATE_FILES.items():
+        _write_if_missing(root / "program-state" / filename, header)
+
+    # --- Gate stage directories (#50) ---
+    for stage in GATE_STAGES:
+        (root / "gates" / stage).mkdir(parents=True, exist_ok=True)
+
+    # --- Executive summary (#50) ---
+    (root / "executive").mkdir(parents=True, exist_ok=True)
+    _write_if_missing(
+        root / "executive" / "program-summary.md",
+        "# Program Summary\n\nHigh-level program status and executive overview.\n",
+    )
+
+    # --- .dde config skeleton (#50) ---
+    _write_if_missing(
+        root / PROJECT_MARKER / "thresholds.yaml",
+        "# Threshold configuration for automated quality gates.\n"
+        "# Define per-artifact-class acceptance thresholds here.\n",
+    )
+    _write_if_missing(
+        root / PROJECT_MARKER / "program.yaml",
+        "# Program-level configuration.\n"
+        "# Define target, program metadata, and global settings here.\n",
+    )
 
     # Control plane directories (issue #22).
     from .controlstore import ensure_control_dirs
