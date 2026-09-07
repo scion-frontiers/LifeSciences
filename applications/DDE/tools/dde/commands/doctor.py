@@ -675,7 +675,17 @@ def _check_gwas_catalog(report: Report) -> None:
     was removed; this check surfaces whether the API itself is reachable,
     separate from whether the specific endpoint exists.
     """
-    import requests as _requests
+    try:
+        import requests as _requests
+    except ImportError:
+        report.add(
+            "gwas catalog api",
+            WARN,
+            "requests package not installed — cannot probe endpoint",
+            "install requests to enable GWAS Catalog connectivity checks",
+            kind=CAVEAT,
+        )
+        return
 
     api_url = "https://www.ebi.ac.uk/gwas/rest/api"
     try:
@@ -683,8 +693,13 @@ def _check_gwas_catalog(report: Report) -> None:
         if resp.status_code == 200:
             report.add(
                 "gwas catalog api",
-                OK,
-                f"{api_url} reachable (HTTP {resp.status_code})",
+                WARN,
+                f"{api_url} reachable, but associations/search/findByGene "
+                "endpoint has been removed by EBI",
+                "use --source opentargets or --source clinvar for gene-disease "
+                "association queries; --source gwas-catalog will fail with a "
+                "clear error message",
+                kind=CAVEAT,
             )
         else:
             report.add(
@@ -735,7 +750,17 @@ def _check_disignatlas(report: Report) -> None:
     ``ConnectionError`` traceback when the endpoint was unreachable;
     this check surfaces reachability at ``dde doctor`` time.
     """
-    import requests as _requests
+    try:
+        import requests as _requests
+    except ImportError:
+        report.add(
+            "disignatlas endpoint",
+            WARN,
+            "requests package not installed — cannot probe endpoint",
+            "install requests to enable DisigNAtlas connectivity checks",
+            kind=CAVEAT,
+        )
+        return
 
     url = "https://www.inbirg.com/disignatlas/"
     try:
