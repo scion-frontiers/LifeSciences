@@ -395,6 +395,7 @@ def analyze_cmd(
         threshold_provenance=thresholds.provenance,
         unresolved=thresholds.unresolved(),
         mandatory_relays=relays,
+        suppress_warnings=as_json,
     )
 
     emit.data("assessment", assessment)
