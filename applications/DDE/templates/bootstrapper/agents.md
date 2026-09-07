@@ -162,7 +162,7 @@ as the environment sanity check before program initialization in Step 5.
 ## Step 4. Sync templates
 
 ```bash
-scion template sync
+scion template sync --all
 ```
 
 This ensures all agent templates are available on the hub. It must complete before

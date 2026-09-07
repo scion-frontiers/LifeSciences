@@ -96,7 +96,7 @@ session but do not block startup.
 ### 3c. Template sync
 
 ```bash
-scion template sync
+scion template sync --all
 ```
 
 Pushes all agent templates to the hub. Must complete before starting any agent.
@@ -250,7 +250,7 @@ Each failed check includes a `remedy` field. Common issues:
 ### Template sync failure
 
 ```bash
-scion template sync
+scion template sync --all
 ```
 
 Verify hub connectivity. If the hub is unreachable, check `scion` configuration
