@@ -661,6 +661,65 @@ def _check_thresholds(report: Report) -> None:
             report.add(f"thresholds {tset.tag}", OK, f"{len(tset.values)} declared")
 
 
+def _check_gwas_catalog(report: Report) -> None:
+    """Probe the GWAS Catalog REST API base URL for reachability.
+
+    A lightweight connectivity check — hits the API root, not a full gene
+    query. Reports CAVEAT (not CAPABILITY) because the GWAS Catalog being
+    down does not prevent other tools from working.
+
+    Added for issue #47: the ``associations/search/findByGene`` endpoint
+    was removed; this check surfaces whether the API itself is reachable,
+    separate from whether the specific endpoint exists.
+    """
+    import requests as _requests
+
+    api_url = "https://www.ebi.ac.uk/gwas/rest/api"
+    try:
+        resp = _requests.get(api_url, timeout=10)
+        if resp.status_code == 200:
+            report.add(
+                "gwas catalog api",
+                OK,
+                f"{api_url} reachable (HTTP {resp.status_code})",
+            )
+        else:
+            report.add(
+                "gwas catalog api",
+                WARN,
+                f"{api_url} returned HTTP {resp.status_code}",
+                "the GWAS Catalog REST API may be degraded; "
+                "--source gwas-catalog queries will likely fail",
+                kind=CAVEAT,
+            )
+    except _requests.ConnectionError:
+        report.add(
+            "gwas catalog api",
+            WARN,
+            f"{api_url} unreachable (connection error)",
+            "the GWAS Catalog REST API is not reachable from this "
+            "environment; --source gwas-catalog queries will fail",
+            kind=CAVEAT,
+        )
+    except _requests.Timeout:
+        report.add(
+            "gwas catalog api",
+            WARN,
+            f"{api_url} timed out after 10 seconds",
+            "the GWAS Catalog REST API is slow or unreachable; "
+            "--source gwas-catalog queries may fail or hang",
+            kind=CAVEAT,
+        )
+    except Exception as exc:
+        report.add(
+            "gwas catalog api",
+            WARN,
+            f"{api_url} probe failed: {type(exc).__name__}: {exc}",
+            "unexpected error probing the GWAS Catalog REST API",
+            kind=CAVEAT,
+        )
+
+
 def _check_known_faults(report: Report) -> None:
     """Standing advisories the agent must know before planning work.
 
@@ -938,6 +997,7 @@ def doctor(state: AppState, as_json: bool) -> None:
     _check_binaries(report)
     _check_credentials(report)
     _check_thresholds(report)
+    _check_gwas_catalog(report)
     _check_phase_two_contract(report)
     _check_known_faults(report)
 

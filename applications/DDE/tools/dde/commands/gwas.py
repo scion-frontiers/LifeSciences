@@ -205,6 +205,15 @@ def _fetch_gwas_catalog(symbol: str) -> tuple[bytes, dict[str, Any]]:
     """Fetch disease associations from the NHGRI-EBI GWAS Catalog.
 
     Returns (verbatim response bytes, structured artifact dict).
+
+    NOTE (2026-09-07, issue #47): The ``associations/search/findByGene``
+    endpoint was removed from the GWAS Catalog REST API. The API base URL
+    still responds, and ``singleNucleotidePolymorphisms/search/findByGene``
+    still works, but there is no direct association-by-gene endpoint.
+    Reconstructing association data from per-SNP lookups would require
+    paginating all SNPs for a gene and issuing a separate request per SNP,
+    which is infeasible at scale. This function now detects the 404 and
+    raises a clear ``Refusal`` so callers know the source is unavailable.
     """
     url = (
         f"{GWAS_CATALOG_API}/associations/search/findByGene"
@@ -216,7 +225,26 @@ def _fetch_gwas_catalog(symbol: str) -> tuple[bytes, dict[str, Any]]:
         qps=GWAS_CATALOG_QPS,
         timeout=60.0,
         headers={"Accept": "application/json"},
+        tolerate_status=(404,),
     )
+
+    if response.status_code == 404:
+        raise Refusal(
+            f"GWAS Catalog association-by-gene endpoint returned HTTP 404 "
+            f"for {symbol.upper()!r}",
+            detail=(
+                f"the endpoint {GWAS_CATALOG_API}/associations/search/"
+                f"findByGene has been removed from the EBI GWAS Catalog "
+                f"REST API (confirmed 2026-09-07)"
+            ),
+            remedy=(
+                "use --source opentargets or --source clinvar instead; "
+                "the GWAS Catalog gwas-catalog source is currently "
+                "unavailable until the API is updated or a replacement "
+                "endpoint is integrated"
+            ),
+        )
+
     raw = response.content
     try:
         payload = json.loads(raw.decode("utf-8"))
