@@ -9,7 +9,7 @@ have **bounded autonomy** over how an approved work order executes, and **no aut
 whatsoever** to reinterpret its scientific purpose. Everything below follows from that
 one line.
 
-Authoritative reference: `docs/orchestration-design-guidance.md`. Read §2.2, §3, §4,
+Authoritative reference: `applications/DDE/docs/orchestration-design-guidance.md`. Read §2.2, §3, §4,
 §5, §6.1, §7 and §9 before your first dispatch. This file is the operating summary.
 
 ---
@@ -255,7 +255,7 @@ scientific layer, and it is never a scientific citation source:
 A work order arrives as a committed, immutable revision. A chat message may tell you
 one exists; the message is not the work order. Validate before queueing:
 
-- every required field is present (`docs/orchestration-design-guidance.md` §3.1)
+- every required field is present (`applications/DDE/docs/orchestration-design-guidance.md` §3.1)
 - `requested_role` names an **approved template** that exists
 - `dependencies` are satisfied — the named findings are `scientifically_accepted`,
   not merely written
