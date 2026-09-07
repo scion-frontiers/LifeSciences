@@ -615,6 +615,31 @@ def analyze(
                 "Address it before proceeding with target selection.",
             ))
 
+    # Mandatory relay: leader has worst contradiction profile.
+    # Fires when the top-ranked idea has the highest (or joint-highest)
+    # contradicted-claim count among all candidates AND at least one
+    # contradicted claim.  This guards against recommending a target whose
+    # foundational claims are the most disputed in the tournament.
+    # See issue #24.
+    if len(per_idea) >= 2 and per_idea[0]["n_contradicted_claims"] > 0:
+        leader_bad = per_idea[0]["n_contradicted_claims"]
+        max_bad_any = max(i["n_contradicted_claims"] for i in per_idea)
+        if leader_bad >= max_bad_any:
+            relay_code = "coscientist.leader_worst_contradiction_profile"
+            if not any(r["code"] == relay_code for r in relays):
+                leader_gene = per_idea[0]["gene"] or "(unknown)"
+                relays.append(provenance.relay(
+                    relay_code,
+                    f"The recommended idea ({leader_gene}) has the worst "
+                    f"contradiction profile in the tournament: "
+                    f"{leader_bad} contradicted claim(s), the highest "
+                    f"(or joint-highest) among all candidates. The Science "
+                    f"Lead must acknowledge this finding, justify proceeding "
+                    f"with this target, and consider a fast-fail foundational "
+                    f"claim check before committing a full cohort.",
+                ))
+            assessment["leader_has_worst_contradiction_profile"] = True
+
     analysis_path = beside_or_out(
         state, path, path.name.replace(".tournament.json", ".analysis.json"), out
     )

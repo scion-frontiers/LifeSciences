@@ -173,6 +173,12 @@ RELAY_CODES: dict[str, str] = {
         "document whether the recommendation was followed, adapted, or "
         "rejected with rationale."
     ),
+    "coscientist.leader_worst_contradiction_profile": (
+        "The recommended idea has the highest contradicted-claim count "
+        "among all candidates. The Science Lead must acknowledge this "
+        "finding, justify proceeding with this target, and consider a "
+        "fast-fail foundational claim check before committing a full cohort."
+    ),
     "alphagenome.no_quantile_scores": (
         "Do not call any effect significant on raw score alone. No quantile "
         "was returned for the named output types, so the significance rule "
