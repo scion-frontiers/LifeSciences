@@ -723,6 +723,67 @@ def _check_gwas_catalog(report: Report) -> None:
         )
 
 
+def _check_disignatlas(report: Report) -> None:
+    """Probe the DisigNAtlas landing page for reachability.
+
+    A lightweight connectivity check — hits the landing page, not a full
+    search query.  Reports CAVEAT (not CAPABILITY) because DisigNAtlas being
+    down does not prevent other tools from working; GEO search may partially
+    compensate.
+
+    Added for issue #51: ``dde disignatlas search`` threw a raw
+    ``ConnectionError`` traceback when the endpoint was unreachable;
+    this check surfaces reachability at ``dde doctor`` time.
+    """
+    import requests as _requests
+
+    url = "https://www.inbirg.com/disignatlas/"
+    try:
+        resp = _requests.get(url, timeout=10)
+        if resp.status_code == 200:
+            report.add(
+                "disignatlas endpoint",
+                OK,
+                f"{url} reachable (HTTP {resp.status_code})",
+            )
+        else:
+            report.add(
+                "disignatlas endpoint",
+                WARN,
+                f"{url} returned HTTP {resp.status_code}",
+                "DisigNAtlas transcriptomics data is unavailable; "
+                "GEO search may partially compensate",
+                kind=CAVEAT,
+            )
+    except _requests.ConnectionError:
+        report.add(
+            "disignatlas endpoint",
+            WARN,
+            f"{url} unreachable (connection error)",
+            "DisigNAtlas transcriptomics data is unavailable; "
+            "GEO search may partially compensate",
+            kind=CAVEAT,
+        )
+    except _requests.Timeout:
+        report.add(
+            "disignatlas endpoint",
+            WARN,
+            f"{url} timed out after 10 seconds",
+            "DisigNAtlas transcriptomics data is unavailable; "
+            "GEO search may partially compensate",
+            kind=CAVEAT,
+        )
+    except _requests.RequestException as exc:
+        report.add(
+            "disignatlas endpoint",
+            WARN,
+            f"{url} probe failed: {type(exc).__name__}: {exc}",
+            "DisigNAtlas transcriptomics data is unavailable; "
+            "GEO search may partially compensate",
+            kind=CAVEAT,
+        )
+
+
 def _check_known_faults(report: Report) -> None:
     """Standing advisories the agent must know before planning work.
 
@@ -1018,6 +1079,7 @@ def doctor(state: AppState, as_json: bool, strict: bool) -> None:
     _check_credentials(report)
     _check_thresholds(report)
     _check_gwas_catalog(report)
+    _check_disignatlas(report)
     _check_phase_two_contract(report)
     _check_known_faults(report)
 

@@ -44,7 +44,7 @@ from ..common import (
     pass_state,
 )
 from ..core import http, provenance
-from ..core.errors import ArtifactError, Refusal, SchemaError
+from ..core.errors import ArtifactError, EndpointUnavailable, Refusal, SchemaError
 
 _log = logging.getLogger(__name__)
 
@@ -177,13 +177,33 @@ def _fetch_disignatlas(
 
     Returns (raw HTML bytes, artifact dict).
     """
+    import requests as _requests
+
     search_method = "gene_search" if mode == "gene" else "dataset_search"
     url = f"{DISIGNATLAS_BASE}/result"
 
-    response = http.request(
-        "GET", url, qps=DISIGNATLAS_QPS, timeout=120.0,
-        params={"search_method": search_method, "query_content": query},
+    _remedy = (
+        "The DisigNAtlas service at www.inbirg.com may be temporarily down. "
+        "Run dde doctor to check endpoint status. GEO search may provide "
+        "partial compensation for transcriptomics data."
     )
+    try:
+        response = http.request(
+            "GET", url, qps=DISIGNATLAS_QPS, timeout=120.0,
+            params={"search_method": search_method, "query_content": query},
+        )
+    except (_requests.ConnectionError, _requests.Timeout) as exc:
+        raise Refusal(
+            "DisigNAtlas endpoint is unreachable",
+            detail=f"{type(exc).__name__}: {exc}",
+            remedy=_remedy,
+        ) from exc
+    except EndpointUnavailable as exc:
+        raise Refusal(
+            "DisigNAtlas endpoint is unreachable",
+            detail=exc.detail or exc.message,
+            remedy=_remedy,
+        ) from exc
     raw = response.content
     html = response.text
 
