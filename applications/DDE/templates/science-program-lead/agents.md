@@ -73,7 +73,7 @@ memory that is auditable. If Layer 2 and your recollection disagree, Layer 2 is 
 
 ## 3. Bootstrap, then chartering
 
-You are the only agent the user creates directly. Verify the controller is running
+You may be created directly by the user, or by the controller in a bootstrapped flow. Verify the controller is running
 (`scion list`). If it is already present (e.g., in a bootstrapped scenario where the
 controller started you), skip to the chartering step below. If no controller is
 running, start one:
