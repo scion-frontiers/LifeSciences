@@ -204,21 +204,27 @@ def source_commit(tree: Path | None = None) -> dict[str, object]:
     )
     if refs_output is not None:
         refs = [r.strip() for r in refs_output.splitlines() if r.strip()]
-        on_origin = False
-        for ref in refs:
-            # Translate full refname to the short form git commands
-            # expect (e.g. "refs/remotes/origin/DDE" → "origin/DDE").
-            short_ref = ref.replace("refs/remotes/", "", 1)
-            probe = subprocess.run(
-                ["git", "merge-base", "--is-ancestor", head, short_ref],
-                cwd=str(tree),
-                capture_output=True,
-                text=True,
-            )
-            if probe.returncode == 0:
-                on_origin = True
-                remote_ref = short_ref
-                break
+        if refs:
+            on_origin = False
+            for ref in refs:
+                # Translate full refname to the short form git commands
+                # expect (e.g. "refs/remotes/origin/DDE" → "origin/DDE").
+                short_ref = ref.replace("refs/remotes/", "", 1)
+                try:
+                    probe = subprocess.run(
+                        ["git", "merge-base", "--is-ancestor", head, short_ref],
+                        cwd=str(tree),
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                    )
+                except (OSError, subprocess.SubprocessError):
+                    continue
+                if probe.returncode == 0:
+                    on_origin = True
+                    remote_ref = short_ref
+                    break
+        # else: on_origin stays None — no refs to check against
 
     return {
         "commit": head,
