@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import re
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -64,7 +65,7 @@ def fix_tables(site_dir: Path) -> str:
 
     if changed == 0:
         return "skipped — no unconverted tables found"
-    return f"applied — converted tables in {changed} file(s)"
+    return f"stub — {changed} file(s) need table conversion (not yet implemented)"
 
 
 def fix_duplicate_h1(site_dir: Path) -> str:
@@ -99,7 +100,7 @@ def fix_duplicate_h1(site_dir: Path) -> str:
 
     if changed == 0:
         return "skipped — no duplicate H1s found"
-    return f"applied — removed duplicate H1 in {changed} file(s)"
+    return f"stub — {changed} file(s) have duplicate H1 (not yet implemented)"
 
 
 def fix_md_links(site_dir: Path) -> str:
@@ -112,23 +113,24 @@ def fix_md_links(site_dir: Path) -> str:
     Detection guard: skip if no href contains ``.md``.
     """
     changed = 0
-    md_href = re.compile(r'href="([^"]*\.md)"')
+    md_href = re.compile(r'href="([^"]*\.md)((?:[#?][^"]*)?)"')
 
     for html_file in site_dir.rglob("*.html"):
         text = html_file.read_text(encoding="utf-8")
 
         # --- detection guard ---
         matches = md_href.findall(text)
-        internal = [m for m in matches if not m.startswith(("http://", "https://"))]
+        internal = [base for base, _suffix in matches if not base.startswith(("http://", "https://"))]
         if not internal:
             continue
 
         # --- apply fix ---
         def rewrite(m: re.Match) -> str:
-            href = m.group(1)
-            if href.startswith(("http://", "https://")):
+            base = m.group(1)
+            suffix = m.group(2)  # fragment or query string
+            if base.startswith(("http://", "https://")):
                 return m.group(0)
-            return f'href="{href.removesuffix(".md")}.html"'
+            return f'href="{base.removesuffix(".md")}.html{suffix}"'
 
         new_text = md_href.sub(rewrite, text)
         if new_text != text:
@@ -144,7 +146,7 @@ def fix_md_links(site_dir: Path) -> str:
 # Fix registry — add or remove entries to match your program's needs.
 # ---------------------------------------------------------------------------
 
-FIXES: list[tuple[str, callable]] = [
+FIXES: list[tuple[str, Callable[[Path], str]]] = [
     # 1. Structural HTML
     ("fix_tables", fix_tables),
     ("fix_duplicate_h1", fix_duplicate_h1),
