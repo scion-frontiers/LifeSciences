@@ -656,6 +656,7 @@ def write_analysis(
     threshold_provenance: str | None = None,
     unresolved: list[str] | None = None,
     mandatory_relays: list[dict[str, str]] | None = None,
+    suppress_warnings: bool = False,
 ) -> Path:
     """Write a phase-2 `.analysis.json` record.
 
@@ -711,7 +712,7 @@ def write_analysis(
         record["source_sha256"] = source_digest
 
     path = Path(path)
-    if _may_write(path, record):
+    if _may_write(path, record, suppress_warnings=suppress_warnings):
         path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     return path
 
@@ -737,7 +738,7 @@ def _comparable(record: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in record.items() if k not in _VOLATILE_ANALYSIS_FIELDS}
 
 
-def _may_write(path: Path, record: dict[str, Any]) -> bool:
+def _may_write(path: Path, record: dict[str, Any], *, suppress_warnings: bool = False) -> bool:
     """Decide whether this analysis may land at this path.
 
     Three outcomes, and the middle one is the reason this is a decision
@@ -784,20 +785,21 @@ def _may_write(path: Path, record: dict[str, Any]) -> bool:
         existing = None
 
     if isinstance(existing, dict) and _comparable(existing) == _comparable(record):
-        previous = existing.get("written_by")
-        when = existing.get("timestamp") or "an earlier run"
-        mine = record.get("written_by")
-        if previous and mine and previous != mine:
-            output.warn(
-                f"{path.name} already holds an identical record by {previous} "
-                f"({when}); left as it is. Your run confirms it — cite "
-                f"{previous}'s record, and pass --out if you need your own copy."
-            )
-        else:
-            output.warn(
-                f"{path.name} already holds an identical record ({when}); "
-                "not rewritten."
-            )
+        if not suppress_warnings:
+            previous = existing.get("written_by")
+            when = existing.get("timestamp") or "an earlier run"
+            mine = record.get("written_by")
+            if previous and mine and previous != mine:
+                output.warn(
+                    f"{path.name} already holds an identical record by {previous} "
+                    f"({when}); left as it is. Your run confirms it — cite "
+                    f"{previous}'s record, and pass --out if you need your own copy."
+                )
+            else:
+                output.warn(
+                    f"{path.name} already holds an identical record ({when}); "
+                    "not rewritten."
+                )
         return False
 
     if isinstance(existing, dict):
