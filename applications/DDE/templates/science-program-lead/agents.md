@@ -144,6 +144,22 @@ runs.
   may not silently repair your scientific intent. If it asks, answer; do not let it
   guess.
 
+### Mechanism-direction pre-commit check
+
+Before committing a work order for **structural characterization** or **safety assessment**,
+check `program-state/open-questions.md` and `program-state/liability-tracker.md` for any
+unresolved mechanism-direction question on the target.
+
+If one exists and is unresolved, you must include an explicit acknowledgment in the work
+order's `context` field: "Proceeding with [structural/safety] work despite unresolved
+mechanism-direction question [OQ-X / L-X] because: [justification]." Record this
+acknowledgment in `decision-log.md` as well.
+
+**Rationale:** Mechanism-direction is the cheapest question to answer and the most
+expensive to get wrong. A structural characterization of a target with an inverted
+mechanism is wasted work. Always resolve — or explicitly accept the risk of — a
+mechanism-direction question before committing downstream structural or safety work.
+
 ### Writing a decision question
 
 The question is the part most often written badly. Test it:
@@ -267,6 +283,19 @@ is yours:
   it rests on. Your successor after a context compaction — or after a restart — has
   only this.
 
+### Mechanism-direction liabilities
+
+When an accepted finding identifies competing directional evidence for the target mechanism
+(e.g., "Factor A promotes the disease pathway but Factor B, regulated by the same target,
+suppresses it"), classify this as a **mechanism-direction liability** in
+`program-state/liability-tracker.md` with:
+- Severity: at minimum "Monitor"
+- Tag: `mechanism-direction`
+- Note: "Sequencing gate for downstream structural/safety work (see section 4)"
+
+This liability is a sequencing gate: the mechanism-direction pre-commit check (section 4) will
+flag it when structural or safety work orders are committed against this target.
+
 ---
 
 ## 8. Cadence: batch and interrupt
@@ -341,6 +370,41 @@ The pre-clinical pipeline is invariant. Routing *within* a stage is dynamic.
 > (`docs/tool-design-guidance.md` §7). If you write a tool threshold value into a
 > finding or a gate document, it will silently disagree with the CLI the day the set
 > is revised.
+
+### Recommended Stage 1 validation sequence
+
+The following ordering is **recommended, not enforced**. It reflects the lesson that the
+cheapest, most discriminating questions should be answered first — before committing
+resources to expensive characterization that becomes valueless if early questions fail.
+
+**Cohort A — Fast-fail** (cheapest, most discriminating):
+1. Genetic anchor verification — is the causal gene assignment correct?
+2. Mechanism-direction check — does modulating this target affect the disease pathway
+   in the right direction?
+
+If either fails: **terminate** the target. Do not proceed to Cohort B.
+
+**Cohort B — Characterization** (moderate cost, target-specific):
+3. Structural characterization and druggability assessment
+4. Safety and tolerability assessment
+
+If the target is not structurally tractable or has prohibitive safety liabilities:
+**terminate or pivot**.
+
+**Cohort C — Functional validation** (highest cost, requires wet-lab):
+5. Functional rescue in a disease-relevant model
+
+Requires human approval per charter before commissioning.
+
+This sequence is ordered by cost and discriminating power. Mechanism-direction (Cohort A)
+kills targets definitively for the cost of one work order. Structural work (Cohort B) is
+informative but rarely terminal at Stage 1. Functional validation (Cohort C) is the most
+expensive and should only run on targets that survived A and B.
+
+Some programs may have reasons to reorder — for example, if mechanism-direction requires
+expensive experimental data rather than a computational check. In such cases, document the
+reordering rationale in `decision-log.md`. The enforcement mechanism in section 4
+(mechanism-direction pre-commit check) still applies regardless of cohort ordering.
 
 ---
 
@@ -456,6 +520,10 @@ not binding.
     selection starts from the review panel's recommendation section (§5), not
     from the quantitative leaderboard.
 11. **Honour the reserved human decisions** named in the charter.
+12. **Resolve mechanism-direction before structure or safety.** Do not commit
+    structural characterization or safety assessment work orders while a
+    mechanism-direction question on that target is open, unless you explicitly
+    acknowledge the risk in the work order and decision log (section 4).
 
 ---
 
