@@ -259,12 +259,15 @@ def _check_env_source(report: Report) -> None:
     if record.get("on_origin") is False:
         report.add(
             "environment source",
-            FAIL,
+            WARN,
             f"provisioned from {short}, which is not reachable on "
             f"{record.get('remote_ref')}",
-            "artifacts written here carry an environment nobody else can rebuild. "
-            "Push that commit (or `git fetch` if this container's view of origin "
-            "is stale — the check reads the local remote-tracking ref)",
+            "the environment works, but artifacts carry a provenance commit "
+            "nobody else can fetch. Push that commit (or `git fetch` if this "
+            "container's view of origin is stale — the check reads the local "
+            "remote-tracking ref). Use `dde doctor --strict` to treat this as "
+            "a blocking failure",
+            kind=HOUSEKEEPING,
         )
         return
 
@@ -907,7 +910,7 @@ def _check_phase_two_contract(report: Report) -> None:
 # --- command ---------------------------------------------------------------
 
 
-def _verdict(report: Report) -> None:
+def _verdict(report: Report, *, strict: bool = False) -> None:
     """Say what the reader should do, because the count does not.
 
     Eight skills tell an agent to "run dde doctor to confirm the
@@ -930,10 +933,16 @@ def _verdict(report: Report) -> None:
     housekeeping = report.warnings_of(HOUSEKEEPING)
 
     if report.failures:
-        click.echo(
-            "STOP. Fix the FAILED checks above before running anything; results "
-            "produced now would be unreproducible or wrong."
-        )
+        if strict:
+            click.echo(
+                "STOP (--strict). Fix the FAILED checks above before running "
+                "anything; provenance issues are blocking under --strict."
+            )
+        else:
+            click.echo(
+                "STOP. Fix the FAILED checks above before running anything; "
+                "results produced now would be unreproducible or wrong."
+            )
         return
 
     # "Warnings are expected here" belongs in the tool, not in the eight
@@ -977,14 +986,25 @@ def _verdict(report: Report) -> None:
             "    Report them; do not work around them. They do not invalidate "
             "a result you have already produced."
         )
+        if not strict:
+            click.echo(
+                f"    ({len(housekeeping)} provenance issue(s) would fail "
+                "under --strict mode.)"
+            )
     if not (capability or caveats or housekeeping):
         click.echo("  none.")
 
 
 @click.command()
 @click.option("--json", "as_json", is_flag=True, help="Emit the report as JSON.")
+@click.option(
+    "--strict",
+    is_flag=True,
+    help="Promote provenance (HOUSEKEEPING) warnings to failures. "
+    "Use in CI or audit contexts where reproducibility is blocking.",
+)
 @pass_state
-def doctor(state: AppState, as_json: bool) -> None:
+def doctor(state: AppState, as_json: bool, strict: bool) -> None:
     """Assert tools, credentials and environment version. Exits non-zero if broken."""
     report = Report()
     _check_python(report)
@@ -1000,6 +1020,13 @@ def doctor(state: AppState, as_json: bool) -> None:
     _check_gwas_catalog(report)
     _check_phase_two_contract(report)
     _check_known_faults(report)
+
+    # --strict: promote HOUSEKEEPING warnings to FAIL so provenance issues
+    # are blocking in CI/audit contexts.
+    if strict:
+        for check in report.checks:
+            if check.status == WARN and check.kind == HOUSEKEEPING:
+                check.status = FAIL
 
     if as_json:
         click.echo(
@@ -1024,6 +1051,6 @@ def doctor(state: AppState, as_json: bool) -> None:
             click.echo(f"{len(report.failures)} check(s) FAILED:")
             for check in report.failures:
                 click.echo(f"  - {check.name}: {check.remedy}")
-        _verdict(report)
+        _verdict(report, strict=strict)
 
     sys.exit(1 if report.failures else 0)
