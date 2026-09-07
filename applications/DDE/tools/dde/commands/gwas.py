@@ -1,12 +1,17 @@
 """`dde gwas` — GWAS, disease association, and clinical variant lookup.
 
-Three public databases, two phases:
+Three public databases, three phases:
 
-  search   one gene -> disease associations from Open Targets Platform,
-           the NHGRI-EBI GWAS Catalog, or ClinVar clinical significance,
-           written verbatim to Layer 0 with a sidecar.
-  analyze  reads stored search results and classifies whether the gene
-           has significant disease associations. No network.
+  search          one gene -> disease associations from Open Targets
+                  Platform, the NHGRI-EBI GWAS Catalog, or ClinVar
+                  clinical significance, written verbatim to Layer 0
+                  with a sidecar.
+  search-disease  one disease -> associated genes from Open Targets
+                  Platform.  Resolves the disease name to an ontology
+                  ID, then fetches the top associated target genes.
+  analyze         reads stored search results and classifies whether
+                  the gene has significant disease associations. No
+                  network.
 
 Open Targets uses a GraphQL endpoint. The gene symbol is first resolved
 to an Ensembl ID via a search query, then associations are fetched for
@@ -110,6 +115,34 @@ query {
   }
 }"""
 
+# GraphQL query to search for a disease by name via Open Targets.
+_OT_DISEASE_SEARCH_QUERY = """\
+query {
+  search(queryString: "%s", entityNames: ["disease"]) {
+    hits { id name }
+  }
+}"""
+
+# GraphQL query to fetch associated targets (genes) for a disease.
+# Uses pagination with a size of 500 to capture the most strongly
+# associated genes without overwhelming the response.
+_OT_DISEASE_TARGETS_QUERY = """\
+query {
+  disease(efoId: "%s") {
+    associatedTargets(page: {index: 0, size: 500}) {
+      count
+      rows {
+        target { id approvedSymbol }
+        score
+        datatypeScores { id score }
+      }
+    }
+  }
+}"""
+
+# Maximum associated targets to fetch per disease query.
+_DISEASE_TARGET_PAGE_SIZE = 500
+
 
 def _graphql_post(url: str, query: str, qps: float) -> dict[str, Any]:
     """POST a GraphQL query and return the parsed JSON payload."""
@@ -158,6 +191,77 @@ def _resolve_ensembl_id(symbol: str) -> tuple[str, str]:
         )
     # Take the first hit — the search is by exact gene symbol.
     return hits[0]["id"], hits[0].get("name", symbol.upper())
+
+
+def _resolve_disease_id(disease: str) -> tuple[str, str]:
+    """Resolve a disease name to (disease_id, resolved_name) via Open Targets.
+
+    Searches for the disease name and returns the top hit's ID (typically
+    an EFO, MONDO, or similar ontology identifier) and canonical name.
+
+    Raises Refusal if no disease matches the query.
+    """
+    payload = _graphql_post(
+        OPENTARGETS_API,
+        _OT_DISEASE_SEARCH_QUERY % disease,
+        OPENTARGETS_QPS,
+    )
+    hits = (payload.get("data") or {}).get("search", {}).get("hits")
+    if not hits:
+        raise Refusal(
+            f"Open Targets has no disease record matching {disease!r}",
+            remedy="check the disease name at platform.opentargets.org",
+        )
+    return hits[0]["id"], hits[0].get("name", disease)
+
+
+def _fetch_opentargets_disease(disease: str) -> tuple[bytes, dict[str, Any]]:
+    """Fetch associated genes from Open Targets for a disease name.
+
+    Two-step: resolve the disease name to an ontology ID, then fetch
+    the top associated targets (genes) for that disease.
+
+    Returns (verbatim response bytes, structured artifact dict).
+    """
+    disease_id, resolved_name = _resolve_disease_id(disease)
+    payload = _graphql_post(
+        OPENTARGETS_API,
+        _OT_DISEASE_TARGETS_QUERY % disease_id,
+        OPENTARGETS_QPS,
+    )
+    raw = json.dumps(payload, indent=2).encode("utf-8")
+
+    disease_data = (payload.get("data") or {}).get("disease")
+    if not disease_data or not disease_data.get("associatedTargets"):
+        return raw, _build_disease_artifact(
+            disease, "opentargets", disease_id, resolved_name, [],
+        )
+
+    assoc_targets = disease_data["associatedTargets"]
+    total_count = assoc_targets.get("count", 0)
+    rows = assoc_targets.get("rows", [])
+
+    associations: list[dict[str, Any]] = []
+    for row in rows:
+        target = row.get("target") or {}
+        datatype_scores: dict[str, float] = {}
+        for ds in row.get("datatypeScores", []):
+            component = ds.get("id", "")
+            datatype_scores[component] = ds.get("score", 0.0)
+        associations.append({
+            "gene_symbol": target.get("approvedSymbol", ""),
+            "ensembl_id": target.get("id", ""),
+            "score": row.get("score", 0.0),
+            "datatype_scores": datatype_scores,
+        })
+
+    # Already sorted by score descending from the API, but enforce it.
+    associations.sort(key=lambda a: a["score"], reverse=True)
+    artifact = _build_disease_artifact(
+        disease, "opentargets", disease_id, resolved_name, associations,
+        total_count=total_count,
+    )
+    return raw, artifact
 
 
 def _fetch_opentargets(symbol: str) -> tuple[bytes, dict[str, Any]]:
@@ -490,6 +594,50 @@ def _build_artifact(
     return artifact
 
 
+def _build_disease_artifact(
+    disease: str,
+    source: str,
+    disease_id: str,
+    resolved_name: str,
+    associations: list[dict[str, Any]],
+    *,
+    total_count: int | None = None,
+) -> dict[str, Any]:
+    """Build the structured dde.gwas-disease.v1 artifact."""
+    top_genes: list[str] = []
+    seen: set[str] = set()
+    for assoc in associations[:10]:
+        symbol = assoc.get("gene_symbol", "")
+        if symbol and symbol not in seen:
+            top_genes.append(symbol)
+            seen.add(symbol)
+        if len(top_genes) >= 5:
+            break
+
+    artifact: dict[str, Any] = {
+        "schema": "dde.gwas-disease.v1",
+        "query": {
+            "disease": disease,
+            "source": source,
+            "disease_id": disease_id,
+            "resolved_name": resolved_name,
+        },
+        "summary": {
+            "n_associations": len(associations),
+            "top_genes": top_genes,
+        },
+        "associations": associations,
+    }
+
+    # Surface truncation when total exceeds the page size fetched.
+    if total_count is not None and total_count > len(associations):
+        artifact["summary"]["total_target_count"] = total_count
+        artifact["summary"]["truncated"] = True
+        artifact["summary"]["page_size"] = _DISEASE_TARGET_PAGE_SIZE
+
+    return artifact
+
+
 @click.group()
 def gwas() -> None:
     """GWAS and disease association lookup."""
@@ -571,6 +719,102 @@ def search_cmd(
     emit.data("source", source)
     emit.data("n_associations", artifact["summary"]["n_associations"])
     emit.data("top_diseases", artifact["summary"]["top_diseases"])
+    emit.path(verbatim_path, role="verbatim")
+    emit.path(artifact_path, role="artifact")
+    emit.path(meta_path, role="sidecar")
+    emit.flush()
+
+
+@gwas.command("search-disease")
+@click.argument("disease")
+@click.option(
+    "--source",
+    type=click.Choice(["opentargets"]),
+    default="opentargets",
+    help=(
+        "Which database to query (default: opentargets). "
+        "Only Open Targets is currently supported for disease-centric "
+        "queries; the GWAS Catalog findByDiseaseTrait endpoint requires "
+        "exact trait names and returns study-level data without gene "
+        "mappings."
+    ),
+)
+@out_option
+@output_options
+@pass_state
+def search_disease_cmd(
+    state: AppState,
+    disease: str,
+    source: str,
+    out: str | None,
+    as_json: bool,
+    quiet: bool,
+) -> None:
+    """Search for genes associated with DISEASE.
+
+    Resolves the disease name to an ontology identifier via Open Targets,
+    then fetches the top associated target genes ranked by overall
+    association score.
+    """
+    emit = emitter(as_json, quiet)
+    target_dir = state.project().artifact_dir(ARTIFACT_CLASS, out)
+    slug = disease.lower().replace(" ", "-")[:80]
+
+    if source == "opentargets":
+        endpoint = OPENTARGETS_API
+        raw, artifact = _fetch_opentargets_disease(disease)
+    else:
+        # Future sources would go here.
+        raise click.BadParameter(f"unsupported source: {source}")
+
+    sidecar = provenance.Sidecar(
+        tool=TOOL,
+        subcommand="search-disease",
+        endpoint=endpoint,
+        parameters={
+            "query_disease": disease,
+            "resolved_disease_id": artifact["query"]["disease_id"],
+            "resolved_disease_name": artifact["query"]["resolved_name"],
+            "source": source,
+        },
+    )
+    sidecar.note("source_db", source)
+    sidecar.note("n_associations", artifact["summary"]["n_associations"])
+
+    # Warn when results were truncated by the page size.
+    if artifact["summary"].get("truncated"):
+        total = artifact["summary"]["total_target_count"]
+        fetched = artifact["summary"]["n_associations"]
+        sidecar.warn(
+            f"Open Targets has {total} gene associations for "
+            f"{artifact['query']['resolved_name']!r} but only the top "
+            f"{fetched} were fetched (page_size={_DISEASE_TARGET_PAGE_SIZE}); "
+            "the result set may not include all associated genes"
+        )
+
+    # Write verbatim response.
+    verbatim_path = target_dir / f"{slug}.gwas-disease-{source}.json"
+    verbatim_path.write_bytes(raw)
+    sidecar.add_output(verbatim_path)
+
+    # Write structured artifact.
+    artifact_path = target_dir / f"{slug}.gwas-disease-{source}.artifact.json"
+    artifact_path.write_text(
+        json.dumps(artifact, indent=2) + "\n", encoding="utf-8"
+    )
+    sidecar.add_output(artifact_path)
+
+    # Write sidecar.
+    meta_path = sidecar.write(
+        target_dir / f"{slug}.gwas-disease-{source}.meta.json"
+    )
+
+    emit.data("disease", disease)
+    emit.data("source", source)
+    emit.data("disease_id", artifact["query"]["disease_id"])
+    emit.data("resolved_name", artifact["query"]["resolved_name"])
+    emit.data("n_associations", artifact["summary"]["n_associations"])
+    emit.data("top_genes", artifact["summary"]["top_genes"])
     emit.path(verbatim_path, role="verbatim")
     emit.path(artifact_path, role="artifact")
     emit.path(meta_path, role="sidecar")
