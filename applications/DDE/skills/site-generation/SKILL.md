@@ -1,6 +1,6 @@
 # Site Generation
 
-How the project curator builds and verifies the navigable HTML website from the drug discovery program's artifact hierarchy. This skill covers when to trigger a build, how to invoke the CLI, what the build produces, and how to verify the output. It complements `artifact-conventions` (which governs the source artifacts) and `program-state-management` (which governs the Layer 2 documents that feed the site).
+How the project curator builds, post-processes, and verifies the navigable HTML website from the drug discovery program's artifact hierarchy. This skill covers when to trigger a build, how to invoke the CLI, what the build produces, how to apply post-build fixes for known rendering gaps, and how to verify the output. It complements `artifact-conventions` (which governs the source artifacts) and `program-state-management` (which governs the Layer 2 documents that feed the site).
 
 ## When to Build
 
@@ -119,9 +119,49 @@ The site includes 13 auto-wired specialized HTML viewers for scientific data fil
 
 **CDN constraint:** All external scripts load from `cdn.jsdelivr.net` only.
 
+## Post-Build Processing
+
+After `dde site build` completes and before verification, run a post-build orchestrator to fix known rendering gaps in the build output. Every fix script must be **idempotent** — safe to re-run after every build without accumulating changes.
+
+### Why This Phase Exists
+
+The build tool renders markdown to HTML deterministically but does not handle every rendering pattern. Several gaps recur across programs:
+
+| Gap | Symptom | Fix Category |
+|---|---|---|
+| Pipe-delimited tables | Raw `\|` text instead of `<table>` elements | Structural HTML |
+| Duplicate H1 | Template injects an H1; markdown `# Title` adds a second | Structural HTML |
+| Shared scroll context | Sidebar and main content scroll together | CSS/styling |
+| `.md` link paths | Internal links retain `.md` extension instead of `.html` | Link resolution |
+| Plain-text references | Evidence/artifact references not rendered as clickable links | Link resolution |
+
+### Execution Model
+
+1. Run `postbuild.py` (the orchestrator) against `_site/`.
+2. The orchestrator discovers and runs fix scripts in dependency order.
+3. Each script applies a **detection guard** — checks whether the fix has already been applied before modifying any file.
+4. Recommended execution order:
+   - Structural HTML fixes (tables, duplicate headings)
+   - CSS/styling fixes (scroll context, layout)
+   - Link resolution (`.md` → `.html`, artifact links)
+   - Cosmetic passes (whitespace, formatting)
+   - Scan/report (summary of remaining issues)
+
+### Invoking Post-Build Processing
+
+```bash
+dde site build
+python3 postbuild.py _site/
+# then verify and serve
+```
+
+### Template Orchestrator
+
+A copy-and-adapt template orchestrator is provided at [`references/postbuild-template.py`](references/postbuild-template.py). Copy it into your project's root or `site-tools/` directory, add fix functions for program-specific gaps, and invoke it after every build.
+
 ## Post-Build Verification
 
-After every build, verify:
+After post-build processing, verify:
 
 1. **Exit code** — the build succeeded (check exit code and output message).
 2. **Page count** — matches expectations (reported in build output).
@@ -176,7 +216,7 @@ Share the returned URL with stakeholders. Use `sciontool expose --list` to see a
 
 ### 3. Iterative rebuild-and-serve
 
-For iterative workflows (rebuild → verify → revise), keep the server running and rebuild in place. Each `dde site build` regenerates `_site/` and the served content updates immediately — no server restart required. The agent can stay retained for revisions in this mode.
+For iterative workflows (rebuild → post-process → verify → revise), keep the server running and rebuild in place. Each `dde site build` followed by `python3 postbuild.py _site/` regenerates `_site/` and the served content updates immediately — no server restart required. The agent can stay retained for revisions in this mode.
 
 ## What This Skill Does NOT Cover
 
