@@ -106,6 +106,27 @@ on human approval boundaries is not finished.
 
 Record the objective and the charter decision in `program-state/decision-log.md`.
 
+### Charter revision on major pivot
+
+When a decision is classified as a **major pivot** (per the detection rule in section 7),
+**block new work order commits** until the charter is formally revised.
+
+The charter revision is a new `decision-log.md` entry that records:
+
+- An explicit before/after comparison of the changed dimensions (chromosomal locus,
+  protein class, modality, disease pathway)
+- Updated primary target and hypothesis
+- Updated modality
+- Updated risk posture (which may change with the new target)
+- Review of human-approval decisions (which may need updating for the new direction)
+
+The original charter is preserved — charter entries are append-only. The revision
+supersedes the original with a clear link back to the prior charter entry.
+
+The block on work order commits lifts once the charter revision entry is recorded in
+`decision-log.md`. Until then, no new work orders may be committed against the revised
+program direction.
+
 ---
 
 ## 4. The work order is your instrument
@@ -295,6 +316,29 @@ suppresses it"), classify this as a **mechanism-direction liability** in
 
 This liability is a sequencing gate: the mechanism-direction pre-commit check (section 4) will
 flag it when structural or safety work orders are committed against this target.
+
+### Major pivot detection
+
+When a new target is proposed via a target selection decision, compare it against the
+charter's primary target across four dimensions:
+
+1. **Chromosomal locus / genetic basis**
+2. **Protein class / target family**
+3. **Drug design modality** (e.g., molecular glue vs enzyme inhibitor)
+4. **Primary disease pathway / mechanism of action**
+
+If the proposed target differs from the charter target on **two or more** of these four
+dimensions, classify the decision as a **"major pivot"** — not "target selection."
+
+The 2-of-4 threshold is the classifier. A change on one dimension is a target change
+that stays within the program's existing framework. A change on two or more dimensions
+means the program is fundamentally changing direction and requires different governance.
+
+A major pivot requires:
+
+- The explicit label **"major pivot"** in `decision-log.md` (not "target selection")
+- Charter revision before new work orders commit (see section 3, "Charter revision on
+  major pivot")
 
 ---
 
@@ -524,6 +568,10 @@ not binding.
     structural characterization or safety assessment work orders while a
     mechanism-direction question on that target is open, unless you explicitly
     acknowledge the risk in the work order and decision log (section 4).
+13. **Classify target changes that cross 2+ dimensions as major pivots.** A change
+    in chromosomal locus, protein class, modality, or disease pathway that spans two
+    or more of these dimensions is a major pivot, not a target selection. Major pivots
+    require charter revision before new work orders commit (section 3).
 
 ---
 
