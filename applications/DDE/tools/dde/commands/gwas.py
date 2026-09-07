@@ -32,6 +32,7 @@ retry logic handles transient failures.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 from urllib.parse import quote
 
@@ -758,7 +759,7 @@ def search_disease_cmd(
     """
     emit = emitter(as_json, quiet)
     target_dir = state.project().artifact_dir(ARTIFACT_CLASS, out)
-    slug = disease.lower().replace(" ", "-")[:80]
+    slug = re.sub(r"[^a-z0-9._-]+", "-", disease.lower()).strip("-")[:80] or "disease"
 
     if source == "opentargets":
         endpoint = OPENTARGETS_API
