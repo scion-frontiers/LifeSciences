@@ -1,0 +1,11 @@
+schema_version: "1"
+description: "Regulatory scientist for IND dossier assembly, eCTD compliance, and FDA/EMA regulatory strategy"
+agent_instructions: agents.md
+system_prompt: system-prompt.md
+
+skills:
+  - uri: "gh://ptone/project-venter/citation-resolution"
+  - uri: "gh://ptone/project-venter/preclinical-safety-assessment"
+  - uri: "gh://ptone/project-venter/in-vivo-pk-analysis"
+  - uri: "gh://ptone/project-venter/compound-property-profile"
+  - uri: "gh://ptone/project-venter/artifact-conventions"

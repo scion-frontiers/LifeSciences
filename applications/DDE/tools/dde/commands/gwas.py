@@ -1,0 +1,837 @@
+"""`dde gwas` — GWAS, disease association, and clinical variant lookup.
+
+Three public databases, two phases:
+
+  search   one gene -> disease associations from Open Targets Platform,
+           the NHGRI-EBI GWAS Catalog, or ClinVar clinical significance,
+           written verbatim to Layer 0 with a sidecar.
+  analyze  reads stored search results and classifies whether the gene
+           has significant disease associations. No network.
+
+Open Targets uses a GraphQL endpoint. The gene symbol is first resolved
+to an Ensembl ID via a search query, then associations are fetched for
+that target. The GWAS Catalog uses a REST endpoint queried by gene name.
+
+ClinVar uses NCBI E-utilities (esearch + esummary). The gene symbol is
+searched in the clinvar database, returning a list of variant UIDs, then
+a single batched esummary call fetches per-variant details including
+germline classification, review status, and associated conditions. The
+clinical significance field is `germline_classification.description`
+(not the older `clinical_significance` field, which returns null/empty).
+
+All three APIs return clean HTTP status codes for errors — unlike gnomAD,
+none hides refusals inside 200 bodies — so the shared HTTP client's
+retry logic handles transient failures.
+"""
+
+from __future__ import annotations
+
+import json
+from typing import Any
+from urllib.parse import quote
+
+import click
+
+from ..common import (
+    AppState,
+    emitter,
+    from_option,
+    out_option,
+    output_options,
+    pass_state,
+)
+from ..core import http, provenance
+from ..core.errors import (
+    ArtifactError,
+    Refusal,
+    SchemaError,
+)
+
+TOOL = "gwas"
+ARTIFACT_CLASS = "genomics"  # co-locate with gnomAD data in raw/genomics/
+
+OPENTARGETS_API = "https://api.platform.opentargets.org/api/v4/graphql"
+OPENTARGETS_QPS = 5.0
+
+GWAS_CATALOG_API = "https://www.ebi.ac.uk/gwas/rest/api"
+GWAS_CATALOG_QPS = 2.0
+
+# NCBI E-utilities for ClinVar (public, unauthenticated).
+CLINVAR_ESEARCH = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
+CLINVAR_ESUMMARY = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
+# NCBI recommends max 3 requests/sec without an API key.
+CLINVAR_QPS = 3.0
+# Maximum variants to retrieve per gene. NCBI esearch default retmax is
+# 20; 500 covers most genes adequately. Heavily-studied genes (BRCA1,
+# TP53) may have more.
+CLINVAR_RETMAX = 500
+
+# ACMG clinical significance classifications considered "significant"
+# (pathogenic findings) in the analyze phase. These are the curated
+# clinical assertions that a variant causes the named condition.
+_PATHOGENIC_CLASSIFICATIONS = frozenset({
+    "Pathogenic",
+    "Likely pathogenic",
+    "Pathogenic/Likely pathogenic",
+})
+
+# Review-status tiers. A classification's weight depends on its review
+# status — a "Pathogenic" call with "no assertion criteria provided" is
+# materially weaker than one "reviewed by expert panel".
+_STRONG_REVIEW = frozenset({
+    "reviewed by expert panel",
+    "practice guideline",
+})
+_MODERATE_REVIEW = frozenset({
+    "criteria provided, multiple submitters, no conflicts",
+    "criteria provided, single submitter",
+    "criteria provided, conflicting classifications",
+})
+
+# GraphQL query to resolve gene symbol to Ensembl ID via Open Targets.
+_OT_SEARCH_QUERY = """\
+query {
+  search(queryString: "%s", entityNames: ["target"]) {
+    hits { id name }
+  }
+}"""
+
+# GraphQL query to fetch disease associations for a resolved target.
+_OT_ASSOC_QUERY = """\
+query {
+  target(ensemblId: "%s") {
+    associatedDiseases {
+      rows {
+        disease { id name }
+        score
+        datatypeScores { id score }
+      }
+    }
+  }
+}"""
+
+
+def _graphql_post(url: str, query: str, qps: float) -> dict[str, Any]:
+    """POST a GraphQL query and return the parsed JSON payload."""
+    body = json.dumps({"query": query})
+    response = http.request(
+        "POST",
+        url,
+        qps=qps,
+        timeout=60.0,
+        headers={"Content-Type": "application/json"},
+        data=body.encode("utf-8"),
+    )
+    try:
+        payload = json.loads(response.content.decode("utf-8"))
+    except Exception as exc:
+        raise SchemaError("endpoint did not return JSON", detail=str(exc))
+    if payload.get("errors"):
+        messages = "; ".join(
+            str(e.get("message", e))
+            for e in payload["errors"]
+            if isinstance(e, dict)
+        )
+        raise Refusal(
+            f"GraphQL query was declined",
+            detail=messages,
+            remedy="check the query input and endpoint availability",
+        )
+    return payload
+
+
+def _resolve_ensembl_id(symbol: str) -> tuple[str, str]:
+    """Resolve a gene symbol to (ensembl_id, resolved_name) via Open Targets.
+
+    Raises Refusal if the gene is not found.
+    """
+    payload = _graphql_post(
+        OPENTARGETS_API,
+        _OT_SEARCH_QUERY % symbol.upper(),
+        OPENTARGETS_QPS,
+    )
+    hits = (payload.get("data") or {}).get("search", {}).get("hits")
+    if not hits:
+        raise Refusal(
+            f"Open Targets has no target record for {symbol!r}",
+            remedy="check the gene symbol at platform.opentargets.org",
+        )
+    # Take the first hit — the search is by exact gene symbol.
+    return hits[0]["id"], hits[0].get("name", symbol.upper())
+
+
+def _fetch_opentargets(symbol: str) -> tuple[bytes, dict[str, Any]]:
+    """Fetch disease associations from Open Targets for a gene symbol.
+
+    Returns (verbatim response bytes, structured artifact dict).
+    """
+    ensembl_id, resolved_name = _resolve_ensembl_id(symbol)
+    payload = _graphql_post(
+        OPENTARGETS_API,
+        _OT_ASSOC_QUERY % ensembl_id,
+        OPENTARGETS_QPS,
+    )
+    raw = json.dumps(payload, indent=2).encode("utf-8")
+
+    target_data = (payload.get("data") or {}).get("target")
+    if not target_data or not target_data.get("associatedDiseases"):
+        # Valid response but no associations — not an error.
+        return raw, _build_artifact(symbol, "opentargets", ensembl_id, [])
+
+    rows = target_data["associatedDiseases"].get("rows", [])
+    associations = []
+    for row in rows:
+        disease = row.get("disease") or {}
+        datatype_scores = {}
+        for ds in row.get("datatypeScores", []):
+            component = ds.get("id", "")
+            datatype_scores[component] = ds.get("score", 0.0)
+        associations.append({
+            "source_db": "opentargets",
+            "disease_id": disease.get("id", ""),
+            "disease_name": disease.get("name", ""),
+            "score": row.get("score", 0.0),
+            "evidence_count": len(row.get("datatypeScores", [])),
+            "datatype_scores": datatype_scores,
+        })
+
+    # Sort by score descending for top-disease extraction.
+    associations.sort(key=lambda a: a["score"], reverse=True)
+    artifact = _build_artifact(symbol, "opentargets", ensembl_id, associations)
+    return raw, artifact
+
+
+def _fetch_gwas_catalog(symbol: str) -> tuple[bytes, dict[str, Any]]:
+    """Fetch disease associations from the NHGRI-EBI GWAS Catalog.
+
+    Returns (verbatim response bytes, structured artifact dict).
+    """
+    url = (
+        f"{GWAS_CATALOG_API}/associations/search/findByGene"
+        f"?geneName={quote(symbol.upper(), safe='')}"
+    )
+    response = http.request(
+        "GET",
+        url,
+        qps=GWAS_CATALOG_QPS,
+        timeout=60.0,
+        headers={"Accept": "application/json"},
+    )
+    raw = response.content
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except Exception as exc:
+        raise SchemaError(
+            "GWAS Catalog did not return JSON", detail=str(exc)
+        )
+
+    # Navigate the HAL-style _embedded response.
+    embedded = payload.get("_embedded", {})
+    raw_assocs = embedded.get("associations", [])
+
+    associations = []
+    for assoc in raw_assocs:
+        # Extract trait names from the nested structure.
+        traits = []
+        for ea_trait in assoc.get("efoTraits", []):
+            trait_name = ea_trait.get("trait")
+            if trait_name:
+                traits.append(trait_name)
+        disease_name = "; ".join(traits) if traits else "Unknown trait"
+
+        # Extract p-value.
+        p_mantissa = assoc.get("pvalueMantissa")
+        p_exponent = assoc.get("pvalueExponent")
+        p_value = None
+        if p_mantissa is not None and p_exponent is not None:
+            p_value = p_mantissa * (10 ** p_exponent)
+
+        # Extract OR/beta.
+        or_value = assoc.get("orPerCopyNum")
+        beta = assoc.get("betaNum")
+
+        # Extract rsIDs from SNPs.
+        rs_ids = []
+        for snp in assoc.get("snps", []):
+            rs_id = snp.get("rsId")
+            if rs_id:
+                rs_ids.append(rs_id)
+
+        # Study accession from _links if available.
+        study_link = (assoc.get("_links") or {}).get("study", {})
+        study_href = study_link.get("href", "")
+        study_accession = study_href.rstrip("/").split("/")[-1] if study_href else None
+
+        associations.append({
+            "source_db": "gwas-catalog",
+            "disease_id": "",
+            "disease_name": disease_name,
+            # NB: score is p-value here (lower = more significant), unlike
+            # Open Targets where score is 0–1 (higher = stronger association).
+            # The analyze command branches on source to interpret correctly.
+            "score": p_value,
+            "rs_ids": rs_ids,
+            "p_value": p_value,
+            "or_per_copy": or_value,
+            "beta": beta,
+            "study_accession": study_accession,
+        })
+
+    # Sort by p-value ascending (most significant first), with None last.
+    associations.sort(
+        key=lambda a: (a["p_value"] is None, a["p_value"] or 0)
+    )
+    artifact = _build_artifact(symbol, "gwas-catalog", None, associations)
+    return raw, artifact
+
+
+def _fetch_clinvar(symbol: str) -> tuple[bytes, dict[str, Any]]:
+    """Fetch ClinVar variant classifications for a gene symbol.
+
+    Two-step: esearch to get variant UIDs for the gene, then a single
+    batched esummary call to fetch all variant details. The batched call
+    is one HTTP request with comma-separated UIDs, not N separate calls.
+
+    Uses `germline_classification.description` for clinical significance
+    and `germline_classification.review_status` for evidence quality.
+    The older `clinical_significance` field is present but returns
+    null/empty — the API has migrated to `germline_classification`.
+
+    Returns (verbatim response bytes, structured artifact dict).
+    """
+    gene = symbol.upper()
+
+    # Step 1: Search for ClinVar UIDs for this gene.
+    search_url = (
+        f"{CLINVAR_ESEARCH}?db=clinvar"
+        f"&term={quote(gene, safe='')}[gene]"
+        f"&retmode=json&retmax={CLINVAR_RETMAX}"
+    )
+    search_response = http.request(
+        "GET",
+        search_url,
+        qps=CLINVAR_QPS,
+        timeout=60.0,
+    )
+    try:
+        search_data = json.loads(search_response.content.decode("utf-8"))
+    except Exception as exc:
+        raise SchemaError("ClinVar esearch did not return JSON", detail=str(exc))
+
+    esearch_result = search_data.get("esearchresult") or {}
+    id_list = esearch_result.get("idlist", [])
+    if not id_list:
+        # No ClinVar entries for this gene — not an error.
+        raw = json.dumps(search_data, indent=2).encode("utf-8")
+        return raw, _build_artifact(gene, "clinvar", None, [])
+
+    # Detect truncation: esearch reports the total count in `count`.
+    total_count = int(esearch_result.get("count", len(id_list)))
+    truncated = len(id_list) < total_count
+
+    # Step 2: Batch fetch summaries — one HTTP call for all UIDs.
+    ids_param = ",".join(id_list)
+    summary_url = (
+        f"{CLINVAR_ESUMMARY}?db=clinvar"
+        f"&id={ids_param}"
+        f"&retmode=json"
+    )
+    summary_response = http.request(
+        "GET",
+        summary_url,
+        qps=CLINVAR_QPS,
+        timeout=120.0,
+    )
+    try:
+        summary_data = json.loads(summary_response.content.decode("utf-8"))
+    except Exception as exc:
+        raise SchemaError(
+            "ClinVar esummary did not return JSON", detail=str(exc)
+        )
+
+    raw = json.dumps(summary_data, indent=2).encode("utf-8")
+    result_data = summary_data.get("result", {})
+    uids = result_data.get("uids", [])
+
+    associations: list[dict[str, Any]] = []
+    for uid in uids:
+        entry = result_data.get(uid)
+        if not isinstance(entry, dict):
+            continue
+
+        # Use germline_classification, NOT the deprecated clinical_significance.
+        germline = entry.get("germline_classification") or {}
+        classification = germline.get("description", "")
+        review_status = germline.get("review_status", "")
+
+        # Extract trait names and cross-references from trait_set.
+        traits: list[str] = []
+        trait_xrefs: list[dict[str, str]] = []
+        for trait in germline.get("trait_set", []):
+            name = trait.get("trait_name")
+            if name:
+                traits.append(name)
+            for xref in trait.get("trait_xrefs", []):
+                trait_xrefs.append({
+                    "db": xref.get("db_source", ""),
+                    "id": xref.get("db_id", ""),
+                })
+
+        disease_name = "; ".join(traits) if traits else ""
+
+        associations.append({
+            "source_db": "clinvar",
+            "variant_id": uid,
+            "variant_title": entry.get("title", ""),
+            "disease_name": disease_name,
+            "classification": classification,
+            "review_status": review_status,
+            "trait_xrefs": trait_xrefs,
+        })
+
+    # Sort: pathogenic first (by clinical significance tier), then
+    # alphabetically by review status within each tier.
+    _class_order = {
+        "Pathogenic": 0,
+        "Pathogenic/Likely pathogenic": 1,
+        "Likely pathogenic": 2,
+        "Uncertain significance": 3,
+        "Conflicting classifications of pathogenicity": 4,
+        "Likely benign": 5,
+        "Benign/Likely benign": 6,
+        "Benign": 7,
+    }
+    associations.sort(
+        key=lambda a: (
+            _class_order.get(a.get("classification", ""), 99),
+            a.get("review_status", ""),
+        )
+    )
+
+    artifact = _build_artifact(gene, "clinvar", None, associations)
+
+    # Add ClinVar-specific summary: classification counts.
+    class_counts: dict[str, int] = {}
+    for assoc in associations:
+        cls = assoc.get("classification", "")
+        if cls:
+            class_counts[cls] = class_counts.get(cls, 0) + 1
+    artifact["summary"]["classification_counts"] = class_counts
+
+    # Surface truncation so downstream consumers know the result set
+    # may be incomplete for heavily-studied genes.
+    if truncated:
+        artifact["summary"]["total_clinvar_count"] = total_count
+        artifact["summary"]["truncated"] = True
+        artifact["summary"]["retmax"] = CLINVAR_RETMAX
+
+    return raw, artifact
+
+
+def _build_artifact(
+    symbol: str,
+    source: str,
+    ensembl_id: str | None,
+    associations: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Build the structured dde.gwas.v1 artifact."""
+    top_diseases = []
+    seen = set()
+    for assoc in associations[:10]:
+        name = assoc.get("disease_name", "")
+        if name and name not in seen:
+            top_diseases.append(name)
+            seen.add(name)
+        if len(top_diseases) >= 5:
+            break
+
+    artifact: dict[str, Any] = {
+        "schema": "dde.gwas.v1",
+        "query": {
+            "gene": symbol.upper(),
+            "source": source,
+        },
+        "summary": {
+            "n_associations": len(associations),
+            "top_diseases": top_diseases,
+        },
+        "associations": associations,
+    }
+    if ensembl_id:
+        artifact["query"]["ensembl_id"] = ensembl_id
+    return artifact
+
+
+@click.group()
+def gwas() -> None:
+    """GWAS and disease association lookup."""
+
+
+@gwas.command("search")
+@click.argument("gene")
+@click.option(
+    "--source",
+    type=click.Choice(["opentargets", "gwas-catalog", "clinvar"]),
+    default="opentargets",
+    help="Which database to query (default: opentargets).",
+)
+@out_option
+@output_options
+@pass_state
+def search_cmd(
+    state: AppState,
+    gene: str,
+    source: str,
+    out: str | None,
+    as_json: bool,
+    quiet: bool,
+) -> None:
+    """Search for GWAS / disease associations for GENE."""
+    emit = emitter(as_json, quiet)
+    target_dir = state.project().artifact_dir(ARTIFACT_CLASS, out)
+    slug = gene.lower()
+
+    if source == "opentargets":
+        endpoint = OPENTARGETS_API
+        raw, artifact = _fetch_opentargets(gene)
+    elif source == "gwas-catalog":
+        endpoint = GWAS_CATALOG_API
+        raw, artifact = _fetch_gwas_catalog(gene)
+    else:
+        endpoint = CLINVAR_ESEARCH
+        raw, artifact = _fetch_clinvar(gene)
+
+    sidecar = provenance.Sidecar(
+        tool=TOOL,
+        subcommand="search",
+        endpoint=endpoint,
+        parameters={
+            "query_gene": gene,
+            "resolved_gene": gene.upper(),
+            "source": source,
+        },
+    )
+    sidecar.note("source_db", source)
+    sidecar.note("n_associations", artifact["summary"]["n_associations"])
+
+    # ClinVar: warn when results were truncated by retmax.
+    if source == "clinvar" and artifact["summary"].get("truncated"):
+        total = artifact["summary"]["total_clinvar_count"]
+        fetched = artifact["summary"]["n_associations"]
+        sidecar.warn(
+            f"ClinVar has {total} variants for {gene.upper()} but only "
+            f"{fetched} were fetched (retmax={CLINVAR_RETMAX}); the result "
+            "set may not include all variants"
+        )
+
+    # Write verbatim response.
+    verbatim_path = target_dir / f"{slug}.gwas-{source}.json"
+    verbatim_path.write_bytes(raw)
+    sidecar.add_output(verbatim_path)
+
+    # Write structured artifact.
+    artifact_path = target_dir / f"{slug}.gwas-{source}.artifact.json"
+    artifact_path.write_text(
+        json.dumps(artifact, indent=2) + "\n", encoding="utf-8"
+    )
+    sidecar.add_output(artifact_path)
+
+    # Write sidecar.
+    meta_path = sidecar.write(target_dir / f"{slug}.gwas-{source}.meta.json")
+
+    emit.data("gene", gene.upper())
+    emit.data("source", source)
+    emit.data("n_associations", artifact["summary"]["n_associations"])
+    emit.data("top_diseases", artifact["summary"]["top_diseases"])
+    emit.path(verbatim_path, role="verbatim")
+    emit.path(artifact_path, role="artifact")
+    emit.path(meta_path, role="sidecar")
+    emit.flush()
+
+
+@gwas.command("analyze")
+@click.argument("gene")
+@click.option(
+    "--source",
+    type=click.Choice(["opentargets", "gwas-catalog", "clinvar"]),
+    default="opentargets",
+    help="Which source to analyze (must match a prior search).",
+)
+@click.option(
+    "--threshold",
+    "score_threshold",
+    type=float,
+    default=None,
+    help="Override the minimum score/significance threshold.",
+)
+@from_option
+@out_option
+@output_options
+@pass_state
+def analyze_cmd(
+    state: AppState,
+    gene: str,
+    source: str,
+    score_threshold: float | None,
+    from_dir: str | None,
+    out: str | None,
+    as_json: bool,
+    quiet: bool,
+) -> None:
+    """Classify disease associations from a stored GWAS search. No network."""
+    emit = emitter(as_json, quiet)
+    source_dir = state.project().artifact_dir(ARTIFACT_CLASS, from_dir)
+    target_dir = state.project().artifact_dir(ARTIFACT_CLASS, out)
+
+    slug = gene.lower()
+    artifact_path = source_dir / f"{slug}.gwas-{source}.artifact.json"
+    if not artifact_path.is_file():
+        raise ArtifactError(
+            f"no GWAS search artifact for {gene.upper()} (source={source})",
+            remedy=f"run `dde gwas search {gene} --source {source}` first",
+        )
+
+    artifact = provenance.read_json(artifact_path, "GWAS artifact")
+    if artifact.get("schema") != "dde.gwas.v1":
+        raise SchemaError(
+            f"unexpected schema in {artifact_path.name}",
+            detail=f"expected dde.gwas.v1, got {artifact.get('schema')!r}",
+        )
+
+    associations = artifact.get("associations", [])
+
+    relays: list[dict[str, str]] = []
+
+    def add_relay(code: str, message: str) -> None:
+        if not any(r["code"] == code for r in relays):
+            relays.append(provenance.relay(code, message))
+
+    # Apply significance filtering — branched by source.
+    if source == "clinvar":
+        if score_threshold is not None:
+            emit.line(
+                "note: --threshold is ignored for --source clinvar; "
+                "ClinVar uses categorical ACMG classifications, not a "
+                "numeric score"
+            )
+        significant, metrics, assessment = _analyze_clinvar(
+            gene, associations, add_relay,
+        )
+        thresholds_applied = {
+            "significant_classifications": sorted(_PATHOGENIC_CLASSIFICATIONS),
+        }
+    else:
+        significant, metrics, assessment = _analyze_gwas(
+            gene, source, associations, score_threshold, add_relay,
+        )
+        thresholds_applied = {
+            "significance_cutoff": metrics["threshold"],
+        }
+
+    analysis_path = provenance.write_analysis(
+        target_dir / f"{slug}.gwas-{source}.analysis.json",
+        source=state.project().relative(artifact_path),
+        threshold_set=f"gwas-{source}",
+        thresholds_applied=thresholds_applied,
+        metrics=metrics,
+        assessment=assessment,
+        mandatory_relays=relays,
+    )
+
+    emit.data("assessment", assessment)
+    emit.data("metrics", metrics)
+    emit.data("relays", relays)
+
+    if source == "clinvar":
+        verdict = assessment["verdict"]
+        emit.line(
+            f"{gene.upper()} -> {verdict.upper()} "
+            f"({len(significant)}/{len(associations)} "
+            "pathogenic/likely pathogenic)"
+        )
+        class_counts = metrics.get("classification_counts", {})
+        if class_counts:
+            parts = [f"{k}={v}" for k, v in class_counts.items()]
+            emit.line(f"classifications: {', '.join(parts)}")
+        review_breakdown = metrics.get("review_status_breakdown", {})
+        if review_breakdown:
+            parts = [f"{k}={v}" for k, v in review_breakdown.items()]
+            emit.line(f"review status (pathogenic): {', '.join(parts)}")
+        top_conditions = assessment.get("top_conditions", [])
+        if top_conditions:
+            emit.line(f"top conditions: {', '.join(top_conditions[:5])}")
+    else:
+        verdict = assessment["verdict"]
+        emit.line(
+            f"{gene.upper()} -> {verdict.upper()} "
+            f"({len(significant)}/{len(associations)} above threshold)"
+        )
+        top_diseases = assessment.get("top_diseases", [])
+        if top_diseases:
+            emit.line(f"top diseases: {', '.join(top_diseases[:5])}")
+
+    for record in relays:
+        emit.line(f"relay {record['code']}: {record['message']}")
+    emit.path(analysis_path, role="analysis")
+    emit.flush()
+
+
+def _analyze_gwas(
+    gene: str,
+    source: str,
+    associations: list[dict[str, Any]],
+    score_threshold: float | None,
+    add_relay: Any,
+) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
+    """Analyze GWAS associations (Open Targets or GWAS Catalog).
+
+    Returns (significant_associations, metrics, assessment).
+    """
+    if source == "opentargets":
+        # Open Targets score range: 0-1, higher is stronger.
+        cutoff = score_threshold if score_threshold is not None else 0.1
+        significant = [a for a in associations if (a.get("score") or 0) >= cutoff]
+    else:
+        # GWAS Catalog: p-value, lower is more significant.
+        cutoff = score_threshold if score_threshold is not None else 5e-8
+        significant = [
+            a for a in associations
+            if a.get("p_value") is not None and a["p_value"] <= cutoff
+        ]
+
+    # Identify top diseases.
+    top_diseases: list[str] = []
+    seen: set[str] = set()
+    for assoc in significant:
+        name = assoc.get("disease_name", "")
+        if name and name not in seen:
+            top_diseases.append(name)
+            seen.add(name)
+        if len(top_diseases) >= 10:
+            break
+
+    verdict = "associations_found" if significant else "no_associations"
+
+    if significant:
+        add_relay(
+            "gwas.association_not_causation",
+            f"{gene.upper()} has {len(significant)} GWAS association(s) above "
+            f"the significance threshold; these are statistical correlations "
+            "between genetic variants and disease phenotypes, not evidence "
+            "of causation or therapeutic mechanism",
+        )
+
+    metrics = {
+        "total_associations": len(associations),
+        "significant_associations": len(significant),
+        "threshold": cutoff,
+        "source": source,
+        "top_diseases": top_diseases,
+    }
+    assessment = {
+        "verdict": verdict,
+        "gene": gene.upper(),
+        "n_significant": len(significant),
+        "top_diseases": top_diseases,
+    }
+    return significant, metrics, assessment
+
+
+def _analyze_clinvar(
+    gene: str,
+    associations: list[dict[str, Any]],
+    add_relay: Any,
+) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
+    """Analyze ClinVar variant classifications.
+
+    Classifies by clinical significance tier rather than by numeric
+    threshold. Pathogenic and Likely pathogenic are the "significant"
+    findings. Review status is surfaced prominently — a classification
+    without its review status is incomplete.
+
+    Returns (significant_associations, metrics, assessment).
+    """
+    significant = [
+        a for a in associations
+        if a.get("classification", "") in _PATHOGENIC_CLASSIFICATIONS
+    ]
+
+    # Classification breakdown across all variants.
+    class_counts: dict[str, int] = {}
+    for assoc in associations:
+        cls = assoc.get("classification", "")
+        if cls:
+            class_counts[cls] = class_counts.get(cls, 0) + 1
+
+    # Review status breakdown for pathogenic/likely pathogenic only.
+    review_breakdown: dict[str, int] = {"strong": 0, "moderate": 0, "weak": 0}
+    weak_pathogenic: list[dict[str, Any]] = []
+    for assoc in significant:
+        rs = assoc.get("review_status", "")
+        if rs in _STRONG_REVIEW:
+            review_breakdown["strong"] += 1
+        elif rs in _MODERATE_REVIEW:
+            review_breakdown["moderate"] += 1
+        else:
+            review_breakdown["weak"] += 1
+            weak_pathogenic.append(assoc)
+
+    # Identify top conditions from pathogenic variants.
+    top_conditions: list[str] = []
+    seen: set[str] = set()
+    for assoc in significant:
+        name = assoc.get("disease_name", "")
+        if name and name not in seen:
+            top_conditions.append(name)
+            seen.add(name)
+        if len(top_conditions) >= 10:
+            break
+
+    verdict = (
+        "pathogenic_variants_found" if significant
+        else "no_pathogenic_variants"
+    )
+
+    # Relay: curated-assertion epistemic status. Fires only when
+    # pathogenic/likely pathogenic variants exist — on a gene with only
+    # benign/VUS variants there is no pathogenicity claim to guard.
+    if significant:
+        add_relay(
+            "clinvar.classification_is_curated",
+            f"{gene.upper()} has {len(significant)} ClinVar variant(s) "
+            f"classified as pathogenic or likely pathogenic; these are "
+            "curated clinical assertions that the variant causes the named "
+            "condition, not statistical correlations — but variant-level "
+            "pathogenicity does not imply the gene is a therapeutic target",
+        )
+
+    # Relay: weak review status. Fires only when pathogenic/LP variants
+    # have weak review status (e.g. "no assertion criteria provided").
+    # Silent when all pathogenic calls have strong/moderate review status.
+    if weak_pathogenic:
+        add_relay(
+            "clinvar.weak_review_status",
+            f"{len(weak_pathogenic)} of {len(significant)} pathogenic/likely "
+            f"pathogenic variant(s) for {gene.upper()} have weak review "
+            "status (no assertion criteria provided or equivalent); do not "
+            "cite these classifications without stating their review status",
+        )
+
+    metrics = {
+        "total_variants": len(associations),
+        "pathogenic_count": len(significant),
+        "classification_counts": class_counts,
+        "review_status_breakdown": review_breakdown,
+        "source": "clinvar",
+        "top_conditions": top_conditions,
+    }
+    assessment = {
+        "verdict": verdict,
+        "gene": gene.upper(),
+        "n_pathogenic": len(significant),
+        "n_weak_review": len(weak_pathogenic),
+        "top_conditions": top_conditions,
+        "classification_counts": class_counts,
+        "review_status_breakdown": review_breakdown,
+    }
+    return significant, metrics, assessment

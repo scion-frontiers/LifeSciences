@@ -1,0 +1,15 @@
+schema_version: "1"
+description: "Independent scientific reviewer — re-runs deterministic analysis against stored Layer 0 artifacts, audits Layer 1 claims and mandatory relays, and recommends accept/revise/reject"
+agent_instructions: agents.md
+system_prompt: system-prompt.md
+
+# DDE_PROJECT is resolved by .dde/ walk-up discovery by default.
+# Set it explicitly only when the agent's workspace is not the program
+# directory — e.g. when /workspace is the dde repo:
+#   env:
+#     DDE_PROJECT: /workspace/program-hr-mbc
+
+skills:
+  - uri: "gh://ptone/project-venter/citation-resolution"
+  - uri: "gh://ptone/project-venter/tournament-corpus"
+  - uri: "gh://ptone/project-venter/artifact-conventions"

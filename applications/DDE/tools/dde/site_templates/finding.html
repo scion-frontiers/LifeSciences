@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Finding — {{ title }}{% endblock %}
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="index.html">Home</a> &rsaquo;
+  <span>Findings</span> &rsaquo;
+  <span>{{ title }}</span>
+</div>
+{% endblock %}
+{% block content %}
+<h1>{{ title }}</h1>
+
+<div class="meta">
+  <dl>
+    <dt>Work Order:</dt>
+    <dd>{{ work_order_id }}-r{{ revision }}</dd>
+    <dt>Source Path:</dt>
+    <dd>{{ source_path }}</dd>
+    <dt>Role:</dt>
+    <dd>{{ requested_role }}</dd>
+  </dl>
+</div>
+
+<h2>Finding Content</h2>
+<div class="finding-body">
+{{ content | markdown }}
+</div>
+
+<h2>Provenance</h2>
+<ul>
+  <li><strong>Work Order:</strong> {{ work_order_id }} revision {{ revision }}</li>
+  <li><strong>State:</strong> {{ state }}</li>
+  <li><strong>Stage:</strong> {{ stage }}</li>
+  <li><strong>Cycle:</strong> {{ cycle }}</li>
+{% if artifact_classes %}
+  <li><strong>Referenced Artifact Classes:</strong>
+    <ul>
+    {% for ac in artifact_classes %}
+      <li><a href="{{ ac.html_filename }}">{{ ac.name }}</a></li>
+    {% endfor %}
+    </ul>
+  </li>
+{% endif %}
+{% if viewer_artifacts is defined and viewer_artifacts %}
+  <li><strong>Artifact Viewers:</strong>
+    <ul>
+    {% for va in viewer_artifacts %}
+      <li><a href="{{ va.viewer_url }}" target="_blank">{{ va.name }}</a> <span style="color:#888; font-size:0.85em">({{ va.artifact_class }})</span></li>
+    {% endfor %}
+    </ul>
+  </li>
+{% endif %}
+</ul>
+
+<p><a href="index.html">&larr; Back to index</a></p>
+{% endblock %}

@@ -1,0 +1,19 @@
+schema_version: "1"
+description: "Computational chemist for virtual screening, molecular docking, cheminformatics, and QSAR modeling"
+agent_instructions: agents.md
+system_prompt: system-prompt.md
+
+# DDE_PROJECT is resolved by .dde/ walk-up discovery by default.
+# Set it explicitly only when the agent's workspace is not the program
+# directory — e.g. when /workspace is the dde repo:
+#   env:
+#     DDE_PROJECT: /workspace/program-hr-mbc
+
+skills:
+  - uri: "gh://ptone/project-venter/protein-structure-confidence"
+  - uri: "gh://ptone/project-venter/pocket-druggability"
+  - uri: "gh://ptone/project-venter/compound-property-profile"
+  - uri: "gh://ptone/project-venter/binding-mode-analysis"
+  - uri: "gh://ptone/project-venter/sar-series-analysis"
+  - uri: "gh://ptone/project-venter/structure-similarity-search"
+  - uri: "gh://ptone/project-venter/artifact-conventions"

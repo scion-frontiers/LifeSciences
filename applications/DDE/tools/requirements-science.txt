@@ -1,0 +1,41 @@
+# DDE science stack — for specialist skills, not for the CLI itself.
+#
+# Nothing under tools/dde/ imports any of these, which is the point:
+# they are split out of requirements.txt so that a failure here leaves a
+# working `dde` behind rather than an empty venv.
+#
+# Some of these build from source. `prody` publishes no wheels for
+# CPython 3.11 and compiles C extensions, so it needs a toolchain and the
+# Python development headers:
+#
+#     apt-get install -y build-essential python3-dev
+#
+# Without them the prody wheel build fails with `fatal error: Python.h:
+# No such file or directory`, and because pip installs a requirements
+# file atomically, that one failure used to abort the whole install and
+# leave nothing behind. install.sh now installs this file separately for
+# exactly that reason.
+
+# --- Molecular chemistry ---
+# `rdkit-pypi` was the unofficial wheel build and stopped at 2023.3.1b1;
+# it has no release satisfying >=2024.3.1 on any Python, so the pin it
+# carried made the whole install unresolvable. Upstream now publishes
+# official wheels as `rdkit`.
+rdkit>=2024.3.1               # Molecular descriptors, fingerprints, substructure search
+meeko>=0.5                    # PDBQT conversion (receptor and ligand preparation for AutoDock Vina)
+gemmi>=0.7                    # Macromolecular crystallography (meeko runtime dependency, undeclared by meeko)
+pubchempy>=1.0.4              # PubChem compound/substance lookups
+
+# --- Bioinformatics ---
+biopython>=1.84               # Sequence analysis, PDB parsing, BLAST wrappers
+prody>=2.4                    # Protein dynamics, PDB fetch, ENM analysis (builds from source)
+
+# --- Cheminformatics APIs ---
+chembl-webresource-client>=0.10.9   # ChEMBL REST API client
+
+# --- Numerical / data ---
+scipy>=1.12
+pandas>=2.2
+
+# --- Visualization (optional, for report generation) ---
+matplotlib>=3.8

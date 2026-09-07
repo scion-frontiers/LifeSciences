@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Retrospectives{% endblock %}
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="index.html">Home</a> &rsaquo;
+  <span>Retrospectives</span>
+</div>
+{% endblock %}
+{% block content %}
+<h1>Retrospectives</h1>
+
+{% if retrospectives %}
+{% for retro in retrospectives %}
+<h2>{{ retro.title }}</h2>
+<div class="retrospective-body">
+{{ retro.content | markdown }}
+</div>
+<p class="meta" style="font-size: 0.8rem;">Source: {{ retro.source_file }}</p>
+{% endfor %}
+{% else %}
+<p>No retrospectives available.</p>
+{% endif %}
+
+<p><a href="index.html">&larr; Back to index</a></p>
+{% endblock %}

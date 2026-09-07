@@ -1,0 +1,47 @@
+# DDE CLI core dependencies — everything `dde` itself imports.
+# Install into a venv via: ./install.sh
+#
+# This file is hashed into the `env_version` recorded in every provenance
+# sidecar whenever the shared tools volume has not been provisioned.
+# Changing it changes the fallback env_version of every artifact produced
+# afterwards, so pin deliberately.
+#
+# Kept deliberately small and pure-wheel. The science stack in
+# requirements-science.txt needs a C toolchain and Python headers to
+# build; keeping the two apart is what lets an agent get a working
+# `dde` on a machine where prody cannot compile, instead of an empty
+# venv and a wall of gcc output. See tools/README.md.
+
+# --- CLI framework ---
+click>=8.1
+jinja2>=3.1                   # site build: deterministic HTML rendering
+mistune>=3.0                  # site build: markdown→HTML rendering
+PyYAML>=6.0                   # <project>/.dde/thresholds.yaml overrides
+
+# --- HTTP ---
+requests>=2.31                # AFDB, UniProt, and the AlphaGenome rawPredict call
+
+# --- Numerical ---
+# Not optional: AlphaGenome returns packed binary tensors, so there is no
+# numpy-free path from a response to a number.
+numpy>=1.26
+
+# --- AlphaGenome transport ---
+# The Vertex backend returns NDJSON whose tensor chunks are base64 zstd
+# over raw float32/bfloat16, so decoding it is not optional either.
+zstandard>=0.22
+
+# --- Google Cloud / Vertex AI ---
+# Optional at run time. `dde alphagenome` prefers Application Default
+# Credentials from this package and falls back to `gcloud auth
+# print-access-token`, so the CLI works without it; `dde alphafold
+# predict` (AF3 dedicated endpoint) still needs it and raises
+# DependencyError rather than degrading if it is absent.
+google-cloud-aiplatform>=1.60
+google-cloud-bigquery>=3.0    # pubmed-bq: PubMed via BigQuery
+
+# --- AlphaGenome pip backend ---
+# The only path that offers ISM. Needs ALPHAGENOME_API_KEY at run time;
+# left commented out because that key is not yet provisioned and
+# `dde doctor` already reports its absence.
+# alphagenome>=0.1

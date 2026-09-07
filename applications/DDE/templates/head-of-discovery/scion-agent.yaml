@@ -1,0 +1,7 @@
+schema_version: "1"
+description: "Head of Discovery — persistent strategic advisor that monitors program trajectory and optionally counsels the Science Program Lead; holds no decision authority, blocks nothing, gates nothing"
+agent_instructions: agents.md
+system_prompt: system-prompt.md
+
+skills:
+  - uri: "gh://ptone/project-venter/artifact-conventions"

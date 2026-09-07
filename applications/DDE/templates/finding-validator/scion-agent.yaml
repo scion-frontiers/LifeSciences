@@ -1,0 +1,7 @@
+schema_version: "1"
+description: "Mechanical finding validator — checks artifact contract, provenance, source tags, and relay codes before the science lead sees a finding"
+agent_instructions: agents.md
+system_prompt: system-prompt.md
+
+skills:
+  - uri: "gh://ptone/project-venter/artifact-conventions"

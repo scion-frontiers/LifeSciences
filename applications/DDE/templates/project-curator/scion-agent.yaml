@@ -1,0 +1,8 @@
+schema_version: "1"
+description: "Project curator — maintains a navigable website from the drug discovery project artifact hierarchy"
+agent_instructions: agents.md
+system_prompt: system-prompt.md
+
+skills:
+  - uri: "gh://ptone/project-venter/artifact-conventions"
+  - uri: "gh://ptone/project-venter/site-generation"

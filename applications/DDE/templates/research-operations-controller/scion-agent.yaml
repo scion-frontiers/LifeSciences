@@ -1,0 +1,15 @@
+schema_version: "1"
+description: "Research Operations Controller — executes approved work orders, supervises specialist runs and retries, performs mechanical artifact validation, and publishes the presentation layer; holds no scientific authority"
+agent_instructions: agents.md
+system_prompt: system-prompt.md
+
+# DDE_PROJECT is resolved by .dde/ walk-up discovery by default.
+# Set it explicitly only when the agent's workspace is not the program
+# directory — e.g. when /workspace is the dde repo:
+#   env:
+#     DDE_PROJECT: /workspace/program-hr-mbc
+
+skills:
+  - uri: "gh://scion-frontiers/agent-team/artifact-durability"
+  - uri: "gh://scion-frontiers/agent-team/agent-state-continuity"
+  - uri: "gh://ptone/project-venter/artifact-conventions"

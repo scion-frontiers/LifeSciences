@@ -1,0 +1,16 @@
+schema_version: "1"
+description: "Science Program Lead — user-facing orchestrator and sole owner of scientific direction; sets decision questions, accepts or rejects findings, maintains Layer 2 program state, and authorizes stage gates"
+agent_instructions: agents.md
+system_prompt: system-prompt.md
+
+# DDE_PROJECT is resolved by .dde/ walk-up discovery by default.
+# Set it explicitly only when the agent's workspace is not the program
+# directory — e.g. when /workspace is the dde repo:
+#   env:
+#     DDE_PROJECT: /workspace/program-hr-mbc
+
+skills:
+  - uri: "gh://scion-frontiers/agent-team/artifact-durability"
+  - uri: "gh://scion-frontiers/agent-team/agent-state-continuity"
+  - uri: "gh://ptone/project-venter/artifact-conventions"
+  - uri: "gh://ptone/project-venter/program-state-management"

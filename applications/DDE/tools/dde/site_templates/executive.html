@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Executive Summary{% endblock %}
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="index.html">Home</a> &rsaquo;
+  <span>Executive Summary</span>
+</div>
+{% endblock %}
+{% block content %}
+<h1>{{ title }}</h1>
+
+<div class="executive-body">
+{{ content | markdown }}
+</div>
+
+<p><a href="index.html">&larr; Back to index</a></p>
+{% endblock %}

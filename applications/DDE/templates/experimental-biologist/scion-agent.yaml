@@ -1,0 +1,10 @@
+schema_version: "1"
+description: "Experimental biologist for assay design, high-throughput screening, CRISPR validation, and cellular pharmacology"
+agent_instructions: agents.md
+system_prompt: system-prompt.md
+
+skills:
+  - uri: "gh://ptone/project-venter/citation-resolution"
+  - uri: "gh://ptone/project-venter/bioactivity-landscape"
+  - uri: "gh://ptone/project-venter/in-vivo-pk-analysis"
+  - uri: "gh://ptone/project-venter/artifact-conventions"
