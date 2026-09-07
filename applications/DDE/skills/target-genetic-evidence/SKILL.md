@@ -164,8 +164,21 @@ sidecar records this.
 | `clinvar.weak_review_status` | Qualifier | Pathogenic/LP variants have weak review status (conditional) | Do not cite the pathogenic classification without stating its review status. A classification without review status is incomplete. |
 | `gtex.whole_blood_is_not_peripheral_blood` | Qualifier | Every GTEx query (unconditional) | Report this as "GTEx whole-blood RNA-seq expression", not as "peripheral blood expression". GTEx whole blood is drawn from femoral/subclavian veins and measured by bulk RNA-seq — a partial proxy, not an equivalent measurement. |
 
-Check `mandatory_relays` in each `.analysis.json` and `.meta.json`.
-Every relay code present must be satisfied in the finding.
+The same relay list appears under two different key names depending on
+where you read it:
+
+- `mandatory_relays` — the key in persisted artifact files
+  (`.analysis.json`, `.meta.json`). This is the authoritative
+  representation and what `dde validate` checks.
+- `relays` — the key in CLI stdout JSON output (`--json` flag). Same
+  data, different name. The stdout key predates the file-persistence
+  layer; the file format uses the more precise name.
+
+Always check `mandatory_relays` in the persisted `.analysis.json` and
+`.meta.json` files. If `relays` in stdout appears empty but
+`mandatory_relays` in the `.analysis.json` is populated, trust the
+`.analysis.json` — it is authoritative. Every relay code present in
+`mandatory_relays` must be satisfied in the finding.
 
 ### Synthesis rules
 
