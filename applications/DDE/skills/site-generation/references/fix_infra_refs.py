@@ -190,6 +190,9 @@ def main() -> None:
     result = scan(site_dir)
     report(result)
 
+    if result.high_count:
+        sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
