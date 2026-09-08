@@ -36,6 +36,7 @@ from .commands.expression import expression
 from .commands.faers import faers
 from .commands.geo import geo
 from .commands.homology import homology
+from .commands.hypothesis import hypothesis
 from .commands.gtex import gtex
 from .commands.genetics import genetics
 from .commands.gwas import gwas
@@ -332,6 +333,7 @@ cli.add_command(conservation)
 cli.add_command(doctor)
 cli.add_command(env)
 cli.add_command(coscientist)
+cli.add_command(hypothesis)
 cli.add_command(alphafold)
 cli.add_command(alphagenome)
 cli.add_command(expression)

@@ -229,6 +229,23 @@ COSCIENTIST_CLAIM_DENOMINATOR = (
     "in the export and cannot be inferred."
 )
 
+# --- Hypothesis set (adopted / charter) ------------------------------------
+# Structural thresholds only — nothing about an adopted set licenses a
+# quality threshold.  The set validates that something was adopted; it
+# does not claim anything about the hypotheses' merit.
+_declare(
+    "hypothesis-set",
+    "1.0",
+    provenance=(
+        "Structural thresholds for hypothesis sets adopted from external "
+        "sources. No quality threshold — nothing about an adopted set "
+        "licenses one."
+    ),
+    values={
+        "min_candidates": 1,
+    },
+)
+
 # --- AlphaGenome variant effect -------------------------------------------
 # Raw-score magnitude bands are quoted directly from the science-skills
 # interpretation guide (docs/interpretation-guide.md, "Magnitude Rules").

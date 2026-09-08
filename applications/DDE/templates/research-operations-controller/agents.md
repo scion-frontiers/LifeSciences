@@ -221,7 +221,7 @@ already exist (created by the bootstrapper via `dde init`). Create the artifact
 layers:
 
 ```text
-raw/{structures,docking,assay-data,descriptors,literature}/
+raw/{structures,docking,assay-data,descriptors,literature,hypotheses}/
 findings/{structural-biology,computational-biology,medicinal-chemistry,
           computational-chemistry,admet-dmpk,experimental-biology,regulatory,reviews}/
 program-state/{active-series.md,liability-tracker.md,decision-log.md,open-questions.md}

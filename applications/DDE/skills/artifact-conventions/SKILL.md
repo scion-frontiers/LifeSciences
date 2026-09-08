@@ -11,7 +11,7 @@ project-<name>/
 ├── raw/                              # Layer 0: Tool I/O
 │   ├── structures/                   # alphafold
 │   ├── genomics/                     # alphagenome, genetics
-│   ├── hypotheses/                   # coscientist
+│   ├── hypotheses/                   # coscientist, adopted
 │   ├── literature/                   # litref
 │   ├── expression/                   # expression
 │   ├── docking/                      # (declared, no tool writes yet)

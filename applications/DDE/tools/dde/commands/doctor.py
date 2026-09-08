@@ -995,6 +995,43 @@ def _check_known_faults(report: Report) -> None:
     )
 
 
+def _check_hypothesis_strategies(report: Report) -> None:
+    """Report availability of the four hypothesis entry strategies."""
+    # Sponsor and charter are always available — they are adoption commands
+    # built into the CLI itself.
+    report.add(
+        "hypothesis strategy: sponsor",
+        OK,
+        "always available (dde hypothesis adopt --origin sponsor)",
+    )
+    report.add(
+        "hypothesis strategy: charter",
+        OK,
+        "always available (dde hypothesis adopt --origin charter)",
+    )
+
+    # Co-scientist requires an export to exist.  The command itself is
+    # always present; the strategy is available whenever dde coscientist
+    # is importable (which it always is in a standard installation).
+    report.add(
+        "hypothesis strategy: co-scientist",
+        OK,
+        "available (dde coscientist ingest — requires an export file)",
+    )
+
+    # hypex requires tools volume + templates + lease (Track B).  Not yet
+    # available — pending Track B implementation.
+    report.add(
+        "hypothesis strategy: hypex",
+        WARN,
+        "not yet available — requires hypex tools, templates and a lease "
+        "(Track B, pending)",
+        "hypex integration is in development; use sponsor, charter or "
+        "co-scientist strategies in the interim",
+        kind=CAPABILITY,
+    )
+
+
 def _check_phase_two_contract(report: Report) -> None:
     """State how many phase-2 commands are under the contract, not just whether any broke it.
 
@@ -1189,6 +1226,7 @@ def doctor(state: AppState, as_json: bool, strict: bool) -> None:
     _check_gwas_catalog(report)
     _check_disignatlas(report)
     _check_askcos(report)
+    _check_hypothesis_strategies(report)
     _check_phase_two_contract(report)
     _check_known_faults(report)
 

@@ -591,6 +591,18 @@ RELAY_CODES: dict[str, str] = {
         "Results were capped at the requested maximum. Additional matching "
         "preprints may exist."
     ),
+    # --- hypothesis adoption ---
+    "hypothesis.adopted_not_generated": (
+        "The hypothesis set was attested by a human, not retrieved by a "
+        "tool. Its provenance chain terminates at the attestation. Quote "
+        "the attestation verbatim in any finding that rests on this "
+        "artifact, and do not describe the set as DDE-derived."
+    ),
+    "hypothesis.unranked_set": (
+        "This set carries no ranking. Array position is input order, not "
+        "preference. Do not present it as a leaderboard or select 'the "
+        "top candidate' from it."
+    ),
 }
 
 
