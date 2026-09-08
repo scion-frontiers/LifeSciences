@@ -224,7 +224,7 @@ def request(
         try:
             response = lib.request(method, url, timeout=timeout, **kwargs)
         except Exception as exc:  # transport-level
-            last_detail = f"{type(exc).__name__}: {exc}"
+            last_detail = _sanitize_url(f"{type(exc).__name__}: {exc}")
             last_status = None
             if attempt == max_attempts:
                 raise EndpointUnavailable(

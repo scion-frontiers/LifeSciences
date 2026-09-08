@@ -10,6 +10,7 @@ every request carries the key; when it is absent, QPS stays at 3 and no
 from __future__ import annotations
 
 import os
+from urllib.parse import quote
 
 _NCBI_KEY: str = os.environ.get("NCBI_API_KEY", "")
 
@@ -19,7 +20,7 @@ EUTILS_QPS: float = 10.0 if _NCBI_KEY else 3.0
 
 def api_key_suffix() -> str:
     """Return ``&api_key=...`` for URL string concatenation, or ``""``."""
-    return f"&api_key={_NCBI_KEY}" if _NCBI_KEY else ""
+    return f"&api_key={quote(_NCBI_KEY, safe='')}" if _NCBI_KEY else ""
 
 
 def api_key_params() -> dict[str, str]:

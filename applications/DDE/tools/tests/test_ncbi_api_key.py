@@ -204,19 +204,31 @@ class TestCredentialScrubbing(unittest.TestCase):
 
     def test_error_message_excludes_key_on_transport_failure(self):
         """EndpointUnavailable from a transport error must not contain the key."""
-        secret = "transport-secret-key-999"
+        secret = "SECRETKEY123"
         url = f"https://eutils.ncbi.nlm.nih.gov/api?api_key={secret}&db=pubmed"
 
+        # A real requests.ConnectionError embeds the full URL (including
+        # query parameters) in its string representation.  The mock must
+        # reproduce that so this test catches unsanitised detail fields.
+        realistic_exc = ConnectionError(
+            "HTTPSConnectionPool(host='eutils.ncbi.nlm.nih.gov', port=443): "
+            "Max retries exceeded with url: "
+            f"/entrez/eutils/esearch.fcgi?db=pubmed&term=test&api_key={secret}"
+        )
+
         with patch.object(http, "requests") as mock_lib:
-            mock_lib.request.side_effect = ConnectionError("refused")
+            mock_lib.request.side_effect = realistic_exc
             with self.assertRaises(EndpointUnavailable) as ctx:
                 http.request("GET", url, qps=0, max_attempts=1)
 
         exc_text = str(ctx.exception)
         exc_msg = ctx.exception.message
-        combined = f"{exc_msg} {exc_text}"
+        exc_detail = ctx.exception.detail or ""
+        combined = f"{exc_msg} {exc_detail} {exc_text}"
         self.assertNotIn(secret, combined,
                          "API key leaked in EndpointUnavailable")
+        self.assertIn("<REDACTED>", exc_detail,
+                      "detail field should contain redacted marker")
 
     def test_error_message_excludes_key_on_retry_exhaustion(self):
         """Retry-exhaustion error must not contain the key."""
