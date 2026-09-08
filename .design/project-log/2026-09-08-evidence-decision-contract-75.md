@@ -80,3 +80,38 @@ Covers every acceptance criterion:
 
 - CLI integration tests requiring `click` could not be run (click not installed in this container). This is the pre-existing state of the test environment.
 - No regressions detected in the tests that could run.
+
+---
+
+## Fix: Human-approval Refusal wiring gap (post-review)
+
+**Finding**: The engineering manager reviewed the initial implementation and identified that the human-approval Refusal never fired in the real `write_record()` path. The validator checked `termination_authority` on the decision record (where it doesn't belong per the schema — it's a concept field) and accepted an optional `concept_loader` kwarg that `write_record()` never passed. Tests passed because they faked `termination_authority` directly on the decision dict — an unrealistic input that no real caller would construct.
+
+**Root cause**: The validator was correct in isolation; the wiring between `write_record()` and `validate_decision()` was the gap. `write_record()` called `validator(data)` with no concept loader, so the gate had nothing to check against.
+
+### Fix applied
+
+1. **`controlstore.py`**: Added `_default_concept_loader(project_root)` that reads concept records from `.dde/control/concepts/` (handles both `IC-NNN.json` and `IC-NNN-rN.json` revision files). `write_record()` now takes an optional `concept_loader` kwarg and, for decision records, automatically supplies the default loader when none is provided.
+
+2. **`evidence.py`**: Rewrote the human-approval gate to:
+   - Only check termination authority for `entity_type == "concept"` (non-concept entities like series, program, claim are not subject to the concept-level gate).
+   - Use the concept_loader to look up `termination_authority` from the real concept record.
+   - **Safe-failure default**: When `termination_authority` cannot be determined (concept record missing, lookup failed, field absent), treat it as `"human"` — require approval. Removed the fallback to `data.get("termination_authority")` which checked a field that doesn't belong on the decision record.
+
+3. **Tests**: Replaced all tests that faked `termination_authority` on the decision record with tests that write real concept records to disk and go through the unmodified `write_record()` call path. Added tests for the safe-failure default (unknown concept still requires approval). Test count increased from 38 to 43.
+
+### Safe-failure reasoning
+
+When the concept record does not exist or `termination_authority` is absent, the validator treats the authority as `"human"` (require approval). This is the safe default because:
+
+- **Design principle #4**: "must not enable autonomous program termination."
+- **`program.yaml` default** (§4.4.1): `termination_authority: "human"`.
+- **The manager's explicit guidance**: "if the system cannot determine termination_authority, err toward requiring human_approval, not toward skipping the check."
+
+An unknown authority defaulting to permissive would reintroduce the exact gap that review finding R1 identified — it would silently allow autonomous termination when the concept record is missing or hasn't been created yet.
+
+### Verification after fix
+
+- 43/43 tests pass in `test_evidence.py` (up from 38, covering the real write path).
+- `test_eval_metrics.py` (26/26) passes — no regressions.
+- The critical test (`REAL write_record: terminate + human concept + no approval => Refusal(9)`) writes a real concept record to disk, then calls `write_record("decision", ...)` with no special arguments, and confirms Refusal fires.

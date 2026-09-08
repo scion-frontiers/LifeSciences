@@ -343,11 +343,61 @@ def read_record(project_root: str | Path, record_type: str, identifier: str) -> 
         )
 
 
+def _default_concept_loader(project_root: Path):
+    """Build a concept-record loader for the human-approval gate.
+
+    Returns a callable ``(concept_id: str) -> dict | None`` that reads
+    concept records from ``.dde/control/concepts/``.  If the concept
+    record type is not registered (the #74 sibling branch has not yet
+    been merged), or the record does not exist, returns ``None`` —
+    the validator treats unknown authority as ``"human"`` (safe default).
+    """
+    def _load(concept_id: str) -> dict[str, Any] | None:
+        # concept records may be stored as IC-NNN.json or IC-NNN-rN.json;
+        # try the bare ID first, then scan for the latest revision.
+        concepts_dir = project_root / CONTROL_DIR / "concepts"
+        if not concepts_dir.is_dir():
+            return None
+
+        # Direct lookup by ID
+        direct = concepts_dir / f"{concept_id}.json"
+        if direct.is_file():
+            try:
+                return json.loads(direct.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                return None
+
+        # Scan for revisions (IC-NNN-r1.json, IC-NNN-r2.json, ...)
+        # and return the latest.
+        import re as _re
+        revision_re = _re.compile(
+            r"^" + _re.escape(concept_id) + r"-r(\d+)\.json$"
+        )
+        best: tuple[int, Path] | None = None
+        for p in concepts_dir.iterdir():
+            m = revision_re.match(p.name)
+            if m:
+                rev = int(m.group(1))
+                if best is None or rev > best[0]:
+                    best = (rev, p)
+
+        if best is not None:
+            try:
+                return json.loads(best[1].read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                pass
+        return None
+
+    return _load
+
+
 def write_record(
     project_root: str | Path,
     record_type: str,
     identifier: str,
     data: dict[str, Any],
+    *,
+    concept_loader: Callable[[str], dict[str, Any] | None] | None = None,
 ) -> Path:
     """Validate schema and write a record to the state store.
 
@@ -356,12 +406,18 @@ def write_record(
     project_root:
         Path to the dde project root.
     record_type:
-        One of ``"work-order"``, ``"context"``, ``"run"``, ``"validation"``.
+        One of the keys in ``RECORD_TYPES``.
     identifier:
-        Filename stem, e.g. ``"WO-001-r1"`` or ``"RUN-003"``.
+        Filename stem, e.g. ``"WO-001-r1"`` or ``"DR-001"``.
     data:
         The record dict.  Validated against the schema for *record_type*
         before writing.
+    concept_loader:
+        Optional callable to look up concept records by ID.  When
+        writing a decision record, this is used by the human-approval
+        gate to determine ``termination_authority``.  If not provided,
+        a default loader that reads from ``.dde/control/concepts/`` is
+        used automatically.
 
     Returns
     -------
@@ -372,6 +428,8 @@ def write_record(
     ------
     SchemaError
         If the data fails schema validation.
+    Refusal
+        If a decision record fails the human-approval gate.
     """
     root = Path(project_root)
     validator = _VALIDATORS.get(record_type)
@@ -381,7 +439,16 @@ def write_record(
             detail=f"known types: {', '.join(sorted(RECORD_TYPES))}",
         )
 
-    errors = validator(data)
+    # For decision records, supply the concept_loader so the
+    # human-approval gate can look up termination_authority from
+    # real concept records — not from a fictional field on the
+    # decision record itself.
+    if record_type == "decision":
+        loader = concept_loader or _default_concept_loader(root)
+        errors = validator(data, concept_loader=loader)
+    else:
+        errors = validator(data)
+
     if errors:
         raise SchemaError(
             f"invalid {record_type} record: {'; '.join(errors)}",

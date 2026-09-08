@@ -309,31 +309,47 @@ def validate_decision(
     # concept whose termination_authority is "human" MUST carry a
     # populated human_approval.  Missing approval raises Refusal
     # (exit 9) — not a validation error list.
+    #
+    # Safe-failure default: when termination_authority cannot be
+    # determined (concept record missing, lookup failed, record type
+    # not yet registered), treat it as "human".  Design principle #4
+    # ("must not enable autonomous program termination") and the
+    # program.yaml default (termination_authority: "human", §4.4.1)
+    # both point to "human" as the safe default.  An unknown
+    # authority must not silently become a permissive one.
     # ---------------------------------------------------------------
     if action == "terminate" and not errors:
-        # Determine termination_authority.
-        # 1. Explicit field on the decision record itself.
-        term_auth = data.get("termination_authority")
+        etype = entity.get("entity_type") if isinstance(entity, dict) else None
+        eref = entity.get("entity_ref") if isinstance(entity, dict) else None
 
-        # 2. If a concept_loader is provided, look up the concept.
-        if term_auth is None and concept_loader is not None and entity:
-            etype = entity.get("entity_type")
-            eref = entity.get("entity_ref")
-            if etype == "concept" and eref:
-                # Strip revision suffix to get the concept ID
+        if etype == "concept":
+            # Determine termination_authority.
+            term_auth = None
+
+            # 1. If a concept_loader is provided, look up the concept.
+            if concept_loader is not None and eref:
                 concept_id = re.sub(r"-r\d+$", "", str(eref))
                 concept = concept_loader(concept_id)
                 if concept is not None:
                     term_auth = concept.get("termination_authority")
 
-        if term_auth == "human":
-            if approval is None:
+            # 2. Safe-failure default: unknown authority => "human".
+            # Design principle #4 requires that the system never enable
+            # autonomous termination.  If we cannot look up the concept
+            # (no loader, concept not found, field absent), the safe
+            # default is to require approval.
+            if term_auth is None:
+                term_auth = "human"
+
+            if term_auth == "human" and approval is None:
+                detail_ref = eref or "(unknown)"
                 raise Refusal(
                     "cannot terminate: human approval is required",
                     detail=(
-                        f"concept {entity.get('entity_ref', '(unknown)')!r} has "
-                        "termination_authority 'human'; the decision record must "
-                        "include a populated human_approval field"
+                        f"concept {detail_ref!r} has "
+                        "termination_authority 'human' (or authority could not "
+                        "be determined — safe default is 'human'); the decision "
+                        "record must include a populated human_approval field"
                     ),
                     remedy=(
                         "obtain human approval for this termination and populate "

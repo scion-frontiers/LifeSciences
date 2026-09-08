@@ -41,6 +41,7 @@ from dde.core.evidence import (
     validate_decision,
 )
 from dde.core.controlstore import (
+    CONTROL_DIR,
     ensure_control_dirs,
     read_record,
     write_record,
@@ -74,6 +75,43 @@ def _make_project(base: Path) -> Path:
     (project / ".dde").mkdir(exist_ok=True)
     ensure_control_dirs(project)
     return project
+
+
+def _write_concept_to_disk(
+    project: Path,
+    concept_id: str,
+    termination_authority: str,
+    *,
+    revision: int | None = None,
+) -> Path:
+    """Write a concept record directly to .dde/control/concepts/.
+
+    Since #74 has not yet landed (no concepts.py, no 'concept' record
+    type in RECORD_TYPES), we write the file directly.  The default
+    concept_loader in write_record() reads from this path.
+    """
+    concepts_dir = project / CONTROL_DIR / "concepts"
+    concepts_dir.mkdir(parents=True, exist_ok=True)
+
+    if revision is not None:
+        filename = f"{concept_id}-r{revision}.json"
+    else:
+        filename = f"{concept_id}.json"
+
+    data = {
+        "schema": "dde.intervention-concept.v1",
+        "id": concept_id,
+        "revision": revision or 1,
+        "state": "active",
+        "termination_authority": termination_authority,
+        "disease_context": {"indication": "solid_tumors"},
+        "target_pathway": {"gene": "CDK4"},
+        "modality": "small_molecule",
+        "created_at": _NOW,
+    }
+    path = concepts_dir / filename
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    return path
 
 
 # ---------------------------------------------------------------------------
@@ -134,70 +172,156 @@ print("=" * 60)
 
 # ---------------------------------------------------------------------------
 # 1. Human-approval Refusal (THE most important test)
+#
+# These tests exercise the REAL write_record() path — no fictional
+# fields on the decision record, no caller-supplied concept_loader.
+# The concept record lives on disk and write_record()'s built-in
+# default loader finds it.
 # ---------------------------------------------------------------------------
-print("\n--- Human-approval Refusal ---")
+print("\n--- Human-approval Refusal (real write path) ---")
 
 
-def test_terminate_human_authority_no_approval_raises_refusal():
-    """A terminate decision with termination_authority=human and no
-    human_approval MUST raise Refusal (exit 9)."""
-    record = _valid_decision(
-        action="terminate",
-        affected_entity={"entity_type": "concept", "entity_ref": "IC-001"},
-        termination_authority="human",
-        human_approval=None,
-    )
-    try:
-        validate_decision(record)
-        raise AssertionError("expected Refusal, got no exception")
-    except Refusal as exc:
-        assert exc.exit_code == 9, f"expected exit code 9, got {exc.exit_code}"
-        assert "human approval" in exc.message.lower(), exc.message
+def test_real_write_path_human_auth_no_approval_raises_refusal():
+    """write_record() for a terminate decision on a concept with
+    termination_authority='human' and no human_approval MUST raise
+    Refusal (exit 9) — through the real, unmodified call path."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = _make_project(Path(tmp))
+        _write_concept_to_disk(project, "IC-001", "human")
+        record = _valid_decision(
+            action="terminate",
+            affected_entity={"entity_type": "concept", "entity_ref": "IC-001"},
+            human_approval=None,
+        )
+        # No termination_authority on the decision record, no concept_loader
+        # argument — the real write path must find the concept on disk.
+        try:
+            write_record(project, "decision", "DR-001", record)
+            raise AssertionError("expected Refusal, got no exception")
+        except Refusal as exc:
+            assert exc.exit_code == 9, f"expected exit code 9, got {exc.exit_code}"
+            assert "human approval" in exc.message.lower(), exc.message
 
 
-_check("terminate + human auth + no approval => Refusal(9)",
-       test_terminate_human_authority_no_approval_raises_refusal)
+_check("REAL write_record: terminate + human concept + no approval => Refusal(9)",
+       test_real_write_path_human_auth_no_approval_raises_refusal)
 
 
-def test_terminate_human_authority_with_approval_succeeds():
-    """The same decision WITH human_approval populated must succeed."""
-    record = _valid_decision(
-        action="terminate",
-        affected_entity={"entity_type": "concept", "entity_ref": "IC-001"},
-        termination_authority="human",
-        human_approval={
-            "approver": "Dr. Smith",
-            "approved_at": _NOW,
-            "approval_method": "charter_authority",
-            "evidence": None,
-        },
-    )
-    errors = validate_decision(record)
-    assert errors == [], f"unexpected errors: {errors}"
+def test_real_write_path_human_auth_with_approval_succeeds():
+    """The same write path WITH human_approval populated must succeed."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = _make_project(Path(tmp))
+        _write_concept_to_disk(project, "IC-001", "human")
+        record = _valid_decision(
+            action="terminate",
+            affected_entity={"entity_type": "concept", "entity_ref": "IC-001"},
+            human_approval={
+                "approver": "Dr. Smith",
+                "approved_at": _NOW,
+                "approval_method": "charter_authority",
+                "evidence": None,
+            },
+        )
+        path = write_record(project, "decision", "DR-001", record)
+        assert path.is_file()
 
 
-_check("terminate + human auth + approval => success",
-       test_terminate_human_authority_with_approval_succeeds)
+_check("REAL write_record: terminate + human concept + approval => success",
+       test_real_write_path_human_auth_with_approval_succeeds)
 
 
-def test_terminate_program_lead_no_approval_succeeds():
-    """termination_authority='program_lead' does NOT require human_approval."""
-    record = _valid_decision(
-        action="terminate",
-        affected_entity={"entity_type": "concept", "entity_ref": "IC-001"},
-        termination_authority="program_lead",
-        human_approval=None,
-    )
-    errors = validate_decision(record)
-    assert errors == [], f"unexpected errors: {errors}"
+def test_real_write_path_program_lead_no_approval_succeeds():
+    """A concept with termination_authority='program_lead' does NOT
+    require human_approval through the real write path."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = _make_project(Path(tmp))
+        _write_concept_to_disk(project, "IC-001", "program_lead")
+        record = _valid_decision(
+            action="terminate",
+            affected_entity={"entity_type": "concept", "entity_ref": "IC-001"},
+            human_approval=None,
+        )
+        path = write_record(project, "decision", "DR-001", record)
+        assert path.is_file()
 
 
-_check("terminate + program_lead auth + no approval => success",
-       test_terminate_program_lead_no_approval_succeeds)
+_check("REAL write_record: terminate + program_lead concept + no approval => success",
+       test_real_write_path_program_lead_no_approval_succeeds)
 
 
-def test_terminate_with_concept_loader():
-    """Refusal fires when termination_authority comes from concept_loader."""
+def test_real_write_path_versioned_concept_ref():
+    """write_record() strips the -rN suffix to find the concept record."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = _make_project(Path(tmp))
+        _write_concept_to_disk(project, "IC-001", "human", revision=3)
+        record = _valid_decision(
+            action="terminate",
+            affected_entity={"entity_type": "concept", "entity_ref": "IC-001-r3"},
+            human_approval=None,
+        )
+        try:
+            write_record(project, "decision", "DR-001", record)
+            raise AssertionError("expected Refusal")
+        except Refusal as exc:
+            assert exc.exit_code == 9
+
+
+_check("REAL write_record: versioned entity_ref (IC-001-r3) => finds concept",
+       test_real_write_path_versioned_concept_ref)
+
+
+def test_real_write_path_unknown_concept_safe_default():
+    """When the concept record does not exist, the safe default
+    (termination_authority='human') kicks in and Refusal fires."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = _make_project(Path(tmp))
+        # No concept record written — IC-999 does not exist.
+        record = _valid_decision(
+            action="terminate",
+            affected_entity={"entity_type": "concept", "entity_ref": "IC-999"},
+            human_approval=None,
+        )
+        try:
+            write_record(project, "decision", "DR-001", record)
+            raise AssertionError("expected Refusal for unknown concept")
+        except Refusal as exc:
+            assert exc.exit_code == 9
+
+
+_check("REAL write_record: unknown concept => safe default => Refusal(9)",
+       test_real_write_path_unknown_concept_safe_default)
+
+
+def test_real_write_path_unknown_concept_with_approval_succeeds():
+    """When the concept is unknown but human_approval is provided,
+    the write succeeds (safe default = require approval, not reject)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = _make_project(Path(tmp))
+        record = _valid_decision(
+            action="terminate",
+            affected_entity={"entity_type": "concept", "entity_ref": "IC-999"},
+            human_approval={
+                "approver": "Dr. Smith",
+                "approved_at": _NOW,
+                "approval_method": "charter_authority",
+                "evidence": None,
+            },
+        )
+        path = write_record(project, "decision", "DR-001", record)
+        assert path.is_file()
+
+
+_check("REAL write_record: unknown concept + approval => success",
+       test_real_write_path_unknown_concept_with_approval_succeeds)
+
+
+# --- Unit tests for validate_decision with explicit concept_loader ---
+
+print("\n--- Human-approval Refusal (unit tests) ---")
+
+
+def test_validate_decision_concept_loader_human():
+    """Refusal fires when concept_loader returns termination_authority='human'."""
     def loader(concept_id: str) -> dict[str, Any] | None:
         if concept_id == "IC-001":
             return {"termination_authority": "human"}
@@ -215,8 +339,48 @@ def test_terminate_with_concept_loader():
         assert exc.exit_code == 9
 
 
-_check("terminate + concept_loader(human) + no approval => Refusal(9)",
-       test_terminate_with_concept_loader)
+_check("validate_decision: concept_loader(human) + no approval => Refusal(9)",
+       test_validate_decision_concept_loader_human)
+
+
+def test_validate_decision_concept_loader_program_lead():
+    """concept_loader returning termination_authority='program_lead'
+    allows termination without approval."""
+    def loader(concept_id: str) -> dict[str, Any] | None:
+        if concept_id == "IC-001":
+            return {"termination_authority": "program_lead"}
+        return None
+
+    record = _valid_decision(
+        action="terminate",
+        affected_entity={"entity_type": "concept", "entity_ref": "IC-001"},
+        human_approval=None,
+    )
+    errors = validate_decision(record, concept_loader=loader)
+    assert errors == [], f"unexpected errors: {errors}"
+
+
+_check("validate_decision: concept_loader(program_lead) + no approval => success",
+       test_validate_decision_concept_loader_program_lead)
+
+
+def test_validate_decision_no_loader_safe_default():
+    """Without a concept_loader, terminate on a concept defaults to
+    requiring human approval (safe failure)."""
+    record = _valid_decision(
+        action="terminate",
+        affected_entity={"entity_type": "concept", "entity_ref": "IC-001"},
+        human_approval=None,
+    )
+    try:
+        validate_decision(record)
+        raise AssertionError("expected Refusal")
+    except Refusal as exc:
+        assert exc.exit_code == 9
+
+
+_check("validate_decision: no loader + no approval => safe default => Refusal(9)",
+       test_validate_decision_no_loader_safe_default)
 
 
 def test_non_terminate_no_approval_ok():
@@ -229,6 +393,26 @@ def test_non_terminate_no_approval_ok():
 
 _check("non-terminate actions do not require human_approval",
        test_non_terminate_no_approval_ok)
+
+
+def test_terminate_non_concept_entity_no_approval_ok():
+    """Terminate on non-concept entities (series, program, claim) does
+    not trigger the human-approval gate."""
+    for etype, eref in [
+        ("series", "cdk4-series"),
+        ("program", "DEC-001"),
+        ("claim", "AR-001"),
+    ]:
+        record = _valid_decision(
+            action="terminate",
+            affected_entity={"entity_type": etype, "entity_ref": eref},
+        )
+        errors = validate_decision(record)
+        assert errors == [], f"{etype}: unexpected errors: {errors}"
+
+
+_check("terminate on non-concept entities => no Refusal",
+       test_terminate_non_concept_entity_no_approval_ok)
 
 
 # ---------------------------------------------------------------------------
@@ -545,27 +729,6 @@ _check("decision controlstore write/read round-trip",
        test_decision_controlstore_round_trip)
 
 
-def test_decision_refusal_through_controlstore():
-    """Refusal propagates through controlstore.write_record."""
-    with tempfile.TemporaryDirectory() as tmp:
-        project = _make_project(Path(tmp))
-        record = _valid_decision(
-            action="terminate",
-            affected_entity={"entity_type": "concept", "entity_ref": "IC-001"},
-            termination_authority="human",
-            human_approval=None,
-        )
-        try:
-            write_record(project, "decision", "DR-001", record)
-            raise AssertionError("expected Refusal")
-        except Refusal as exc:
-            assert exc.exit_code == 9
-
-
-_check("Refusal propagates through controlstore.write_record",
-       test_decision_refusal_through_controlstore)
-
-
 # ---------------------------------------------------------------------------
 # 7. Assessment validation edge cases
 # ---------------------------------------------------------------------------
@@ -690,13 +853,17 @@ _check("decision bad supporting_assessments entry => error",
 
 def test_decision_human_approval_missing_fields():
     """human_approval with missing required sub-fields."""
+    # Use a concept_loader returning program_lead so the Refusal gate
+    # doesn't fire — we're testing the sub-schema validation here.
+    def loader(cid: str) -> dict[str, Any] | None:
+        return {"termination_authority": "program_lead"}
+
     record = _valid_decision(
         action="terminate",
         affected_entity={"entity_type": "concept", "entity_ref": "IC-001"},
-        termination_authority="program_lead",
         human_approval={"approver": "Dr. X"},  # missing approved_at, approval_method
     )
-    errors = validate_decision(record)
+    errors = validate_decision(record, concept_loader=loader)
     assert any("human_approval missing required fields" in e for e in errors)
 
 
