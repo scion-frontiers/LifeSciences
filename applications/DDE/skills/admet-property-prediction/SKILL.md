@@ -127,6 +127,32 @@ artifact: every `.analysis.json` carries `threshold_set`,
 `threshold_provenance`. Quote values from the analysis being cited,
 never from prose.
 
+### Model applicability domains
+
+Each prediction is derived from published rules calibrated on a
+specific chemical space. Predictions for compounds outside that
+space are extrapolations and should be flagged, not trusted at face
+value.
+
+| Endpoint | Source | Training domain / applicability | Known breakdown regions |
+|---|---|---|---|
+| Metabolic stability | Gleeson 2008 | Drug-like small molecules, predominantly MW <600 Da, LogP roughly −2 to 6. The liability classification was derived from oral drug candidates in medicinal-chemistry space. | Highly lipophilic compounds (LogP >6) may saturate the classification. Peptides, macrocycles, and PROTACs (MW >600–700 Da) fall outside the calibration set. |
+| CYP inhibition | Structural / lipophilicity rules per isoform | Calibrated on known drug–CYP interaction data for CYP2D6, CYP3A4, CYP2C9 — primarily small-molecule drugs with MW <500 Da and conventional heteroatom content. | Unusual pharmacophores, covalent modifiers, and compounds with atypical metal-coordination chemistry may not match the rule patterns. Time-dependent inhibition (TDI) is not modelled. |
+| Permeability | Egan 2000 (Egan egg) | Optimized for oral drug candidates; calibration set dominated by compounds with TPSA <140 Å², LogP roughly −1 to 5, MW <500 Da. | Compounds with TPSA >140 Å² or MW >500 Da fall outside the egg boundary and predictions are unreliable. Actively transported compounds, prodrugs, and peptides are not modelled. |
+| hERG liability | Aronov 2005 | Pharmacophore rules derived from known hERG blockers — small molecules with a basic nitrogen, moderate-to-high LogP, and aromatic ring systems. | The pharmacophore covers one binding mode; hERG blockers that act through different motifs (e.g. neutral compounds, non-aromatic scaffolds) produce false negatives. The flag has a documented false-negative rate. |
+| Solubility | Delaney 2004 (ESOL) | Trained on ~1,144 small molecules, predominantly MW <500 Da, LogP roughly −4 to 7. The model is a linear regression on LogP, MW, rotatable bonds, and aromatic proportion. | Predictions degrade for molecules >~600 Da, for compounds with unusual functional groups not well-represented in the training set (e.g. boronates, organometallics), and for salt forms (the model predicts free-form solubility only). |
+
+**When a compound falls outside an endpoint's domain:**
+
+- Flag the prediction as out-of-domain in the finding. State which
+  endpoint is affected and why (e.g. "MW 780 Da; ESOL was trained
+  on molecules predominantly <500 Da").
+- Do not treat the prediction as reliable — it is an extrapolation,
+  not a calibrated estimate.
+- If the question being answered depends on the out-of-domain
+  endpoint, report the endpoint as untooled for that compound
+  class, not as a confident prediction with a caveat.
+
 ### Mandatory relays
 
 | Relay code | Kind | Fires when | Obligation |
