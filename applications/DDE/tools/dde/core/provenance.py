@@ -455,6 +455,12 @@ RELAY_CODES: dict[str, str] = {
         "variant is present from conception, not what happens when the gene "
         "product is modulated pharmacologically in an adult."
     ),
+    "clinvar.cnv_not_gene_specific": (
+        "ClinVar pathogenic variants for this gene are dominated by large CNVs "
+        "that span multiple genes, not gene-specific mutations. The pathogenic "
+        "count reflects locus overlap, not gene-specific evidence. Any safety "
+        "conclusion must distinguish CNV-based from gene-specific pathogenicity."
+    ),
     "clinvar.weak_review_status": (
         "Do not cite a ClinVar classification without its review status, and do "
         "not weight a classification with weak review status as though it were "

@@ -91,6 +91,51 @@ _MODERATE_REVIEW = frozenset({
     "criteria provided, conflicting classifications",
 })
 
+# ClinVar obj_type values (case-insensitive) that indicate locus-overlapping
+# structural variants rather than gene-specific coding variants. A large CNV
+# that happens to overlap a gene locus inflates the pathogenic count without
+# being gene-specific evidence — issue #97.
+_LOCUS_OVERLAPPING_OBJ_TYPES = re.compile(
+    r"deletion|duplication|copy\s*number|structural\s*variant",
+    re.IGNORECASE,
+)
+
+# Patterns in variant_title that indicate locus-overlapping variants when
+# obj_type is absent (backward compatibility with older artifacts).
+_LOCUS_OVERLAPPING_TITLE = re.compile(
+    r"(?:"
+    r"GRCh\d+/hg\d+"         # chromosomal coordinate prefix
+    r"|chr\d+:\d+-\d+"       # explicit chromosomal range
+    r"|\d+[pq]\d+"           # cytogenetic band notation
+    r"|[Xx][pq]\d+"          # X-chromosome cytogenetic band
+    r")"
+    r".*"
+    r"(?:x\d+|del|dup)?",    # optional copy-number suffix
+    re.IGNORECASE,
+)
+
+
+def _classify_variant_type(assoc: dict[str, Any]) -> str:
+    """Classify a ClinVar variant as gene_specific or locus_overlapping.
+
+    Uses ``obj_type`` when available (preferred — directly from ClinVar
+    esummary), falling back to heuristic parsing of ``variant_title``
+    for artifacts created before obj_type was stored.
+
+    Returns ``"gene_specific"`` or ``"locus_overlapping"``.
+    """
+    obj_type = assoc.get("obj_type", "")
+    if obj_type and _LOCUS_OVERLAPPING_OBJ_TYPES.search(obj_type):
+        return "locus_overlapping"
+
+    # Fallback: infer from variant_title.
+    title = assoc.get("variant_title", "")
+    if title and _LOCUS_OVERLAPPING_TITLE.search(title):
+        return "locus_overlapping"
+
+    return "gene_specific"
+
+
 # GraphQL query to resolve gene symbol to Ensembl ID via Open Targets.
 _OT_SEARCH_QUERY = """\
 query {
@@ -513,6 +558,7 @@ def _fetch_clinvar(symbol: str) -> tuple[bytes, dict[str, Any]]:
             "source_db": "clinvar",
             "variant_id": uid,
             "variant_title": entry.get("title", ""),
+            "obj_type": entry.get("obj_type", ""),
             "disease_name": disease_name,
             "classification": classification,
             "review_status": review_status,
@@ -915,10 +961,13 @@ def analyze_cmd(
 
     if source == "clinvar":
         verdict = assessment["verdict"]
+        n_total = assessment["n_pathogenic"]
+        n_gs = assessment.get("pathogenic_gene_specific", n_total)
+        n_lo = assessment.get("pathogenic_locus_overlapping", 0)
         emit.line(
             f"{gene.upper()} -> {verdict.upper()} "
-            f"({len(significant)}/{len(associations)} "
-            "pathogenic/likely pathogenic)"
+            f"(Pathogenic: {n_total} total "
+            f"({n_gs} gene-specific, {n_lo} locus-overlapping CNVs))"
         )
         class_counts = metrics.get("classification_counts", {})
         if class_counts:
@@ -1020,12 +1069,28 @@ def _analyze_clinvar(
     findings. Review status is surfaced prominently — a classification
     without its review status is incomplete.
 
+    Pathogenic variants are stratified into gene-specific (SNV, indel,
+    coding) and locus-overlapping (CNV, structural) categories. The
+    verdict uses gene-specific pathogenic count as the primary safety
+    signal because a large CNV that overlaps a gene locus inflates the
+    pathogenic count without being gene-specific evidence (issue #97).
+
     Returns (significant_associations, metrics, assessment).
     """
     significant = [
         a for a in associations
         if a.get("classification", "") in _PATHOGENIC_CLASSIFICATIONS
     ]
+
+    # Stratify pathogenic variants by variant type.
+    pathogenic_gene_specific: list[dict[str, Any]] = []
+    pathogenic_locus_overlapping: list[dict[str, Any]] = []
+    for assoc in significant:
+        vtype = _classify_variant_type(assoc)
+        if vtype == "locus_overlapping":
+            pathogenic_locus_overlapping.append(assoc)
+        else:
+            pathogenic_gene_specific.append(assoc)
 
     # Classification breakdown across all variants.
     class_counts: dict[str, int] = {}
@@ -1058,8 +1123,10 @@ def _analyze_clinvar(
         if len(top_conditions) >= 10:
             break
 
+    # Verdict uses gene-specific count as primary safety signal:
+    # CNV-only pathogenic variants are not gene-specific evidence.
     verdict = (
-        "pathogenic_variants_found" if significant
+        "pathogenic_variants_found" if pathogenic_gene_specific
         else "no_pathogenic_variants"
     )
 
@@ -1088,9 +1155,29 @@ def _analyze_clinvar(
             "cite these classifications without stating their review status",
         )
 
+    # Relay: CNV-dominated pathogenic count (issue #97). Fires when
+    # locus-overlapping variants outnumber gene-specific ones, because
+    # the headline pathogenic count is then actively misleading about
+    # gene-specific risk.
+    if (
+        pathogenic_locus_overlapping
+        and len(pathogenic_locus_overlapping) > len(pathogenic_gene_specific)
+    ):
+        add_relay(
+            "clinvar.cnv_not_gene_specific",
+            f"{len(pathogenic_locus_overlapping)} of {len(significant)} "
+            f"pathogenic/likely pathogenic variant(s) for {gene.upper()} "
+            "are locus-overlapping CNVs/structural variants, not "
+            f"gene-specific mutations ({len(pathogenic_gene_specific)} "
+            "gene-specific); the pathogenic count reflects locus overlap, "
+            "not gene-specific evidence",
+        )
+
     metrics = {
         "total_variants": len(associations),
-        "pathogenic_count": len(significant),
+        "pathogenic_total": len(significant),
+        "pathogenic_gene_specific": len(pathogenic_gene_specific),
+        "pathogenic_locus_overlapping": len(pathogenic_locus_overlapping),
         "classification_counts": class_counts,
         "review_status_breakdown": review_breakdown,
         "source": "clinvar",
@@ -1100,6 +1187,8 @@ def _analyze_clinvar(
         "verdict": verdict,
         "gene": gene.upper(),
         "n_pathogenic": len(significant),
+        "pathogenic_gene_specific": len(pathogenic_gene_specific),
+        "pathogenic_locus_overlapping": len(pathogenic_locus_overlapping),
         "n_weak_review": len(weak_pathogenic),
         "top_conditions": top_conditions,
         "classification_counts": class_counts,
