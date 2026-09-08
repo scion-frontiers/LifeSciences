@@ -163,6 +163,36 @@ A copy-and-adapt template orchestrator is provided at [`references/postbuild-tem
 
 [`references/fix_autolink_codes.py`](references/fix_autolink_codes.py) provides a template post-build fix that auto-discovers linkable codes (e.g. WO-001, DEC-005) from built filenames and replaces bare text references with `<a>` links. It avoids double-linking, self-links, and modifications inside HTML attributes, `<code>`, and `<pre>` elements. Register it in your orchestrator's FIXES list under the Link Resolution category.
 
+## Content Boundaries
+
+Stakeholder-facing sites must present scientific substance — not operational noise. Filter content before it reaches the built site.
+
+### What Belongs
+
+**Include:** Scientific methodology, experimental results, decisions and rationale, evidence chains, program flow and gate progression, liability assessments, strategic recommendations.
+
+**Exclude:** Infrastructure failures and stack traces, tool endpoint issues (gateway errors, connection refused), retry/timeout cycles, agent orchestration mechanics (cold-start delays, scheduling artifacts), debugging output, rate-limit incidents, internal tool configuration details.
+
+### Edit Strategy by Content Source
+
+| Content source | Owned by this program? | Edit strategy |
+|---|---|---|
+| Program findings/decisions | Yes | Edit source markdown — persists across rebuilds |
+| Shared-volume retrospectives | No (other agents) | Post-build HTML scrub; re-apply after each rebuild |
+| Build-tool generated content | No (template) | Post-build HTML transformation |
+
+When content is owned by this program, fix the source markdown so the correction survives future rebuilds. When it is not — retrospectives from other agents, template-generated markup — apply post-build HTML modifications and re-apply them after every rebuild.
+
+### Scanning for Boundary Violations
+
+Run [`references/fix_infra_refs.py`](references/fix_infra_refs.py) after each build to detect infrastructure details that leaked into generated HTML. The script scans only — it does not modify files. Review its output and apply edits using the strategy table above.
+
+```bash
+dde site build
+python3 postbuild.py _site/
+python3 references/fix_infra_refs.py _site/
+```
+
 ## Post-Build Verification
 
 After post-build processing, verify:
