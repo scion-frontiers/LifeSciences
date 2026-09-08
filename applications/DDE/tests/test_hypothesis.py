@@ -19,6 +19,7 @@ Covers (from §10 criteria 18-25):
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 import tempfile
@@ -190,7 +191,12 @@ def test_adopt_without_attest_fails() -> None:
             "--origin", "sponsor",
             # No --attest
         ])
-        assert result.exit_code != 0, "Should fail without --attest"
+        assert result.exit_code == 2, (
+            f"Expected usage error (exit 2), got {result.exit_code}"
+        )
+        assert "--attest" in result.output or "attestation" in result.output.lower(), (
+            f"Expected mention of --attest or attestation in output: {result.output}"
+        )
 
     print("  PASS: adopt without --attest fails (criterion 19)")
 
@@ -459,8 +465,21 @@ def test_relay_adopted_fires_on_every_adoption() -> None:
 
 
 def test_unranked_set_conditional() -> None:
-    """unranked_set fires on analysis of adopted set. Show that it would NOT
-    fire if the set were ranked (tests conditional logic)."""
+    """Verify unranked_set fires on analysis of adopted set.
+
+    A true negative fixture — where unranked_set does NOT fire because
+    candidates carry non-null rank/score from a coscientist tournament —
+    is impossible before Phase C2, which adds the assessment core to
+    coscientist. Until then, every hypothesis set that flows through
+    ``hypothesis analyze`` is adopted-with-nulls, so unranked_set always
+    fires. This test therefore validates the positive case only and
+    confirms that the relay is structurally tied to null rank/score, not
+    unconditionally emitted.
+
+    # TODO(C2): After coscientist produces ranked hypothesis assessments,
+    # add a negative fixture that feeds a ranked set through analyze and
+    # asserts unranked_set is absent from mandatory_relays.
+    """
     runner = CliRunner()
     with tempfile.TemporaryDirectory() as td:
         project = _make_project(Path(td))
@@ -489,18 +508,11 @@ def test_unranked_set_conditional() -> None:
             "unranked_set should fire for adopted sets"
         )
 
-        # Verify that this relay is NOT unconditional — it is specific to
-        # adopted sets. A ranked set (e.g., coscientist) would not fire it.
-        # We demonstrate this by checking that the relay is not globally
-        # unconditional: it is scoped to the hypothesis.analyze command
-        # and fires because score is null. A fixture with non-null scores
-        # would not fire it.
+        # Structural confirmation: the relay fires because all candidates
+        # have null rank and score (adopted, not ranked).
         for candidate in analysis["assessment"]["candidates"]:
             assert candidate["rank"] is None, "rank should be null for adopted"
             assert candidate["score"] is None, "score should be null for adopted"
-        # The conditional logic is: unranked_set fires because
-        # all candidates have rank=null and score=null. If they had
-        # rank!=null (a ranked tournament), the relay would not apply.
 
     print("  PASS: unranked_set conditional logic (criterion 27)")
 
@@ -538,6 +550,290 @@ def test_cite_required_for_publication() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Test: Charter analyze relay carry-forward (validates Fix 1)
+# ---------------------------------------------------------------------------
+
+
+def test_charter_analyze_relay_carryforward() -> None:
+    """Adopt with --origin charter, then analyze. The analysis's
+    mandatory_relays must include hypothesis.adopted_not_generated
+    carried forward from the ingest sidecar."""
+    runner = CliRunner()
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+        hyp_file = _write_hypothesis_file(project)
+
+        # Adopt as charter
+        result = runner.invoke(cli, [
+            "--project", str(project),
+            "hypothesis", "adopt", str(hyp_file),
+            "--origin", "charter",
+            "--attest", "Charter team attestation",
+        ])
+        assert result.exit_code == 0, f"adopt failed: {result.output}"
+
+        # Find the charter artifact
+        hyp_dir = project / "raw" / "hypotheses"
+        charter_files = list(hyp_dir.glob("*.charter.json"))
+        assert charter_files, "No charter file found"
+
+        # Analyze
+        result = runner.invoke(cli, [
+            "--project", str(project),
+            "hypothesis", "analyze", str(charter_files[0]),
+        ])
+        assert result.exit_code == 0, f"analyze failed: {result.output}"
+
+        # Read the analysis
+        analysis_files = list(hyp_dir.glob("*.analysis.json"))
+        assert analysis_files, "No analysis file found"
+        analysis = json.loads(analysis_files[0].read_text())
+
+        relay_codes = [r["code"] for r in analysis.get("mandatory_relays", [])]
+        assert "hypothesis.adopted_not_generated" in relay_codes, (
+            f"adopted_not_generated relay should be carried forward from "
+            f"ingest sidecar, got relays: {relay_codes}"
+        )
+
+    print("  PASS: charter analyze relay carry-forward (Fix 1)")
+
+
+# ---------------------------------------------------------------------------
+# Test: source_sha256 integrity (test review F3)
+# ---------------------------------------------------------------------------
+
+
+def test_source_sha256_integrity() -> None:
+    """Verify source_sha256 matches the hash of the original bytes and the
+    verbatim copy is byte-identical to the original."""
+    runner = CliRunner()
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+        hypotheses = _sample_hypotheses()
+        hyp_file = _write_hypothesis_file(project, hypotheses)
+
+        # Compute expected hash from original bytes
+        original_bytes = hyp_file.read_bytes()
+        expected_sha256 = hashlib.sha256(original_bytes).hexdigest()
+
+        # Adopt
+        result = runner.invoke(cli, [
+            "--project", str(project),
+            "hypothesis", "adopt", str(hyp_file),
+            "--origin", "sponsor",
+            "--attest", "Integrity test attestation",
+        ])
+        assert result.exit_code == 0, f"adopt failed: {result.output}"
+
+        hyp_dir = project / "raw" / "hypotheses"
+
+        # Read normalised artifact and check source_sha256
+        adopted_files = list(hyp_dir.glob("*.adopted.json"))
+        assert adopted_files, "No adopted file found"
+        adopted = json.loads(adopted_files[0].read_text())
+        assert adopted["source_sha256"] == expected_sha256, (
+            f"source_sha256 mismatch: expected {expected_sha256}, "
+            f"got {adopted['source_sha256']}"
+        )
+
+        # Read verbatim copy and check byte-identity
+        source_files = list(hyp_dir.glob("*.adopted.source.*"))
+        assert source_files, "No verbatim source file found"
+        verbatim_bytes = source_files[0].read_bytes()
+        assert verbatim_bytes == original_bytes, (
+            "Verbatim copy is not byte-identical to original"
+        )
+
+    print("  PASS: source_sha256 integrity (F3)")
+
+
+# ---------------------------------------------------------------------------
+# Test: Edge cases (test review F4)
+# ---------------------------------------------------------------------------
+
+
+def test_empty_hypothesis_list() -> None:
+    """An empty hypothesis list [] fails with a meaningful error."""
+    runner = CliRunner()
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+        hyp_file = _write_hypothesis_file(project, [])
+
+        result = runner.invoke(cli, [
+            "--project", str(project),
+            "hypothesis", "adopt", str(hyp_file),
+            "--origin", "sponsor",
+            "--attest", "Empty test",
+        ])
+        assert result.exit_code != 0, "Should fail on empty list"
+        assert "empty" in result.output.lower(), (
+            f"Error should mention 'empty', got: {result.output}"
+        )
+
+    print("  PASS: empty hypothesis list rejected (F4)")
+
+
+def test_missing_statement_field() -> None:
+    """A hypothesis without a 'statement' field fails naming the field."""
+    runner = CliRunner()
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+        hyp_file = _write_hypothesis_file(project, [{"mechanism": "x"}])
+
+        result = runner.invoke(cli, [
+            "--project", str(project),
+            "hypothesis", "adopt", str(hyp_file),
+            "--origin", "sponsor",
+            "--attest", "Missing field test",
+        ])
+        assert result.exit_code != 0, "Should fail on missing statement"
+        assert "statement" in result.output.lower(), (
+            f"Error should mention 'statement', got: {result.output}"
+        )
+
+    print("  PASS: missing statement field rejected (F4)")
+
+
+def test_malformed_json_input() -> None:
+    """Non-JSON content fails with a parse error."""
+    runner = CliRunner()
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+        bad_file = Path(td) / "not-json.json"
+        bad_file.write_text("this is not json {{{", encoding="utf-8")
+
+        result = runner.invoke(cli, [
+            "--project", str(project),
+            "hypothesis", "adopt", str(bad_file),
+            "--origin", "sponsor",
+            "--attest", "Malformed test",
+        ])
+        assert result.exit_code != 0, "Should fail on malformed JSON"
+        assert "json" in result.output.lower(), (
+            f"Error should mention JSON, got: {result.output}"
+        )
+
+    print("  PASS: malformed JSON rejected (F4)")
+
+
+# ---------------------------------------------------------------------------
+# Test: Overwrite guard in analyze (test review F5)
+# ---------------------------------------------------------------------------
+
+
+def test_analyze_overwrite_refusal() -> None:
+    """Running analyze twice without --overwrite should refuse/fail on
+    the second run when the artifact has changed."""
+    runner = CliRunner()
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+        hyp_file = _write_hypothesis_file(project)
+
+        # Adopt
+        result = runner.invoke(cli, [
+            "--project", str(project),
+            "hypothesis", "adopt", str(hyp_file),
+            "--origin", "sponsor",
+            "--attest", "Overwrite test",
+        ])
+        assert result.exit_code == 0, f"adopt failed: {result.output}"
+
+        hyp_dir = project / "raw" / "hypotheses"
+        adopted_files = list(hyp_dir.glob("*.adopted.json"))
+        assert adopted_files
+
+        # First analyze (succeeds)
+        result = runner.invoke(cli, [
+            "--project", str(project),
+            "hypothesis", "analyze", str(adopted_files[0]),
+        ])
+        assert result.exit_code == 0, f"first analyze failed: {result.output}"
+
+        # Modify the adopted artifact (add a candidate) so verdict differs
+        adopted = json.loads(adopted_files[0].read_text())
+        adopted["candidates"].append({
+            "candidate_id": "99",
+            "statement": "Extra hypothesis added to force a different verdict",
+        })
+        adopted_files[0].write_text(
+            json.dumps(adopted, indent=2) + "\n", encoding="utf-8"
+        )
+
+        # Second analyze WITHOUT --overwrite should refuse
+        result = runner.invoke(cli, [
+            "--project", str(project),
+            "hypothesis", "analyze", str(adopted_files[0]),
+        ])
+        assert result.exit_code != 0, (
+            f"Second analyze should refuse without --overwrite, "
+            f"got exit {result.exit_code}: {result.output}"
+        )
+
+    print("  PASS: analyze overwrite refusal (F5)")
+
+
+# ---------------------------------------------------------------------------
+# Test: Same-source different-origin sidecar collision (validates Fix 2)
+# ---------------------------------------------------------------------------
+
+
+def test_same_source_different_origin_no_clobber() -> None:
+    """Adopting the same source with --origin sponsor and --origin charter
+    produces two distinct sidecars that both provenance-validate."""
+    runner = CliRunner()
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+        hypotheses = _sample_hypotheses()
+
+        # Write a single source file
+        source_file = Path(td) / "shared-hyps.json"
+        source_file.write_text(json.dumps(hypotheses, indent=2))
+
+        # Adopt as sponsor
+        result = runner.invoke(cli, [
+            "--project", str(project),
+            "hypothesis", "adopt", str(source_file),
+            "--origin", "sponsor",
+            "--attest", "Sponsor attestation",
+        ])
+        assert result.exit_code == 0, f"sponsor adopt failed: {result.output}"
+
+        # Adopt as charter
+        result = runner.invoke(cli, [
+            "--project", str(project),
+            "hypothesis", "adopt", str(source_file),
+            "--origin", "charter",
+            "--attest", "Charter attestation",
+        ])
+        assert result.exit_code == 0, f"charter adopt failed: {result.output}"
+
+        hyp_dir = project / "raw" / "hypotheses"
+
+        # Both sidecars exist with different names
+        adopted_meta = list(hyp_dir.glob("*.adopted.meta.json"))
+        charter_meta = list(hyp_dir.glob("*.charter.meta.json"))
+        assert len(adopted_meta) >= 1, (
+            f"Expected adopted.meta.json sidecar, got: "
+            f"{[f.name for f in hyp_dir.glob('*.meta.json')]}"
+        )
+        assert len(charter_meta) >= 1, (
+            f"Expected charter.meta.json sidecar, got: "
+            f"{[f.name for f in hyp_dir.glob('*.meta.json')]}"
+        )
+
+        # Both provenance-validate
+        prov_result = _check_provenance_valid(
+            project,
+            {"layer_0_classes": ["hypotheses"]},
+        )
+        assert prov_result["result"] == "pass", (
+            f"Both origins should validate, got {prov_result}"
+        )
+
+    print("  PASS: same-source different-origin no sidecar clobber (Fix 2)")
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
@@ -565,6 +861,19 @@ def main() -> None:
         ("test_unranked_set_conditional", test_unranked_set_conditional),
         # --cite validation
         ("test_cite_required_for_publication", test_cite_required_for_publication),
+        # --- New tests (review fix-ups) ---
+        # Fix 1 validation: charter relay carry-forward
+        ("test_charter_analyze_relay_carryforward", test_charter_analyze_relay_carryforward),
+        # F3: source_sha256 integrity
+        ("test_source_sha256_integrity", test_source_sha256_integrity),
+        # F4: Edge cases
+        ("test_empty_hypothesis_list", test_empty_hypothesis_list),
+        ("test_missing_statement_field", test_missing_statement_field),
+        ("test_malformed_json_input", test_malformed_json_input),
+        # F5: Overwrite guard
+        ("test_analyze_overwrite_refusal", test_analyze_overwrite_refusal),
+        # Fix 2 validation: sidecar collision
+        ("test_same_source_different_origin_no_clobber", test_same_source_different_origin_no_clobber),
     ]
 
     passed = 0

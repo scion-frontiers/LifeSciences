@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +41,7 @@ from ..core.output import Emitter
 
 TOOL = "hypothesis"
 ARTIFACT_CLASS = "hypotheses"
+MAX_INPUT_BYTES = 50 * 1024 * 1024  # 50 MiB
 
 _VALID_ORIGINS = ("sponsor", "charter", "prior-program", "publication")
 _CITE_REQUIRED_ORIGINS = ("prior-program", "publication")
@@ -139,11 +139,23 @@ def adopt(
     source = source.resolve()
     target_dir = project.artifact_dir(ARTIFACT_CLASS, out)
 
-    # -- Read and validate the source --
+    # -- Size guard (mirrors cite.py) --
+    if source.stat().st_size > MAX_INPUT_BYTES:
+        raise click.UsageError(
+            f"Source file exceeds {MAX_INPUT_BYTES // (1024 * 1024)} MiB limit"
+        )
+
+    # -- Read once, hash once, parse once (TOCTOU-safe) --
     raw_bytes = source.read_bytes()
     source_sha256 = hashlib.sha256(raw_bytes).hexdigest()
 
-    doc = provenance.read_json(source, "hypothesis set")
+    try:
+        doc = json.loads(raw_bytes)
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise ArtifactError(
+            f"hypothesis set is not valid JSON: {source}",
+            detail=str(exc),
+        )
     if not isinstance(doc, list):
         raise SchemaError(
             "hypothesis set must be a JSON array of hypothesis objects",
@@ -240,7 +252,7 @@ def adopt(
     # -- Register outputs and write sidecar --
     sidecar.add_output(verbatim)
     sidecar.add_output(normalised_path)
-    meta = sidecar.write(target_dir / f"{slug}.meta.json")
+    meta = sidecar.write(target_dir / f"{slug}.{infix}.meta.json")
 
     # -- CLI output --
     emit = Emitter(as_json=as_json, quiet=quiet)
@@ -330,17 +342,21 @@ def analyze(
     ))
 
     # Carry forward relays from the ingest sidecar
-    meta_candidates = [
-        path.with_name(path.name.replace(".adopted.json", ".meta.json")),
-        path.with_name(path.name.replace(".charter.json", ".meta.json")),
-    ]
-    for meta_path in meta_candidates:
-        if meta_path.is_file():
-            ingest_meta = provenance.read_json(meta_path, "provenance sidecar")
-            for item in ingest_meta.get("mandatory_relays", []) or []:
-                if not any(r["code"] == item.get("code") for r in relays):
-                    relays.append(item)
+    meta_path = None
+    for suffix in (".adopted.json", ".charter.json"):
+        if path.name.endswith(suffix):
+            base = path.name[:-len(suffix)]
+            infix = suffix[1:suffix.rindex('.')]  # "adopted" or "charter"
+            candidate = path.with_name(f"{base}.{infix}.meta.json")
+            if candidate.is_file():
+                meta_path = candidate
             break
+
+    if meta_path:
+        ingest_meta = provenance.read_json(meta_path, "provenance sidecar")
+        for item in ingest_meta.get("mandatory_relays", []) or []:
+            if not any(r["code"] == item.get("code") for r in relays):
+                relays.append(item)
 
     analysis_name = path.name
     for suffix in (".adopted.json", ".charter.json"):
