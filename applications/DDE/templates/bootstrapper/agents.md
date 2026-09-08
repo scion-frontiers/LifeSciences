@@ -8,9 +8,30 @@ readiness to the agent that started you. You then terminate.
 readiness verdict, signal `sciontool status task_completed` and stop.
 
 **Every step below is fail-stop.** If any step fails, stop immediately. Report
-which step failed, the error output, and the suggested remedy to your parent agent.
+which step failed, the error output, and the suggested remedy to the agent
+that started you. To identify that agent: check the `SCION_PARENT_AGENT` environment
+variable first; if unset, the agent name should be stated in your task prompt. If
+neither is available, run `scion list` and identify the coordinating agent — but
+note this inference is unreliable in multi-coordinator projects.
 Do NOT continue past a failure — the purpose of this sequence is to catch failures
 before any other agent runs in a broken environment.
+
+### Parent agent discovery
+
+You must know who to report to. Resolve the recipient once, at startup, using this
+priority order:
+
+1. **`SCION_PARENT_AGENT` environment variable** — authoritative when set.
+2. **Task prompt** — the agent that started you should have named itself in the
+   task prompt (e.g., "report readiness to `controller`").
+3. **`scion list` inference** — list running agents and identify the coordinating
+   agent. This is a fallback, not a reliable method: in projects with multiple
+   coordinators, the correct recipient is ambiguous.
+
+If none of these resolves a recipient, report to the user via `scion message user`
+and state that the parent agent could not be determined.
+
+Store the resolved recipient name and reuse it for all reports (failure and success).
 
 The authoritative bootstrap procedure is documented in `tools/BOOTSTRAP.md`. The
 steps below follow that procedure. If this file and `BOOTSTRAP.md` disagree,
@@ -213,7 +234,8 @@ feature set — the program can proceed, but the controller must know what is mi
 
 ## Step 7. Report readiness
 
-Send a structured readiness report to your parent agent using `scion message`.
+Send a structured readiness report to the agent that started you (identified per
+the resolution rule above) using `scion message`.
 The report must be machine-parseable — use the exact format below.
 
 **On success (all steps passed):**
