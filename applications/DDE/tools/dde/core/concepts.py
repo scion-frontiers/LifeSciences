@@ -243,10 +243,12 @@ def validate_concept(data: dict[str, Any]) -> list[str]:
         elif "gene" not in tp:
             errors.append("target_pathway.gene is required")
 
-    # modality must be a string.
-    if "modality" in data and not isinstance(data["modality"], str):
+    # modality must be a string or null (null = gap declared per §3.4).
+    # The key is required (in _REQUIRED_FIELDS) but the value may be
+    # None for migrated records that predate modality assignment.
+    if "modality" in data and data["modality"] is not None and not isinstance(data["modality"], str):
         errors.append(
-            f"modality must be a string, got {type(data['modality']).__name__}"
+            f"modality must be a string or null, got {type(data['modality']).__name__}"
         )
 
     # Biomarker assumptions.
