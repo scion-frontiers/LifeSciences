@@ -60,6 +60,7 @@ from .commands.tox import tox
 from .commands.differentiation import differentiation
 from .commands.patent import patent
 from .commands.trials import trials
+from .commands.triage import triage
 from .commands.pocket import pocket
 from .commands.screen import screen
 from .commands.structure_screening import structure_screen
@@ -385,6 +386,7 @@ cli.add_command(tox)
 cli.add_command(differentiation)
 cli.add_command(patent)
 cli.add_command(trials)
+cli.add_command(triage)
 
 # Must follow every add_command: the walk guards what is registered at
 # the time it runs, so a command added after this line would be missed.
