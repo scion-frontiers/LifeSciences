@@ -29,6 +29,7 @@ from .commands.disignatlas import disignatlas
 from .commands.docking import docking
 from .commands.dossier import dossier
 from .commands.doctor import doctor
+from .commands.manufacturing import manufacturing
 from .commands.mmp import mmp
 from .commands.mpo import mpo
 from .commands.env import env
@@ -371,6 +372,7 @@ cli.add_command(dice)
 cli.add_command(selectivity)
 cli.add_command(disco)
 cli.add_command(disignatlas)
+cli.add_command(manufacturing)
 cli.add_command(mmp)
 cli.add_command(mpo)
 cli.add_command(scp)
