@@ -357,9 +357,9 @@ Science Lead must take one of three actions:
 "Blocked on tooling" is never a resting state. An open question blocked for more than
 one cohort without one of these three actions is a process failure.
 
-When a "blocked on tooling" gap is accepted at a gate, the gate decision must state
-what the answer would need to be to change the verdict — making the risk explicit
-rather than silent.
+When a previously accepted gap reaches a gate, the gate decision must restate what
+evidence would flip the verdict — carrying the risk forward explicitly, not relying
+on the earlier acceptance entry alone.
 
 ---
 
