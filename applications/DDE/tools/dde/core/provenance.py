@@ -616,6 +616,52 @@ RELAY_CODES: dict[str, str] = {
         "preference. Do not present it as a leaderboard or select 'the "
         "top candidate' from it."
     ),
+    # --- hypex tournament ---
+    "hypex.citation_manifest_absent": (
+        "Absence of a citation manifest is not evidence of verified "
+        "citations. State which hypotheses lack a manifest and do not "
+        "infer citation quality from the absence."
+    ),
+    "hypex.composite_ranking": (
+        "The ranking number is a composite blending ELO with reviewer "
+        "scores, not a pure ELO. Report it as a composite and name the "
+        "preset used. Do not write it into a field named 'elo'."
+    ),
+    "hypex.integrity_violations": (
+        "State the dangling references. `hypex validate` does not check "
+        "these; the ingest is the only place they surface. A dangling "
+        "match or review reference means the ranking rests on a record "
+        "that cannot be traced to its source."
+    ),
+    "hypex.pacing_uncoordinated": (
+        "The run fanned out without verified shared pacing, so its "
+        "retrieval rate against upstream hosts was up to roster_size × "
+        "the intended limit. Findings resting on this run's retrievals "
+        "may be incomplete through throttling rather than through "
+        "absence. State the roster size and the tier observed."
+    ),
+    "hypex.phantom_citations_present": (
+        "Name the affected hypotheses. A phantom citation invalidates "
+        "the claim resting on it, not merely the reference."
+    ),
+    "hypex.quarantined_excluded": (
+        "Report the quarantine count alongside the ranking. Quarantined "
+        "hypotheses were excluded from the tournament and are not "
+        "represented in the standings."
+    ),
+    "hypex.run_aborted": (
+        "No termination record was written. Treat the run as incomplete "
+        "and state which epoch it reached."
+    ),
+    "hypex.run_not_converged": (
+        "The ranking is where the run stopped, not where the tournament "
+        "settled. Do not report it as converged."
+    ),
+    "hypex.unrated_hypotheses": (
+        "These hypotheses were not ranked; under Swiss pairing they were "
+        "excluded entirely. Absence from the ranking is not elimination "
+        "by it."
+    ),
 }
 
 
