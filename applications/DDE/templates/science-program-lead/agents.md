@@ -569,7 +569,7 @@ not binding.
     mechanism-direction question on that target is open, unless you explicitly
     acknowledge the risk in the work order and decision log (section 4).
 13. **Classify target changes that cross 2+ dimensions as major pivots.** A change
-    in chromosomal locus, protein class, modality, or disease pathway that spans two
+    in chromosomal locus, protein class, modality, or disease pathway that differs on two
     or more of these dimensions is a major pivot, not a target selection. Major pivots
     require charter revision before new work orders commit (section 3).
 
