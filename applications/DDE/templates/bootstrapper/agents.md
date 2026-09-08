@@ -8,9 +8,27 @@ readiness to the agent that started you. You then terminate.
 readiness verdict, signal `sciontool status task_completed` and stop.
 
 **Every step below is fail-stop.** If any step fails, stop immediately. Report
-which step failed, the error output, and the suggested remedy to your parent agent.
+which step failed, the error output, and the suggested remedy to the agent
+that started you (see **Parent agent discovery** below).
 Do NOT continue past a failure — the purpose of this sequence is to catch failures
 before any other agent runs in a broken environment.
+
+### Parent agent discovery
+
+You must know who to report to. Resolve the recipient once, at startup, using this
+priority order:
+
+1. **`SCION_PARENT_AGENT` environment variable** — authoritative when set.
+2. **Task prompt** — the agent that started you should have named itself in the
+   task prompt (e.g., "report readiness to `controller`").
+3. **`scion list` inference** — list running agents and identify the coordinating
+   agent. This is a fallback, not a reliable method: in projects with multiple
+   coordinators, the correct recipient is ambiguous.
+
+If none of these resolves a recipient, report to the user via `scion message user`
+and state that the parent agent could not be determined.
+
+Store the resolved recipient name and reuse it for all reports (failure and success).
 
 The authoritative bootstrap procedure is documented in `tools/BOOTSTRAP.md`. The
 steps below follow that procedure. If this file and `BOOTSTRAP.md` disagree,
@@ -102,7 +120,7 @@ documented in `tools/BOOTSTRAP.md`. If anything is missing, it prints the exact
 | 2 | Could not check |
 
 **If `bootstrap-preflight.sh` exits non-zero, STOP.** Report the missing
-prerequisites and the printed install command to your parent. The system is not ready
+prerequisites and the printed install command to the resolved parent (see **Parent agent discovery** above). The system is not ready
 and `install.sh` will fail.
 
 ---
@@ -133,7 +151,7 @@ cd /workspace/tools && ./install.sh --update
 
 `install.sh` exits non-zero when the science stack or a declared binary fails to
 install (exit 3 for science, exit 4 for binaries). **If `install.sh` exits
-non-zero, STOP.** Report the failure output to your parent. The environment is not
+non-zero, STOP.** Report the failure output to the resolved parent (see **Parent agent discovery** above). The environment is not
 ready and nothing downstream will work.
 
 ---
@@ -166,7 +184,7 @@ scion template sync --all
 ```
 
 This ensures all agent templates are available on the hub. It must complete before
-the controller starts any other agent. If it fails, STOP and report to your parent.
+the controller starts any other agent. If it fails, STOP and report to the resolved parent (see **Parent agent discovery** above).
 
 ---
 
@@ -199,7 +217,7 @@ an expected state, not an environment problem.
 Parse the JSON output and evaluate:
 
 - **If any check has `status: "fail"`:** STOP. Report the failure, its `remedy`
-  field, and which check failed to your parent. The environment is not ready.
+  field, and which check failed to the resolved parent (see **Parent agent discovery** above). The environment is not ready.
 - **If capability warnings exist** (`kind: "capability"`, `status: "warn"`):
   record every one. These are not failures — the environment works, but certain
   capabilities are unavailable. Include all capability warnings in your readiness
@@ -213,7 +231,8 @@ feature set — the program can proceed, but the controller must know what is mi
 
 ## Step 7. Report readiness
 
-Send a structured readiness report to your parent agent using `scion message`.
+Send a structured readiness report to the agent that started you (identified per
+the **Parent agent discovery** section above) using `scion message`.
 The report must be machine-parseable — use the exact format below.
 
 **On success (all steps passed):**
