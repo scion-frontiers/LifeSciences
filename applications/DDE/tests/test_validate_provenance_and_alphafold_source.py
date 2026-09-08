@@ -26,6 +26,7 @@ from dde.commands.validate import (
     _check_relay_coverage,
     _is_analysis,
     _is_sidecar,
+    _overall_verdict,
 )
 from dde.core.context import ARTIFACT_DIRS
 from dde.core.provenance import Sidecar, write_analysis
@@ -79,6 +80,8 @@ def test_gtex_layout() -> None:
         result = _check_provenance_valid(root, deliverables)
 
         assert result["result"] == "pass", f"Expected pass, got: {result}"
+        assert result["status"] == "ok"
+        assert result["kind"] == "DATA_INTEGRITY"
         assert result["detail"]["artifacts_checked"] == 1
         print("  PASS: gtex layout — shared sidecar matched by sha256")
 
@@ -120,6 +123,8 @@ def test_expression_layout() -> None:
         result = _check_provenance_valid(root, deliverables)
 
         assert result["result"] == "pass", f"Expected pass, got: {result}"
+        assert result["status"] == "ok"
+        assert result["kind"] == "DATA_INTEGRITY"
         assert result["detail"]["artifacts_checked"] == 2
         print("  PASS: expression layout — two artifacts, one shared sidecar")
 
@@ -162,6 +167,8 @@ def test_structures_afdb_layout() -> None:
         result = _check_provenance_valid(root, deliverables)
 
         assert result["result"] == "pass", f"Expected pass, got: {result}"
+        assert result["status"] == "ok"
+        assert result["kind"] == "DATA_INTEGRITY"
         assert result["detail"]["artifacts_checked"] == 3
         print("  PASS: structures/AFDB layout — three artifacts, one shared sidecar")
 
@@ -204,6 +211,8 @@ def test_sc_meta_sidecar_layout() -> None:
         result = _check_provenance_valid(root, deliverables)
 
         assert result["result"] == "pass", f"Expected pass, got: {result}"
+        assert result["status"] == "ok"
+        assert result["kind"] == "DATA_INTEGRITY"
         assert result["detail"]["artifacts_checked"] == 2
         print("  PASS: sc-meta.json sidecar layout — two artifacts, one .sc-meta.json sidecar")
 
@@ -222,6 +231,8 @@ def test_missing_sidecar() -> None:
         result = _check_provenance_valid(root, deliverables)
 
         assert result["result"] == "fail", f"Expected fail, got: {result}"
+        assert result["status"] == "fail"
+        assert result["kind"] == "DATA_INTEGRITY"
         issues = result["detail"]["issues"]
         assert len(issues) == 1
         assert "no provenance sidecar covers this artifact" in issues[0]["issue"]
@@ -252,6 +263,8 @@ def test_sha256_mismatch() -> None:
         result = _check_provenance_valid(root, deliverables)
 
         assert result["result"] == "fail", f"Expected fail, got: {result}"
+        assert result["status"] == "fail"
+        assert result["kind"] == "DATA_INTEGRITY"
         issues = result["detail"]["issues"]
         assert len(issues) == 1
         assert "no provenance sidecar covers this artifact" in issues[0]["issue"]
@@ -286,6 +299,8 @@ def test_analysis_source_project_relative() -> None:
         deliverables = {"layer_0_classes": ["structures"]}
         result = _check_analysis_citations(root, deliverables)
 
+        assert "status" in result
+        assert "kind" in result
         # With the fixed source path, the source file should resolve
         source_issues = [
             i for i in result.get("detail", {}).get("issues", [])
@@ -318,6 +333,8 @@ def test_analysis_source_bare_name_fails() -> None:
         deliverables = {"layer_0_classes": ["structures"]}
         result = _check_analysis_citations(root, deliverables)
 
+        assert "status" in result
+        assert "kind" in result
         # A bare filename resolves relative to project root, so
         # root / "AF-P04637-F1.meta.json" won't exist → should fail
         source_issues = [
@@ -351,6 +368,8 @@ def test_analyze_prediction_source_project_relative() -> None:
         deliverables = {"layer_0_classes": ["structures"]}
         result = _check_analysis_citations(root, deliverables)
 
+        assert "status" in result
+        assert "kind" in result
         source_issues = [
             i for i in result.get("detail", {}).get("issues", [])
             if "source reference does not resolve" in i.get("issue", "")
@@ -401,6 +420,8 @@ def test_provenance_two_wos_scoped() -> None:
         result = _check_provenance_valid(root, deliverables, wo_id="WO-A")
 
         assert result["result"] == "pass", f"Expected pass, got: {result}"
+        assert result["status"] == "ok"
+        assert result["kind"] == "DATA_INTEGRITY"
         # Only WO-A's artifact should be checked; WO-B's skipped
         assert result["detail"]["artifacts_checked"] == 1
         print("  PASS: provenance — two WOs scoped, only WO-A checked")
@@ -442,6 +463,8 @@ def test_provenance_backward_compat_untagged() -> None:
         result = _check_provenance_valid(root, deliverables, wo_id="WO-A")
 
         assert result["result"] == "pass", f"Expected pass, got: {result}"
+        assert result["status"] == "ok"
+        assert result["kind"] == "DATA_INTEGRITY"
         # Both WO-A's and untagged artifacts should be checked
         assert result["detail"]["artifacts_checked"] == 2
         print("  PASS: provenance — backward compat, untagged sidecar included")
@@ -494,6 +517,8 @@ def test_relay_coverage_scoped() -> None:
         result = _check_relay_coverage(root, deliverables, wo_id="WO-A")
 
         assert result["result"] == "pass", f"Expected pass, got: {result}"
+        assert result["status"] == "ok"
+        assert result["kind"] == "COMPLETENESS"
         # Only WO-A's relay should be checked; WO-B's relay out of scope
         assert result["detail"]["codes_checked"] == 1
         print("  PASS: relay coverage — scoped to WO-A, WO-B's relay excluded")
@@ -531,11 +556,15 @@ def test_analysis_citations_scoped_two_wos() -> None:
         # Scoped to WO-A: should PASS — WO-B's malformed file is excluded
         result_a = _check_analysis_citations(root, deliverables, wo_id="WO-A")
         assert result_a["result"] == "pass", f"Expected pass for WO-A, got: {result_a}"
+        assert result_a["status"] == "ok"
+        assert result_a["kind"] == "DATA_INTEGRITY"
         assert result_a["detail"]["analyses_checked"] == 1
 
         # Scoped to WO-B: should FAIL — WO-B's own malformed file is checked
         result_b = _check_analysis_citations(root, deliverables, wo_id="WO-B")
         assert result_b["result"] == "fail", f"Expected fail for WO-B, got: {result_b}"
+        assert result_b["status"] == "fail"
+        assert result_b["kind"] == "DATA_INTEGRITY"
         assert result_b["detail"]["analyses_checked"] == 1
         print("  PASS: analysis citations — two WOs scoped, cross-WO excluded")
 
@@ -562,6 +591,8 @@ def test_analysis_citations_backward_compat_untagged() -> None:
         # Untagged file should be checked even when scoping to WO-A
         result = _check_analysis_citations(root, deliverables, wo_id="WO-A")
         assert result["result"] == "pass", f"Expected pass, got: {result}"
+        assert result["status"] == "ok"
+        assert result["kind"] == "DATA_INTEGRITY"
         assert result["detail"]["analyses_checked"] == 1
         print("  PASS: analysis citations — untagged file checked (backward compat)")
 
@@ -588,6 +619,8 @@ def test_analysis_citations_null_wo_checked() -> None:
         # Explicit null work_order_id → treated as untagged → always checked
         result = _check_analysis_citations(root, deliverables, wo_id="WO-A")
         assert result["result"] == "pass", f"Expected pass, got: {result}"
+        assert result["status"] == "ok"
+        assert result["kind"] == "DATA_INTEGRITY"
         assert result["detail"]["analyses_checked"] == 1
         print("  PASS: analysis citations — null work_order_id treated as untagged")
 
@@ -616,6 +649,8 @@ def test_analysis_citations_no_wo_id_checks_all() -> None:
         # No wo_id → all analysis files checked
         result = _check_analysis_citations(root, deliverables)
         assert result["result"] == "pass", f"Expected pass, got: {result}"
+        assert result["status"] == "ok"
+        assert result["kind"] == "DATA_INTEGRITY"
         assert result["detail"]["analyses_checked"] == 2
         print("  PASS: analysis citations — no wo_id checks all files")
 
@@ -702,6 +737,8 @@ def test_deliverables_exist_vacuous_pass_blocked() -> None:
         result = _check_deliverables_exist(root, deliverables, wo_id="WO-A")
 
         assert result["result"] == "fail", f"Expected fail (vacuous pass blocked), got: {result}"
+        assert result["status"] == "fail"
+        assert result["kind"] == "COMPLETENESS"
         assert any("no artifacts attributed" in m for m in result["detail"]["missing"]), (
             f"Expected 'no artifacts attributed' in missing, got: {result['detail']['missing']}"
         )
@@ -751,6 +788,8 @@ def test_deliverables_exist_own_artifact_passes() -> None:
         result = _check_deliverables_exist(root, deliverables, wo_id="WO-A")
 
         assert result["result"] == "pass", f"Expected pass (own artifact present), got: {result}"
+        assert result["status"] == "ok"
+        assert result["kind"] == "COMPLETENESS"
         print("  PASS: WO with own artifact in shared directory passes correctly")
 
 
@@ -782,6 +821,8 @@ def test_deliverables_exist_backward_compat_untagged() -> None:
         result = _check_deliverables_exist(root, deliverables, wo_id="WO-A")
 
         assert result["result"] == "pass", f"Expected pass (untagged artifact), got: {result}"
+        assert result["status"] == "ok"
+        assert result["kind"] == "COMPLETENESS"
         print("  PASS: untagged artifact counts toward deliverables_exist (backward compat)")
 
 
@@ -814,6 +855,8 @@ def test_deliverables_exist_single_wo_unaffected() -> None:
         result = _check_deliverables_exist(root, deliverables, wo_id="WO-ONLY")
 
         assert result["result"] == "pass", f"Expected pass (single WO), got: {result}"
+        assert result["status"] == "ok"
+        assert result["kind"] == "COMPLETENESS"
         print("  PASS: single-WO project unaffected")
 
 
@@ -843,7 +886,45 @@ def test_deliverables_exist_no_wo_id_checks_all() -> None:
         result = _check_deliverables_exist(root, deliverables)
 
         assert result["result"] == "pass", f"Expected pass (no wo_id), got: {result}"
+        assert result["status"] == "ok"
+        assert result["kind"] == "COMPLETENESS"
         print("  PASS: no wo_id checks all artifacts (pre-scoping behavior)")
+
+
+# ---------------------------------------------------------------------------
+# _overall_verdict tests (#105 severity model)
+# ---------------------------------------------------------------------------
+
+
+def test_overall_verdict_all_pass():
+    checks = [
+        {"name": "a", "result": "pass", "status": "ok", "kind": "DATA_INTEGRITY"},
+        {"name": "b", "result": "pass", "status": "ok", "kind": "COMPLETENESS"},
+    ]
+    assert _overall_verdict(checks) == "pass"
+
+
+def test_overall_verdict_any_fail():
+    checks = [
+        {"name": "a", "result": "pass", "status": "ok", "kind": "DATA_INTEGRITY"},
+        {"name": "b", "result": "fail", "status": "fail", "kind": "COMPLETENESS"},
+    ]
+    assert _overall_verdict(checks) == "fail"
+
+
+def test_overall_verdict_warns_only():
+    checks = [
+        {"name": "a", "result": "pass", "status": "ok", "kind": "DATA_INTEGRITY"},
+        {"name": "b", "result": "pass", "status": "warn", "kind": "CONVENTION"},
+    ]
+    assert _overall_verdict(checks) == "pass_with_warnings"
+
+
+def test_overall_verdict_all_skip():
+    checks = [
+        {"name": "a", "result": "skip", "status": "skip", "kind": None},
+    ]
+    assert _overall_verdict(checks) == "fail"
 
 
 # ---------------------------------------------------------------------------
@@ -882,6 +963,11 @@ def main() -> None:
         ("test_deliverables_exist_backward_compat_untagged", test_deliverables_exist_backward_compat_untagged),
         ("test_deliverables_exist_single_wo_unaffected", test_deliverables_exist_single_wo_unaffected),
         ("test_deliverables_exist_no_wo_id_checks_all", test_deliverables_exist_no_wo_id_checks_all),
+        # #105 severity model — _overall_verdict
+        ("test_overall_verdict_all_pass", test_overall_verdict_all_pass),
+        ("test_overall_verdict_any_fail", test_overall_verdict_any_fail),
+        ("test_overall_verdict_warns_only", test_overall_verdict_warns_only),
+        ("test_overall_verdict_all_skip", test_overall_verdict_all_skip),
     ]
 
     passed = 0

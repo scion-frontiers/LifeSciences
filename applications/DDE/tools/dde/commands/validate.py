@@ -45,6 +45,18 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _overall_verdict(checks: list[dict[str, Any]]) -> str:
+    """Compute overall validation verdict from individual check results."""
+    non_skipped = [c for c in checks if c.get("status") != "skip"]
+    if not non_skipped:
+        return "fail"  # vacuous — nothing was validated
+    if any(c.get("status") == "fail" for c in non_skipped):
+        return "fail"
+    if any(c.get("status") == "warn" for c in non_skipped):
+        return "pass_with_warnings"
+    return "pass"
+
+
 def _find_latest_revision(
     project_root: Path,
     wo_id: str,
@@ -229,11 +241,15 @@ def _check_deliverables_exist(
         return {
             "name": "deliverables_exist",
             "result": "fail",
+            "status": "fail",
+            "kind": "COMPLETENESS",
             "detail": detail,
         }
     return {
         "name": "deliverables_exist",
         "result": "pass",
+        "status": "ok",
+        "kind": "COMPLETENESS",
         "detail": {"layer_1_count": len(layer_1) if isinstance(layer_1, list) else 0,
                     "layer_0_classes": layer_0_classes if isinstance(layer_0_classes, list) else []},
     }
@@ -254,6 +270,8 @@ def _check_report_headings(
         return {
             "name": "report_headings",
             "result": "skip",
+            "status": "skip",
+            "kind": None,
             "detail": "no layer_1 deliverables declared",
         }
 
@@ -269,11 +287,15 @@ def _check_report_headings(
         return {
             "name": "report_headings",
             "result": "fail",
+            "status": "fail",
+            "kind": "COMPLETENESS",
             "detail": {"expected_reference": reference, "files_missing_reference": missing_ref},
         }
     return {
         "name": "report_headings",
         "result": "pass",
+        "status": "ok",
+        "kind": "COMPLETENESS",
         "detail": {"reference": reference},
     }
 
@@ -295,6 +317,8 @@ def _check_paths_resolve(
         return {
             "name": "paths_resolve",
             "result": "skip",
+            "status": "skip",
+            "kind": None,
             "detail": "no layer_1 deliverables declared",
         }
 
@@ -329,8 +353,8 @@ def _check_paths_resolve(
         detail["broken_links"] = broken
 
     if confined_failures or broken:
-        return {"name": "paths_resolve", "result": "fail", "detail": detail}
-    return {"name": "paths_resolve", "result": "pass", "detail": detail}
+        return {"name": "paths_resolve", "result": "fail", "status": "fail", "kind": "DATA_INTEGRITY", "detail": detail}
+    return {"name": "paths_resolve", "result": "pass", "status": "ok", "kind": "DATA_INTEGRITY", "detail": detail}
 
 
 def _build_sidecar_index(
@@ -422,6 +446,8 @@ def _check_provenance_valid(
         return {
             "name": "provenance_valid",
             "result": "skip",
+            "status": "skip",
+            "kind": None,
             "detail": "no layer_0_classes declared",
         }
 
@@ -453,8 +479,8 @@ def _check_provenance_valid(
     detail: dict[str, Any] = {"artifacts_checked": artifacts_checked}
     if issues:
         detail["issues"] = issues
-        return {"name": "provenance_valid", "result": "fail", "detail": detail}
-    return {"name": "provenance_valid", "result": "pass", "detail": detail}
+        return {"name": "provenance_valid", "result": "fail", "status": "fail", "kind": "DATA_INTEGRITY", "detail": detail}
+    return {"name": "provenance_valid", "result": "pass", "status": "ok", "kind": "DATA_INTEGRITY", "detail": detail}
 
 
 def _check_analysis_citations(
@@ -477,6 +503,8 @@ def _check_analysis_citations(
         return {
             "name": "analysis_citations",
             "result": "skip",
+            "status": "skip",
+            "kind": None,
             "detail": "no layer_0_classes declared",
         }
 
@@ -550,8 +578,8 @@ def _check_analysis_citations(
     detail: dict[str, Any] = {"analyses_checked": analyses_checked}
     if issues:
         detail["issues"] = issues
-        return {"name": "analysis_citations", "result": "fail", "detail": detail}
-    return {"name": "analysis_citations", "result": "pass", "detail": detail}
+        return {"name": "analysis_citations", "result": "fail", "status": "fail", "kind": "DATA_INTEGRITY", "detail": detail}
+    return {"name": "analysis_citations", "result": "pass", "status": "ok", "kind": "DATA_INTEGRITY", "detail": detail}
 
 
 def _check_relay_coverage(
@@ -575,6 +603,8 @@ def _check_relay_coverage(
         return {
             "name": "relay_coverage",
             "result": "skip",
+            "status": "skip",
+            "kind": None,
             "detail": "no layer_0_classes declared",
         }
 
@@ -613,6 +643,8 @@ def _check_relay_coverage(
         return {
             "name": "relay_coverage",
             "result": "pass",
+            "status": "ok",
+            "kind": "COMPLETENESS",
             "detail": {"codes_checked": 0, "codes_addressed": 0,
                         "codes_not_addressed": 0, "unaddressed": []},
         }
@@ -642,8 +674,8 @@ def _check_relay_coverage(
     }
 
     if unaddressed:
-        return {"name": "relay_coverage", "result": "fail", "detail": detail}
-    return {"name": "relay_coverage", "result": "pass", "detail": detail}
+        return {"name": "relay_coverage", "result": "fail", "status": "fail", "kind": "COMPLETENESS", "detail": detail}
+    return {"name": "relay_coverage", "result": "pass", "status": "ok", "kind": "COMPLETENESS", "detail": detail}
 
 
 def _check_version_policy(
@@ -660,6 +692,8 @@ def _check_version_policy(
         return {
             "name": "version_policy",
             "result": "skip",
+            "status": "skip",
+            "kind": None,
             "detail": "program.yaml not present — check deferred to issue #16",
         }
 
@@ -668,6 +702,8 @@ def _check_version_policy(
     return {
         "name": "version_policy",
         "result": "pass",
+        "status": "ok",
+        "kind": "COMPLETENESS",
         "detail": "program.yaml present; version policy check not yet implemented",
     }
 
@@ -687,6 +723,8 @@ def _check_findings_integrity(
         return {
             "name": "findings_integrity",
             "result": "pass",
+            "status": "ok",
+            "kind": "CONVENTION",
             "detail": "no findings/ directory present",
         }
 
@@ -701,11 +739,15 @@ def _check_findings_integrity(
         return {
             "name": "findings_integrity",
             "result": "fail",
+            "status": "fail",
+            "kind": "CONVENTION",
             "detail": {"misplaced_files": misplaced},
         }
     return {
         "name": "findings_integrity",
         "result": "pass",
+        "status": "ok",
+        "kind": "CONVENTION",
         "detail": "no misplaced sidecars found under findings/",
     }
 
@@ -801,14 +843,8 @@ def _perform_validation(
         _check_findings_integrity(project_root),
     ])
 
-    # Determine overall result: pass if all non-skipped checks pass.
-    # Guard against the vacuous-pass case — if every check skipped,
-    # nothing was actually validated, and "pass" would be a lie.
-    non_skipped = [c for c in checks if c["result"] != "skip"]
-    if not non_skipped:
-        overall_result = "fail"
-    else:
-        overall_result = "pass" if all(c["result"] == "pass" for c in non_skipped) else "fail"
+    # Determine overall result using the severity-model verdict.
+    overall_result = _overall_verdict(checks)
     checks_failed = [c["name"] for c in checks if c["result"] == "fail"]
 
     # Find the latest run for this WO revision (informational).
@@ -839,7 +875,7 @@ def _perform_validation(
     )
 
     # State transition.
-    if overall_result == "pass":
+    if overall_result in ("pass", "pass_with_warnings"):
         target_state = "mechanically_validated"
     else:
         target_state = "validation_failed"

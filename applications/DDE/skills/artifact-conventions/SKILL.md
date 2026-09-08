@@ -76,6 +76,12 @@ Every factual claim links to its supporting artifact. Three link directions:
 - **Lateral (peer findings):** `[findings/medicinal-chemistry/series-a-sar.md]` — cross-references to related specialist work at the same layer.
 - **Upward (program state):** `[program-state/active-series.md#series-a]` — anchoring into the orchestrator's decision surface.
 
+**Path resolution differs between source tags and markdown links:**
+- Source tags (`{source: raw/...}`) resolve **project-root-relative**.
+- Markdown links (`[text](raw/...)`) resolve **file-relative** (standard Markdown behavior).
+
+This means a finding at `findings/computational-biology/assessment.md` that links to `raw/genomics/` must write `[raw/genomics/](../../raw/genomics/)`, but its source tag writes `{source: raw/genomics/tp53.analysis.json $.field}` without the `../../` prefix.
+
 ### Source tags for numerical claims
 
 Every numerical value cited from a tool output must carry an inline source tag
@@ -85,12 +91,16 @@ value** to the **exact field** that produced it.
 
 **Format:** `{source: <path> <locator>}`
 
+Locators are **required** on all numerical source tags. A tag without a locator (`{source: raw/structures/target-apo.analysis.json}`) is valid only for non-numerical artifact references where the link establishes provenance without claiming a specific value. The validator emits a format warning for numerical tags missing a locator.
+
 The locator identifies where in the artifact the value lives:
 
-- **JSONPath** for `.json`, `.analysis.json`, and `.meta.json` files:
+- **JSONPath (RFC 9535 subset)** for `.json`, `.analysis.json`, and `.meta.json` files. Supported syntax: `$`, dot and bracket child selectors, single-index array access `[N]`, and slice notation `[start:end]`. Recursive descent (`..`) and filter expressions (`?()`) are not supported — source tags must resolve to exactly one scalar value.
   `{source: raw/structures/target-apo.analysis.json $.pocket_volume}`
 - **Line number** for non-JSON text or when field-level precision is unnecessary:
   `{source: raw/structures/target-apo.meta.json:14}`
+
+The locator must resolve to a **scalar value** (string, number, boolean, or null). Tags whose locators resolve to an object or array produce a format warning — the claimed value cannot be tolerance-compared against a non-scalar.
 
 Path and JSONPath locator are space-separated (not colon-separated) to avoid
 ambiguity with colons in file paths. Line-number locators use the `:N` suffix
@@ -107,7 +117,14 @@ indicating strong evolutionary constraint.
 
 The top hypothesis scored 8.2 {source: raw/hypotheses/hbv-entry.tournament.json $.rounds[0].winner.score}
 across the tournament evaluation.
+
+The search returned 687 results {source: raw/genomics/tp53.meta.json $.metrics.total_results}
+across all patent families.
 ```
+
+`.meta.json` files are valid source-tag targets. When a value is only available in `.meta.json`, it can be tagged directly. Tooling should also surface frequently-cited meta values in the `.analysis.json` `metrics` object for convenience.
+
+A source tag binds to the **immediately preceding numerical value**. When a clause contains multiple numbers from source artifacts, each number carries its own tag. This makes mechanical extraction unambiguous: the validator reads the number immediately before the `{source:` token.
 
 **What must be tagged:**
 
@@ -120,6 +137,9 @@ across the tournament evaluation.
 - General quantities from literature (covered by citation-resolution)
 - Counts or descriptions that are not derived from a specific tool output
   (e.g., "three binding pockets were identified" — the artifact link suffices)
+
+**Bulk table citations:**
+When a table's values derive from a single artifact, use `{source-table: <path> <locator>}` on the line following the table. This asserts provenance for the table as a whole. The locator may resolve to an object or array. Per-cell `{source: ...}` tags are optional and additive — use them for values that warrant individual mechanical verification.
 
 Source tags and path links coexist. A claim can carry both — the path link
 points to the artifact, the source tag points to the specific value within it.
@@ -209,3 +229,13 @@ the re-analysis artifacts under `raw/reanalysis/`.
 - Distinguish between measured values and model predictions.
 - State units explicitly.
 - Acknowledge limitations and alternative interpretations.
+
+## Addressing Mandatory Relays
+
+When a finding addresses a mandatory relay, use the label format `**Relay: \`<code>\`**` followed by the substantive response. Every mandatory relay from the work order's artifacts must be addressed with this label.
+
+```markdown
+**Relay: `compound.alerts_not_toxicology`**
+The structural alerts identified (PAINS pattern A) are pharmacological mechanism-related
+rather than toxicological. This is supported by the target's known SAR...
+```
