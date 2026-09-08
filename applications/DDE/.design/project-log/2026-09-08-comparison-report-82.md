@@ -131,3 +131,42 @@ environments where the full project infrastructure is not available.
 - `eval/fixtures/definitions.py` — existing fixture definitions (unchanged)
 - `eval/metrics.py` — existing metrics module (unchanged)
 - `eval/baseline/*` — Phase 1 frozen output (read-only, checksums verified)
+
+## Addendum: Re-run After Manufacturing ARTIFACT_DIRS Fix (2026-09-08)
+
+The initial comparison run (commit `89b0a23`) was affected by a pre-existing
+bug in `tools/dde/core/context.py`: the `"manufacturing"` key was missing from
+`ARTIFACT_DIRS`, causing `dde manufacturing assess-stage0` to exit with code 2
+("unknown artifact class 'manufacturing'") on every invocation.  This meant the
+initial Stage 0 report showed `cli_success_rate: 0/8` for manufacturing — an
+artifact of the bug, not a reflection of Stage 0's actual behavior.
+
+The bug was independently fixed and merged to the DDE branch at commit
+`19eb355` (one-line addition: `"manufacturing": "raw/manufacturing"` in
+`ARTIFACT_DIRS`).  See issue #23 for the full history.
+
+After rebasing `scion/dev-comparison-82` onto the fix, the comparison harness
+was re-run.  The corrected results:
+
+| Metric (changed) | Before fix | After fix |
+|-------------------|-----------|-----------|
+| cli_success_rate (Stage 0) | 0/8 (0.0) | 8/8 (1.0) |
+| cli_failure_rate (Stage 0) | 8/8 (1.0) | 0/8 (0.0) |
+| Manufacturing observations | CLI error messages | Real assessments (evidence_status=not_yet_applicable / not_assessed) |
+
+The manufacturing workstream now completes successfully for all 8 fixtures,
+producing genuine `not_yet_applicable` (7 fixtures) and `not_assessed` (EVAL-008)
+evidence statuses instead of CLI errors.  All other metrics remain unchanged
+from the initial run.
+
+No harness code was changed — only the generated comparison artifacts were
+regenerated against the fixed underlying code.
+
+### Re-run Verification
+
+- **Comparison tests**: 18/18 passed
+- **Manufacturing tests**: 37/37 passed (includes new regression test from fix commit)
+- **Eval metrics tests**: 26/26 passed (no regressions)
+- **Triage tests**: 63/63 passed (no regressions)
+- **Total**: 144/144 tests passing
+- **Baseline artifacts**: SHA-256 checksums verified unchanged

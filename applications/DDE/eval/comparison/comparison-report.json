@@ -1,8 +1,8 @@
 {
   "eval_version": "1.0-comparison",
   "baseline_timestamp": "2026-09-08T15:07:57Z",
-  "stage0_timestamp": "2026-09-08T17:45:57Z",
-  "comparison_timestamp": "2026-09-08T17:45:57Z",
+  "stage0_timestamp": "2026-09-08T18:01:30Z",
+  "comparison_timestamp": "2026-09-08T18:01:30Z",
   "scope_and_limitations": [
     "This comparison covers baseline (pre-Stage 0) vs. Stage 0 bounded triage workflows only.",
     "Evidence reuse (#77) is P2 and explicitly out of scope for this tracker phase \u2014 it has not been implemented and is not measured in this comparison.",
@@ -36,12 +36,12 @@
         "note": ""
       },
       "stage0": {
-        "value": 0,
+        "value": 8,
         "denominator": 8,
-        "rate": 0.0,
+        "rate": 1.0,
         "note": ""
       },
-      "comparison_note": "Delta: -4"
+      "comparison_note": "Delta: +4"
     },
     {
       "metric": "cli_failure_rate",
@@ -52,12 +52,12 @@
         "note": ""
       },
       "stage0": {
-        "value": 8,
+        "value": 0,
         "denominator": 8,
-        "rate": 1.0,
+        "rate": 0.0,
         "note": ""
       },
-      "comparison_note": "Delta: +8"
+      "comparison_note": "No change"
     },
     {
       "metric": "total_state_transitions",
@@ -116,12 +116,12 @@
         "note": ""
       },
       "stage0": {
-        "value": 0.0282,
+        "value": 0.0314,
         "denominator": null,
         "rate": null,
         "note": ""
       },
-      "comparison_note": "Delta: -0.0116"
+      "comparison_note": "Delta: -0.0084"
     },
     {
       "metric": "repeated_operations",
@@ -212,7 +212,7 @@
       "baseline_completed": true,
       "stage0_completed": true,
       "baseline_wall_clock": 0.009,
-      "stage0_wall_clock": 0.0045,
+      "stage0_wall_clock": 0.005,
       "baseline_invocations": 2,
       "stage0_invocations": 1,
       "baseline_transitions": 5,
@@ -223,7 +223,7 @@
         "Final work order state: submitted. No genomics artifacts exist \u2014 this is the expected baseline behavior for no-genetic-support scenarios."
       ],
       "stage0_observations": [
-        "[manufacturing] error: Manufacturing assess-stage0 exited 2: error: unknown artifact class 'manufacturing'\n  detail: known classes: admet, analogs, assays, bioactivity, compound, compounds, descriptors, docking, expression, genetics, genomics, gtex, hypotheses,",
+        "[manufacturing] evidence_status=not_yet_applicable, execution_outcome=unknown",
         "Stage 0 disposition: (pending lead review)",
         "Shortlisted: True (shortlist: ['IC-EVAL-001-r1'])"
       ],
@@ -239,7 +239,7 @@
       "baseline_completed": true,
       "stage0_completed": true,
       "baseline_wall_clock": 0.0046,
-      "stage0_wall_clock": 0.0036,
+      "stage0_wall_clock": 0.0039,
       "baseline_invocations": 0,
       "stage0_invocations": 1,
       "baseline_transitions": 5,
@@ -249,7 +249,7 @@
         "Pocket druggability score 0.12 (unfavorable). Single conformation relay fired. Work order state: submitted."
       ],
       "stage0_observations": [
-        "[manufacturing] error: Manufacturing assess-stage0 exited 2: error: unknown artifact class 'manufacturing'\n  detail: known classes: admet, analogs, assays, bioactivity, compound, compounds, descriptors, docking, expression, genetics, genomics, gtex, hypotheses,",
+        "[manufacturing] evidence_status=not_yet_applicable, execution_outcome=unknown",
         "Stage 0 disposition: (pending lead review)",
         "Shortlisted: True (shortlist: ['IC-EVAL-002-r1'])"
       ],
@@ -264,7 +264,7 @@
       "baseline_completed": true,
       "stage0_completed": true,
       "baseline_wall_clock": 0.0038,
-      "stage0_wall_clock": 0.0035,
+      "stage0_wall_clock": 0.0039,
       "baseline_invocations": 0,
       "stage0_invocations": 1,
       "baseline_transitions": 5,
@@ -274,7 +274,7 @@
         "Work order state: submitted. Favorable geometry baseline."
       ],
       "stage0_observations": [
-        "[manufacturing] error: Manufacturing assess-stage0 exited 2: error: unknown artifact class 'manufacturing'\n  detail: known classes: admet, analogs, assays, bioactivity, compound, compounds, descriptors, docking, expression, genetics, genomics, gtex, hypotheses,",
+        "[manufacturing] evidence_status=not_yet_applicable, execution_outcome=unknown",
         "Stage 0 disposition: (pending lead review)",
         "Shortlisted: True (shortlist: ['IC-EVAL-003-r1'])"
       ],
@@ -289,7 +289,7 @@
       "baseline_completed": true,
       "stage0_completed": true,
       "baseline_wall_clock": 0.0035,
-      "stage0_wall_clock": 0.0033,
+      "stage0_wall_clock": 0.0036,
       "baseline_invocations": 0,
       "stage0_invocations": 1,
       "baseline_transitions": 5,
@@ -298,7 +298,7 @@
         "Modality mismatch caught: False. Work order state: submitted. Context modality='antibody', deliverables target small-molecule artifact classes (docking, compounds, descriptors). Current workflow has no modality-consistency gate."
       ],
       "stage0_observations": [
-        "[manufacturing] error: Manufacturing assess-stage0 exited 2: error: unknown artifact class 'manufacturing'\n  detail: known classes: admet, analogs, assays, bioactivity, compound, compounds, descriptors, docking, expression, genetics, genomics, gtex, hypotheses,",
+        "[manufacturing] evidence_status=not_yet_applicable, execution_outcome=unknown",
         "Stage 0 disposition: (pending lead review)",
         "Shortlisted: True (shortlist: ['IC-EVAL-004-r1'])"
       ],
@@ -313,7 +313,7 @@
       "baseline_completed": true,
       "stage0_completed": true,
       "baseline_wall_clock": 0.0031,
-      "stage0_wall_clock": 0.0033,
+      "stage0_wall_clock": 0.0035,
       "baseline_invocations": 0,
       "stage0_invocations": 1,
       "baseline_transitions": 4,
@@ -322,7 +322,7 @@
         "Work order accepted with 4 empty entity fields: ['target', 'compound_smiles', 'compound_inchikey', 'pubchem_cid']. Current workflow has no context-content validation. Work order state: in_progress."
       ],
       "stage0_observations": [
-        "[manufacturing] error: Manufacturing assess-stage0 exited 2: error: unknown artifact class 'manufacturing'\n  detail: known classes: admet, analogs, assays, bioactivity, compound, compounds, descriptors, docking, expression, genetics, genomics, gtex, hypotheses,",
+        "[manufacturing] evidence_status=not_yet_applicable, execution_outcome=unknown",
         "Stage 0 disposition: (pending lead review)",
         "Shortlisted: True (shortlist: ['IC-EVAL-005-r1'])"
       ],
@@ -337,7 +337,7 @@
       "baseline_completed": true,
       "stage0_completed": true,
       "baseline_wall_clock": 0.004,
-      "stage0_wall_clock": 0.0032,
+      "stage0_wall_clock": 0.0038,
       "baseline_invocations": 0,
       "stage0_invocations": 1,
       "baseline_transitions": 9,
@@ -347,7 +347,7 @@
         "Recovery run RUN-007 created (attempt 2). State machine allows retry after infrastructure failure."
       ],
       "stage0_observations": [
-        "[manufacturing] error: Manufacturing assess-stage0 exited 2: error: unknown artifact class 'manufacturing'\n  detail: known classes: admet, analogs, assays, bioactivity, compound, compounds, descriptors, docking, expression, genetics, genomics, gtex, hypotheses,",
+        "[manufacturing] evidence_status=not_yet_applicable, execution_outcome=unknown",
         "Stage 0 disposition: (pending lead review)",
         "Shortlisted: True (shortlist: ['IC-EVAL-006-r1'])"
       ],
@@ -362,7 +362,7 @@
       "baseline_completed": true,
       "stage0_completed": true,
       "baseline_wall_clock": 0.0056,
-      "stage0_wall_clock": 0.0032,
+      "stage0_wall_clock": 0.0039,
       "baseline_invocations": 2,
       "stage0_invocations": 1,
       "baseline_transitions": 1,
@@ -373,7 +373,7 @@
         "Disputed citation scenario: current workflow does not have a retraction-check gate.  The citation passes through unchanged.  Future workflow improvements may add citation verification."
       ],
       "stage0_observations": [
-        "[manufacturing] error: Manufacturing assess-stage0 exited 2: error: unknown artifact class 'manufacturing'\n  detail: known classes: admet, analogs, assays, bioactivity, compound, compounds, descriptors, docking, expression, genetics, genomics, gtex, hypotheses,",
+        "[manufacturing] evidence_status=not_yet_applicable, execution_outcome=unknown",
         "Stage 0 disposition: (pending lead review)",
         "Shortlisted: True (shortlist: ['IC-EVAL-007-r1'])"
       ],
@@ -389,7 +389,7 @@
       "baseline_completed": true,
       "stage0_completed": true,
       "baseline_wall_clock": 0.0062,
-      "stage0_wall_clock": 0.0036,
+      "stage0_wall_clock": 0.0038,
       "baseline_invocations": 0,
       "stage0_invocations": 1,
       "baseline_transitions": 14,
@@ -398,7 +398,7 @@
         "Completed 3 validation-failure recovery cycles. State machine allows unlimited cycles (no circuit breaker). Final state: submitted. Transitions per cycle: 3 (submitted->validation_failed->in_progress->submitted)."
       ],
       "stage0_observations": [
-        "[manufacturing] error: Manufacturing assess-stage0 exited 2: error: unknown artifact class 'manufacturing'\n  detail: known classes: admet, analogs, assays, bioactivity, compound, compounds, descriptors, docking, expression, genetics, genomics, gtex, hypotheses,",
+        "[manufacturing] evidence_status=not_assessed, execution_outcome=unknown",
         "Stage 0 disposition: (pending lead review)",
         "Shortlisted: True (shortlist: ['IC-EVAL-008-r1'])"
       ],
@@ -416,12 +416,14 @@
         "Final work order state: submitted. No genomics artifacts exist \u2014 this is the expected baseline behavior for no-genetic-support scenarios."
       ],
       "stage0_observations": [
-        "[manufacturing] error: Manufacturing assess-stage0 exited 2: error: unknown artifact class 'manufacturing'\n  detail: known classes: admet, analogs, assays, bioactivity, compound, compounds, descriptors, docking, expression, genetics, genomics, gtex, hypotheses,",
+        "[manufacturing] evidence_status=not_yet_applicable, execution_outcome=unknown",
         "Stage 0 disposition: (pending lead review)",
         "Shortlisted: True (shortlist: ['IC-EVAL-001-r1'])"
       ],
       "stage0_disposition": "(pending lead review)",
-      "stage0_evidence_statuses": [],
+      "stage0_evidence_statuses": [
+        "not_yet_applicable"
+      ],
       "comparison_note": "Baseline: work order reaches submitted state; validation fails on deliverables_exist because no genomics artifacts exist.  Stage 0: concept is evaluated through triage (disposition: (pending lead review)).  Stage 0 evaluates the concept's manufacturing feasibility rather than checking for pre-existing artifacts \u2014 a structurally different assessment path that does not auto-terminate the concept for lacking genetic evidence."
     },
     {
@@ -431,17 +433,19 @@
         "Pocket druggability score 0.12 (unfavorable). Single conformation relay fired. Work order state: submitted."
       ],
       "stage0_observations": [
-        "[manufacturing] error: Manufacturing assess-stage0 exited 2: error: unknown artifact class 'manufacturing'\n  detail: known classes: admet, analogs, assays, bioactivity, compound, compounds, descriptors, docking, expression, genetics, genomics, gtex, hypotheses,",
+        "[manufacturing] evidence_status=not_yet_applicable, execution_outcome=unknown",
         "Stage 0 disposition: (pending lead review)",
         "Shortlisted: True (shortlist: ['IC-EVAL-002-r1'])"
       ],
       "stage0_disposition": "(pending lead review)",
-      "stage0_evidence_statuses": [],
+      "stage0_evidence_statuses": [
+        "not_yet_applicable"
+      ],
       "comparison_note": "Baseline: pocket analysis artifact has unfavorable metrics (druggability score 0.12); fpocket.single_conformation relay fires.  Stage 0: concept is evaluated through triage (disposition: (pending lead review)).  Stage 0 assesses manufacturing feasibility independently of the pocket druggability findings \u2014 the unfavorable pocket score does not auto-terminate the concept, consistent with the no-automatic-veto design principle."
     }
   ],
   "stage0_resource_characteristics": {
-    "total_wall_clock_seconds": 0.0282,
+    "total_wall_clock_seconds": 0.0314,
     "total_workstream_invocations": 8,
     "total_state_transitions": 8,
     "workstreams_per_concept": "1 (manufacturing) \u2014 differentiation and structure screening require additional configuration not present in the evaluation fixtures",

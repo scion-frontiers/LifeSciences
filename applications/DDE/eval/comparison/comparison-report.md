@@ -2,8 +2,8 @@
 
 **Evaluation version**: 1.0-comparison
 **Baseline run**: 2026-09-08T15:07:57Z
-**Stage 0 run**: 2026-09-08T17:45:57Z
-**Comparison generated**: 2026-09-08T17:45:57Z
+**Stage 0 run**: 2026-09-08T18:01:30Z
+**Comparison generated**: 2026-09-08T18:01:30Z
 
 ## Scope and Limitations
 
@@ -18,12 +18,12 @@
 | Metric | Baseline | Stage 0 | Note |
 |--------|----------|---------|------|
 | fixtures_completed | 8/8 (1.0) | 8/8 (1.0) | No change |
-| cli_success_rate | 4/4 (1.0) | 0/8 (0.0) | Delta: -4 |
-| cli_failure_rate | 0/4 (0.0) | 8/8 (1.0) | Delta: +8 |
+| cli_success_rate | 4/4 (1.0) | 8/8 (1.0) | Delta: +4 |
+| cli_failure_rate | 0/4 (0.0) | 0/8 (0.0) | No change |
 | total_state_transitions | 48 | 8 | Delta: -40 |
 | total_relay_codes_fired | 4 | 1 | Delta: -3 |
 | total_artifacts_produced | 8 | 4 | Delta: -4 |
-| total_wall_clock_seconds | 0.0398 | 0.0282 | Delta: -0.0116 |
+| total_wall_clock_seconds | 0.0398 | 0.0314 | Delta: -0.0084 |
 | repeated_operations | 0/4 (0.0) | 0/8 (0.0) | No change |
 | unsupported_claims_accepted | N/A — Requires LLM agent workflow execution with scientific review | N/A — Requires LLM agent workflow execution with scientific review | Both N/A — requires LLM agent workflow execution, not measured by this control-plane harness |
 | mistaken_rejections | N/A — Requires LLM agent workflow execution with review of declined candidates | N/A — Requires LLM agent workflow execution with review of declined candidates | Both N/A — requires LLM agent workflow execution, not measured by this control-plane harness |
@@ -36,7 +36,7 @@
 
 - **Category**: no_genetic_support
 - **Completed**: baseline=True, Stage 0=True
-- **Wall clock**: baseline 0.009s, Stage 0 0.0045s
+- **Wall clock**: baseline 0.009s, Stage 0 0.005s
 - **Invocations**: baseline 2, Stage 0 1
 - **State transitions**: baseline 5, Stage 0 1
 
@@ -45,8 +45,7 @@
 - Different CLI command paths: baseline uses control-plane commands (hypothesis adopt, validate check); Stage 0 uses triage workstream commands (manufacturing assess-stage0)
 
 **Stage 0 observations**:
-- [manufacturing] error: Manufacturing assess-stage0 exited 2: error: unknown artifact class 'manufacturing'
-  detail: known classes: admet, analogs, assays, bioactivity, compound, compounds, descriptors, docking, expression, genetics, genomics, gtex, hypotheses,
+- [manufacturing] evidence_status=not_yet_applicable, execution_outcome=unknown
 - Stage 0 disposition: (pending lead review)
 - Shortlisted: True (shortlist: ['IC-EVAL-001-r1'])
 
@@ -54,7 +53,7 @@
 
 - **Category**: negative_pocket_conformation
 - **Completed**: baseline=True, Stage 0=True
-- **Wall clock**: baseline 0.0046s, Stage 0 0.0036s
+- **Wall clock**: baseline 0.0046s, Stage 0 0.0039s
 - **Invocations**: baseline 0, Stage 0 1
 - **State transitions**: baseline 5, Stage 0 1
 
@@ -62,8 +61,7 @@
 - Stage 0 adds triage evaluation with manufacturing feasibility assessment (not present in baseline)
 
 **Stage 0 observations**:
-- [manufacturing] error: Manufacturing assess-stage0 exited 2: error: unknown artifact class 'manufacturing'
-  detail: known classes: admet, analogs, assays, bioactivity, compound, compounds, descriptors, docking, expression, genetics, genomics, gtex, hypotheses,
+- [manufacturing] evidence_status=not_yet_applicable, execution_outcome=unknown
 - Stage 0 disposition: (pending lead review)
 - Shortlisted: True (shortlist: ['IC-EVAL-002-r1'])
 
@@ -71,7 +69,7 @@
 
 - **Category**: positive_model_geometry
 - **Completed**: baseline=True, Stage 0=True
-- **Wall clock**: baseline 0.0038s, Stage 0 0.0035s
+- **Wall clock**: baseline 0.0038s, Stage 0 0.0039s
 - **Invocations**: baseline 0, Stage 0 1
 - **State transitions**: baseline 5, Stage 0 1
 
@@ -79,8 +77,7 @@
 - Stage 0 adds triage evaluation with manufacturing feasibility assessment (not present in baseline)
 
 **Stage 0 observations**:
-- [manufacturing] error: Manufacturing assess-stage0 exited 2: error: unknown artifact class 'manufacturing'
-  detail: known classes: admet, analogs, assays, bioactivity, compound, compounds, descriptors, docking, expression, genetics, genomics, gtex, hypotheses,
+- [manufacturing] evidence_status=not_yet_applicable, execution_outcome=unknown
 - Stage 0 disposition: (pending lead review)
 - Shortlisted: True (shortlist: ['IC-EVAL-003-r1'])
 
@@ -88,7 +85,7 @@
 
 - **Category**: modality_mismatch
 - **Completed**: baseline=True, Stage 0=True
-- **Wall clock**: baseline 0.0035s, Stage 0 0.0033s
+- **Wall clock**: baseline 0.0035s, Stage 0 0.0036s
 - **Invocations**: baseline 0, Stage 0 1
 - **State transitions**: baseline 5, Stage 0 1
 
@@ -96,8 +93,7 @@
 - Stage 0 adds triage evaluation with manufacturing feasibility assessment (not present in baseline)
 
 **Stage 0 observations**:
-- [manufacturing] error: Manufacturing assess-stage0 exited 2: error: unknown artifact class 'manufacturing'
-  detail: known classes: admet, analogs, assays, bioactivity, compound, compounds, descriptors, docking, expression, genetics, genomics, gtex, hypotheses,
+- [manufacturing] evidence_status=not_yet_applicable, execution_outcome=unknown
 - Stage 0 disposition: (pending lead review)
 - Shortlisted: True (shortlist: ['IC-EVAL-004-r1'])
 
@@ -105,7 +101,7 @@
 
 - **Category**: absent_entity_inputs
 - **Completed**: baseline=True, Stage 0=True
-- **Wall clock**: baseline 0.0031s, Stage 0 0.0033s
+- **Wall clock**: baseline 0.0031s, Stage 0 0.0035s
 - **Invocations**: baseline 0, Stage 0 1
 - **State transitions**: baseline 4, Stage 0 1
 
@@ -113,8 +109,7 @@
 - Stage 0 adds triage evaluation with manufacturing feasibility assessment (not present in baseline)
 
 **Stage 0 observations**:
-- [manufacturing] error: Manufacturing assess-stage0 exited 2: error: unknown artifact class 'manufacturing'
-  detail: known classes: admet, analogs, assays, bioactivity, compound, compounds, descriptors, docking, expression, genetics, genomics, gtex, hypotheses,
+- [manufacturing] evidence_status=not_yet_applicable, execution_outcome=unknown
 - Stage 0 disposition: (pending lead review)
 - Shortlisted: True (shortlist: ['IC-EVAL-005-r1'])
 
@@ -122,7 +117,7 @@
 
 - **Category**: tool_failure
 - **Completed**: baseline=True, Stage 0=True
-- **Wall clock**: baseline 0.004s, Stage 0 0.0032s
+- **Wall clock**: baseline 0.004s, Stage 0 0.0038s
 - **Invocations**: baseline 0, Stage 0 1
 - **State transitions**: baseline 9, Stage 0 1
 
@@ -130,8 +125,7 @@
 - Stage 0 adds triage evaluation with manufacturing feasibility assessment (not present in baseline)
 
 **Stage 0 observations**:
-- [manufacturing] error: Manufacturing assess-stage0 exited 2: error: unknown artifact class 'manufacturing'
-  detail: known classes: admet, analogs, assays, bioactivity, compound, compounds, descriptors, docking, expression, genetics, genomics, gtex, hypotheses,
+- [manufacturing] evidence_status=not_yet_applicable, execution_outcome=unknown
 - Stage 0 disposition: (pending lead review)
 - Shortlisted: True (shortlist: ['IC-EVAL-006-r1'])
 
@@ -139,7 +133,7 @@
 
 - **Category**: disputed_citation
 - **Completed**: baseline=True, Stage 0=True
-- **Wall clock**: baseline 0.0056s, Stage 0 0.0032s
+- **Wall clock**: baseline 0.0056s, Stage 0 0.0039s
 - **Invocations**: baseline 2, Stage 0 1
 - **State transitions**: baseline 1, Stage 0 1
 
@@ -148,8 +142,7 @@
 - Different CLI command paths: baseline uses control-plane commands (hypothesis adopt, validate check); Stage 0 uses triage workstream commands (manufacturing assess-stage0)
 
 **Stage 0 observations**:
-- [manufacturing] error: Manufacturing assess-stage0 exited 2: error: unknown artifact class 'manufacturing'
-  detail: known classes: admet, analogs, assays, bioactivity, compound, compounds, descriptors, docking, expression, genetics, genomics, gtex, hypotheses,
+- [manufacturing] evidence_status=not_yet_applicable, execution_outcome=unknown
 - Stage 0 disposition: (pending lead review)
 - Shortlisted: True (shortlist: ['IC-EVAL-007-r1'])
 
@@ -157,7 +150,7 @@
 
 - **Category**: bounded_review_exhaustion
 - **Completed**: baseline=True, Stage 0=True
-- **Wall clock**: baseline 0.0062s, Stage 0 0.0036s
+- **Wall clock**: baseline 0.0062s, Stage 0 0.0038s
 - **Invocations**: baseline 0, Stage 0 1
 - **State transitions**: baseline 14, Stage 0 1
 
@@ -165,8 +158,7 @@
 - Stage 0 adds triage evaluation with manufacturing feasibility assessment (not present in baseline)
 
 **Stage 0 observations**:
-- [manufacturing] error: Manufacturing assess-stage0 exited 2: error: unknown artifact class 'manufacturing'
-  detail: known classes: admet, analogs, assays, bioactivity, compound, compounds, descriptors, docking, expression, genetics, genomics, gtex, hypotheses,
+- [manufacturing] evidence_status=not_assessed, execution_outcome=unknown
 - Stage 0 disposition: (pending lead review)
 - Shortlisted: True (shortlist: ['IC-EVAL-008-r1'])
 
@@ -177,12 +169,14 @@ The following fixtures represent concepts likely to be declined in a real workfl
 ### EVAL-001
 
 **Stage 0 disposition**: (pending lead review)
+**Evidence statuses**: not_yet_applicable
 
 **Comparison**: Baseline: work order reaches submitted state; validation fails on deliverables_exist because no genomics artifacts exist.  Stage 0: concept is evaluated through triage (disposition: (pending lead review)).  Stage 0 evaluates the concept's manufacturing feasibility rather than checking for pre-existing artifacts — a structurally different assessment path that does not auto-terminate the concept for lacking genetic evidence.
 
 ### EVAL-002
 
 **Stage 0 disposition**: (pending lead review)
+**Evidence statuses**: not_yet_applicable
 
 **Comparison**: Baseline: pocket analysis artifact has unfavorable metrics (druggability score 0.12); fpocket.single_conformation relay fires.  Stage 0: concept is evaluated through triage (disposition: (pending lead review)).  Stage 0 assesses manufacturing feasibility independently of the pocket druggability findings — the unfavorable pocket score does not auto-terminate the concept, consistent with the no-automatic-veto design principle.
 
@@ -192,7 +186,7 @@ Stage 0 dispatches workstreams per concept, subject to budget controls.  The fol
 
 | Characteristic | Value |
 |----------------|-------|
-| total_wall_clock_seconds | 0.0282 |
+| total_wall_clock_seconds | 0.0314 |
 | total_workstream_invocations | 8 |
 | total_state_transitions | 8 |
 | workstreams_per_concept | 1 (manufacturing) — differentiation and structure screening require additional configuration not present in the evaluation fixtures |

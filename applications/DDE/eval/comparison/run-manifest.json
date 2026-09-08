@@ -1,8 +1,8 @@
 {
   "eval_version": "1.0-comparison",
-  "comparison_timestamp": "2026-09-08T17:45:57Z",
+  "comparison_timestamp": "2026-09-08T18:01:30Z",
   "baseline_timestamp": "2026-09-08T15:07:57Z",
-  "stage0_timestamp": "2026-09-08T17:45:57Z",
+  "stage0_timestamp": "2026-09-08T18:01:30Z",
   "python_version": "3.11.2 (main, May 12 2026, 05:17:27) [GCC 12.2.0]",
   "platform": "linux",
   "fixture_count": 8,
