@@ -36,11 +36,18 @@ Design principles:
 
 from __future__ import annotations
 
+import json
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+try:
+    import click
+    _HAS_CLICK = True
+except ImportError:
+    _HAS_CLICK = False
 
 
 # ---------------------------------------------------------------------------
@@ -724,3 +731,313 @@ def screen_structures(
         evaluated += 1
 
     return assessments
+
+
+# ---------------------------------------------------------------------------
+# Real pocket_runner — bridges to ``dde pocket run`` + ``dde pocket analyze``
+# ---------------------------------------------------------------------------
+
+
+def _parse_pocket_analysis(analysis_path: Path, candidate: StructureCandidate) -> PocketResult:
+    """Parse a ``dde pocket analyze`` output into a ``PocketResult``.
+
+    Reads the ``.pocket.analysis.json`` file that ``dde pocket analyze``
+    writes, and extracts the verdict, score, relays, and threshold set
+    into a ``PocketResult`` for the screening layer.
+    """
+    doc = json.loads(analysis_path.read_text(encoding="utf-8"))
+
+    assessment = doc.get("assessment", {})
+    verdict = assessment.get("verdict", "no-pockets-detected")
+    relays = doc.get("mandatory_relays", [])
+
+    metrics = doc.get("metrics", {})
+    best_pocket = metrics.get("best_pocket") or {}
+    drug_score = best_pocket.get("druggability_score")
+    best_rank = best_pocket.get("rank")
+
+    # For site-specific queries, pull the site score if available
+    site = metrics.get("site") or {}
+    site_pockets = site.get("pockets_at_site") or []
+    site_relevant: bool | None = None
+    site_query: str | None = None
+    if site_pockets:
+        site_score = site_pockets[0].get("druggability_score")
+        if site_score is not None:
+            drug_score = site_score
+            best_rank = site_pockets[0].get("rank")
+        site_relevant = verdict == "site-druggable"
+        site_query = ",".join(site.get("requested", []))
+    elif site.get("requested"):
+        # --near was used but nothing matched
+        site_relevant = False
+        site_query = ",".join(site.get("requested", []))
+
+    return PocketResult(
+        verdict=verdict,
+        drug_score=drug_score,
+        best_pocket_rank=best_rank,
+        structure_name=candidate.identifier,
+        is_experimental=candidate.is_experimental,
+        relays=[
+            {"code": r.get("code", ""), "message": r.get("message", "")}
+            for r in relays
+        ],
+        analysis_path=str(analysis_path),
+        threshold_set=doc.get("threshold_set"),
+        thresholds_applied=doc.get("thresholds_applied"),
+        site_query=site_query,
+        site_relevant=site_relevant,
+    )
+
+
+def make_pocket_runner(
+    project_dir: str | None = None,
+    near: str | None = None,
+) -> Any:
+    """Build a real pocket_runner that invokes ``dde pocket run`` + ``analyze``.
+
+    Uses ``click.testing.CliRunner`` to invoke the CLI programmatically,
+    matching the pattern established in ``eval/harness.py``.
+
+    Parameters
+    ----------
+    project_dir:
+        Program directory (``--project``). If None, uses the environment
+        default (``$DDE_PROJECT``).
+    near:
+        ``--near`` residue selector passed to ``dde pocket analyze``.
+        If None, global pocket analysis is performed.
+
+    Returns
+    -------
+    A callable ``(StructureCandidate) -> PocketResult`` suitable for
+    passing to ``screen_structures(pocket_runner=...)``.
+    """
+    from click.testing import CliRunner
+    from ..cli import cli
+
+    runner = CliRunner(mix_stderr=False)
+
+    def _run(candidate: StructureCandidate) -> PocketResult:
+        # --- Phase 1: dde pocket run ---
+        run_args = []
+        if project_dir is not None:
+            run_args += ["--project", project_dir]
+        run_args += ["pocket", "run", candidate.identifier, "--json"]
+
+        result = runner.invoke(cli, run_args, catch_exceptions=False)
+        if result.exit_code != 0:
+            raise RuntimeError(
+                f"dde pocket run failed (exit {result.exit_code}): "
+                f"{(result.output or '').strip()[:500]}"
+            )
+
+        # Locate the pockets record. The pocket run command writes
+        # <stem>.pockets.json into the structures artifact directory.
+        # Parse the JSON output to find the path.
+        pockets_path: str | None = None
+        for line in result.output.strip().splitlines():
+            line = line.strip()
+            if line.endswith(".pockets.json"):
+                pockets_path = line
+                break
+
+        if pockets_path is None:
+            # Try to find from project directory
+            if project_dir is not None:
+                p = Path(project_dir)
+            else:
+                import os
+                p = Path(os.environ.get("DDE_PROJECT", "."))
+            stem = Path(candidate.identifier).stem
+            candidate_path = p / "raw" / "structures" / f"{stem}.pockets.json"
+            if candidate_path.is_file():
+                pockets_path = str(candidate_path)
+
+        if pockets_path is None:
+            raise RuntimeError(
+                "dde pocket run succeeded but pockets record path not found "
+                "in output"
+            )
+
+        # --- Phase 2: dde pocket analyze ---
+        analyze_args = []
+        if project_dir is not None:
+            analyze_args += ["--project", project_dir]
+        analyze_args += ["pocket", "analyze", pockets_path, "--json"]
+        if near is not None:
+            analyze_args += ["--near", near]
+
+        result = runner.invoke(cli, analyze_args, catch_exceptions=False)
+        if result.exit_code != 0:
+            raise RuntimeError(
+                f"dde pocket analyze failed (exit {result.exit_code}): "
+                f"{(result.output or '').strip()[:500]}"
+            )
+
+        # Find the analysis output file
+        stem = Path(candidate.identifier).stem
+        if project_dir is not None:
+            analysis_dir = Path(project_dir) / "raw" / "structures"
+        else:
+            import os
+            analysis_dir = Path(os.environ.get("DDE_PROJECT", ".")) / "raw" / "structures"
+        analysis_path = analysis_dir / f"{stem}.pocket.analysis.json"
+
+        if not analysis_path.is_file():
+            raise RuntimeError(
+                f"dde pocket analyze succeeded but analysis file not found: "
+                f"{analysis_path}"
+            )
+
+        return _parse_pocket_analysis(analysis_path, candidate)
+
+    return _run
+
+
+# ---------------------------------------------------------------------------
+# CLI commands — require click
+# ---------------------------------------------------------------------------
+
+if _HAS_CLICK:
+    from ..common import (
+        AppState,
+        output_options,
+        pass_state,
+    )
+    from ..core.output import Emitter
+
+    @click.group("structure-screen")
+    def structure_screen() -> None:
+        """Bounded structure screening for Stage 0 pre-commitment filtering.
+
+        Retrieves existing structures within a declared screen budget, runs
+        pocket druggability analysis, and produces evidence assessment records
+        with relay codes preserved.
+        """
+
+    @structure_screen.command()
+    @click.argument("structures", nargs=-1, required=True)
+    @click.option(
+        "--concept-ref", required=True,
+        help="Concept reference (IC-NNN) this screen is for.",
+    )
+    @click.option(
+        "--modality", required=True,
+        help="Intervention modality (e.g. small_molecule, antibody).",
+    )
+    @click.option(
+        "--max-structures", default=5, type=int, show_default=True,
+        help="Maximum structures to evaluate.",
+    )
+    @click.option(
+        "--max-seconds", default=300.0, type=float, show_default=True,
+        help="Maximum wall-clock seconds for the screen.",
+    )
+    @click.option(
+        "--near", default=None,
+        help="Residues defining the intervention site (CHAIN:RESNUM, comma-separated). "
+        "Passed through to dde pocket analyze --near.",
+    )
+    @click.option(
+        "--claim", default=None,
+        help="The claim being assessed. Defaults to 'target has a druggable binding pocket'.",
+    )
+    @click.option(
+        "--source", "source_type", default="pdb",
+        type=click.Choice(sorted(RETRIEVAL_SOURCES | PREDICTION_SOURCES), case_sensitive=False),
+        help="Structure source type for all input structures.",
+    )
+    @click.option(
+        "--experimental/--no-experimental", default=None,
+        help="Whether structures are experimental. If omitted, "
+        "pocket.py's _is_experimental() auto-detects per structure.",
+    )
+    @output_options
+    @pass_state
+    def run(
+        state: AppState,
+        structures: tuple[str, ...],
+        concept_ref: str,
+        modality: str,
+        max_structures: int,
+        max_seconds: float,
+        near: str | None,
+        claim: str | None,
+        source_type: str,
+        experimental: bool | None,
+        as_json: bool,
+        quiet: bool,
+    ) -> None:
+        """Run a bounded structure screen over one or more structure files.
+
+        Each STRUCTURE argument is a path to a coordinate file (.pdb, .cif)
+        resolved against the project root. The screen runs ``dde pocket run``
+        then ``dde pocket analyze`` on each structure within the budget, and
+        produces ``dde.evidence-assessment.v1`` records.
+
+        Examples::
+
+            dde structure-screen run 1HCK.pdb --concept-ref IC-001 --modality small_molecule
+            dde structure-screen run AF-P04637-F1.cif --concept-ref IC-002 --modality small_molecule --near A:145,A:146
+        """
+        budget = ScreenBudget(
+            max_structures=max_structures,
+            max_wall_clock_seconds=max_seconds,
+        )
+
+        # Build candidate list from arguments
+        candidates: list[StructureCandidate] = []
+        for struct_path in structures:
+            is_exp = experimental if experimental is not None else True
+            # Auto-detect experimental status if not explicitly set
+            if experimental is None:
+                # We'll let the pocket runner's underlying pocket.py detect this
+                # from the structure file itself (EXPDTA / _exptl.method).
+                # Default to True for PDB, False for AlphaFold DB sources.
+                is_exp = source_type == "pdb"
+
+            candidates.append(StructureCandidate(
+                source=source_type,
+                identifier=struct_path,
+                is_experimental=is_exp,
+            ))
+
+        # Build the real pocket runner
+        project_path = state.project_override
+        pocket_runner = make_pocket_runner(
+            project_dir=project_path,
+            near=near,
+        )
+
+        # Parse site residues from --near
+        intended_site_residues: list[str] | None = None
+        if near is not None:
+            intended_site_residues = [
+                t.strip() for t in near.replace(";", ",").split(",") if t.strip()
+            ]
+
+        assessments = screen_structures(
+            candidates=candidates,
+            concept_ref=concept_ref,
+            modality=modality,
+            budget=budget,
+            pocket_runner=pocket_runner,
+            intended_site_residues=intended_site_residues,
+            claim=claim,
+        )
+
+        # Emit output
+        emit = Emitter(as_json=as_json, quiet=quiet)
+        emit.data("n_assessments", len(assessments))
+        emit.data("assessments", assessments)
+        for i, a in enumerate(assessments):
+            emit.line(
+                f"[{a.get('id', i+1)}] {a.get('evidence_status', '?')} "
+                f"({a.get('execution_outcome', '?')})"
+            )
+            if a.get("rationale"):
+                summary = a["rationale"][:200]
+                emit.line(f"  {summary}")
+        emit.flush()

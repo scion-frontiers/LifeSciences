@@ -59,7 +59,33 @@ duplicate it. The relationship is:
 | Site relevance assessment | structure-screening (this skill) |
 | Evidence assessment record production | structure-screening (this skill) |
 
-## 3. Preconditions
+## 3. Tool invocations
+
+| Question | Run | Writes to |
+|---|---|---|
+| Screen structures for druggable pockets | `dde structure-screen run <STRUCTURE>... --concept-ref IC-NNN --modality small_molecule` | Evidence assessment records (stdout / `--json`) |
+| Screen with site-specific query | `dde structure-screen run <STRUCTURE>... --concept-ref IC-NNN --modality small_molecule --near A:145,A:146` | Evidence assessment records with site relevance |
+| Screen with custom budget | `dde structure-screen run <STRUCTURE>... --concept-ref IC-NNN --modality small_molecule --max-structures 3 --max-seconds 120` | Budget-bounded assessment records |
+
+The `structure-screen run` command internally invokes `dde pocket run`
+then `dde pocket analyze` for each candidate structure within the
+screen budget. It produces `dde.evidence-assessment.v1` records with
+relay codes and scoping preserved from the underlying pocket analysis.
+
+Options:
+
+- `--concept-ref` (required): concept reference (IC-NNN) the screen is for.
+- `--modality` (required): intervention modality (`small_molecule`, `molecular_glue`, `antibody`, etc.). Non-pocket-relevant modalities produce a `not_yet_applicable` assessment immediately.
+- `--near`: residues defining the intervention site (CHAIN:RESNUM, comma-separated). Passed through to `dde pocket analyze --near`.
+- `--source`: structure source type (`pdb`, `alphafold_db`, `existing_model`). Default: `pdb`.
+- `--experimental/--no-experimental`: whether structures are experimental. Auto-detected from source type if omitted.
+- `--max-structures`: maximum structures to evaluate (default: 5).
+- `--max-seconds`: maximum wall-clock seconds (default: 300).
+- `--json`: machine-readable JSON output.
+- `--quiet`: paths only.
+- `--claim`: the claim being assessed (default: "target has a druggable binding pocket").
+
+## 4. Preconditions
 
 - **Structure retrieval**: existing AlphaFold DB models or PDB
   structures must be retrievable. If no suitable structure exists,
@@ -69,7 +95,7 @@ duplicate it. The relationship is:
 - **Screen budget**: a declared budget (max structures, max wall-clock
   time). The screen respects this budget.
 
-## 4. Workflow
+## 5. Workflow
 
 ### Step 1: Check modality applicability
 
@@ -123,7 +149,7 @@ record that:
 - Notes site relevance assessment
 - Proposes the next discriminating characterization where justified
 
-## 5. Mandatory relay preservation
+## 6. Mandatory relay preservation
 
 The following relays from pocket-druggability MUST be preserved
 through the screening layer into the assessment record. They must
@@ -136,7 +162,7 @@ layer's own verdict.
 | `fpocket.conformation_dependent` | Qualifier | The assessment must note that the score was computed on a non-experimental structure and constrains the model in both directions. |
 | `fpocket.druggability_is_not_affinity` | Stop | The assessment must not present the pocket score as evidence of binding or affinity. If the program question is about binding, the assessment states that the question is untooled. |
 
-## 6. Evidence status mapping
+## 7. Evidence status mapping
 
 | Pocket verdict | Evidence status | Rationale |
 |---|---|---|
@@ -158,7 +184,7 @@ The appropriate evidence status is `insufficient` — the evidence
 exists but is not decisive — with the `fpocket.single_conformation`
 relay carrying the calibration numbers.
 
-## 7. Hard constraints
+## 8. Hard constraints
 
 - **No new AF3 predictions.** Retrieval only within budget.
 - **No cross-target ranking by raw pocket score.** The drug score
@@ -170,7 +196,7 @@ relay carrying the calibration numbers.
 - **Carry relays through.** If a relay fires on an underlying pocket
   analysis, the assessment record must preserve it.
 
-## 8. What this skill produces
+## 9. What this skill produces
 
 Following this workflow produces:
 

@@ -35,6 +35,7 @@ Exit 0 = all tests passed, exit 1 = at least one failure.
 
 from __future__ import annotations
 
+import json
 import sys
 import time
 import traceback
@@ -1300,6 +1301,438 @@ def test_screen_structures_tool_failure():
 
 _check("screen_structures: tool failure -> tool_failed record",
        test_screen_structures_tool_failure)
+
+
+# ---------------------------------------------------------------------------
+# 15. _parse_pocket_analysis — real pocket output parsing
+# ---------------------------------------------------------------------------
+print("\n--- Pocket analysis output parsing ---")
+
+from dde.commands.structure_screening import _parse_pocket_analysis
+
+
+def test_parse_pocket_analysis_druggable():
+    """_parse_pocket_analysis correctly parses a druggable analysis record."""
+    import tempfile
+    analysis_data = {
+        "source": "raw/structures/CDK2-1HCK.pockets.json",
+        "threshold_set": "pocket@1.0",
+        "thresholds_applied": {"druggable_dscore": 0.5, "borderline_dscore": 0.2},
+        "metrics": {
+            "n_pockets": 5,
+            "best_pocket": {
+                "rank": 1,
+                "druggability_score": 0.939,
+                "score": 0.43,
+                "volume": 1234.5,
+                "n_alpha_spheres": 42,
+            },
+            "site": None,
+        },
+        "assessment": {
+            "verdict": "druggable-pocket-present",
+            "statement": "Best pocket scores 0.939 (druggable) across 5 detected pocket(s).",
+            "advisories": [],
+        },
+        "mandatory_relays": [
+            {
+                "code": "fpocket.druggability_is_not_affinity",
+                "message": "0.939 is cavity shape in CDK2-1HCK.pdb; not an affinity.",
+            }
+        ],
+    }
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        json.dump(analysis_data, f)
+        f.flush()
+        analysis_path = Path(f.name)
+
+    try:
+        candidate = StructureCandidate(
+            source="pdb", identifier="CDK2-1HCK.pdb", is_experimental=True,
+        )
+        result = _parse_pocket_analysis(analysis_path, candidate)
+
+        assert result.verdict == "druggable-pocket-present"
+        assert result.drug_score == 0.939
+        assert result.best_pocket_rank == 1
+        assert result.is_experimental is True
+        assert result.threshold_set == "pocket@1.0"
+        assert len(result.relays) == 1
+        assert result.relays[0]["code"] == "fpocket.druggability_is_not_affinity"
+    finally:
+        analysis_path.unlink(missing_ok=True)
+
+
+_check("_parse_pocket_analysis: druggable analysis parsed correctly",
+       test_parse_pocket_analysis_druggable)
+
+
+def test_parse_pocket_analysis_site_query():
+    """_parse_pocket_analysis handles --near site-specific results."""
+    import tempfile
+    analysis_data = {
+        "source": "raw/structures/TARGET.pockets.json",
+        "threshold_set": "pocket@1.0",
+        "thresholds_applied": {"druggable_dscore": 0.5, "borderline_dscore": 0.2},
+        "metrics": {
+            "n_pockets": 3,
+            "best_pocket": {
+                "rank": 1,
+                "druggability_score": 0.85,
+            },
+            "site": {
+                "requested": ["A:100", "A:101"],
+                "pockets_at_site": [
+                    {
+                        "rank": 2,
+                        "druggability_score": 0.72,
+                        "matched_residues": ["A:100"],
+                    }
+                ],
+            },
+        },
+        "assessment": {
+            "verdict": "site-druggable",
+            "statement": "Pocket 2 lines the requested site and scores 0.720 (druggable)",
+        },
+        "mandatory_relays": [
+            {
+                "code": "fpocket.druggability_is_not_affinity",
+                "message": "0.720 is cavity shape.",
+            }
+        ],
+    }
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        json.dump(analysis_data, f)
+        f.flush()
+        analysis_path = Path(f.name)
+
+    try:
+        candidate = StructureCandidate(
+            source="pdb", identifier="TARGET.pdb", is_experimental=True,
+        )
+        result = _parse_pocket_analysis(analysis_path, candidate)
+
+        assert result.verdict == "site-druggable"
+        # Should use the site pocket's score, not the global best
+        assert result.drug_score == 0.72
+        assert result.best_pocket_rank == 2
+        assert result.site_relevant is True
+        assert result.site_query == "A:100,A:101"
+    finally:
+        analysis_path.unlink(missing_ok=True)
+
+
+_check("_parse_pocket_analysis: site-specific results parsed correctly",
+       test_parse_pocket_analysis_site_query)
+
+
+def test_parse_pocket_analysis_no_site_hit():
+    """_parse_pocket_analysis handles --near with no pocket at site."""
+    import tempfile
+    analysis_data = {
+        "source": "raw/structures/TARGET.pockets.json",
+        "threshold_set": "pocket@1.0",
+        "thresholds_applied": {"druggable_dscore": 0.5, "borderline_dscore": 0.2},
+        "metrics": {
+            "n_pockets": 2,
+            "best_pocket": {
+                "rank": 1,
+                "druggability_score": 0.6,
+            },
+            "site": {
+                "requested": ["B:200", "B:201"],
+                "pockets_at_site": [],
+            },
+        },
+        "assessment": {
+            "verdict": "no-pocket-at-site-in-this-conformation",
+            "statement": "No pocket lines the requested residues.",
+        },
+        "mandatory_relays": [
+            {
+                "code": "fpocket.single_conformation",
+                "message": "no pocket at the requested site.",
+            }
+        ],
+    }
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        json.dump(analysis_data, f)
+        f.flush()
+        analysis_path = Path(f.name)
+
+    try:
+        candidate = StructureCandidate(
+            source="pdb", identifier="TARGET.pdb", is_experimental=True,
+        )
+        result = _parse_pocket_analysis(analysis_path, candidate)
+
+        assert result.verdict == "no-pocket-at-site-in-this-conformation"
+        assert result.site_relevant is False
+        assert result.site_query == "B:200,B:201"
+    finally:
+        analysis_path.unlink(missing_ok=True)
+
+
+_check("_parse_pocket_analysis: no-pocket-at-site parsed correctly",
+       test_parse_pocket_analysis_no_site_hit)
+
+
+# ---------------------------------------------------------------------------
+# 16. Integration: _parse_pocket_analysis → build_assessment_record
+# ---------------------------------------------------------------------------
+print("\n--- Integration: parsed analysis → assessment record ---")
+
+
+def test_parsed_analysis_to_assessment_record():
+    """End-to-end: parse a realistic pocket analysis output, then feed it
+    through build_assessment_record and verify the resulting evidence
+    assessment is correct and schema-valid.
+
+    This tests the real data path: pocket analysis JSON → PocketResult →
+    assessment record. No hand-crafted PocketResult fixtures — the
+    PocketResult is built by _parse_pocket_analysis from a realistic
+    analysis file matching what ``dde pocket analyze`` actually writes."""
+    import tempfile
+
+    # Realistic analysis output matching dde pocket analyze's format
+    analysis_data = {
+        "source": "raw/structures/CDK2-2W1D.pockets.json",
+        "threshold_set": "pocket@1.0",
+        "thresholds_applied": {"druggable_dscore": 0.5, "borderline_dscore": 0.2},
+        "threshold_sources": ["built-in"],
+        "threshold_provenance": "loaded from built-in defaults",
+        "metrics": {
+            "n_pockets": 4,
+            "best_pocket": {
+                "rank": 1,
+                "druggability_score": 0.293,
+                "score": 0.22,
+                "volume": 876.3,
+                "n_alpha_spheres": 38,
+                "centre_of_mass_max_sphere_distance": 12.5,
+            },
+            "site": None,
+            "volume_estimate_tolerance": 0.03,
+        },
+        "assessment": {
+            "verdict": "no-druggable-pocket-in-this-conformation",
+            "statement": "Best pocket scores 0.293 (not-druggable) across 4 detected pocket(s).",
+            "advisories": [
+                "Volumes are Monte Carlo estimates; differences under 3% between runs are noise."
+            ],
+            "relayed_run_warnings": [],
+        },
+        "mandatory_relays": [
+            {
+                "code": "fpocket.single_conformation",
+                "message": (
+                    "0.293 in CDK2-2W1D.cif; the same CDK2 ATP site "
+                    "scores 0.17, 0.29 and 0.94 in three crystals."
+                ),
+            }
+        ],
+    }
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        json.dump(analysis_data, f)
+        f.flush()
+        analysis_path = Path(f.name)
+
+    try:
+        candidate = StructureCandidate(
+            source="pdb", identifier="CDK2-2W1D.cif", is_experimental=True,
+        )
+
+        # Step 1: Parse the analysis file (real parsing, not a mock)
+        pocket_result = _parse_pocket_analysis(analysis_path, candidate)
+
+        # Verify parsed result
+        assert pocket_result.verdict == "no-druggable-pocket-in-this-conformation"
+        assert pocket_result.drug_score == 0.293
+        assert pocket_result.threshold_set == "pocket@1.0"
+        assert len(pocket_result.relays) == 1
+        assert pocket_result.relays[0]["code"] == "fpocket.single_conformation"
+
+        # Step 2: Build assessment record (real assessment, not a mock)
+        assessment = build_assessment_record(
+            assessment_id="AR-001",
+            concept_ref="IC-CDK2-r1",
+            pocket_result=pocket_result,
+            modality="small_molecule",
+        )
+
+        # Verify the assessment
+        assert assessment["evidence_status"] == "insufficient", (
+            "CDK2 sub-cutoff score should be insufficient, not contradicted"
+        )
+        assert assessment["execution_outcome"] == "completed"
+
+        # Relay preserved
+        relay_codes = [r["code"] for r in assessment.get("relay_codes", [])]
+        assert "fpocket.single_conformation" in relay_codes
+
+        # CDK2 calibration in rationale
+        assert "CDK2" in assessment["rationale"] or "0.94" in assessment["rationale"]
+
+        # Schema valid
+        errors = validate_assessment(assessment)
+        assert errors == [], f"assessment validation errors: {errors}"
+    finally:
+        analysis_path.unlink(missing_ok=True)
+
+
+_check("integration: parsed analysis → assessment record end-to-end",
+       test_parsed_analysis_to_assessment_record)
+
+
+# ---------------------------------------------------------------------------
+# 17. Integration: make_pocket_runner + CliRunner
+# ---------------------------------------------------------------------------
+print("\n--- Integration: real pocket_runner via CliRunner ---")
+
+
+def test_make_pocket_runner_requires_click():
+    """make_pocket_runner requires click to be installed.
+    Tests the import path and validates the function signature."""
+    from dde.commands.structure_screening import make_pocket_runner
+    # The function itself is importable regardless of click.
+    # Calling it requires click.testing.CliRunner.
+    try:
+        from click.testing import CliRunner
+        # Click IS available — test that make_pocket_runner returns a callable
+        runner = make_pocket_runner(project_dir="/tmp/nonexistent")
+        assert callable(runner), "make_pocket_runner should return a callable"
+        print("    (click is available, make_pocket_runner returns a callable)")
+    except ImportError:
+        # Click is not installed — the function exists but calling it
+        # should raise ImportError
+        try:
+            make_pocket_runner()
+            raise AssertionError(
+                "make_pocket_runner should raise ImportError without click"
+            )
+        except ImportError:
+            pass
+        print("    (click not installed — skipped CliRunner test, "
+              "import path validated)")
+
+
+_check("make_pocket_runner: import path and callable validation",
+       test_make_pocket_runner_requires_click)
+
+
+def test_cli_command_registration():
+    """When click is installed, structure_screen is a Click group with a
+    run subcommand. When click is not installed, the import still works
+    for library use but the CLI command is not defined."""
+    try:
+        import click
+        from dde.commands.structure_screening import structure_screen
+        assert isinstance(structure_screen, click.Group), (
+            f"structure_screen should be a click.Group, got {type(structure_screen)}"
+        )
+        assert "run" in structure_screen.commands, (
+            "structure_screen should have a 'run' subcommand"
+        )
+        print("    (click available — CLI command verified)")
+    except ImportError:
+        # Without click, structure_screen is not defined — verify the
+        # import of library functions still works
+        from dde.commands.structure_screening import screen_structures
+        assert callable(screen_structures)
+        print("    (click not installed — library import verified)")
+
+
+_check("CLI command registration: structure-screen group with run subcommand",
+       test_cli_command_registration)
+
+
+def test_screen_structures_with_parsed_analysis():
+    """Full integration: screen_structures with a pocket_runner that returns
+    results from _parse_pocket_analysis (simulating the real data path without
+    requiring fpocket on PATH).
+
+    This bridges the gap between the mock-runner tests and a fully live run:
+    the pocket_runner returns PocketResults built by the real parser, not by
+    hand-crafted constructors."""
+    import tempfile
+
+    # Write a realistic analysis JSON to disk
+    analysis_data = {
+        "source": "raw/structures/TEST.pockets.json",
+        "threshold_set": "pocket@1.0",
+        "thresholds_applied": {"druggable_dscore": 0.5, "borderline_dscore": 0.2},
+        "metrics": {
+            "n_pockets": 2,
+            "best_pocket": {
+                "rank": 1,
+                "druggability_score": 0.65,
+                "score": 0.3,
+                "volume": 950.0,
+                "n_alpha_spheres": 35,
+            },
+            "site": None,
+            "volume_estimate_tolerance": 0.03,
+        },
+        "assessment": {
+            "verdict": "druggable-pocket-present",
+            "statement": "Best pocket scores 0.650 (druggable) across 2 detected pocket(s).",
+            "advisories": [],
+        },
+        "mandatory_relays": [
+            {
+                "code": "fpocket.druggability_is_not_affinity",
+                "message": "0.650 is cavity shape in TEST.pdb; not an affinity.",
+            }
+        ],
+    }
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        json.dump(analysis_data, f)
+        f.flush()
+        analysis_path = Path(f.name)
+
+    try:
+        # A pocket_runner that uses the real parser
+        def parsed_runner(candidate):
+            return _parse_pocket_analysis(analysis_path, candidate)
+
+        candidates = [
+            StructureCandidate(
+                source="pdb",
+                identifier="TEST.pdb",
+                is_experimental=True,
+            ),
+        ]
+        budget = ScreenBudget(max_structures=5)
+
+        assessments = screen_structures(
+            candidates=candidates,
+            concept_ref="IC-TEST",
+            modality="small_molecule",
+            budget=budget,
+            pocket_runner=parsed_runner,
+        )
+
+        assert len(assessments) == 1
+        a = assessments[0]
+        assert a["evidence_status"] == "supported"
+        assert a["execution_outcome"] == "completed"
+        relay_codes = [r["code"] for r in a.get("relay_codes", [])]
+        assert "fpocket.druggability_is_not_affinity" in relay_codes
+
+        errors = validate_assessment(a)
+        assert errors == [], f"assessment validation errors: {errors}"
+    finally:
+        analysis_path.unlink(missing_ok=True)
+
+
+_check("screen_structures with _parse_pocket_analysis pocket_runner (integration)",
+       test_screen_structures_with_parsed_analysis)
 
 
 # ===========================================================================
