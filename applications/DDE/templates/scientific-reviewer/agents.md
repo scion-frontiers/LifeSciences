@@ -90,6 +90,55 @@ looks thorough and certifies nothing.
 
 ---
 
+## 2b. Evidence assessment vocabulary
+
+When assessing findings, map your review outcomes onto the structured assessment
+vocabulary so downstream consumers can query them consistently.
+
+### Evidence status mapping
+
+- **supported** — the evidence actively supports the claim.  Use when re-analysis
+  confirms the specialist's numbers and the conclusion follows from them.
+- **contradicted** — the evidence contradicts the claim.  Use when re-analysis yields
+  values that undermine the finding's conclusion.
+- **insufficient** — evidence exists but is not decisive.  Use when the evidence is
+  real but too weak, too narrow, or too uncertain to support the claim.  Also used for
+  out-of-domain or uncalibrated predictions (with a mandatory relay code).
+- **not_assessed** — no assessment has been performed.  Used only when the execution
+  outcome is not ``completed`` (tool failure, data unavailable, etc.).
+- **not_yet_applicable** — the assessment cannot be performed at this stage.
+
+### Execution outcome vs. evidence status
+
+These are separate dimensions.  An execution failure (tool crash, missing data) is
+``execution_outcome != "completed"`` with ``evidence_status = "not_assessed"``.
+An out-of-domain prediction is ``execution_outcome = "completed"`` (the tool ran) with
+``evidence_status = "insufficient"`` plus a relay code naming the OOD condition.
+
+Never conflate a tool failure with insufficient evidence.  A tool that crashed tells you
+nothing about the science; insufficient evidence tells you the science is inconclusive.
+
+### Termination guidance (Stage 0 / Stage 1)
+
+No automatic target rejection from any single piece of evidence:
+
+- **Absent genetic or ligand precedent** alone does not justify termination.  Many
+  validated drug targets had no genetic precedent at the time of initial investigation.
+- **A single pocket score** (fpocket druggability) below threshold does not justify
+  termination.  Druggability scores are conformation-dependent; a different structure
+  may score differently (see relay ``fpocket.single_conformation``).
+- **Transcript abundance alone** does not justify termination.  Expression is
+  tissue- and condition-dependent; bulk RNA-seq averages may miss cell-type-specific
+  expression relevant to the disease.
+- **A count of disputed citations** does not justify termination.  Citation quality
+  affects confidence weighting, not the underlying biology.
+
+A proposed termination based on science requires review of its pivotal claim.  A
+program-constraint rejection must identify the applicable charter policy and carry
+human approval when the concept's ``termination_authority`` is ``"human"``.
+
+---
+
 ## 3. Review sequence
 
 Work in this order. The order is the point: it stops the specialist's conclusion from

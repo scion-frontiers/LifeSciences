@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .errors import ArtifactError, SchemaError
+from .evidence import validate_assessment, validate_decision
 from .statemachine import RUN_STATES, WORK_ORDER_STATES
 
 # ---------------------------------------------------------------------------
@@ -34,6 +35,8 @@ RECORD_TYPES: dict[str, str] = {
     "run": "runs",
     "validation": "validations",
     "lease": "leases",
+    "assessment": "assessments",
+    "decision": "decisions",
 }
 
 _SUBDIRS = list(RECORD_TYPES.values())
@@ -291,6 +294,8 @@ _VALIDATORS: dict[str, Callable[[dict[str, Any]], list[str]]] = {
     "run": _validate_run,
     "validation": _validate_validation,
     "lease": _validate_lease,
+    "assessment": validate_assessment,
+    "decision": validate_decision,
 }
 
 
@@ -515,6 +520,8 @@ def write_publish_state(project_root: str | Path, data: dict[str, Any]) -> Path:
 
 _WO_PREFIX_RE = re.compile(r"^WO-(\d{3,})")
 _RUN_PREFIX_RE = re.compile(r"^RUN-(\d{3,})")
+_AR_PREFIX_RE = re.compile(r"^AR-(\d{3,})")
+_DR_PREFIX_RE = re.compile(r"^DR-(\d{3,})")
 
 
 def next_id(project_root: str | Path, record_type: str) -> str:
@@ -548,10 +555,18 @@ def next_id(project_root: str | Path, record_type: str) -> str:
         directory = _control_path(root, "run")
         pattern = _RUN_PREFIX_RE
         prefix = "RUN"
+    elif record_type == "assessment":
+        directory = _control_path(root, "assessment")
+        pattern = _AR_PREFIX_RE
+        prefix = "AR"
+    elif record_type == "decision":
+        directory = _control_path(root, "decision")
+        pattern = _DR_PREFIX_RE
+        prefix = "DR"
     else:
         raise SchemaError(
             f"next_id does not support record type {record_type!r}",
-            detail="supported types: work-order, run",
+            detail="supported types: work-order, run, assessment, decision",
         )
 
     if not directory.is_dir():

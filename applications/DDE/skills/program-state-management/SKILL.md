@@ -179,3 +179,45 @@ same repair, and not all fields belong to the reader:
 These fields are required, not advisory: an entry missing its severity
 or receiving role cannot be triaged, and an entry that cannot be
 triaged sits in the decision surface without being acted on.
+
+### Assessment and decision record integrity checks
+
+The pre-routing integrity check is extended to cover structured
+assessment and decision records (`.dde/control/assessments/`,
+`.dde/control/decisions/`):
+
+- **Evidence/execution mutual constraint.** Every assessment with
+  `execution_outcome != "completed"` must have
+  `evidence_status == "not_assessed"`.  Any other combination is a
+  schema violation — a tool crash recorded as "insufficient evidence"
+  conflates two distinct failure modes.
+
+- **Decision supporting-assessment references.** Every decision's
+  `supporting_assessments` entries reference assessment records
+  (`AR-NNN`) that actually exist in `.dde/control/assessments/`.
+  A dangling reference is a warning — the decision's evidence chain
+  is broken.
+
+- **Human-approval enforcement (critical finding).** Every decision
+  with `action == "terminate"` where the affected concept's
+  `termination_authority == "human"` must have a non-null
+  `human_approval` field.  This condition is **primarily enforced at
+  write time** by the decision-record validator (which raises
+  `Refusal`, exit 9).  The integrity check is a supplementary
+  defense that catches records that entered through direct file
+  manipulation, data migration, or bugs in the write validator.
+
+  If the integrity check finds a violation here, it flags it as a
+  **critical finding**, not just a warning.  A terminate decision
+  that bypassed the write-time validator represents a control
+  failure — the record should not exist in its current state.
+
+- **Assessment coverage.** Every concept in `active` state has at
+  least one assessment record referencing it.  A concept with no
+  assessments is not necessarily wrong (it may be newly created),
+  but it is reported for visibility.
+
+**Coverage reporting.** The check states what it examined: "Checked
+N assessment records, M decision records."  A program with no
+assessment or decision records passes vacuously — the coverage line
+makes that visible.
