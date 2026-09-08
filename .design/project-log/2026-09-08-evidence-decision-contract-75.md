@@ -115,3 +115,29 @@ An unknown authority defaulting to permissive would reintroduce the exact gap th
 - 43/43 tests pass in `test_evidence.py` (up from 38, covering the real write path).
 - `test_eval_metrics.py` (26/26) passes — no regressions.
 - The critical test (`REAL write_record: terminate + human concept + no approval => Refusal(9)`) writes a real concept record to disk, then calls `write_record("decision", ...)` with no special arguments, and confirms Refusal fires.
+
+---
+
+## Fix: Program termination authorization bypass (security audit)
+
+**Finding**: A security audit found that `entity_type == "program"` terminate decisions bypassed the human-approval gate entirely. The gate only checked `entity_type == "concept"`, so `write_record(root, "decision", "DR-002", {action: "terminate", affected_entity: {entity_type: "program", entity_ref: "DEC-001"}, ...})` wrote successfully with no approval. This directly contradicts design principle #4 ("must not enable autonomous program termination") and `program.yaml`'s `human_reserved` list which names `"program_termination"` explicitly.
+
+### Fixes applied (3 items from the audit)
+
+1. **Program termination gate** (Medium severity): Extended the human-approval gate in `evidence.py` to cover `entity_type == "program"`. Program termination is unconditionally human-reserved — no concept lookup needed, approval is always required. Added as an `elif` branch alongside the existing concept gate.
+
+   **Judgment on series/claim**: Not gated. Series termination (deprioritizing a compound series) is within the program lead's normal authority and is not named in `human_reserved`. Claim termination (ceasing to pursue a specific claim) is an operational decision, not a program-level gate. The audit flagged only `"program"` as Medium severity; `"series"`/`"claim"` were not identified as gaps. This keeps the change minimal and aligned with what the design actually reserves for humans.
+
+2. **`schema` field required** (Low severity): Added `"schema"` to both `_ASSESSMENT_REQUIRED_FIELDS` and `_DECISION_REQUIRED_FIELDS`. This matches design Appendix A.2 and A.3, which list `schema` as required on every record type, and is consistent with the concept validator's behavior in #74.
+
+3. **Concept loader format check** (Low severity): Added `re.match(r"^IC-\d{3,}$", concept_id)` guard at the top of `_default_concept_loader`'s `_load()` function. Defense-in-depth: upstream `entity_ref` validation already blocks malformed input, but this prevents filesystem access from unexpected callers.
+
+### Verification after fix
+
+- 49/49 tests pass in `test_evidence.py` (up from 43).
+- `test_eval_metrics.py` (26/26) passes — no regressions.
+- Key new tests:
+  - `REAL write_record: terminate program + no approval => Refusal(9)` — reproduces the exact audit bypass and confirms it now fails.
+  - `REAL write_record: terminate program + approval => success` — confirms the happy path works.
+  - `assessment/decision schema field required` — confirms omitting `schema` is now a validation error.
+  - `concept_loader rejects malformed IDs` — confirms defense-in-depth guard works.

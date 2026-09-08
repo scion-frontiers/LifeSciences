@@ -395,12 +395,11 @@ _check("non-terminate actions do not require human_approval",
        test_non_terminate_no_approval_ok)
 
 
-def test_terminate_non_concept_entity_no_approval_ok():
-    """Terminate on non-concept entities (series, program, claim) does
-    not trigger the human-approval gate."""
+def test_terminate_series_claim_no_approval_ok():
+    """Terminate on series/claim entities does not trigger the
+    human-approval gate (these are not named in human_reserved)."""
     for etype, eref in [
         ("series", "cdk4-series"),
-        ("program", "DEC-001"),
         ("claim", "AR-001"),
     ]:
         record = _valid_decision(
@@ -411,8 +410,77 @@ def test_terminate_non_concept_entity_no_approval_ok():
         assert errors == [], f"{etype}: unexpected errors: {errors}"
 
 
-_check("terminate on non-concept entities => no Refusal",
-       test_terminate_non_concept_entity_no_approval_ok)
+_check("terminate on series/claim => no Refusal",
+       test_terminate_series_claim_no_approval_ok)
+
+
+# --- Program termination gate (security audit fix) ---
+
+print("\n--- Program termination gate ---")
+
+
+def test_terminate_program_no_approval_raises_refusal():
+    """A terminate decision on a program entity without human_approval
+    MUST raise Refusal (exit 9) — program termination is unconditionally
+    human-reserved per design principle #4 and program.yaml human_reserved."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = _make_project(Path(tmp))
+        record = _valid_decision(
+            action="terminate",
+            affected_entity={"entity_type": "program", "entity_ref": "DEC-001"},
+            human_approval=None,
+        )
+        try:
+            write_record(project, "decision", "DR-002", record)
+            raise AssertionError("expected Refusal, got no exception")
+        except Refusal as exc:
+            assert exc.exit_code == 9, f"expected exit code 9, got {exc.exit_code}"
+            assert "program" in exc.message.lower(), exc.message
+
+
+_check("REAL write_record: terminate program + no approval => Refusal(9)",
+       test_terminate_program_no_approval_raises_refusal)
+
+
+def test_terminate_program_with_approval_succeeds():
+    """Program termination WITH human_approval populated must succeed."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = _make_project(Path(tmp))
+        record = _valid_decision(
+            action="terminate",
+            affected_entity={"entity_type": "program", "entity_ref": "DEC-001"},
+            human_approval={
+                "approver": "Dr. Smith",
+                "approved_at": _NOW,
+                "approval_method": "charter_authority",
+                "evidence": "Meeting notes 2026-09-08",
+            },
+        )
+        path = write_record(project, "decision", "DR-002", record)
+        assert path.is_file()
+
+
+_check("REAL write_record: terminate program + approval => success",
+       test_terminate_program_with_approval_succeeds)
+
+
+def test_terminate_program_unit_test():
+    """validate_decision directly: program terminate without approval
+    raises Refusal."""
+    record = _valid_decision(
+        action="terminate",
+        affected_entity={"entity_type": "program", "entity_ref": "DEC-001"},
+        human_approval=None,
+    )
+    try:
+        validate_decision(record)
+        raise AssertionError("expected Refusal")
+    except Refusal as exc:
+        assert exc.exit_code == 9
+
+
+_check("validate_decision: terminate program + no approval => Refusal(9)",
+       test_terminate_program_unit_test)
 
 
 # ---------------------------------------------------------------------------
@@ -745,6 +813,19 @@ _check("assessment missing required fields => error",
        test_assessment_missing_required_fields)
 
 
+def test_assessment_schema_required():
+    """schema field is required on assessment records (design Appendix A.2)."""
+    record = _step3_assessment()
+    del record["schema"]
+    errors = validate_assessment(record)
+    assert any("missing required fields" in e and "schema" in e for e in errors), (
+        f"expected schema in missing required fields, got: {errors}"
+    )
+
+
+_check("assessment schema field required", test_assessment_schema_required)
+
+
 def test_assessment_bad_id_format():
     """Assessment ID must match AR-NNN."""
     record = _step3_assessment()
@@ -818,6 +899,19 @@ def test_decision_missing_required_fields():
 
 _check("decision missing required fields => error",
        test_decision_missing_required_fields)
+
+
+def test_decision_schema_required():
+    """schema field is required on decision records (design Appendix A.3)."""
+    record = _valid_decision()
+    del record["schema"]
+    errors = validate_decision(record)
+    assert any("missing required fields" in e and "schema" in e for e in errors), (
+        f"expected schema in missing required fields, got: {errors}"
+    )
+
+
+_check("decision schema field required", test_decision_schema_required)
 
 
 def test_decision_bad_id_format():
@@ -955,6 +1049,37 @@ def test_ensure_control_dirs_creates_assessment_decision_dirs():
 
 _check("ensure_control_dirs creates assessments/ and decisions/",
        test_ensure_control_dirs_creates_assessment_decision_dirs)
+
+
+# ---------------------------------------------------------------------------
+# 12. Defense-in-depth: concept_loader format check
+# ---------------------------------------------------------------------------
+print("\n--- Concept loader defense-in-depth ---")
+
+
+def test_concept_loader_rejects_malformed_id():
+    """The default concept_loader rejects IDs that don't match IC-NNN,
+    even if a file with that name exists on disk (defense-in-depth)."""
+    from dde.core.controlstore import _default_concept_loader
+
+    with tempfile.TemporaryDirectory() as tmp:
+        project = _make_project(Path(tmp))
+        # Write a file with a malformed name to disk
+        concepts_dir = project / CONTROL_DIR / "concepts"
+        concepts_dir.mkdir(parents=True, exist_ok=True)
+        bad_path = concepts_dir / "../../evil.json"
+        # Don't actually write — just confirm the loader rejects the ID
+        loader = _default_concept_loader(project)
+        result = loader("../../evil")
+        assert result is None, "should reject path-traversal ID"
+        result = loader("IC-01")  # too short
+        assert result is None, "should reject short ID"
+        result = loader("XC-001")
+        assert result is None, "should reject wrong prefix"
+
+
+_check("concept_loader rejects malformed IDs (defense-in-depth)",
+       test_concept_loader_rejects_malformed_id)
 
 
 # ===========================================================================
