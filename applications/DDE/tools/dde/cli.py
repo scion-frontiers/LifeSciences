@@ -38,6 +38,7 @@ from .commands.homology import homology
 from .commands.gtex import gtex
 from .commands.genetics import genetics
 from .commands.gwas import gwas
+from .commands.retro import retro
 from .commands.phenotype import phenotype
 from .commands.pathway import pathway
 from .commands.litref import litref
@@ -338,6 +339,7 @@ cli.add_command(pubmed)
 cli.add_command(pubmed_bq)
 cli.add_command(genetics)
 cli.add_command(gwas)
+cli.add_command(retro)
 cli.add_command(phenotype)
 cli.add_command(pathway)
 cli.add_command(homology)

@@ -827,6 +827,71 @@ def _check_disignatlas(report: Report) -> None:
         )
 
 
+def _check_askcos(report: Report) -> None:
+    """Probe the ASKCOS retrosynthesis API for reachability.
+
+    A lightweight connectivity check -- hits the frontend config endpoint,
+    not a full retrosynthesis query. Reports CAVEAT (not CAPABILITY) because
+    ASKCOS being down does not prevent other tools from working.
+    """
+    try:
+        import requests as _requests
+    except ImportError:
+        report.add(
+            "askcos api",
+            WARN,
+            "requests package not installed -- cannot probe endpoint",
+            "install requests to enable ASKCOS connectivity checks",
+            kind=CAVEAT,
+        )
+        return
+
+    url = "https://askcos.mit.edu/api/frontend-config/get-all-config"
+    try:
+        resp = _requests.get(url, timeout=10)
+        if resp.status_code == 200:
+            report.add(
+                "askcos api",
+                OK,
+                "askcos.mit.edu reachable (retrosynthesis endpoint available)",
+            )
+        else:
+            report.add(
+                "askcos api",
+                WARN,
+                f"askcos.mit.edu returned HTTP {resp.status_code}",
+                "the ASKCOS retrosynthesis API may be degraded; "
+                "`dde retro search` queries may fail",
+                kind=CAVEAT,
+            )
+    except _requests.ConnectionError:
+        report.add(
+            "askcos api",
+            WARN,
+            "askcos.mit.edu unreachable (connection error)",
+            "the ASKCOS retrosynthesis API is not reachable from this "
+            "environment; `dde retro search` queries will fail",
+            kind=CAVEAT,
+        )
+    except _requests.Timeout:
+        report.add(
+            "askcos api",
+            WARN,
+            "askcos.mit.edu timed out after 10 seconds",
+            "the ASKCOS retrosynthesis API is slow or unreachable; "
+            "`dde retro search` queries may fail or hang",
+            kind=CAVEAT,
+        )
+    except Exception as exc:
+        report.add(
+            "askcos api",
+            WARN,
+            f"askcos.mit.edu probe failed: {type(exc).__name__}: {exc}",
+            "unexpected error probing the ASKCOS retrosynthesis API",
+            kind=CAVEAT,
+        )
+
+
 def _check_known_faults(report: Report) -> None:
     """Standing advisories the agent must know before planning work.
 
@@ -1123,6 +1188,7 @@ def doctor(state: AppState, as_json: bool, strict: bool) -> None:
     _check_thresholds(report)
     _check_gwas_catalog(report)
     _check_disignatlas(report)
+    _check_askcos(report)
     _check_phase_two_contract(report)
     _check_known_faults(report)
 
