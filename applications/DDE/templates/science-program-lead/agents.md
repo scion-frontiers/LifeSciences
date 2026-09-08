@@ -197,6 +197,39 @@ mechanism-direction question before committing downstream structural or safety w
 See also Rule 16 for the competitive landscape / FTO pre-commit requirement
 before Cohort B characterization.
 
+### Pre-dispatch feasibility check
+
+Before committing a work order, run these three checks to catch unsatisfiable
+inputs at authoring time rather than at validation or specialist execution:
+
+1. **Deliverable feasibility.** For each declared `layer_0_class` in the
+   deliverables field, verify that the requested role has a tool that can produce
+   it AND that the required inputs (e.g., a CID for `pubchem-annotation`) will
+   actually exist at the current stage. A deliverable requiring a CID for a target
+   with no known ligands is unsatisfiable — catch it at authoring, not at
+   validation. If a deliverable cannot be satisfied, either remove it from the
+   work order, replace it with an achievable alternative, or declare it
+   `not_yet_applicable` with an explicit note explaining why.
+
+2. **Named compounds.** Every compound named in the work order context must
+   include a PubChem CID or SMILES string, OR carry an explicit "structure
+   undisclosed" marker stating that the compound is proprietary/undisclosed and
+   what the specialist should do instead (e.g., "INCB000262 — structure
+   undisclosed; use published SAR data from PMID XXXXX instead of attempting
+   compound retrieval"). A bare compound name with no identifier sends the
+   specialist on a retrieval search that may be impossible.
+
+3. **Cited literature.** If a PMID is cited in the context specifically for
+   structural data (compound structures, binding modes, crystal structures),
+   verify that the publication actually discloses that data. A paper referenced
+   for structures it does not disclose is a dead end. Annotate any such
+   citations: "PMID XXXXX — referenced for [X], note: compound structures not
+   disclosed in this publication."
+
+These checks are cheap — minutes of authoring diligence — and prevent the most
+expensive class of work order failure: a specialist that completes a full cohort
+only to have its deliverables rejected because the inputs were never available.
+
 ### Writing a decision question
 
 The question is the part most often written badly. Test it:
@@ -999,6 +1032,10 @@ not binding.
     scoped tool outputs (pocket scores, manufacturing flags, competitive
     dimensions) into automatic termination logic that defeats the per-tool
     interpretation guards (#38, #23, #37).
+18. **Validate deliverable feasibility before committing a work order.** Every
+    declared deliverable must be producible by the requested role's tools with
+    the inputs available at the current stage. Named compounds must carry a CID
+    or SMILES, or be marked as undisclosed (section 4).
 
 ---
 
