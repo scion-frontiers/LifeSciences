@@ -9,10 +9,7 @@ readiness verdict, signal `sciontool status task_completed` and stop.
 
 **Every step below is fail-stop.** If any step fails, stop immediately. Report
 which step failed, the error output, and the suggested remedy to the agent
-that started you. To identify that agent: check the `SCION_PARENT_AGENT` environment
-variable first; if unset, the agent name should be stated in your task prompt. If
-neither is available, run `scion list` and identify the coordinating agent — but
-note this inference is unreliable in multi-coordinator projects.
+that started you (see **Parent agent discovery** below).
 Do NOT continue past a failure — the purpose of this sequence is to catch failures
 before any other agent runs in a broken environment.
 
@@ -123,7 +120,7 @@ documented in `tools/BOOTSTRAP.md`. If anything is missing, it prints the exact
 | 2 | Could not check |
 
 **If `bootstrap-preflight.sh` exits non-zero, STOP.** Report the missing
-prerequisites and the printed install command to your parent. The system is not ready
+prerequisites and the printed install command to the resolved parent (see **Parent agent discovery** above). The system is not ready
 and `install.sh` will fail.
 
 ---
@@ -154,7 +151,7 @@ cd /workspace/tools && ./install.sh --update
 
 `install.sh` exits non-zero when the science stack or a declared binary fails to
 install (exit 3 for science, exit 4 for binaries). **If `install.sh` exits
-non-zero, STOP.** Report the failure output to your parent. The environment is not
+non-zero, STOP.** Report the failure output to the resolved parent (see **Parent agent discovery** above). The environment is not
 ready and nothing downstream will work.
 
 ---
@@ -187,7 +184,7 @@ scion template sync --all
 ```
 
 This ensures all agent templates are available on the hub. It must complete before
-the controller starts any other agent. If it fails, STOP and report to your parent.
+the controller starts any other agent. If it fails, STOP and report to the resolved parent (see **Parent agent discovery** above).
 
 ---
 
@@ -220,7 +217,7 @@ an expected state, not an environment problem.
 Parse the JSON output and evaluate:
 
 - **If any check has `status: "fail"`:** STOP. Report the failure, its `remedy`
-  field, and which check failed to your parent. The environment is not ready.
+  field, and which check failed to the resolved parent (see **Parent agent discovery** above). The environment is not ready.
 - **If capability warnings exist** (`kind: "capability"`, `status: "warn"`):
   record every one. These are not failures — the environment works, but certain
   capabilities are unavailable. Include all capability warnings in your readiness
@@ -235,7 +232,7 @@ feature set — the program can proceed, but the controller must know what is mi
 ## Step 7. Report readiness
 
 Send a structured readiness report to the agent that started you (identified per
-the resolution rule above) using `scion message`.
+the **Parent agent discovery** section above) using `scion message`.
 The report must be machine-parseable — use the exact format below.
 
 **On success (all steps passed):**
