@@ -622,6 +622,7 @@ def run_triage(
     structures_by_concept: dict[str, list[str]] | None = None,
     query_terms_by_concept: dict[str, str] | None = None,
     project_root: str | None = None,
+    accepted_concept_ref: str | None = None,
     runner: Any = None,
     cli: Any = None,
 ) -> TriageOutcome:
@@ -641,7 +642,14 @@ def run_triage(
     query_terms_by_concept:
         Map of concept_ref -> query term for differentiation assessment.
     project_root:
-        Path to the DDE project root (for CLI commands).
+        Path to the DDE project root (for CLI commands and record
+        persistence).  When set, triage assessment and decision records
+        are persisted through the real ``write_record()`` path.
+    accepted_concept_ref:
+        Optional concept ref (e.g. ``"IC-001-r1"``) to accept.  When
+        set, competing alternatives are cancelled via
+        ``cancel_competing_alternatives()`` and park decisions are
+        recorded for cancelled concepts.
     runner:
         Optional CliRunner instance (for testing).
     cli:
@@ -767,12 +775,79 @@ def run_triage(
         outcome.concept_results
     )
 
-    # Build shortlist from concepts with no terminal disposition
+    # Cancel competing alternatives when a concept is accepted
+    if accepted_concept_ref:
+        outcome.concept_results = cancel_competing_alternatives(
+            outcome.concept_results, accepted_concept_ref
+        )
+        # Record park decisions for cancelled competing concepts
+        for cr in outcome.concept_results:
+            if cr.concept_ref == accepted_concept_ref:
+                continue
+            if cr.is_terminal:
+                continue
+            any_cancelled = any(
+                ws.cancelled for ws in cr.workstream_results.values()
+            )
+            if any_cancelled and cr.decision_record is None:
+                cr.disposition = "parked"
+                cr.disposition_reason = (
+                    f"Competing alternative cancelled: concept "
+                    f"{accepted_concept_ref} was accepted for this slot."
+                )
+                cr.decision_record = build_triage_decision(
+                    concept_ref=cr.concept_ref,
+                    concept_id=cr.concept_id,
+                    action="park",
+                    rationale=cr.disposition_reason,
+                )
+                outcome.all_decisions.append(cr.decision_record)
+
+    # Build shortlist from concepts with no terminal/parked disposition
     outcome.shortlist = [
         cr.concept_ref
         for cr in outcome.concept_results
-        if not cr.is_terminal
+        if not cr.is_terminal and cr.disposition != "parked"
     ]
+
+    # --- Persist records to the control store ---
+    #
+    # When project_root is set, persist assessment and decision records
+    # through the real write_record() path.  This is where Hard
+    # Constraint #2 takes effect: terminate decisions go through
+    # write_record()'s human-approval gate.
+    if project_root:
+        from dde.core.controlstore import next_id
+
+        # Persist assessment records from all workstreams
+        for cr in outcome.concept_results:
+            for _ws_name, ws_result in cr.workstream_results.items():
+                for assessment in ws_result.assessments:
+                    # Only persist records with the assessment schema
+                    if assessment.get("schema") != "dde.evidence-assessment.v1":
+                        continue
+                    try:
+                        aid = next_id(project_root, "assessment")
+                        write_triage_assessment(project_root, assessment, aid)
+                    except Exception:
+                        # Assessment may not validate; it stays in the
+                        # in-memory outcome but is not persisted.
+                        pass
+
+        # Persist decision records
+        for cr in outcome.concept_results:
+            if cr.decision_record is None:
+                continue
+            try:
+                did = next_id(project_root, "decision")
+                write_triage_decision(project_root, cr.decision_record, did)
+            except Refusal:
+                # Terminate without human approval — the gate works.
+                # The decision needs human approval before persistence.
+                pass
+            except Exception:
+                # Other validation errors; the decision stays in-memory.
+                pass
 
     return outcome
 

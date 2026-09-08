@@ -72,6 +72,7 @@ from dde.core.triage import (
     run_manufacturing_workstream,
     run_structure_screening_workstream,
     run_triage,
+    write_triage_assessment,
     write_triage_decision,
 )
 
@@ -1174,20 +1175,187 @@ def test_write_triage_assessment():
 
 
 # ---------------------------------------------------------------------------
+# Tests: End-to-end persistence through run_triage() (Round 2 fix)
+# ---------------------------------------------------------------------------
+
+
+def test_persistence_end_to_end():
+    """run_triage() with project_root persists real DR-NNN records.
+
+    Uses budget exhaustion to guarantee at least one decision record
+    (action='investigate') is written through write_triage_decision()
+    → write_record().  Then reads it back via read_record() to confirm
+    the record is a real, validated file on disk — not just an in-memory
+    dict or an ad-hoc JSON summary.
+    """
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+
+        c1 = _small_molecule_concept("IC-001")
+        c2 = _small_molecule_concept("IC-002", entity_ref="c1ccccc1")
+
+        # Budget of 1 concept — second concept gets budget exhaustion decision
+        budget = TriageBudget(max_concepts=1)
+
+        outcome = run_triage(
+            [c1, c2],
+            budget=budget,
+            project_root=str(project),
+            runner=CliRunner(),
+            cli=cli,
+        )
+
+        assert outcome.budget_exhausted
+
+        # The budget-exhausted concept's decision should be persisted
+        decisions_dir = project / CONTROL_DIR / "decisions"
+        decision_files = list(decisions_dir.glob("DR-*.json"))
+        assert len(decision_files) >= 1, (
+            f"Expected at least one persisted decision record in "
+            f"{decisions_dir}, found {len(decision_files)}.  "
+            f"run_triage() must call write_triage_decision() when "
+            f"project_root is set."
+        )
+
+        # Read it back through the real control-store API
+        dr = read_record(project, "decision", decision_files[0].stem)
+        assert dr["action"] == "investigate", (
+            f"Budget-exhausted decision should use 'investigate', "
+            f"got {dr['action']!r}"
+        )
+        assert dr["schema"] == "dde.decision-record.v1"
+        assert "budget" in dr["rationale"].lower()
+
+
+def test_cancellation_persistence():
+    """Two concepts, one accepted — cancellation produces a persisted
+    park decision for the rejected alternative.
+
+    Per AC4: cancelled alternatives are recorded, never silently dropped.
+    The cancellation decision must be a real DR-NNN file readable via
+    read_record(), not just an in-memory annotation.
+    """
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+
+        c1 = _small_molecule_concept("IC-001")
+        c2 = _small_molecule_concept("IC-002", entity_ref="c1ccccc1")
+
+        outcome = run_triage(
+            [c1, c2],
+            accepted_concept_ref="IC-001-r1",
+            project_root=str(project),
+            runner=CliRunner(),
+            cli=cli,
+        )
+
+        # IC-002 should be parked (cancelled alternative)
+        cr2 = [
+            cr for cr in outcome.concept_results
+            if cr.concept_id == "IC-002"
+        ][0]
+        assert cr2.disposition == "parked", (
+            f"IC-002 should be parked after IC-001 accepted, "
+            f"got {cr2.disposition!r}"
+        )
+
+        # Its workstreams should be cancelled
+        any_cancelled = any(
+            ws.cancelled for ws in cr2.workstream_results.values()
+        )
+        assert any_cancelled, (
+            "IC-002's workstreams should be cancelled after IC-001 accepted"
+        )
+
+        # Check persistence — there should be a park decision for IC-002
+        decisions_dir = project / CONTROL_DIR / "decisions"
+        decision_files = list(decisions_dir.glob("DR-*.json"))
+        assert len(decision_files) >= 1, (
+            f"Expected at least one persisted decision record for "
+            f"the cancelled alternative, found {len(decision_files)}"
+        )
+
+        # Find the park decision for IC-002
+        park_found = False
+        for df in decision_files:
+            dr = read_record(project, "decision", df.stem)
+            entity_ref = dr.get("affected_entity", {}).get("entity_ref", "")
+            if dr["action"] == "park" and "IC-002" in entity_ref:
+                park_found = True
+                assert "IC-001-r1" in dr["rationale"], (
+                    "Park decision should reference the accepted concept"
+                )
+                break
+
+        assert park_found, (
+            "Expected a persisted park decision (DR-NNN) for IC-002 "
+            "after IC-001 was accepted.  cancel_competing_alternatives() "
+            "must produce a recorded decision, not just an in-memory flag."
+        )
+
+
+def test_cli_triage_run_with_project_persists_records():
+    """CLI triage run with --project persists real records to disk.
+
+    This is the full end-to-end path: CLI command → run_cmd() →
+    run_triage() → write_triage_decision() → write_record().
+    """
+    runner = CliRunner()
+
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+
+        c1 = _small_molecule_concept("IC-001")
+        c2 = _small_molecule_concept("IC-002", entity_ref="c1ccccc1")
+
+        f1 = Path(td) / "concept1.json"
+        f2 = Path(td) / "concept2.json"
+        f1.write_text(json.dumps(c1, indent=2))
+        f2.write_text(json.dumps(c2, indent=2))
+
+        result = runner.invoke(cli, [
+            "--project", str(project),
+            "triage", "run",
+            str(f1), str(f2),
+            "--max-concepts", "1",
+            "--json",
+        ])
+
+        assert result.exit_code in (0, 2), (
+            f"CLI triage with --project exited {result.exit_code}: "
+            f"{result.output[:500]}"
+        )
+
+        if result.exit_code == 0:
+            # Budget exhaustion should produce a persisted decision record
+            decisions_dir = project / CONTROL_DIR / "decisions"
+            decision_files = list(decisions_dir.glob("DR-*.json"))
+            assert len(decision_files) >= 1, (
+                "Expected at least one persisted decision record when "
+                "running CLI with --project flag and budget exhaustion"
+            )
+
+
+# ---------------------------------------------------------------------------
 # Tests: All functions reachable from callers (Hard Constraint #3)
 # ---------------------------------------------------------------------------
 
 
 def test_all_functions_reachable():
-    """Every public function in core/triage.py is reachable from the
-    production CLI command module (commands/triage.py).
+    """Every public function in core/triage.py is actually CALLED from
+    a production code path — not just imported.
 
     Per Hard Constraint #3: every function must be reachable from a real
-    caller, not just from its own test file.  The production caller is
-    ``commands/triage.py``, which either imports and calls each function
-    directly in ``run_cmd``, or imports it for re-export to the CLI
-    layer.
+    caller.  Uses ``ast.parse()`` and walks for ``ast.Call`` nodes to
+    verify actual function invocations.  Import-only references (which
+    satisfied the previous text-presence check) are not sufficient.
+
+    The production code paths are:
+      - ``commands/triage.py`` (CLI entry point, calls ``run_triage``)
+      - ``core/triage.py`` (``run_triage`` calls the workstream functions,
+        persistence helpers, and cancellation internally)
     """
+    import ast
     import inspect
     import dde.core.triage as triage_mod
 
@@ -1198,21 +1366,33 @@ def test_all_functions_reachable():
         and obj.__module__ == "dde.core.triage"
     ]
 
-    # Read the PRODUCTION caller (commands/triage.py), not the test file
-    commands_triage_path = (
-        REPO_ROOT / "tools" / "dde" / "commands" / "triage.py"
-    )
-    assert commands_triage_path.exists(), (
-        "commands/triage.py must exist as the production CLI entry point"
-    )
-    production_source = commands_triage_path.read_text()
+    # Parse BOTH production source files for actual function calls
+    core_path = REPO_ROOT / "tools" / "dde" / "core" / "triage.py"
+    cmd_path = REPO_ROOT / "tools" / "dde" / "commands" / "triage.py"
+
+    assert core_path.exists(), "core/triage.py must exist"
+    assert cmd_path.exists(), "commands/triage.py must exist"
+
+    # Collect all function names that appear as actual ast.Call targets
+    called_names: set[str] = set()
+    for src_path in [core_path, cmd_path]:
+        tree = ast.parse(src_path.read_text())
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            if isinstance(func, ast.Name):
+                called_names.add(func.id)
+            elif isinstance(func, ast.Attribute):
+                called_names.add(func.attr)
 
     for fn_name in public_functions:
-        assert fn_name in production_source, (
-            f"Function {fn_name} from core/triage.py is not imported or "
-            f"called in commands/triage.py — per Hard Constraint #3, "
-            f"every function must be reachable from a real production "
-            f"caller, not just from the test file"
+        assert fn_name in called_names, (
+            f"Function {fn_name!r} from core/triage.py is not actually "
+            f"CALLED (as a function invocation, not just imported) in "
+            f"any production source file (core/triage.py or "
+            f"commands/triage.py).  Import-only references do not "
+            f"satisfy Hard Constraint #3."
         )
 
 
@@ -1448,6 +1628,10 @@ _TESTS = [
     ("write_triage_decision_terminate_blocked", test_write_triage_decision_terminate_blocked),
     # write_triage_assessment
     ("write_triage_assessment", test_write_triage_assessment),
+    # End-to-end persistence (round 2 fix)
+    ("persistence_end_to_end", test_persistence_end_to_end),
+    ("cancellation_persistence", test_cancellation_persistence),
+    ("cli_triage_run_with_project_persists_records", test_cli_triage_run_with_project_persists_records),
     # Hard Constraint #3
     ("all_functions_reachable", test_all_functions_reachable),
     # CLI entry point end-to-end

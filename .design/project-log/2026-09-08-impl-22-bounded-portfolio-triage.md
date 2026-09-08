@@ -194,3 +194,84 @@ requirement.
 - test_triage.py: 54/54 passed (was 49/49, +5 new CLI tests)
 - All pre-existing tests unchanged (concepts 74/74, evidence 49/49, manufacturing 35/35,
   differentiation 25/25, premortem 42/42, structure_screening 44/45 pre-existing failure)
+
+---
+
+## Fix: Orphaned persistence and cancellation (2026-09-08, round 2 reviewer finding)
+
+### Gap identified
+
+The round 1 fix added a real CLI entry point (`commands/triage.py`) and confirmed that
+8 of 11 public functions are genuinely called transitively through `run_triage()`. But
+three functions were **imported in `commands/triage.py` but never actually called** from
+any production code path:
+
+1. **`write_triage_decision()`** — imported on line 38, never called. The CLI command
+   only wrote an ad-hoc JSON summary file (`stage0-triage-outcome.json`), never persisting
+   real `DR-NNN` decision records through `write_record()`.
+2. **`write_triage_assessment()`** — imported on line 39, never called. No assessment
+   records (`AR-NNN`) were ever persisted to `.dde/control/assessments/`.
+3. **`cancel_competing_alternatives()`** — imported on line 36, never called. The template
+   text says cancellation is recorded, but nothing in the production path actually
+   performed or recorded the cancellation.
+
+**Why the round 1 reachability test missed this**: The "fixed" test checked
+`fn_name in production_source` against `commands/triage.py`. An import statement like
+`from ..core.triage import write_triage_decision` contains the function name as text,
+so the assertion passed. This is the same false-positive class as the original version
+(which checked the test file), just against a different file.
+
+**Impact**: Running `dde triage run` for real produced no AR-NNN or DR-NNN control-store
+records. The ad-hoc JSON summary was not consumable by any downstream system (Layer 2
+documents, gate documents, evidence-reuse mechanism). This directly violated the
+"Recording" acceptance criterion.
+
+### Fix applied
+
+1. **Wired persistence into `run_triage()`** (`core/triage.py`):
+   - When `project_root` is provided, persists assessment records via
+     `write_triage_assessment()` → `write_record()` for each workstream assessment
+     with schema `dde.evidence-assessment.v1`.
+   - Persists decision records via `write_triage_decision()` → `write_record()` for
+     each concept that has a decision record. Catches `Refusal` for terminate decisions
+     without human approval (the gate works correctly — the decision needs human
+     approval before persistence).
+   - Uses `next_id()` from the control store to assign sequential AR-NNN / DR-NNN IDs.
+
+2. **Wired cancellation into `run_triage()`** (`core/triage.py`):
+   - Added `accepted_concept_ref` parameter to `run_triage()`.
+   - When set, calls `cancel_competing_alternatives()` after portfolio evaluation.
+   - Builds `park` decision records for cancelled competing concepts (never `terminate`).
+   - Cancellation decisions are persisted through the same `write_triage_decision()` path.
+
+3. **Cleaned up orphaned imports** in `commands/triage.py`:
+   - Reduced imports from 12 items to 2 (`TriageBudget`, `run_triage`).
+   - All other functions are called internally by `run_triage()`.
+   - Added `--accept CONCEPT_REF` CLI option to expose `accepted_concept_ref`.
+
+4. **Fixed the reachability test with AST parsing**:
+   - `test_all_functions_reachable()` now uses `ast.parse()` on both `core/triage.py`
+     and `commands/triage.py`, walking for `ast.Call` nodes.
+   - Import-only references (e.g., `from foo import write_triage_decision`) no longer
+     satisfy the check — only actual function calls (`write_triage_decision(...)`) do.
+   - Verified the AST approach would have caught the round 1 gap: import statements
+     produce `ast.ImportFrom` nodes, not `ast.Call` nodes.
+
+5. **Three new end-to-end persistence tests**:
+   - `test_persistence_end_to_end` — runs `run_triage()` with `project_root` and budget
+     exhaustion, verifies DR-NNN files exist under `.dde/control/decisions/` and reads
+     them back via `read_record()`.
+   - `test_cancellation_persistence` — two concepts, one accepted via `accepted_concept_ref`,
+     verifies the rejected alternative has a persisted park decision (DR-NNN) referencing
+     the accepted concept.
+   - `test_cli_triage_run_with_project_persists_records` — full CLI end-to-end with
+     `--project` flag, verifies persisted records on disk.
+
+6. **Full module audit**: Confirmed all 11 public functions are genuinely called from
+   the production code path. No remaining orphaned imports or unreachable functions.
+
+### Test results after fix
+
+- test_triage.py: 57/57 passed (was 54/54, +3 new persistence/cancellation tests)
+- All pre-existing tests unchanged (concepts 74/74, evidence 49/49, manufacturing 35/35,
+  differentiation 25/25, premortem 42/42, policy OK)

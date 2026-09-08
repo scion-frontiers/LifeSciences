@@ -27,16 +27,6 @@ from ..core.output import Emitter
 from ..core.triage import (
     TriageBudget,
     run_triage,
-    run_manufacturing_workstream,
-    run_structure_screening_workstream,
-    run_differentiation_workstream,
-    build_triage_decision,
-    build_budget_exhaustion_decision,
-    evaluate_concept_portfolio,
-    cancel_competing_alternatives,
-    check_policy_exclusion,
-    write_triage_decision,
-    write_triage_assessment,
 )
 
 
@@ -89,6 +79,15 @@ def triage() -> None:
     type=click.Path(exists=True),
     help="Path to a gate-policy JSON file.  May be repeated.",
 )
+@click.option(
+    "--accept",
+    "accepted_concept_ref",
+    default=None,
+    help=(
+        "Accept a specific concept ref (e.g. IC-001-r1), cancelling "
+        "competing alternatives.  Omit to leave all concepts for lead review."
+    ),
+)
 @out_option
 @output_options
 @pass_state
@@ -101,6 +100,7 @@ def run_cmd(
     query_term: tuple[str, ...],
     structure_specs: tuple[str, ...],
     policy_paths: tuple[str, ...],
+    accepted_concept_ref: str | None,
     out: str | None,
     as_json: bool,
     quiet: bool,
@@ -185,6 +185,7 @@ def run_cmd(
         structures_by_concept=structures_by_concept,
         query_terms_by_concept=query_terms_by_concept,
         project_root=project_root,
+        accepted_concept_ref=accepted_concept_ref,
         runner=CliRunner(),
         cli=dde_cli,
     )
