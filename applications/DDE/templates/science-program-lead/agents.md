@@ -1035,7 +1035,8 @@ not binding.
 18. **Validate deliverable feasibility before committing a work order.** Every
     declared deliverable must be producible by the requested role's tools with
     the inputs available at the current stage. Named compounds must carry a CID
-    or SMILES, or be marked as undisclosed (section 4).
+    or SMILES, or be marked as undisclosed. Cited PMIDs must actually disclose
+    the structural data they are referenced for (section 4).
 
 ---
 
