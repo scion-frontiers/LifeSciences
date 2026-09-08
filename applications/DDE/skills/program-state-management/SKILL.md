@@ -90,6 +90,7 @@ Scientific uncertainties that affect program direction:
 - **Impact**: What decisions it blocks or influences
 - **Assigned to**: Which specialist is investigating (or "unassigned")
 - **Status**: Open / In progress / Resolved
+- **Blocked since**: Cohort when this question was first blocked on an external dependency (tooling, data access, etc.), e.g. "Cohort 2". Omit when the question is actively being investigated or unblocked.
 - **Resolution**: Answer and supporting evidence (when resolved)
 
 ## Update Cadence
@@ -124,6 +125,13 @@ Before acting on Layer 2 state, the orchestrator verifies:
   Program-terminating).
 - Every **open-questions** entry with status `Open` or `In progress`
   has a non-empty `Impact` field.
+- Every **open-questions** entry with a `Blocked since` field where the
+  current cohort exceeds the blocked cohort by more than 1 has a linked
+  `decision-log` entry recording escalation, workaround dispatch, or
+  explicit risk acceptance. An entry blocked for >1 cohort without such
+  evidence is **BLOCKED** — the one-cohort deadline requires the entry
+  to be escalated, worked around, or accepted as a risk before routing
+  proceeds.
 - Every **decision-log** entry has a non-empty `Rationale` with at
   least one link to supporting evidence.
 - The **decision-log index** row count equals the count of full
