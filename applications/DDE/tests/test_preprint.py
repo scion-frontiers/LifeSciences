@@ -27,7 +27,7 @@ TOOLS_DIR = Path(__file__).resolve().parent.parent / "tools"
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
-from dde.commands.preprint import _slugify, _parse_arxiv_entries
+from dde.commands.preprint import _slugify, _parse_arxiv_entries, _parse_biorxiv_collection
 from dde.core import provenance
 
 
@@ -747,6 +747,289 @@ def test_analyze_end_to_end() -> None:
 
 
 # ---------------------------------------------------------------------------
+# bioRxiv helpers
+# ---------------------------------------------------------------------------
+
+
+def _biorxiv_api_response(
+    items: list[dict[str, Any]],
+    total: int | None = None,
+) -> dict[str, Any]:
+    """Build a canned bioRxiv API JSON response.
+
+    Each item dict should have: doi, title, authors, abstract, date,
+    category, version, server (defaults provided where missing).
+    """
+    collection = []
+    for item in items:
+        collection.append({
+            "doi": item.get("doi", "10.1101/2023.01.01.000001"),
+            "title": item.get("title", "Untitled"),
+            "authors": item.get("authors", "Author One; Author Two"),
+            "author_corresponding": item.get("author_corresponding", "Author One"),
+            "author_corresponding_institution": item.get(
+                "author_corresponding_institution", "Test University"
+            ),
+            "date": item.get("date", "2023-01-15"),
+            "version": item.get("version", "1"),
+            "type": item.get("type", "new results"),
+            "license": item.get("license", "cc_by_nc_nd"),
+            "category": item.get("category", "bioinformatics"),
+            "jatsxml": item.get("jatsxml", ""),
+            "abstract": item.get("abstract", "No abstract."),
+            "published": item.get("published", "NA"),
+            "server": item.get("server", "bioRxiv"),
+        })
+
+    if total is None:
+        total = len(collection)
+
+    return {
+        "messages": [
+            {
+                "status": "ok",
+                "count": len(collection),
+                "total": str(total),
+            }
+        ],
+        "collection": collection,
+    }
+
+
+# ---------------------------------------------------------------------------
+# 12. bioRxiv: query returning results — correct schema, source="biorxiv"
+# ---------------------------------------------------------------------------
+
+
+def test_biorxiv_search_results() -> None:
+    """A bioRxiv query returning results produces correct schema and source."""
+    from click.testing import CliRunner
+    from dde.cli import cli
+
+    items = [
+        {
+            "doi": "10.1101/2023.01.15.000001",
+            "title": "CRISPR gene editing in zebrafish",
+            "authors": "Alice Smith; Bob Jones",
+            "abstract": "We present a CRISPR method for gene editing.",
+            "date": "2023-01-15",
+            "version": "1",
+            "category": "genetics",
+            "server": "bioRxiv",
+        },
+        {
+            "doi": "10.1101/2023.02.01.000002",
+            "title": "Gene editing approaches in model organisms",
+            "authors": "Carol Davis",
+            "abstract": "A survey of gene editing approaches.",
+            "date": "2023-02-01",
+            "version": "2",
+            "category": "genomics",
+            "server": "bioRxiv",
+        },
+        {
+            "doi": "10.1101/2023.03.10.000003",
+            "title": "Gene therapy for rare diseases",
+            "authors": "Eve White; Frank Black",
+            "abstract": "Novel gene editing approaches to rare diseases.",
+            "date": "2023-03-10",
+            "version": "1",
+            "category": "genetics",
+            "server": "bioRxiv",
+        },
+    ]
+    api_response = _biorxiv_api_response(items, total=3)
+
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+        runner = CliRunner()
+
+        with mock.patch("dde.commands.preprint.http.get_json") as mock_get:
+            mock_get.return_value = api_response
+            result = runner.invoke(
+                cli,
+                [
+                    "--project", str(project),
+                    "preprint", "search",
+                    "--source", "biorxiv",
+                    "gene editing",
+                ],
+                catch_exceptions=False,
+            )
+
+        assert result.exit_code == 0, f"Exit {result.exit_code}\n{result.output}"
+
+        # Check the artifact
+        lit_dir = project / "raw" / "literature"
+        artifact_files = list(lit_dir.glob("*.preprint-search.json"))
+        assert len(artifact_files) == 1, f"Expected 1 artifact, got {artifact_files}"
+
+        artifact = json.loads(artifact_files[0].read_text(encoding="utf-8"))
+        assert artifact["schema"] == "dde.preprint-search.v1"
+        assert artifact["source"] == "biorxiv"
+        assert len(artifact["results"]) == 3
+        for r in artifact["results"]:
+            assert r["source"] == "biorxiv"
+            assert r["doi"] is not None
+            assert isinstance(r["authors"], list)
+
+    print("  PASS: bioRxiv search with results — correct schema and source")
+
+
+# ---------------------------------------------------------------------------
+# 13. bioRxiv: query returning 0 results — fires preprint.no_results
+# ---------------------------------------------------------------------------
+
+
+def test_biorxiv_search_zero_results() -> None:
+    """A bioRxiv query returning 0 results: exit 0, fires preprint.no_results."""
+    from click.testing import CliRunner
+    from dde.cli import cli
+
+    # Empty collection — no items match the query.
+    api_response = _biorxiv_api_response([], total=0)
+
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+        runner = CliRunner()
+
+        with mock.patch("dde.commands.preprint.http.get_json") as mock_get:
+            mock_get.return_value = api_response
+            result = runner.invoke(
+                cli,
+                [
+                    "--project", str(project),
+                    "preprint", "search",
+                    "--source", "biorxiv",
+                    "xyznonexistentquery42",
+                ],
+                catch_exceptions=False,
+            )
+
+        assert result.exit_code == 0, f"Exit {result.exit_code}\n{result.output}"
+
+        lit_dir = project / "raw" / "literature"
+
+        # Check the meta file for relay codes
+        meta_files = list(lit_dir.glob("*.meta.json"))
+        assert len(meta_files) >= 1
+        meta = json.loads(meta_files[0].read_text(encoding="utf-8"))
+        relay_codes = [r["code"] for r in meta.get("mandatory_relays", [])]
+        assert "preprint.no_results" in relay_codes, (
+            f"preprint.no_results not fired; relays: {relay_codes}"
+        )
+
+    print("  PASS: bioRxiv 0 results — exit 0, fires preprint.no_results")
+
+
+# ---------------------------------------------------------------------------
+# 14. bioRxiv: source validation — --source biorxiv is accepted
+# ---------------------------------------------------------------------------
+
+
+def test_biorxiv_source_accepted() -> None:
+    """--source biorxiv is accepted by the CLI."""
+    from click.testing import CliRunner
+    from dde.cli import cli
+
+    api_response = _biorxiv_api_response(
+        [
+            {
+                "doi": "10.1101/2023.05.01.000010",
+                "title": "Test paper for source validation",
+                "authors": "Test Author",
+                "abstract": "Source validation abstract.",
+                "date": "2023-05-01",
+                "version": "1",
+                "category": "bioinformatics",
+                "server": "bioRxiv",
+            },
+        ],
+        total=1,
+    )
+
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+        runner = CliRunner()
+
+        with mock.patch("dde.commands.preprint.http.get_json") as mock_get:
+            mock_get.return_value = api_response
+            result = runner.invoke(
+                cli,
+                [
+                    "--project", str(project),
+                    "preprint", "search",
+                    "--source", "biorxiv",
+                    "test",
+                ],
+                catch_exceptions=False,
+            )
+
+        # The key assertion: biorxiv is accepted as a source.
+        assert result.exit_code == 0, (
+            f"--source biorxiv rejected: exit {result.exit_code}\n{result.output}"
+        )
+
+    print("  PASS: --source biorxiv is accepted")
+
+
+# ---------------------------------------------------------------------------
+# 15. _parse_biorxiv_collection unit test
+# ---------------------------------------------------------------------------
+
+
+def test_parse_biorxiv_collection() -> None:
+    """_parse_biorxiv_collection correctly parses bioRxiv JSON items."""
+    items = [
+        {
+            "doi": "10.1101/2023.01.15.000001",
+            "title": "  CRISPR  gene  editing  ",
+            "authors": "Alice Smith; Bob Jones",
+            "abstract": "  Abstract  with  extra  spaces.  ",
+            "date": "2023-01-15",
+            "version": "1",
+            "category": "genetics",
+            "server": "bioRxiv",
+        },
+        {
+            "doi": "10.1101/2023.02.01.000002",
+            "title": "Protein folding dynamics",
+            "authors": "Carol Davis",
+            "abstract": "A study of protein folding.",
+            "date": "2023-02-01",
+            "version": "2",
+            "category": "biophysics",
+            "server": "bioRxiv",
+        },
+    ]
+
+    # Without query filter — return all items.
+    results = _parse_biorxiv_collection(items)
+    assert len(results) == 2
+    assert results[0]["id"] == "10.1101/2023.01.15.000001"
+    assert results[0]["doi"] == "10.1101/2023.01.15.000001"
+    assert results[0]["authors"] == ["Alice Smith", "Bob Jones"]
+    assert results[0]["source"] == "biorxiv"
+    # Whitespace cleaned up
+    assert "  " not in results[0]["title"]
+    assert "  " not in results[0]["abstract"]
+
+    assert results[1]["id"] == "10.1101/2023.02.01.000002"
+    assert results[1]["categories"] == ["biophysics"]
+
+    # With query filter — only matching items returned.
+    filtered = _parse_biorxiv_collection(items, query="CRISPR")
+    assert len(filtered) == 1
+    assert filtered[0]["doi"] == "10.1101/2023.01.15.000001"
+
+    # Query that matches nothing
+    empty = _parse_biorxiv_collection(items, query="xyznonexistent42")
+    assert len(empty) == 0
+
+    print("  PASS: _parse_biorxiv_collection parses correctly")
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
@@ -765,6 +1048,10 @@ def main() -> None:
         ("test_query_truncated_fires", test_query_truncated_fires),
         ("test_query_truncated_no_fire", test_query_truncated_no_fire),
         ("test_analyze_end_to_end", test_analyze_end_to_end),
+        ("test_biorxiv_search_results", test_biorxiv_search_results),
+        ("test_biorxiv_search_zero_results", test_biorxiv_search_zero_results),
+        ("test_biorxiv_source_accepted", test_biorxiv_source_accepted),
+        ("test_parse_biorxiv_collection", test_parse_biorxiv_collection),
     ]
 
     passed = 0

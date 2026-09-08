@@ -1,6 +1,6 @@
 """`dde preprint` -- preprint search across preprint servers.
 
-Searches preprint repositories (currently arXiv) for papers matching a
+Searches preprint repositories (arXiv, bioRxiv) for papers matching a
 query.  Preprints are not peer-reviewed; use this when looking for
 recent, not-yet-peer-reviewed work.  For peer-reviewed literature, use
 `dde pubmed`.
@@ -12,9 +12,7 @@ Two phases:
   analyze  reads those results and produces a summary analysis: total
            results, source breakdown. No network.
 
-The `--source` flag selects the preprint server.  Only `arxiv` is
-supported in this release; other sources (biorxiv, medrxiv) will be
-added later.
+The `--source` flag selects the preprint server: `arxiv` or `biorxiv`.
 """
 
 from __future__ import annotations
@@ -22,7 +20,7 @@ from __future__ import annotations
 import json
 import re
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import quote_plus
 
@@ -44,12 +42,18 @@ TOOL = "preprint"
 ARTIFACT_CLASS = "literature"  # same as pubmed/litref
 
 ARXIV_API_BASE = "https://export.arxiv.org/api/query"
+BIORXIV_API_BASE = "https://api.biorxiv.org/details/biorxiv"
 
 # Atom/XML namespaces used by the arXiv API
 ATOM_NS = "http://www.w3.org/2005/Atom"
 ARXIV_NS = "http://arxiv.org/schemas/atom"
 
-VALID_SOURCES = ("arxiv",)
+# bioRxiv API returns up to 100 records per page.
+_BIORXIV_PAGE_SIZE = 100
+# Default window (days) to search when querying bioRxiv by date range.
+_BIORXIV_SEARCH_DAYS = 60
+
+VALID_SOURCES = ("arxiv", "biorxiv")
 
 
 def _slugify(query: str) -> str:
@@ -158,6 +162,70 @@ def _parse_arxiv_entries(xml_bytes: bytes) -> tuple[list[dict[str, Any]], int]:
     return results, total_results
 
 
+def _parse_biorxiv_collection(
+    collection: list[dict[str, Any]],
+    query: str | None = None,
+) -> list[dict[str, Any]]:
+    """Convert raw bioRxiv API collection items into structured paper records.
+
+    When *query* is provided, only items whose title or abstract contain
+    every whitespace-delimited token (case-insensitive) are returned.
+    """
+    query_tokens: list[str] = []
+    if query:
+        query_tokens = [t.lower() for t in query.split() if t]
+
+    results: list[dict[str, Any]] = []
+    for item in collection:
+        title = (item.get("title") or "").strip()
+        abstract = (item.get("abstract") or "").strip()
+
+        # Client-side keyword filtering — bioRxiv has no search endpoint.
+        if query_tokens:
+            haystack = f"{title} {abstract}".lower()
+            if not all(tok in haystack for tok in query_tokens):
+                continue
+
+        # Clean up whitespace
+        if title:
+            title = re.sub(r"\s+", " ", title)
+        if abstract:
+            abstract = re.sub(r"\s+", " ", abstract)
+
+        # Authors — bioRxiv returns a single comma-separated string.
+        raw_authors = item.get("authors") or ""
+        authors: list[str] = [
+            a.strip() for a in raw_authors.split(";") if a.strip()
+        ]
+        if not authors and raw_authors:
+            # Fallback: some records use comma separation.
+            authors = [a.strip() for a in raw_authors.split(",") if a.strip()]
+
+        doi = (item.get("doi") or "").strip() or None
+        date = (item.get("date") or "").strip() or None
+        version = item.get("version")
+        category = (item.get("category") or "").strip() or None
+        server = (item.get("server") or "bioRxiv").strip()
+
+        # Build a PDF URL from the DOI when available.
+        pdf_url = f"https://www.biorxiv.org/content/{doi}v{version}.full.pdf" if doi and version else None
+
+        results.append({
+            "id": doi or "",
+            "title": title or None,
+            "authors": authors,
+            "abstract": abstract or None,
+            "published": date,
+            "updated": date,  # bioRxiv does not distinguish published/updated per version
+            "categories": [category] if category else [],
+            "pdf_url": pdf_url,
+            "doi": doi,
+            "source": "biorxiv",
+        })
+
+    return results
+
+
 # ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
@@ -174,7 +242,7 @@ def preprint() -> None:
     "--source",
     type=click.Choice(VALID_SOURCES, case_sensitive=False),
     required=True,
-    help="Preprint source to search (currently: arxiv).",
+    help="Preprint source to search (arxiv, biorxiv).",
 )
 @click.option(
     "--max-results",
@@ -197,7 +265,7 @@ def search_cmd(
     """Search preprints for QUERY and write structured results.
 
     QUERY is a free-text search string.  --source selects the preprint
-    server (currently only 'arxiv' is supported).
+    server ('arxiv' or 'biorxiv').
     """
     source = source.lower()
     if source not in VALID_SOURCES:
@@ -213,6 +281,8 @@ def search_cmd(
 
     if source == "arxiv":
         _search_arxiv(state, emit, target_dir, slug, query, max_results)
+    elif source == "biorxiv":
+        _search_biorxiv(state, emit, target_dir, slug, query, max_results)
 
 
 def _search_arxiv(
@@ -307,6 +377,137 @@ def _search_arxiv(
     emit.path(meta_path, role="sidecar")
     emit.line(f"Preprint search (arXiv): {query!r}")
     emit.line(f"  {total_results} total found, {len(results)} retrieved")
+    if results:
+        for r in results[:5]:
+            emit.line(f"  {r['id']}: {(r.get('title') or '(no title)')[:70]}")
+        if len(results) > 5:
+            emit.line(f"  ... {len(results) - 5} more in the artifact")
+    emit.flush()
+
+
+def _search_biorxiv(
+    state: AppState,
+    emit: Any,
+    target_dir: Any,
+    slug: str,
+    query: str,
+    max_results: int,
+) -> None:
+    """Execute bioRxiv search and write artifacts.
+
+    bioRxiv has no keyword-search endpoint, so we fetch recent preprints
+    via the date-range details API and filter client-side by keyword match
+    in title and abstract.
+    """
+    today = datetime.now(timezone.utc).date()
+    start_date = today - timedelta(days=_BIORXIV_SEARCH_DAYS)
+    interval = f"{start_date.isoformat()}/{today.isoformat()}"
+
+    qps = qps_for_host("api.biorxiv.org")
+    results: list[dict[str, Any]] = []
+    cursor = 0
+    total_scanned = 0
+    raw_collections: list[dict[str, Any]] = []
+
+    while len(results) < max_results:
+        url = f"{BIORXIV_API_BASE}/{interval}/{cursor}/json"
+        data = http.get_json(url, qps=qps, timeout=60.0)
+
+        collection = data.get("collection", [])
+        if not collection:
+            break
+
+        raw_collections.extend(collection)
+        total_scanned += len(collection)
+
+        matched = _parse_biorxiv_collection(collection, query=query)
+        results.extend(matched)
+
+        # The API returns up to 100 per page.  If fewer come back, we
+        # have exhausted the date range.
+        if len(collection) < _BIORXIV_PAGE_SIZE:
+            break
+
+        cursor += _BIORXIV_PAGE_SIZE
+
+    # Trim to requested size.
+    results = results[:max_results]
+
+    # Save verbatim API response (aggregated collection items).
+    raw_path = target_dir / f"{slug}.biorxiv-response.json"
+    raw_path.write_text(
+        json.dumps(raw_collections, indent=2) + "\n", encoding="utf-8"
+    )
+
+    # Build structured artifact
+    searched_at = datetime.now(timezone.utc).isoformat()
+    artifact = {
+        "schema": "dde.preprint-search.v1",
+        "source": "biorxiv",
+        "query": query,
+        "searched_at": searched_at,
+        "total_results": len(results),
+        "results": results,
+    }
+
+    artifact_path = target_dir / f"{slug}.preprint-search.json"
+    artifact_path.write_text(
+        json.dumps(artifact, indent=2) + "\n", encoding="utf-8"
+    )
+
+    # Sidecar
+    sidecar = provenance.Sidecar(
+        tool=TOOL,
+        subcommand="search",
+        endpoint="biorxiv",
+        parameters={
+            "query": query,
+            "max_results": max_results,
+            "source": "biorxiv",
+            "search_days": _BIORXIV_SEARCH_DAYS,
+            "interval": interval,
+        },
+    )
+    sidecar.note("source", "bioRxiv (Cold Spring Harbor Laboratory)")
+    sidecar.note("licence", "bioRxiv API Terms and Conditions")
+    sidecar.note("n_results", str(len(results)))
+    sidecar.note("total_scanned", str(total_scanned))
+    sidecar.note(
+        "search_method",
+        "date-range fetch with client-side keyword filtering "
+        "(bioRxiv has no keyword search endpoint)",
+    )
+
+    sidecar.add_output(raw_path)
+    sidecar.add_output(artifact_path)
+
+    # Relay codes
+    if len(results) == 0:
+        sidecar.warn(
+            f"bioRxiv search for {query!r} returned no results",
+            code="preprint.no_results",
+        )
+
+    if len(results) >= max_results and total_scanned > len(results):
+        sidecar.warn(
+            f"bioRxiv search scanned {total_scanned} preprints and found "
+            f"{len(results)} matches (capped at {max_results}); additional "
+            f"matching preprints may exist",
+            code="preprint.query_truncated",
+        )
+
+    meta_path = sidecar.write(target_dir / f"{slug}.meta.json")
+
+    # Emit
+    emit.data("query", query)
+    emit.data("source", "biorxiv")
+    emit.data("total_results", len(results))
+    emit.data("n_results", len(results))
+    emit.path(raw_path, role="biorxiv-response")
+    emit.path(artifact_path, role="artifact")
+    emit.path(meta_path, role="sidecar")
+    emit.line(f"Preprint search (bioRxiv): {query!r}")
+    emit.line(f"  {len(results)} matching preprints found ({total_scanned} scanned)")
     if results:
         for r in results[:5]:
             emit.line(f"  {r['id']}: {(r.get('title') or '(no title)')[:70]}")
