@@ -941,6 +941,246 @@ def test_analyze_unrated_hypotheses_relay():
 
 
 # ---------------------------------------------------------------------------
+# Tests: Pacing persistence (Finding 1 — pacing survives run dir deletion)
+# ---------------------------------------------------------------------------
+
+
+def test_pacing_persisted_in_record():
+    """Pacing data must be stored in the normalised record, not only on disk."""
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        project = _make_project(base)
+        run_dir = _make_run_dir(
+            base, n_hypotheses=2, include_pacing=True, pacing_tier="shared",
+        )
+
+        runner = CliRunner()
+        result = _run_ingest(runner, project, run_dir)
+        assert result.exit_code == 0
+
+        hyp_dir = project / "raw" / "hypotheses"
+        json_files = list(hyp_dir.glob("hx-*.hypex.json"))
+        record = json.loads(json_files[0].read_text(encoding="utf-8"))
+
+        assert "pacing" in record, "pacing must be persisted in the record"
+        assert record["pacing"] is not None
+        assert record["pacing"]["tier"] == "shared"
+
+
+def test_pacing_relay_after_run_dir_deleted():
+    """After deleting the run dir, analyze must NOT false-positive pacing_uncoordinated.
+
+    This is the core regression for Finding 1: pacing is now read from
+    the record, not from the filesystem.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        project = _make_project(base)
+        run_dir = _make_run_dir(
+            base, n_hypotheses=2, include_pacing=True, pacing_tier="shared",
+        )
+
+        runner = CliRunner()
+        result = _run_ingest(runner, project, run_dir)
+        assert result.exit_code == 0
+
+        # Delete the original run directory (simulates archival/cleanup)
+        import shutil
+        shutil.rmtree(run_dir)
+
+        hyp_dir = project / "raw" / "hypotheses"
+        json_files = list(hyp_dir.glob("hx-*.hypex.json"))
+        artifact = str(json_files[0])
+
+        result = _run_analyze(runner, project, artifact)
+        assert result.exit_code == 0
+
+        analysis_files = list(hyp_dir.glob("hx-*.analysis.json"))
+        analysis = json.loads(analysis_files[0].read_text(encoding="utf-8"))
+
+        relay_codes = [r["code"] for r in analysis.get("mandatory_relays", [])]
+        assert "hypex.pacing_uncoordinated" not in relay_codes, (
+            "pacing_uncoordinated must NOT fire when pacing was properly "
+            "coordinated — even after the run directory is deleted"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Tests: Composite ranking (Finding 6, criterion 14)
+# ---------------------------------------------------------------------------
+
+
+def test_composite_ranking_fires():
+    """composite_preset in run.yaml + composite values → fires hypex.composite_ranking."""
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        project = _make_project(base)
+        run_dir = _make_run_dir(
+            base, n_hypotheses=2, include_pacing=True,
+        )
+
+        # Patch run.yaml to include composite_preset
+        run_yaml_path = run_dir / "run.yaml"
+        try:
+            import yaml
+            run_yaml = yaml.safe_load(run_yaml_path.read_text(encoding="utf-8"))
+        except ImportError:
+            run_yaml = json.loads(run_yaml_path.read_text(encoding="utf-8"))
+        run_yaml["composite_preset"] = "balanced-v2"
+        try:
+            import yaml
+            run_yaml_path.write_text(yaml.dump(run_yaml), encoding="utf-8")
+        except ImportError:
+            run_yaml_path.write_text(json.dumps(run_yaml), encoding="utf-8")
+
+        # Add composite values to hypotheses
+        for f in (run_dir / "hypotheses").glob("*.json"):
+            h = json.loads(f.read_text(encoding="utf-8"))
+            h["composite"] = 0.85
+            f.write_text(json.dumps(h, indent=2), encoding="utf-8")
+
+        runner = CliRunner()
+        result = _run_ingest(runner, project, run_dir)
+        assert result.exit_code == 0
+
+        hyp_dir = project / "raw" / "hypotheses"
+        json_files = list(hyp_dir.glob("hx-*.hypex.json"))
+        artifact = str(json_files[0])
+
+        result = _run_analyze(runner, project, artifact)
+        assert result.exit_code == 0
+
+        analysis_files = list(hyp_dir.glob("hx-*.analysis.json"))
+        analysis = json.loads(analysis_files[0].read_text(encoding="utf-8"))
+
+        relay_codes = [r["code"] for r in analysis.get("mandatory_relays", [])]
+        assert "hypex.composite_ranking" in relay_codes
+
+
+def test_no_composite_no_relay():
+    """No composite_preset and no composite values → does NOT fire composite_ranking."""
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        project = _make_project(base)
+        run_dir = _make_run_dir(
+            base, n_hypotheses=2, include_pacing=True,
+        )
+
+        runner = CliRunner()
+        result = _run_ingest(runner, project, run_dir)
+        assert result.exit_code == 0
+
+        hyp_dir = project / "raw" / "hypotheses"
+        json_files = list(hyp_dir.glob("hx-*.hypex.json"))
+        artifact = str(json_files[0])
+
+        result = _run_analyze(runner, project, artifact)
+        assert result.exit_code == 0
+
+        analysis_files = list(hyp_dir.glob("hx-*.analysis.json"))
+        analysis = json.loads(analysis_files[0].read_text(encoding="utf-8"))
+
+        relay_codes = [r["code"] for r in analysis.get("mandatory_relays", [])]
+        assert "hypex.composite_ranking" not in relay_codes
+
+
+# ---------------------------------------------------------------------------
+# Tests: Roster (Finding 6, criterion 16)
+# ---------------------------------------------------------------------------
+
+
+def test_roster_ingested():
+    """meta/roster.ndjson with 2 entries → record["roster"] has 2 entries."""
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        project = _make_project(base)
+        run_dir = _make_run_dir(
+            base, n_hypotheses=2, include_pacing=True,
+        )
+
+        # Write roster.ndjson
+        roster_path = run_dir / "meta" / "roster.ndjson"
+        entries = [
+            {"agent_id": "agent-1", "role": "hypothesis-generator"},
+            {"agent_id": "agent-2", "role": "judge"},
+        ]
+        roster_path.write_text(
+            "\n".join(json.dumps(e) for e in entries) + "\n",
+            encoding="utf-8",
+        )
+
+        runner = CliRunner()
+        result = _run_ingest(runner, project, run_dir)
+        assert result.exit_code == 0
+
+        hyp_dir = project / "raw" / "hypotheses"
+        json_files = list(hyp_dir.glob("hx-*.hypex.json"))
+        record = json.loads(json_files[0].read_text(encoding="utf-8"))
+
+        assert len(record["roster"]) == 2
+        agent_ids = [r["agent_id"] for r in record["roster"]]
+        assert "agent-1" in agent_ids
+        assert "agent-2" in agent_ids
+
+
+# ---------------------------------------------------------------------------
+# Tests: Archive verification (Finding 6)
+# ---------------------------------------------------------------------------
+
+
+def test_ingest_produces_archive():
+    """Happy path ingest must produce a .tar.zst archive file."""
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        project = _make_project(base)
+        run_dir = _make_run_dir(base, n_hypotheses=2, include_pacing=True)
+
+        runner = CliRunner()
+        result = _run_ingest(runner, project, run_dir)
+        assert result.exit_code == 0
+
+        hyp_dir = project / "raw" / "hypotheses"
+        archives = list(hyp_dir.glob("hx-*.run.tar.zst"))
+        assert len(archives) == 1, (
+            f"expected 1 .tar.zst archive, got {len(archives)}"
+        )
+        assert archives[0].stat().st_size > 0
+
+
+# ---------------------------------------------------------------------------
+# Tests: Negative relay — run_not_converged (Finding 6)
+# ---------------------------------------------------------------------------
+
+
+def test_converged_run_no_run_not_converged_relay():
+    """A converged run must NOT fire hypex.run_not_converged."""
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        project = _make_project(base)
+        run_dir = _make_run_dir(
+            base, n_hypotheses=2, include_pacing=True,
+            termination_reason="converged",
+        )
+
+        runner = CliRunner()
+        result = _run_ingest(runner, project, run_dir)
+        assert result.exit_code == 0
+
+        hyp_dir = project / "raw" / "hypotheses"
+        json_files = list(hyp_dir.glob("hx-*.hypex.json"))
+        artifact = str(json_files[0])
+
+        result = _run_analyze(runner, project, artifact)
+        assert result.exit_code == 0
+
+        analysis_files = list(hyp_dir.glob("hx-*.analysis.json"))
+        analysis = json.loads(analysis_files[0].read_text(encoding="utf-8"))
+
+        relay_codes = [r["code"] for r in analysis.get("mandatory_relays", [])]
+        assert "hypex.run_not_converged" not in relay_codes
+
+
+# ---------------------------------------------------------------------------
 # Run all tests
 # ---------------------------------------------------------------------------
 

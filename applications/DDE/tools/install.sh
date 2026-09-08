@@ -277,6 +277,7 @@ install_fpocket() {
 # GitHub releases yet.  Replace with real release URLs once available.
 HYPEX_VERSION="1.0.0"
 HYPEX_URL="PLACEHOLDER://github.com/scion-frontiers/hypex/releases/download/v${HYPEX_VERSION}/hypex_${HYPEX_VERSION}_linux_amd64"
+HYPEX_SHA256="PLACEHOLDER"
 
 install_hypex() {
     local target="${BIN_DIR}/hypex"
@@ -284,9 +285,22 @@ install_hypex() {
         log "hypex already installed at ${target}"
         return 0
     fi
+    if [ "$HYPEX_SHA256" = "PLACEHOLDER" ]; then
+        warn "hypex SHA-256 not yet pinned; skipping verification."
+        warn "Replace PLACEHOLDER with real hash before production use."
+    fi
     log "Downloading hypex ${HYPEX_VERSION}"
     if curl -fsSL -o "$target" "$HYPEX_URL" 2>/dev/null; then
         chmod +x "$target"
+        if [ "$HYPEX_SHA256" != "PLACEHOLDER" ]; then
+            local got
+            got="$(sha256sum "$target" | cut -d' ' -f1)"
+            if [ "$got" != "$HYPEX_SHA256" ]; then
+                warn "hypex checksum mismatch; refusing to install."
+                rm -f "$target"
+                return 1
+            fi
+        fi
         log "hypex installed at ${target}"
     else
         warn "Could not download hypex (network may be unavailable or release"
@@ -301,6 +315,7 @@ install_hypex() {
 # ratings from match ledgers and produces per-epoch standings.
 HYPEX_ELO_VERSION="1.0.0"
 HYPEX_ELO_URL="PLACEHOLDER://github.com/scion-frontiers/hypex/releases/download/v${HYPEX_ELO_VERSION}/elo_${HYPEX_ELO_VERSION}_linux_amd64"
+HYPEX_ELO_SHA256="PLACEHOLDER"
 
 install_elo() {
     local target="${BIN_DIR}/elo"
@@ -308,9 +323,22 @@ install_elo() {
         log "elo already installed at ${target}"
         return 0
     fi
+    if [ "$HYPEX_ELO_SHA256" = "PLACEHOLDER" ]; then
+        warn "elo SHA-256 not yet pinned; skipping verification."
+        warn "Replace PLACEHOLDER with real hash before production use."
+    fi
     log "Downloading elo ${HYPEX_ELO_VERSION}"
     if curl -fsSL -o "$target" "$HYPEX_ELO_URL" 2>/dev/null; then
         chmod +x "$target"
+        if [ "$HYPEX_ELO_SHA256" != "PLACEHOLDER" ]; then
+            local got
+            got="$(sha256sum "$target" | cut -d' ' -f1)"
+            if [ "$got" != "$HYPEX_ELO_SHA256" ]; then
+                warn "elo checksum mismatch; refusing to install."
+                rm -f "$target"
+                return 1
+            fi
+        fi
         log "elo installed at ${target}"
     else
         warn "Could not download elo (network may be unavailable or release"
@@ -326,6 +354,7 @@ install_elo() {
 # assignments that feed ELO pairing and merge recommendations.
 HYPEX_PROX_VERSION="0.1.0"
 HYPEX_PROX_URL="PLACEHOLDER://github.com/scion-frontiers/hypex/releases/download/v${HYPEX_PROX_VERSION}/prox_${HYPEX_PROX_VERSION}_linux_amd64"
+HYPEX_PROX_SHA256="PLACEHOLDER"
 
 install_prox() {
     local target="${BIN_DIR}/prox"
@@ -333,9 +362,22 @@ install_prox() {
         log "prox already installed at ${target}"
         return 0
     fi
+    if [ "$HYPEX_PROX_SHA256" = "PLACEHOLDER" ]; then
+        warn "prox SHA-256 not yet pinned; skipping verification."
+        warn "Replace PLACEHOLDER with real hash before production use."
+    fi
     log "Downloading prox ${HYPEX_PROX_VERSION}"
     if curl -fsSL -o "$target" "$HYPEX_PROX_URL" 2>/dev/null; then
         chmod +x "$target"
+        if [ "$HYPEX_PROX_SHA256" != "PLACEHOLDER" ]; then
+            local got
+            got="$(sha256sum "$target" | cut -d' ' -f1)"
+            if [ "$got" != "$HYPEX_PROX_SHA256" ]; then
+                warn "prox checksum mismatch; refusing to install."
+                rm -f "$target"
+                return 1
+            fi
+        fi
         log "prox installed at ${target}"
     else
         warn "Could not download prox (network may be unavailable or release"

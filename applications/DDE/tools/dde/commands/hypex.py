@@ -40,11 +40,12 @@ from ..common import (
     resolve_artifact,
 )
 from ..core import provenance
-from ..core.errors import ArtifactError, SchemaError
+from ..core.errors import ArtifactError, SchemaError, ThresholdError
 from ..core.output import Emitter
 
 TOOL = "hypex"
 ARTIFACT_CLASS = "hypotheses"
+MAX_INPUT_BYTES = 50 * 1024 * 1024  # 50 MiB per file
 
 
 # ---------------------------------------------------------------------------
@@ -84,7 +85,13 @@ def _walk_json_dir(directory: Path) -> list[tuple[Path, dict]]:
     if not directory.is_dir():
         return results
     for f in sorted(directory.iterdir()):
+        if f.is_symlink():
+            continue  # Do not follow symlinks
         if f.suffix == ".json" and f.is_file():
+            if f.stat().st_size > MAX_INPUT_BYTES:
+                raise ArtifactError(
+                    f"{f.name} exceeds {MAX_INPUT_BYTES // (1024 * 1024)} MiB limit"
+                )
             try:
                 data = _read_json_file(f, f.name)
                 if isinstance(data, dict):
@@ -410,6 +417,8 @@ def _build_hypex_record(
             "base_rating": base_rating,
             "per_hypothesis": ratings_per_h,
         },
+        "pacing": pacing,
+        "progress": progress,
         "hypotheses": hyp_list,
         "integrity": integrity,
         "_schema_validation": schema_validation,
@@ -433,11 +442,16 @@ def _archive_run_dir(run_dir: Path, dest: Path) -> str:
             remedy="pip install zstandard",
         )
 
+    def _safe_filter(tarinfo):
+        if tarinfo.issym() or tarinfo.islnk():
+            return None  # strip symlinks from archive
+        return tarinfo
+
     buf = io.BytesIO()
     cctx = zstd.ZstdCompressor(level=3)
     zst_writer = cctx.stream_writer(buf, closefd=False)
     with tarfile.open(fileobj=zst_writer, mode="w|") as tar:
-        tar.add(str(run_dir), arcname=run_dir.name)
+        tar.add(str(run_dir), arcname=run_dir.name, filter=_safe_filter)
     zst_writer.close()
     compressed = buf.getvalue()
     dest.write_bytes(compressed)
@@ -754,7 +768,7 @@ def analyze(
     gap_cutoff: float | None = None
     try:
         gap_cutoff = thresholds.get("elo_decisive_gap")
-    except Exception:
+    except ThresholdError:
         # UNRESOLVED — leave as None
         pass
 
@@ -953,15 +967,10 @@ def analyze(
             "from the tournament standings.",
         )
 
-    # pacing_uncoordinated — when meta/pacing.json absent, tier != "shared",
-    # or paths disagree
-    pacing_data = None
-    pacing_path = Path(record.get("hypex_run_dir", "")) / "meta" / "pacing.json"
-    if pacing_path.is_file():
-        try:
-            pacing_data = _read_json_file(pacing_path, "pacing")
-        except SchemaError:
-            pass
+    # pacing_uncoordinated — when pacing absent, tier != "shared",
+    # or paths disagree.  Read from the record (persisted at ingest)
+    # instead of from the filesystem — the run dir may be archived.
+    pacing_data = record.get("pacing")
 
     pacing_uncoordinated = False
     if pacing_data is None:
