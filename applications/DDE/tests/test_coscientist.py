@@ -540,6 +540,8 @@ def test_assessment_core_present_in_analysis() -> None:
         assert "source_sha256" in core
         assert isinstance(core["candidates"], list)
         assert len(core["candidates"]) == 2
+        for candidate in core["candidates"]:
+            assert candidate["origin"] == "generated"
     print("  PASS: assessment_core present in analysis")
 
 
@@ -679,6 +681,38 @@ def test_assessment_core_backward_compatible() -> None:
     print("  PASS: assessment_core backward compatible")
 
 
+def test_assessment_core_null_rank_score() -> None:
+    """Ideas without elo_rating / ranking produce rank: null, score: null."""
+    from click.testing import CliRunner
+    from dde.cli import cli
+
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+        record = _make_tournament(n_ideas=1, n_generated=5)
+        # Strip elo_rating and ranking to simulate missing data
+        idea = record["ideas"][0]
+        del idea["elo_rating"]
+        del idea["ranking"]
+        artifact_path = _write_tournament(project, record)
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--project", str(project), "coscientist", "analyze", str(artifact_path)],
+            catch_exceptions=False,
+        )
+        assert result.exit_code == 0
+
+        analysis_path = artifact_path.with_name(
+            artifact_path.name.replace(".tournament.json", ".analysis.json")
+        )
+        analysis = json.loads(analysis_path.read_text(encoding="utf-8"))
+        candidate = analysis["assessment"]["assessment_core"]["candidates"][0]
+        assert candidate["rank"] is None, f"expected rank=null, got {candidate['rank']}"
+        assert candidate["score"] is None, f"expected score=null, got {candidate['score']}"
+    print("  PASS: assessment_core null rank/score for missing elo")
+
+
 # ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
@@ -708,6 +742,7 @@ def main() -> None:
         ("test_assessment_core_strategy_is_coscientist", test_assessment_core_strategy_is_coscientist),
         ("test_assessment_core_basis_is_coscientist_elo", test_assessment_core_basis_is_coscientist_elo),
         ("test_assessment_core_backward_compatible", test_assessment_core_backward_compatible),
+        ("test_assessment_core_null_rank_score", test_assessment_core_null_rank_score),
     ]
 
     passed = 0

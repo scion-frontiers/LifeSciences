@@ -616,7 +616,7 @@ def analyze(
                     if elo is not None
                     else None
                 ),
-                "origin": "co-scientist",
+                "origin": "generated",
             }
         )
     assessment["assessment_core"] = {
