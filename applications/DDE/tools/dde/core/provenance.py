@@ -555,6 +555,13 @@ RELAY_CODES: dict[str, str] = {
         "Treat as a discovery resource for identifying disease-gene associations, "
         "not as a substitute for primary analysis of the underlying data."
     ),
+    "trials.active_competitor_pipeline": (
+        "Report that active Phase 3+ clinical trials exist for this target or "
+        "query. Late-stage clinical development may affect freedom to operate or "
+        "competitive positioning. Name the specific trials, sponsors, and "
+        "indications. Do not treat the presence of competitor trials as evidence "
+        "that the target is validated — a trial is a bet, not a result."
+    ),
 }
 
 

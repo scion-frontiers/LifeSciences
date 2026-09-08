@@ -50,6 +50,7 @@ from .commands.scp import scp
 from .commands.spatialdb import spatialdb
 from .commands.pk import pk
 from .commands.tox import tox
+from .commands.trials import trials
 from .commands.pocket import pocket
 from .commands.screen import screen
 from .commands.run import run
@@ -363,6 +364,7 @@ cli.add_command(screen)
 cli.add_command(spatialdb)
 cli.add_command(similar)
 cli.add_command(tox)
+cli.add_command(trials)
 
 # Must follow every add_command: the walk guards what is registered at
 # the time it runs, so a command added after this line would be missed.

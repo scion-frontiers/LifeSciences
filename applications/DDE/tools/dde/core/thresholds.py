@@ -936,6 +936,22 @@ _declare(
 )
 
 _declare(
+    "trials",
+    "1.0",
+    provenance=(
+        "Clinical trial pipeline classification: Phase 2 is the conventional "
+        "threshold for 'active pipeline' in pharmaceutical competitive intelligence. "
+        "No single-source citation; this reflects standard industry practice for "
+        "distinguishing active development programs from early-stage exploration."
+    ),
+    values={
+        # Minimum phase number (numeric) for a recruiting trial to qualify
+        # as 'active pipeline'. Phase 2 = 2, Phase 3 = 3, etc.
+        "active_pipeline_min_phase": 2,
+    },
+)
+
+_declare(
     "conservation-scores",
     "1.0",
     provenance=(
