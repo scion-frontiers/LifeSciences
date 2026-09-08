@@ -242,6 +242,44 @@ exists but contains no structured recommendation heading. Read
 `eOa.topRankingIdeasSummary` directly from the export for qualitative guidance. Do
 not fall back to ELO ranking alone.
 
+### Parallel mechanism-direction screening
+
+After tournament analysis produces viable candidates (via the recommendation handling
+above) and **before committing to any single target**, dispatch lightweight
+mechanism-direction checks for **all** viable candidates in parallel. Each check is one
+computational work order asking: "Does modulating this target affect the disease pathway
+in the right direction?" This is cheap — roughly one work order per candidate — and
+surfaces portfolio-level signals that serial evaluation misses.
+
+**Portfolio-level assessment.** After the parallel screen completes, evaluate the
+portfolio before target commitment:
+
+- **At least one candidate has a clear mechanism-direction** — proceed with target
+  selection among the clear candidates, applying the recommendation handling rules
+  above. Candidates with unclear mechanism-direction are eliminated from consideration.
+- **Multiple candidates have unclear direction** — flag as portfolio-level risk. Present
+  to the user with options: proceed with the best-available candidate (documenting the
+  directional uncertainty as an accepted risk), pause for experimental data to resolve
+  the ambiguity, or re-tournament with a mechanism-direction filter.
+- **All candidates have unclear direction** — escalate as a potential
+  campaign-termination signal. This pattern may indicate the tournament is generating
+  ideas that are genetically plausible but mechanistically untested — a systematic gap
+  in idea generation, not an individual target problem. Present to the user with the
+  full picture before proceeding.
+
+**Why parallel, not serial.** Serial evaluation — commit to one target, discover
+problems, fall back to next — means each candidate's mechanism-direction problem is
+discovered one at a time. Parallel screening surfaces the portfolio-level pattern ("no
+candidate has a clean directional answer") for the cost of a few lightweight work
+orders, which is far cheaper than discovering it through sequential full-validation
+failures.
+
+**Relationship to per-target enforcement.** This portfolio-level screen complements the
+per-target mechanism-direction pre-commit check in section 4. The portfolio screen
+happens once, early, before target commitment. The section 4 check is ongoing
+enforcement that catches mechanism-direction questions that arise later during the
+validation process. Both are needed.
+
 ---
 
 ## 6. Scientific acceptance
@@ -596,6 +634,10 @@ not binding.
 14. **Escalate "blocked on tooling" within one cohort.** An open question blocked
     on tooling must be escalated, worked around, or explicitly accepted as a risk
     within one cohort. Parking it indefinitely is not an option (section 7).
+15. **Screen all candidates for mechanism-direction before committing to one.**
+    After tournament analysis, dispatch parallel mechanism-direction checks for
+    all viable candidates. Evaluate the portfolio-level result before target
+    commitment (section 5).
 
 ---
 
