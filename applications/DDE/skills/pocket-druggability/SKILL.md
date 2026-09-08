@@ -126,6 +126,26 @@ queries:
   relay fires: absence at the site is the most negative answer the
   site question has.
 
+### Pocket rank vs druggability score
+
+fpocket assigns each detected pocket a rank by its own internal scoring
+function, which weights pocket geometry and physico-chemical properties
+(volume, hydrophobicity, polarity, alpha-sphere density). The
+druggability score (`drug_score`) is a separate continuous metric
+produced by a different model — a logistic regression trained on a
+set of drugged and non-drugged pockets. The two orderings are
+independent: the pocket with the highest drug score is routinely NOT
+rank 1. A pocket at rank 28 of 36 can carry the top drug score
+because fpocket's internal ranking emphasises different features from
+the druggability model.
+
+When reporting results, always state both the pocket rank and the drug
+score (e.g. "pocket 28 of 36, drug_score 0.87"). Do not assume rank 1
+is the druggable pocket, and do not discard high-rank-number pockets
+before checking their drug scores. The `analyze` subcommand already
+selects by drug score, not by rank — but raw fpocket output ordered by
+rank can mislead a reader who scans only the first entry.
+
 ### The conformation problem
 
 This is the core interpretation challenge. The drug score is
@@ -259,6 +279,34 @@ inspect, not as a characterised site.
   spread over what may be several merged surface grooves rather than
   one cavity — the shape of pocket that scores low without the site
   being poor.
+
+### CoM-to-max-sphere distance: reference values
+
+The `centre_of_mass_max_sphere_distance` (the distance from the
+pocket's centre of mass to its most distant alpha sphere) provides a
+sense of pocket compactness, but the number is uninformative without
+a scale. The following reference ranges are drawn from well-known
+drug-bound pockets and are provided for calibration, not as
+thresholds:
+
+| Site class | Typical range | Examples |
+|---|---|---|
+| Compact, enclosed drug-binding sites | ~8–12 Å | HIV-1 protease active site (e.g. PDB 1HHP, ~8–10 Å); CDK2 ATP site (e.g. PDB 1HCK, ~10–12 Å) |
+| Medium-sized, partially solvent-exposed sites | ~12–18 Å | Larger kinase hinge pockets; nuclear receptor ligand-binding domains |
+| Extended surface grooves / merged features | ~20+ Å | PPI interfaces scored as single pockets; elongated allosteric channels |
+
+Values above ~20 Å suggest the alpha spheres span what may be
+several merged surface grooves rather than a single discrete cavity.
+Such pockets often score low on druggability because fpocket's model
+was trained on enclosed, drug-like cavities — the low score reflects
+pocket shape, not necessarily site quality. Conversely, a compact
+pocket in the 8–12 Å range is geometrically consistent with the
+kinds of sites the druggability model was calibrated on.
+
+These ranges are approximate and structure-dependent — they provide
+a sense of scale for the metric, not decision boundaries. As with
+the CDK2 drug-score calibration, the goal is to give the reader an
+interpretive anchor, not a verdict.
 
 ### What this section produces
 
