@@ -18,7 +18,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .errors import SchemaError
+from .errors import Refusal, SchemaError
 
 # ---------------------------------------------------------------------------
 # Concept ID
@@ -154,6 +154,17 @@ def requires_new_revision(old: dict[str, Any], new: dict[str, Any]) -> bool:
     A new revision is required when any key field has changed.
     ``delivery_assumptions`` triggers only when the new value is non-null
     (per design §2.1: "when non-null").
+
+    **Call-site note (2026-09-08):** This function is intentionally not
+    wired into ``validate_concept()`` or ``write_record()`` because no
+    CLI command yet updates an existing concept's key fields in place.
+    ``migrate-concepts`` creates new records from scratch (always r1),
+    and there is no ``dde program update-concept`` command yet.  When
+    such a command is added, it must call ``requires_new_revision()``
+    to decide whether the update needs a new record key (``IC-NNN-rN+1``)
+    or can overwrite the current one.  The function is tested and ready
+    for that wiring; the deferral is an intentional scope boundary, not
+    an oversight.
     """
     for field in KEY_FIELDS:
         old_val = _get_nested(old, field)
@@ -257,6 +268,26 @@ def validate_concept(data: dict[str, Any]) -> list[str]:
             errors.append(
                 f"termination_authority must be 'human', 'program_lead', "
                 f"or null, got {ta!r}"
+            )
+
+    # ---------------------------------------------------------------
+    # Charter-linkage gate (Refusal, not SchemaError).
+    #
+    # A concept in ``"active"`` state must have ``charter_ref`` set.
+    # This is a governance prerequisite, not a data-quality issue:
+    # the record is well-formed but the action is not permitted
+    # without the charter link.  Raise ``Refusal`` (exit 9) so the
+    # caller knows to set ``charter_ref`` and retry — the same
+    # enforcement pattern as the human-approval gate on terminate
+    # decisions (design §1.1, §2.1 "Charter linkage").
+    # ---------------------------------------------------------------
+    if "state" in data and data["state"] == "active":
+        msg = check_charter_linkage(data, "active")
+        if msg is not None:
+            raise Refusal(
+                msg,
+                remedy="set charter_ref to the originating charter decision "
+                "(e.g. 'DEC-001') before writing a concept in 'active' state",
             )
 
     return errors

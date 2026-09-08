@@ -140,3 +140,44 @@ concept available, and the §7 Step 1 worked example round-trip.
 - `skills/program-state-management/SKILL.md` (extended)
 - `templates/science-program-lead/agents.md` (extended)
 - `tests/test_concepts.py` (new)
+
+---
+
+## Post-review fix (2026-09-08): charter-linkage gate wired into real write path
+
+**Finding**: The EM review identified that `check_charter_linkage()` was
+defined but never called from `validate_concept()` — the function
+registered in `controlstore._VALIDATORS["concept"]`. A caller could
+write a concept with `state: "active"` and `charter_ref: null` through
+`write_record()` with no enforcement. Same class of gap as the sibling
+#75 human-approval finding.
+
+**Fix (3 changes)**:
+
+1. **Wired `check_charter_linkage` into `validate_concept()`** with
+   `Refusal` semantics (exit 9). When `data["state"] == "active"` and
+   `charter_ref` is missing/empty, `validate_concept()` now raises
+   `Refusal` directly — not a soft `SchemaError`. This matches the
+   design's intent: a missing charter reference is a governance
+   prerequisite (same class as the human-approval gate on terminate
+   decisions), not a data-quality problem. The `Refusal` propagates
+   naturally through `write_record()` since `controlstore.py` does
+   not catch it.
+
+2. **Documented `requires_new_revision()` deferral.** This function
+   is intentionally not wired into any write path because no CLI
+   command yet updates an existing concept's key fields in place.
+   `migrate-concepts` creates new r1 records from scratch; there is
+   no `dde program update-concept` command yet. The deferral is noted
+   in the function's docstring with the specific wiring point for when
+   such a command is added. This is an intentional scope boundary, not
+   an oversight.
+
+3. **Added 7 through-`write_record()` tests** (72 total, up from 65):
+   - `validate_active_no_charter_refusal`: `validate_concept()` raises `Refusal` for active + no charter
+   - `validate_active_with_charter_ok`: active + charter passes
+   - `validate_draft_no_charter_ok`: draft + no charter passes (gate only on active)
+   - `write_record_active_no_charter_refusal`: **the critical integration test** — real `write_record()` path raises `Refusal` (exit 9), not `SchemaError`
+   - `write_record_active_with_charter_ok`: real path succeeds with charter set
+   - `write_record_active_empty_charter_refusal`: empty string charter raises `Refusal` through real path
+   - `write_record_draft_no_charter_ok`: draft without charter writes successfully

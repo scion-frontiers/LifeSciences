@@ -558,6 +558,107 @@ def test_charter_linkage_not_checked_for_other_states() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Tests: Charter-linkage gate wired into validate_concept (Refusal)
+# ---------------------------------------------------------------------------
+
+def test_validate_concept_active_without_charter_raises_refusal() -> None:
+    """validate_concept() raises Refusal for active state without charter_ref.
+
+    This is the wired-in enforcement, not just the isolated function.
+    """
+    record = _make_minimal_concept(state="active", charter_ref=None)
+    try:
+        validate_concept(record)
+        assert False, "should have raised Refusal"
+    except Refusal as exc:
+        assert "charter_ref" in exc.message
+        assert exc.exit_code == 9
+
+
+def test_validate_concept_active_with_charter_no_refusal() -> None:
+    """Active concept with charter_ref should not raise Refusal."""
+    record = _make_minimal_concept(state="active", charter_ref="DEC-001")
+    errors = validate_concept(record)
+    assert errors == [], f"unexpected errors: {errors}"
+
+
+def test_validate_concept_draft_without_charter_no_refusal() -> None:
+    """Draft concept without charter_ref is fine — gate only applies to active."""
+    record = _make_minimal_concept(state="draft", charter_ref=None)
+    errors = validate_concept(record)
+    assert not any("charter" in e.lower() for e in errors)
+
+
+# ---------------------------------------------------------------------------
+# Tests: Charter-linkage through the REAL write_record() path
+# ---------------------------------------------------------------------------
+
+def test_write_record_active_concept_without_charter_raises_refusal() -> None:
+    """write_record() must raise Refusal for active concept without charter_ref.
+
+    This is the critical integration test: the real, unmodified
+    write_record() -> validate_concept() path must enforce the
+    charter-linkage gate with Refusal (exit 9), not SchemaError.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        ensure_control_dirs(root)
+
+        record = _make_minimal_concept(state="active", charter_ref=None)
+        try:
+            write_record(root, "concept", "IC-001-r1", record)
+            assert False, "should have raised Refusal"
+        except Refusal as exc:
+            assert exc.exit_code == 9
+            assert "charter_ref" in exc.message
+        except SchemaError:
+            assert False, (
+                "got SchemaError instead of Refusal — the charter-linkage "
+                "gate is not wired in with the correct error class"
+            )
+
+
+def test_write_record_active_concept_with_charter_succeeds() -> None:
+    """write_record() succeeds for active concept with charter_ref set."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        ensure_control_dirs(root)
+
+        record = _make_minimal_concept(state="active", charter_ref="DEC-001")
+        path = write_record(root, "concept", "IC-001-r1", record)
+        assert path.is_file()
+
+        read_back = read_record(root, "concept", "IC-001-r1")
+        assert read_back["state"] == "active"
+        assert read_back["charter_ref"] == "DEC-001"
+
+
+def test_write_record_active_concept_empty_charter_raises_refusal() -> None:
+    """Empty-string charter_ref on active concept: Refusal through write_record."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        ensure_control_dirs(root)
+
+        record = _make_minimal_concept(state="active", charter_ref="")
+        try:
+            write_record(root, "concept", "IC-001-r1", record)
+            assert False, "should have raised Refusal"
+        except Refusal as exc:
+            assert exc.exit_code == 9
+
+
+def test_write_record_draft_concept_without_charter_succeeds() -> None:
+    """Draft concept without charter_ref writes successfully — no gate."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        ensure_control_dirs(root)
+
+        record = _make_minimal_concept(state="draft", charter_ref=None)
+        path = write_record(root, "concept", "IC-001-r1", record)
+        assert path.is_file()
+
+
+# ---------------------------------------------------------------------------
 # Tests: Control store registration
 # ---------------------------------------------------------------------------
 
@@ -864,12 +965,23 @@ def main() -> int:
         ("decision_log_refs_no_revision", test_decision_log_refs_change_no_revision),
         ("patient_population_triggers", test_patient_population_change_triggers_revision),
 
-        # Charter-linkage gate
+        # Charter-linkage gate (isolated function)
         ("charter_blocks_activation", test_charter_linkage_blocks_activation),
         ("charter_empty_blocks", test_charter_linkage_empty_string_blocks),
         ("charter_whitespace_blocks", test_charter_linkage_whitespace_blocks),
         ("charter_set_allows", test_charter_linkage_set_allows_activation),
         ("charter_other_states_ok", test_charter_linkage_not_checked_for_other_states),
+
+        # Charter-linkage wired into validate_concept (Refusal)
+        ("validate_active_no_charter_refusal", test_validate_concept_active_without_charter_raises_refusal),
+        ("validate_active_with_charter_ok", test_validate_concept_active_with_charter_no_refusal),
+        ("validate_draft_no_charter_ok", test_validate_concept_draft_without_charter_no_refusal),
+
+        # Charter-linkage through real write_record() path
+        ("write_record_active_no_charter_refusal", test_write_record_active_concept_without_charter_raises_refusal),
+        ("write_record_active_with_charter_ok", test_write_record_active_concept_with_charter_succeeds),
+        ("write_record_active_empty_charter_refusal", test_write_record_active_concept_empty_charter_raises_refusal),
+        ("write_record_draft_no_charter_ok", test_write_record_draft_concept_without_charter_succeeds),
 
         # Control store registration
         ("concept_in_record_types", test_concept_in_record_types),
