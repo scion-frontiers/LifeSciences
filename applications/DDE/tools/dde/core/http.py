@@ -8,15 +8,19 @@ Error bodies are returned, not just codes — an agent can act on
 
 Pacing state is persisted to disk with ``flock(2)`` so that the
 minimum interval between requests to a given host is honoured across
-CLI invocations (not only within a single process).  Cross-container
-pacing, where each container has its own filesystem, is NOT covered —
-see ``dde-plan.md`` section 721 for the cross-container lease broker
-design.
+CLI invocations (not only within a single process).  When a shared
+filesystem volume is available (``/scion-volumes/scratchpad/pace`` or
+an explicit ``DDE_PACE_DIR``), cross-container coordination is active
+and multiple agents on the same host observe the per-host interval.
+When falling back to container-local pacing (``~/.cache/dde/pace``),
+cross-container coordination is NOT covered — each container enforces
+the interval independently.
 """
 
 from __future__ import annotations
 
 import fcntl
+import os
 import re
 import time
 from pathlib import Path
@@ -28,6 +32,7 @@ from .errors import (
     EndpointError,
     EndpointUnavailable,
     PhaseContractError,
+    Refusal,
 )
 
 try:  # requests is the one hard HTTP dependency
@@ -47,8 +52,59 @@ USER_AGENT = "dde-cli/1.0 (+https://github.com/scion-frontiers/LifeSciences)"
 
 _RETRY_STATUS = {429, 500, 502, 503, 504}
 
-# Disk directory for cross-invocation pacing state.
-_PACE_DIR = Path.home() / ".cache" / "dde" / "pace"
+def _resolve_pace_dir() -> tuple[Path, str]:
+    """Resolve the pacing directory with a three-tier fallback.
+
+    Returns (path, tier) where tier is one of:
+    - "shared" — cross-container coordination via env var or shared volume
+    - "local" — container-local (~/.cache/dde/pace)
+    - "memory" — in-process only (no disk pacing)
+
+    When ``DDE_PACE_REQUIRE_SHARED=1`` is set, failure to resolve a
+    shared tier raises :class:`Refusal` instead of falling back to
+    container-local.  This is opt-in: single-agent DDE must not regress.
+    """
+    # Tier 1: explicit env var override
+    env_path = os.environ.get("DDE_PACE_DIR", "")
+    if env_path:
+        p = Path(env_path)
+        try:
+            p.mkdir(parents=True, exist_ok=True)
+            return p, "shared"
+        except OSError:
+            pass
+
+    # Tier 2: shared project volume (scion default)
+    shared = Path("/scion-volumes/scratchpad/pace")
+    try:
+        shared.mkdir(parents=True, exist_ok=True)
+        return shared, "shared"
+    except OSError:
+        pass
+
+    # Strict mode: refuse rather than silently downgrade
+    require_shared = os.environ.get("DDE_PACE_REQUIRE_SHARED", "") == "1"
+    if require_shared:
+        raise Refusal(
+            "DDE_PACE_REQUIRE_SHARED is set but no shared pacing path is available",
+            detail="Set DDE_PACE_DIR to a shared path or ensure "
+            "/scion-volumes/scratchpad is mounted",
+            remedy="unset DDE_PACE_REQUIRE_SHARED to allow container-local fallback",
+        )
+
+    # Tier 3: container-local (today's behavior)
+    local = Path.home() / ".cache" / "dde" / "pace"
+    try:
+        local.mkdir(parents=True, exist_ok=True)
+        return local, "local"
+    except OSError:
+        pass
+
+    # Tier 4: no disk pacing possible
+    return local, "memory"
+
+
+_PACE_DIR, _PACE_TIER = _resolve_pace_dir()
 
 # In-process fallback when disk pacing is unavailable.
 _last_call: dict[str, float] = {}
@@ -101,21 +157,23 @@ def _pace(url: str, qps: float) -> None:
     """Enforce per-host request pacing.
 
     Persists pacing state to disk with ``flock(2)``, fixing
-    cross-invocation pacing within one filesystem.  Does NOT fix
-    cross-container pacing when containers have separate filesystems —
-    see ``dde-plan.md`` section 721 for the cross-container lease
-    broker design.
+    cross-invocation pacing within one filesystem.  When the resolved
+    pacing directory lives on a shared volume, cross-container
+    coordination is active.  When falling back to container-local
+    pacing, each container enforces the interval independently.
 
     Falls back to in-process-only pacing if the pace directory cannot
     be created or the lock file cannot be acquired (e.g. read-only
-    filesystem).  This is a mitigation, not a full solution: it
-    covers the common single-container, multi-invocation case but
-    leaves the cross-container gap open.
+    filesystem), or if the resolved tier is ``"memory"`` (no disk
+    pacing was possible at startup).
     """
     if qps <= 0:
         return
     host = urlparse(url).netloc
     interval = 1.0 / qps
+    if _PACE_TIER == "memory":
+        _pace_memory(host, interval)
+        return
     try:
         _pace_disk(host, interval)
     except OSError:
@@ -124,7 +182,6 @@ def _pace(url: str, qps: float) -> None:
 
 def _pace_disk(host: str, interval: float) -> None:
     """Disk-based pacing with flock for cross-invocation coordination."""
-    _PACE_DIR.mkdir(parents=True, exist_ok=True)
     pace_file = _PACE_DIR / host.replace(":", "_")
 
     with open(pace_file, "a+") as f:

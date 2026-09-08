@@ -682,6 +682,33 @@ def _check_thresholds(report: Report) -> None:
             report.add(f"thresholds {tset.tag}", OK, f"{len(tset.values)} declared")
 
 
+def _check_pacing(report: Report) -> None:
+    """Report which HTTP pacing tier is active."""
+    from ..core.http import _PACE_DIR, _PACE_TIER
+
+    if _PACE_TIER == "shared":
+        report.add(
+            "HTTP pacing",
+            OK,
+            f"shared — cross-container coordination active ({_PACE_DIR})",
+            kind=CAPABILITY,
+        )
+    elif _PACE_TIER == "local":
+        report.add(
+            "HTTP pacing",
+            WARN,
+            f"container-local only — multi-agent fan-out will multiply rates ({_PACE_DIR})",
+            kind=CAVEAT,
+        )
+    else:
+        report.add(
+            "HTTP pacing",
+            WARN,
+            "in-memory only — no cross-invocation coordination",
+            kind=CAVEAT,
+        )
+
+
 def _check_gwas_catalog(report: Report) -> None:
     """Probe the GWAS Catalog REST API base URL for reachability.
 
@@ -1223,6 +1250,7 @@ def doctor(state: AppState, as_json: bool, strict: bool) -> None:
     _check_binaries(report)
     _check_credentials(report)
     _check_thresholds(report)
+    _check_pacing(report)
     _check_gwas_catalog(report)
     _check_disignatlas(report)
     _check_askcos(report)

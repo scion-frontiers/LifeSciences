@@ -1,8 +1,8 @@
-"""Regression tests for core/http.py pacing functions (#59).
+"""Regression tests for core/http.py pacing functions (#59, #68).
 
 Covers cross-invocation disk pacing, backward clock-jump capping,
 corrupted pace file recovery, OSError fallback to in-memory pacing,
-and in-memory pacing behaviour.
+in-memory pacing behaviour, and pacing tier resolution.
 """
 
 from __future__ import annotations
@@ -19,7 +19,13 @@ from unittest.mock import MagicMock, patch
 # installed in the test environment.
 with patch.dict("sys.modules", {"requests": MagicMock(), "click": MagicMock()}):
     from dde.core import http
-    from dde.core.http import _pace, _pace_disk, _pace_memory
+    from dde.core.errors import Refusal
+    from dde.core.http import (
+        _pace,
+        _pace_disk,
+        _pace_memory,
+        _resolve_pace_dir,
+    )
 
 
 class TestPaceDisk(unittest.TestCase):
@@ -169,6 +175,90 @@ class TestPaceFallback(unittest.TestCase):
             _pace("https://example.com", qps=0)
             mock_disk.assert_not_called()
             mock_mem.assert_not_called()
+
+
+class TestResolvePaceDir(unittest.TestCase):
+    """Tests for ``_resolve_pace_dir`` — the three-tier fallback (#68)."""
+
+    # ------------------------------------------------------------------
+    # 7. DDE_PACE_DIR env var → shared tier
+    # ------------------------------------------------------------------
+    def test_resolve_pace_dir_env_var(self):
+        """When DDE_PACE_DIR is set to a valid path, resolve to shared tier."""
+        tmpdir = tempfile.mkdtemp(prefix="dde_pace_env_")
+        try:
+            with patch.dict(os.environ, {"DDE_PACE_DIR": tmpdir}):
+                path, tier = _resolve_pace_dir()
+            self.assertEqual(tier, "shared")
+            self.assertEqual(path, Path(tmpdir))
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+    # ------------------------------------------------------------------
+    # 8. No env var, no shared volume → local tier
+    # ------------------------------------------------------------------
+    def test_resolve_pace_dir_fallback_to_local(self):
+        """With no env var and no shared volume, resolve to local tier."""
+        env_clean = os.environ.copy()
+        env_clean.pop("DDE_PACE_DIR", None)
+        env_clean.pop("DDE_PACE_REQUIRE_SHARED", None)
+
+        original_mkdir = Path.mkdir
+
+        def _selective_mkdir(self_path, *args, **kwargs):
+            # Fail only for the shared volume path
+            if str(self_path).startswith("/scion-volumes"):
+                raise OSError("no mount")
+            return original_mkdir(self_path, *args, **kwargs)
+
+        with patch.dict(os.environ, env_clean, clear=True):
+            with patch.object(Path, "mkdir", _selective_mkdir):
+                path, tier = _resolve_pace_dir()
+        self.assertEqual(tier, "local")
+        self.assertEqual(path, Path.home() / ".cache" / "dde" / "pace")
+
+    # ------------------------------------------------------------------
+    # 9. _PACE_TIER is importable and valid
+    # ------------------------------------------------------------------
+    def test_pace_tier_exposed(self):
+        """``_PACE_TIER`` is importable and is a valid tier string."""
+        from dde.core.http import _PACE_TIER
+
+        self.assertIn(_PACE_TIER, {"shared", "local", "memory"})
+
+    # ------------------------------------------------------------------
+    # 10. DDE_PACE_REQUIRE_SHARED raises when shared unavailable
+    # ------------------------------------------------------------------
+    def test_resolve_pace_dir_require_shared_raises(self):
+        """When DDE_PACE_REQUIRE_SHARED=1 and no shared path is available,
+        _resolve_pace_dir raises Refusal."""
+        env_clean = os.environ.copy()
+        env_clean.pop("DDE_PACE_DIR", None)
+        env_clean["DDE_PACE_REQUIRE_SHARED"] = "1"
+
+        def _always_fail(self_path, *args, **kwargs):
+            raise OSError("no mount")
+
+        with patch.dict(os.environ, env_clean, clear=True):
+            with patch.object(Path, "mkdir", _always_fail):
+                with self.assertRaises(Refusal):
+                    _resolve_pace_dir()
+
+    # ------------------------------------------------------------------
+    # 11. Memory tier skips disk pacing
+    # ------------------------------------------------------------------
+    def test_pace_memory_tier_skips_disk(self):
+        """When _PACE_TIER is 'memory', _pace goes straight to _pace_memory."""
+        orig_tier = http._PACE_TIER
+        try:
+            http._PACE_TIER = "memory"
+            with patch.object(http, "_pace_disk") as mock_disk, \
+                 patch.object(http, "_pace_memory") as mock_mem:
+                _pace("https://example.com/foo", qps=1.0)
+                mock_disk.assert_not_called()
+                mock_mem.assert_called_once()
+        finally:
+            http._PACE_TIER = orig_tier
 
 
 if __name__ == "__main__":
