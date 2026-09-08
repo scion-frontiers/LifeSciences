@@ -248,14 +248,15 @@ After tournament analysis produces viable candidates (via the recommendation han
 above) and **before committing to any single target**, dispatch lightweight
 mechanism-direction checks for **all** viable candidates in parallel. Each check is one
 computational work order asking: "Does modulating this target affect the disease pathway
-in the intended direction?" This is cheap — roughly one work order per candidate — and
+in the right direction?" This is cheap — roughly one work order per candidate — and
 surfaces portfolio-level signals that serial evaluation misses.
 
 **Portfolio-level assessment.** After the parallel screen completes, evaluate the
 portfolio before target commitment:
 
-- **One candidate has a clear mechanism-direction** — commit to that candidate. Proceed
-  with target selection.
+- **At least one candidate has a clear mechanism-direction** — proceed with target
+  selection among the clear candidates, applying the recommendation handling rules
+  above. Candidates with unclear mechanism-direction are eliminated from consideration.
 - **Multiple candidates have unclear direction** — flag as portfolio-level risk. Present
   to the user with options: proceed with the best-available candidate (documenting the
   directional uncertainty as an accepted risk), pause for experimental data to resolve
