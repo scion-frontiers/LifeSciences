@@ -49,6 +49,7 @@ HOST_QPS: dict[str, float] = {
     "www.proteinatlas.org": 1.0,            # expression/hpa=1
     "gtexportal.org": 1.0,                  # gtex=1
     "api.cellxgene.cziscience.com": 5.0,    # cellxgene=5
+    "www.cbioportal.org": 5.0,              # cbioportal=5
     "api.brain-map.org": 5.0,               # allen=5
     # ── Genetics ─────────────────────────────────────────────────────
     "gnomad.broadinstitute.org": 0.35,      # genetics=0.35

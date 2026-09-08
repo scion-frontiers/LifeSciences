@@ -591,6 +591,15 @@ RELAY_CODES: dict[str, str] = {
         "Results were capped at the requested maximum. Additional matching "
         "preprints may exist."
     ),
+    # --- cBioPortal ---
+    "cbioportal.no_results": (
+        "The cBioPortal search returned no results. Consider broadening "
+        "the query or checking alternative cancer genomics databases."
+    ),
+    "cbioportal.query_truncated": (
+        "Results were capped at the requested maximum. Additional matching "
+        "studies may exist."
+    ),
     # --- hypothesis adoption ---
     "hypothesis.adopted_not_generated": (
         "The hypothesis set was attested by a human, not retrieved by a "

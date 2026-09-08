@@ -247,3 +247,21 @@ The same interpretation contract from `dde pubmed` (section 4) applies:
 results are a keyword-based sample, not a comprehensive survey. The
 `search_not_exhaustive` relay must be satisfied. The retrieval-vs-total
 gap applies here as well — `--max-results` caps the retrieval.
+
+---
+
+## 7. Related genomics commands
+
+For cancer genomics data, use `dde cbioportal search` and
+`dde cbioportal analyze`. cBioPortal aggregates genomic data from
+large-scale cancer studies (TCGA, AACR GENIE, institutional cohorts).
+Artifacts land under `raw/expression/`.
+
+| Question | Run | Writes to |
+|---|---|---|
+| What cancer genomics studies match a query? | `dde cbioportal search <QUERY> [--cancer-type T] [--study S] [--max-results N]` | `raw/expression/<slug>.cbioportal-search.json`<br>`raw/expression/<slug>.cbioportal.meta.json` |
+| What do the cBioPortal results show? | `dde cbioportal analyze <ARTIFACT>` | `raw/expression/<slug>.cbioportal-search.analysis.json` |
+
+cBioPortal is a cancer genomics resource, not a literature database.
+Results are study-level metadata (study ID, name, cancer type, sample
+count), not mutation data or expression profiles.
