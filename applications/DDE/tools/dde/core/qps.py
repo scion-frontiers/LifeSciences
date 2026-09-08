@@ -65,6 +65,8 @@ HOST_QPS: dict[str, float] = {
     "www.spatialomics.org": 2.0,            # spatialdb=2
     # ── Citation verification ───────────────────────────────────────
     "api.crossref.org": 2.0,                # cite/crossref=2
+    # ── Preprint servers ────────────────────────────────────────────
+    "export.arxiv.org": 0.333,              # preprint/arxiv; politeness minimum
     # ── Other ────────────────────────────────────────────────────────
     "www.inbirg.com": 2.0,                  # disignatlas=2
     "patents.google.com": 0.5,              # patent=0.5

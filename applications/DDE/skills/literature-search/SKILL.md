@@ -61,9 +61,19 @@ topic. Entry points include:
 |---|---|---|
 | What has been published on this topic? | `dde pubmed search <QUERY> [--max-results N] [--sort relevance\|date]` | `raw/literature/<slug>.esearch.json`<br>`raw/literature/<slug>.efetch.xml`<br>`raw/literature/<slug>.pubmed-search.json`<br>`raw/literature/<slug>.meta.json` |
 | What does the result set look like? | `dde pubmed analyze <QUERY>` | `raw/literature/<slug>.pubmed-search.analysis.json` |
+| Find preprints on a topic | `dde preprint search --source arxiv <QUERY>` | `raw/literature/<slug>.preprint-search.json` |
 
 Run `search` before `analyze`. `analyze` reads from disk and produces
 summary statistics without network access.
+
+### When to prefer preprint over pubmed
+
+Use `dde preprint search --source arxiv` when looking for recent,
+not-yet-peer-reviewed work — preprints appear on arXiv days after
+submission, whereas PubMed indexes peer-reviewed publications which
+may lag months behind. Use `dde pubmed search` when looking for
+peer-reviewed literature with MeSH indexing, journal provenance, and
+the quality signal that peer review provides.
 
 The `<slug>` is derived from the query string (filesystem-safe,
 lowercase, max 80 characters). The `.pubmed-search.json` is the

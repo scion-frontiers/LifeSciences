@@ -583,6 +583,14 @@ RELAY_CODES: dict[str, str] = {
         "State that references were recovered by pattern match. A reference "
         "the extractor missed is not in the manifest and was not checked."
     ),
+    "preprint.no_results": (
+        "The preprint search returned no results. Consider broadening the "
+        "query or checking alternative sources."
+    ),
+    "preprint.query_truncated": (
+        "Results were capped at the requested maximum. Additional matching "
+        "preprints may exist."
+    ),
 }
 
 
