@@ -19,7 +19,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from .errors import ProjectRootError
+from .errors import ProjectRootError, SchemaError
 
 # Marker placed at the root of the dde *source repo*. Its presence
 # means "this directory is the toolchain, not a drug program".
@@ -44,13 +44,16 @@ ARTIFACT_DIRS: dict[str, str] = {
     "genomics": "raw/genomics",
     "gtex": "raw/gtex",
     "hypotheses": "raw/hypotheses",
+    "ip": "raw/ip",
     "literature": "raw/literature",
     "manufacturing": "raw/manufacturing",
     "mmp": "raw/mmp",
     "mpo": "raw/mpo",
+    "pipeline": "raw/pipeline",
     "pk": "raw/pk",
     "pocket": "raw/pocket",
     "regulatory": "raw/regulatory",
+    "retrosynthesis": "raw/retrosynthesis",
     "safety": "raw/safety",
     "sar": "raw/sar",
     "screening": "raw/screening",
@@ -59,6 +62,36 @@ ARTIFACT_DIRS: dict[str, str] = {
     "tox": "raw/tox",
     "transcriptomics": "raw/transcriptomics",
 }
+
+
+def normalize_artifact_class(artifact_class: str) -> str:
+    """Strip a leading ``dde.`` prefix from an artifact class name.
+
+    Work orders use prefixed names (e.g. ``dde.genetics``); ARTIFACT_DIRS
+    uses unprefixed names (``genetics``).  This normalizer is the single
+    place that mapping lives — every lookup site must call it first.
+    """
+    if artifact_class.startswith("dde."):
+        return artifact_class[4:]
+    return artifact_class
+
+
+def resolve_artifact_subdir(artifact_class: str) -> str:
+    """Look up the relative directory for *artifact_class* in ARTIFACT_DIRS.
+
+    Applies ``dde.*`` prefix normalization before lookup.  Raises
+    :class:`SchemaError` if the (normalized) class is not registered —
+    an unknown class must never silently return ``None``.
+    """
+    normalized = normalize_artifact_class(artifact_class)
+    subdir = ARTIFACT_DIRS.get(normalized)
+    if subdir is None:
+        raise SchemaError(
+            f"unknown artifact class: {artifact_class!r}",
+            detail=f"known classes: {', '.join(sorted(ARTIFACT_DIRS))}",
+            remedy="this is an internal registration bug — add the class to ARTIFACT_DIRS in context.py",
+        )
+    return subdir
 
 
 @dataclass(frozen=True)
@@ -71,6 +104,9 @@ class ProjectContext:
     def artifact_dir(self, artifact_class: str, override: str | os.PathLike | None = None) -> Path:
         """Return (and create) the output directory for an artifact class.
 
+        ``dde.*`` prefix is normalized before lookup — work orders use
+        prefixed names, ARTIFACT_DIRS uses unprefixed names.
+
         `override` corresponds to a subcommand's --out flag. A relative
         override resolves against the project root, never against CWD.
         """
@@ -78,13 +114,7 @@ class ProjectContext:
             path = Path(override)
             target = path if path.is_absolute() else self.root / path
         else:
-            try:
-                rel = ARTIFACT_DIRS[artifact_class]
-            except KeyError:
-                raise ProjectRootError(
-                    f"unknown artifact class {artifact_class!r}",
-                    detail=f"known classes: {', '.join(sorted(ARTIFACT_DIRS))}",
-                )
+            rel = resolve_artifact_subdir(artifact_class)
             target = self.root / rel
         target.mkdir(parents=True, exist_ok=True)
         return target

@@ -32,7 +32,7 @@ from ..common import (
     pass_state,
 )
 from ..core import controlstore
-from ..core.context import ARTIFACT_DIRS
+from ..core.context import ARTIFACT_DIRS, normalize_artifact_class
 from ..core.controlstore import normalize_deliverables
 from ..core.env import CLI_VERSION
 from ..core.errors import ArtifactError, UsageError
@@ -229,7 +229,8 @@ def _collect_artifact_classes(
 
     result: list[dict[str, Any]] = []
     for ac_name in sorted(class_to_wos):
-        rel_dir = ARTIFACT_DIRS.get(ac_name)
+        normalized = normalize_artifact_class(ac_name)
+        rel_dir = ARTIFACT_DIRS.get(normalized)
         if rel_dir is None:
             # Unknown artifact class — skip rather than using unsanitized fallback
             continue
@@ -506,11 +507,12 @@ def _validate_links(
         layer_0_classes = deliverables.get("layer_0_classes", [])
         if isinstance(layer_0_classes, list):
             for ac in sorted(layer_0_classes):
-                rel_dir = ARTIFACT_DIRS.get(ac)
+                normalized = normalize_artifact_class(ac)
+                rel_dir = ARTIFACT_DIRS.get(normalized)
                 if rel_dir is None:
                     issues.append({
                         "artifact_class": ac,
-                        "issue": f"unknown artifact class: {ac}",
+                        "issue": f"unknown artifact class: {ac!r}",
                     })
                     continue
                 art_dir = project_root / rel_dir

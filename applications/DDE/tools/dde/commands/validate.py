@@ -27,7 +27,7 @@ from ..common import (
     pass_state,
 )
 from ..core import controlstore
-from ..core.context import ARTIFACT_DIRS
+from ..core.context import ARTIFACT_DIRS, normalize_artifact_class
 from ..core.controlstore import normalize_deliverables
 from ..core.env import CLI_VERSION
 from ..core.errors import ArtifactError, Refusal, SchemaError
@@ -124,6 +124,10 @@ def _find_layer0_artifacts(
 ) -> list[Path]:
     """Find artifact files in an ARTIFACT_DIRS directory.
 
+    Normalizes ``dde.*`` prefix before lookup.  Returns an empty list
+    when the directory does not exist *or* the class is unknown (callers
+    distinguish via ``ARTIFACT_DIRS.get``).
+
     Excludes sidecar and analysis files — those are metadata about
     artifacts, not artifacts themselves.
 
@@ -132,7 +136,8 @@ def _find_layer0_artifacts(
     (e.g. ``raw/structures/evil.pdb → /etc/shadow``) is silently
     skipped — ``sha256_file`` must never read outside the project.
     """
-    rel_dir = ARTIFACT_DIRS.get(artifact_class)
+    normalized = normalize_artifact_class(artifact_class)
+    rel_dir = ARTIFACT_DIRS.get(normalized)
     if rel_dir is None:
         return []
     art_dir = project_root / rel_dir
@@ -476,8 +481,13 @@ def _check_analysis_citations(
         }
 
     for artifact_class in layer_0_classes:
-        rel_dir = ARTIFACT_DIRS.get(artifact_class)
+        normalized = normalize_artifact_class(artifact_class)
+        rel_dir = ARTIFACT_DIRS.get(normalized)
         if rel_dir is None:
+            issues.append({
+                "file": f"(artifact class {artifact_class!r})",
+                "issue": f"unknown artifact class: {artifact_class!r}",
+            })
             continue
         art_dir = project_root / rel_dir
         if not art_dir.is_dir():
@@ -571,7 +581,8 @@ def _check_relay_coverage(
     # Collect all mandatory relay codes from .meta.json and .analysis.json
     relay_codes: set[str] = set()
     for artifact_class in layer_0_classes:
-        rel_dir = ARTIFACT_DIRS.get(artifact_class)
+        normalized = normalize_artifact_class(artifact_class)
+        rel_dir = ARTIFACT_DIRS.get(normalized)
         if rel_dir is None:
             continue
         art_dir = project_root / rel_dir
