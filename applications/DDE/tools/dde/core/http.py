@@ -5,11 +5,20 @@ prose (docs/tool-design-guidance.md §8).
 
 Error bodies are returned, not just codes — an agent can act on
 "429, retry after 300s"; it cannot act on "request failed".
+
+Pacing state is persisted to disk with ``flock(2)`` so that the
+minimum interval between requests to a given host is honoured across
+CLI invocations (not only within a single process).  Cross-container
+pacing, where each container has its own filesystem, is NOT covered —
+see ``dde-plan.md`` section 721 for the cross-container lease broker
+design.
 """
 
 from __future__ import annotations
 
+import fcntl
 import time
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
@@ -33,9 +42,14 @@ DEFAULT_MAX_RESPONSE_BYTES = 100 * 1024 * 1024  # 100 MB
 # because Layer 2 checks ``total > 0`` after the first chunk.
 DEFAULT_CHUNK_SIZE = 8192
 
+USER_AGENT = "dde-cli/1.0 (+https://github.com/scion-frontiers/LifeSciences)"
+
 _RETRY_STATUS = {429, 500, 502, 503, 504}
 
-# Last-request timestamp per host, for polite pacing.
+# Disk directory for cross-invocation pacing state.
+_PACE_DIR = Path.home() / ".cache" / "dde" / "pace"
+
+# In-process fallback when disk pacing is unavailable.
 _last_call: dict[str, float] = {}
 
 
@@ -66,10 +80,54 @@ def network_forbidden() -> str | None:
 
 
 def _pace(url: str, qps: float) -> None:
+    """Enforce per-host request pacing.
+
+    Persists pacing state to disk with ``flock(2)``, fixing
+    cross-invocation pacing within one filesystem.  Does NOT fix
+    cross-container pacing when containers have separate filesystems —
+    see ``dde-plan.md`` section 721 for the cross-container lease
+    broker design.
+
+    Falls back to in-process-only pacing if the pace directory cannot
+    be created or the lock file cannot be acquired (e.g. read-only
+    filesystem).  This is a mitigation, not a full solution: it
+    covers the common single-container, multi-invocation case but
+    leaves the cross-container gap open.
+    """
     if qps <= 0:
         return
     host = urlparse(url).netloc
     interval = 1.0 / qps
+    try:
+        _pace_disk(host, interval)
+    except OSError:
+        _pace_memory(host, interval)
+
+
+def _pace_disk(host: str, interval: float) -> None:
+    """Disk-based pacing with flock for cross-invocation coordination."""
+    _PACE_DIR.mkdir(parents=True, exist_ok=True)
+    pace_file = _PACE_DIR / host.replace(":", "_")
+
+    with open(pace_file, "a+") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            f.seek(0)
+            content = f.read().strip()
+            previous = float(content) if content else 0.0
+            now = time.time()
+            wait = interval - (now - previous)
+            if wait > 0:
+                time.sleep(wait)
+            f.seek(0)
+            f.truncate()
+            f.write(str(time.time()))
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+
+def _pace_memory(host: str, interval: float) -> None:
+    """In-process-only pacing fallback when disk is unavailable."""
     previous = _last_call.get(host)
     now = time.monotonic()
     if previous is not None:
@@ -134,6 +192,11 @@ def request(
     last_detail = ""
     last_status: int | None = None
     kwargs["stream"] = True
+
+    # Inject default User-Agent unless the caller supplied one.
+    headers = kwargs.pop("headers", {})
+    headers.setdefault("User-Agent", USER_AGENT)
+    kwargs["headers"] = headers
 
     for attempt in range(1, max_attempts + 1):
         _pace(url, qps)

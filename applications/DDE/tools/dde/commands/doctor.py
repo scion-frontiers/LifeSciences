@@ -607,6 +607,24 @@ def _check_credentials(report: Report) -> None:
                 kind=CAPABILITY,
             )
 
+    # --- NCBI_API_KEY: env var presence only ---
+    if os.environ.get("NCBI_API_KEY"):
+        report.add(
+            "credential NCBI_API_KEY",
+            OK,
+            "present (NCBI E-utilities QPS lifted from 3 to 10)",
+        )
+    else:
+        report.add(
+            "credential NCBI_API_KEY",
+            WARN,
+            "not set — NCBI E-utilities queries are limited to 3 QPS; "
+            "with the key the limit rises to 10",
+            "set NCBI_API_KEY (https://ncbiinsights.ncbi.nlm.nih.gov"
+            "/2017/11/02/new-api-keys-for-the-e-utilities/)",
+            kind=HOUSEKEEPING,
+        )
+
     # --- GCP credentials: try ADC resolution ---
     if os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
         report.add(
