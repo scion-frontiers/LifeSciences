@@ -1,0 +1,426 @@
+"""`dde preprint` -- preprint search across preprint servers.
+
+Searches preprint repositories (currently arXiv) for papers matching a
+query.  Preprints are not peer-reviewed; use this when looking for
+recent, not-yet-peer-reviewed work.  For peer-reviewed literature, use
+`dde pubmed`.
+
+Two phases:
+
+  search   queries a preprint server and writes structured results to
+           Layer 0 with a sidecar.
+  analyze  reads those results and produces a summary analysis: total
+           results, source breakdown. No network.
+
+The `--source` flag selects the preprint server.  Only `arxiv` is
+supported in this release; other sources (biorxiv, medrxiv) will be
+added later.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
+from typing import Any
+from urllib.parse import quote_plus
+
+import click
+
+from ..common import (
+    AppState,
+    emitter,
+    from_option,
+    out_option,
+    output_options,
+    pass_state,
+)
+from ..core import http, provenance
+from ..core.errors import ArtifactError, SchemaError, UsageError
+from ..core.qps import qps_for_host
+
+TOOL = "preprint"
+ARTIFACT_CLASS = "literature"  # same as pubmed/litref
+
+ARXIV_API_BASE = "https://export.arxiv.org/api/query"
+
+# Atom/XML namespaces used by the arXiv API
+ATOM_NS = "http://www.w3.org/2005/Atom"
+ARXIV_NS = "http://arxiv.org/schemas/atom"
+
+VALID_SOURCES = ("arxiv",)
+
+
+def _slugify(query: str) -> str:
+    """Derive a filesystem-safe slug from a search query string."""
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "-", query).strip("-").lower()
+    return slug[:80] or "preprint-search"
+
+
+def _parse_arxiv_entries(xml_bytes: bytes) -> tuple[list[dict[str, Any]], int]:
+    """Parse arXiv Atom XML response into structured paper records.
+
+    Returns (results_list, total_results).
+    """
+    try:
+        root = ET.fromstring(xml_bytes)
+    except ET.ParseError as exc:
+        raise SchemaError("arXiv API response is not valid XML", detail=str(exc))
+
+    # Total results from opensearch namespace
+    total_results = 0
+    opensearch_ns = "http://a9.com/-/spec/opensearch/1.1/"
+    total_el = root.find(f"{{{opensearch_ns}}}totalResults")
+    if total_el is not None and total_el.text:
+        try:
+            total_results = int(total_el.text)
+        except ValueError:
+            pass
+
+    results: list[dict[str, Any]] = []
+
+    for entry in root.findall(f"{{{ATOM_NS}}}entry"):
+        # arXiv ID — extract from the id URL
+        id_el = entry.find(f"{{{ATOM_NS}}}id")
+        if id_el is None or not id_el.text:
+            continue
+        raw_id = id_el.text.strip()
+        # Extract the arXiv ID from URLs like http://arxiv.org/abs/2301.12345v1
+        arxiv_id = raw_id.rsplit("/abs/", 1)[-1] if "/abs/" in raw_id else raw_id
+        # Strip version suffix for the canonical ID
+        arxiv_id_base = re.sub(r"v\d+$", "", arxiv_id)
+
+        # Title
+        title_el = entry.find(f"{{{ATOM_NS}}}title")
+        title = title_el.text.strip() if title_el is not None and title_el.text else None
+        # Clean up whitespace in title
+        if title:
+            title = re.sub(r"\s+", " ", title)
+
+        # Authors
+        authors: list[str] = []
+        for author_el in entry.findall(f"{{{ATOM_NS}}}author"):
+            name_el = author_el.find(f"{{{ATOM_NS}}}name")
+            if name_el is not None and name_el.text:
+                authors.append(name_el.text.strip())
+
+        # Abstract/summary
+        summary_el = entry.find(f"{{{ATOM_NS}}}summary")
+        abstract = None
+        if summary_el is not None and summary_el.text:
+            abstract = re.sub(r"\s+", " ", summary_el.text.strip())
+
+        # Published date
+        published_el = entry.find(f"{{{ATOM_NS}}}published")
+        published = published_el.text.strip() if published_el is not None and published_el.text else None
+
+        # Updated date
+        updated_el = entry.find(f"{{{ATOM_NS}}}updated")
+        updated = updated_el.text.strip() if updated_el is not None and updated_el.text else None
+
+        # Categories
+        categories: list[str] = []
+        for cat_el in entry.findall(f"{{{ATOM_NS}}}category"):
+            term = cat_el.get("term")
+            if term:
+                categories.append(term)
+
+        # PDF link
+        pdf_url = None
+        for link_el in entry.findall(f"{{{ATOM_NS}}}link"):
+            if link_el.get("title") == "pdf":
+                pdf_url = link_el.get("href")
+                break
+        if pdf_url is None:
+            # Construct from ID
+            pdf_url = f"https://arxiv.org/pdf/{arxiv_id_base}"
+
+        # DOI (arXiv-specific namespace)
+        doi = None
+        doi_el = entry.find(f"{{{ARXIV_NS}}}doi")
+        if doi_el is not None and doi_el.text:
+            doi = doi_el.text.strip()
+
+        results.append({
+            "id": arxiv_id_base,
+            "title": title,
+            "authors": authors,
+            "abstract": abstract,
+            "published": published,
+            "updated": updated,
+            "categories": categories,
+            "pdf_url": pdf_url,
+            "doi": doi,
+            "source": "arxiv",
+        })
+
+    return results, total_results
+
+
+# ---------------------------------------------------------------------------
+# Commands
+# ---------------------------------------------------------------------------
+
+
+@click.group()
+def preprint() -> None:
+    """Preprint search across preprint servers."""
+
+
+@preprint.command("search")
+@click.argument("query")
+@click.option(
+    "--source",
+    type=click.Choice(VALID_SOURCES, case_sensitive=False),
+    required=True,
+    help="Preprint source to search (currently: arxiv).",
+)
+@click.option(
+    "--max-results",
+    default=20,
+    type=click.IntRange(1, 200),
+    help="Number of results to return (1-200, default 20).",
+)
+@out_option
+@output_options
+@pass_state
+def search_cmd(
+    state: AppState,
+    query: str,
+    source: str,
+    max_results: int,
+    out: str | None,
+    as_json: bool,
+    quiet: bool,
+) -> None:
+    """Search preprints for QUERY and write structured results.
+
+    QUERY is a free-text search string.  --source selects the preprint
+    server (currently only 'arxiv' is supported).
+    """
+    source = source.lower()
+    if source not in VALID_SOURCES:
+        raise UsageError(
+            f"unknown preprint source: {source!r}",
+            remedy=f"valid sources: {', '.join(VALID_SOURCES)}",
+        )
+
+    emit = emitter(as_json, quiet)
+    target_dir = state.project().artifact_dir(ARTIFACT_CLASS, out)
+
+    slug = _slugify(query)
+
+    if source == "arxiv":
+        _search_arxiv(state, emit, target_dir, slug, query, max_results)
+
+
+def _search_arxiv(
+    state: AppState,
+    emit: Any,
+    target_dir: Any,
+    slug: str,
+    query: str,
+    max_results: int,
+) -> None:
+    """Execute arXiv search and write artifacts."""
+    url = (
+        f"{ARXIV_API_BASE}"
+        f"?search_query={quote_plus(query)}"
+        f"&max_results={max_results}"
+        f"&sortBy=relevance"
+        f"&sortOrder=descending"
+    )
+
+    response = http.request(
+        "GET", url,
+        qps=qps_for_host("export.arxiv.org"),
+        timeout=60.0,
+    )
+    xml_bytes = response.content
+
+    # Save verbatim API response
+    raw_path = target_dir / f"{slug}.arxiv-response.xml"
+    raw_path.write_bytes(xml_bytes)
+
+    # Parse the Atom XML
+    results, total_results = _parse_arxiv_entries(xml_bytes)
+
+    # Build structured artifact
+    searched_at = datetime.now(timezone.utc).isoformat()
+    artifact = {
+        "schema": "dde.preprint-search.v1",
+        "source": "arxiv",
+        "query": query,
+        "searched_at": searched_at,
+        "total_results": total_results,
+        "results": results,
+    }
+
+    artifact_path = target_dir / f"{slug}.preprint-search.json"
+    artifact_path.write_text(
+        json.dumps(artifact, indent=2) + "\n", encoding="utf-8"
+    )
+
+    # Sidecar
+    sidecar = provenance.Sidecar(
+        tool=TOOL,
+        subcommand="search",
+        endpoint="arxiv",
+        parameters={
+            "query": query,
+            "max_results": max_results,
+            "source": "arxiv",
+        },
+    )
+    sidecar.note("source", "arXiv (Cornell University)")
+    sidecar.note("licence", "arXiv API Terms of Use")
+    sidecar.note("n_results", str(len(results)))
+    sidecar.note("total_results", str(total_results))
+
+    sidecar.add_output(raw_path)
+    sidecar.add_output(artifact_path)
+
+    # Relay codes — fire conditionally
+    if len(results) == 0:
+        sidecar.warn(
+            f"arXiv search for {query!r} returned no results",
+            code="preprint.no_results",
+        )
+
+    if len(results) >= max_results and total_results > max_results:
+        sidecar.warn(
+            f"arXiv search returned {total_results} total results but only "
+            f"{max_results} were retrieved; additional matching preprints may exist",
+            code="preprint.query_truncated",
+        )
+
+    meta_path = sidecar.write(target_dir / f"{slug}.meta.json")
+
+    # Emit
+    emit.data("query", query)
+    emit.data("source", "arxiv")
+    emit.data("total_results", total_results)
+    emit.data("n_results", len(results))
+    emit.path(raw_path, role="arxiv-response")
+    emit.path(artifact_path, role="artifact")
+    emit.path(meta_path, role="sidecar")
+    emit.line(f"Preprint search (arXiv): {query!r}")
+    emit.line(f"  {total_results} total found, {len(results)} retrieved")
+    if results:
+        for r in results[:5]:
+            emit.line(f"  {r['id']}: {(r.get('title') or '(no title)')[:70]}")
+        if len(results) > 5:
+            emit.line(f"  ... {len(results) - 5} more in the artifact")
+    emit.flush()
+
+
+@preprint.command("analyze")
+@click.argument("artifact")
+@from_option
+@out_option
+@output_options
+@pass_state
+def analyze_cmd(
+    state: AppState,
+    artifact: str,
+    from_dir: str | None,
+    out: str | None,
+    as_json: bool,
+    quiet: bool,
+) -> None:
+    """Summarise stored preprint search results from ARTIFACT. No network.
+
+    Reads what `search` wrote and produces a summary analysis: total
+    results, source breakdown.
+    """
+    emit = emitter(as_json, quiet)
+    source_dir = state.project().artifact_dir(ARTIFACT_CLASS, from_dir)
+    target_dir = state.project().artifact_dir(ARTIFACT_CLASS, out)
+
+    # Locate the structured artifact
+    artifact_path = source_dir / artifact
+    if not artifact_path.is_file():
+        # Try with .preprint-search.json suffix
+        slug = _slugify(artifact)
+        artifact_path = source_dir / f"{slug}.preprint-search.json"
+    if not artifact_path.is_file():
+        raise ArtifactError(
+            f"no preprint search artifact: {artifact} under {source_dir}",
+            remedy="run `dde preprint search --source arxiv <QUERY>` first",
+        )
+
+    data = provenance.read_json(artifact_path, "preprint search artifact")
+    if not isinstance(data, dict) or "results" not in data:
+        raise SchemaError(
+            "preprint search artifact has no results array",
+            detail=f"keys: {list(data.keys()) if isinstance(data, dict) else type(data).__name__}",
+        )
+
+    results = data["results"]
+    total_results = data.get("total_results", 0)
+    query_str = data.get("query", "")
+    source_name = data.get("source", "unknown")
+
+    # Compute metrics
+    source_counts: dict[str, int] = {}
+    for r in results:
+        s = r.get("source", "unknown")
+        source_counts[s] = source_counts.get(s, 0) + 1
+
+    outcome = "results-found" if results else "no-results"
+
+    relays: list[dict[str, str]] = []
+    # No additional relays in analyze — relays fire in search phase
+
+    assessment = {
+        "outcome": outcome,
+        "query": query_str,
+        "source": source_name,
+        "total_results": total_results,
+        "n_retrieved": len(results),
+        "source_breakdown": source_counts,
+    }
+
+    metrics = {
+        "total_results": total_results,
+        "n_retrieved": len(results),
+        "source_breakdown": source_counts,
+    }
+
+    # Locate the meta file written by search for the source reference
+    meta_path = artifact_path.parent / artifact_path.name.replace(
+        ".preprint-search.json", ".meta.json"
+    )
+    source_ref = (
+        state.project().relative(meta_path)
+        if meta_path.is_file()
+        else state.project().relative(artifact_path)
+    )
+
+    analysis_path = provenance.write_analysis(
+        target_dir / artifact_path.name.replace(
+            ".preprint-search.json", ".preprint-search.analysis.json"
+        ),
+        source=source_ref,
+        threshold_set="preprint-search",
+        thresholds_applied={},
+        metrics=metrics,
+        assessment=assessment,
+        mandatory_relays=relays,
+        suppress_warnings=as_json,
+    )
+
+    emit.data("assessment", assessment)
+    emit.data("relays", relays)
+    emit.line(f"Preprint search analysis: {query_str!r}")
+    emit.line(f"  Outcome: {outcome}")
+    emit.line(f"  {total_results} total found, {len(results)} retrieved")
+    if source_counts:
+        emit.line("  Source breakdown:")
+        for s, c in source_counts.items():
+            emit.line(f"    {s}: {c}")
+    for record in relays:
+        emit.line(f"relay {record['code']}: {record['message']}")
+    emit.path(analysis_path, role="analysis")
+    emit.flush()

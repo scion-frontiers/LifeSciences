@@ -1066,6 +1066,19 @@ _declare(
     },
 )
 
+# --- preprint search (default parameters) -----------------------------------
+# Default parameters for preprint search; configurable per program.
+_declare(
+    "preprint-search",
+    "1.0",
+    provenance=(
+        "Default parameters for preprint search; configurable per program."
+    ),
+    values={
+        "max_results_default": 20,
+    },
+)
+
 # Warnings that must reach the report whenever these sets are applied.
 # The skill's interpretation contract names them; the sidecar is the
 # evidence they were emitted (tool-design-guidance §5).

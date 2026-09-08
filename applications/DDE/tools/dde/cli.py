@@ -46,6 +46,7 @@ from .commands.litref import litref
 from .commands.ppi import ppi
 from .commands.pubchem import pubchem
 from .commands.similar import similar
+from .commands.preprint import preprint
 from .commands.pubmed import pubmed
 from .commands.pubmed_bq import pubmed_bq
 from .commands.scp import scp
@@ -338,6 +339,7 @@ cli.add_command(faers)
 cli.add_command(geo)
 cli.add_command(gtex)
 cli.add_command(litref)
+cli.add_command(preprint)
 cli.add_command(pubmed)
 cli.add_command(pubmed_bq)
 cli.add_command(genetics)
