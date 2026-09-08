@@ -3,7 +3,8 @@
 **Program**: [program name]
 **Date**: [date]
 **Decision**: advance | loop | terminate
-**Policy version**: [threshold set citations]
+**Policy version**: [GP-NNN@V — the gate policy version in force for this decision]
+**Snapshot ref**: [SNAP-NNN — the policy freeze snapshot recording the full state at decision time]
 
 ## Nominated Target
 
