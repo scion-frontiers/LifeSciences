@@ -181,6 +181,9 @@ expensive to get wrong. A structural characterization of a target with an invert
 mechanism is wasted work. Always resolve — or explicitly accept the risk of — a
 mechanism-direction question before committing downstream structural or safety work.
 
+See also Rule 16 for the competitive landscape / FTO pre-commit requirement
+before Cohort B characterization.
+
 ### Writing a decision question
 
 The question is the part most often written badly. Test it:
@@ -485,14 +488,15 @@ resources to expensive characterization that becomes valueless if early question
 2. Mechanism-direction check — does modulating this target affect the disease pathway
    in the right direction?
 3. Competitive landscape / FTO screen — is there freedom to operate on this target?
-   Use `dde patent`, `dde trials`, and `dde retro` to answer:
+   Use `dde patent`, `dde trials`, and `dde pubchem` to answer:
    - Are there published inhibitors or modulators of this target?
    - Are there active clinical programs targeting this gene/protein?
    - Are there patent filings covering this target, binding site strategy, or indication?
    - Where is the white space for differentiation?
 
-If any fails: **terminate** the target or **pivot** to exploit identified white space.
-Do not proceed to Cohort B.
+If step 1 or 2 fails: **terminate** the target. If step 3 reveals blocking IP
+with no white space: **terminate**. If white space exists: **pivot** to exploit it.
+Do not proceed to Cohort B until all three pass.
 
 **Cohort B — Characterization** (moderate cost, target-specific):
 4. Structural characterization and druggability assessment
@@ -648,7 +652,7 @@ not binding.
     commitment (section 5).
 16. **Screen for competitive landscape and FTO before structural work.** Before
     committing to Cohort B characterization, verify there is freedom to operate on
-    the target using `dde patent`, `dde trials`, and `dde retro` (section 9).
+    the target using `dde patent`, `dde trials`, and `dde pubchem` (section 9).
 
 ---
 
