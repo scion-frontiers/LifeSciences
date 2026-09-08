@@ -246,6 +246,38 @@ _declare(
     },
 )
 
+# --- hypex tournament -----------------------------------------------------
+# These govern how a hypex tournament result is read, not what is
+# biologically true. Three of six thresholds are UNRESOLVED, which is
+# the honest state.  MarginMultiplier's undocumented 0.75 damping puts
+# hypex ELO on a different scale from Co-Scientist, so elo_decisive_gap
+# must not inherit 50.0 by analogy.
+_declare(
+    "hypex",
+    "1.0",
+    provenance=(
+        "structural defaults for reading a hypex ELO tournament; "
+        "no external source claims these cutoffs. "
+        "elo_decisive_gap, max_suspect_citations and min_safety_score "
+        "are UNRESOLVED — measure the distribution before filling them"
+    ),
+    values={
+        # Below this a pairwise ranking is unsupported.
+        "min_matches": 5,
+        # Below this win rate a hypothesis's rank is not well supported.
+        "min_win_rate": 0.5,
+        # A count of phantom citations.
+        "max_phantom_citations": 0,
+        # Deliberately not 50.0 — MarginMultiplier damping puts hypex
+        # ELO on a different scale than Co-Scientist.
+        "elo_decisive_gap": UNRESOLVED,
+        # No corpus has been measured.
+        "max_suspect_citations": UNRESOLVED,
+        # 1–5 anchors are LLM-reviewer judgements; no basis for cutoff.
+        "min_safety_score": UNRESOLVED,
+    },
+)
+
 # --- AlphaGenome variant effect -------------------------------------------
 # Raw-score magnitude bands are quoted directly from the science-skills
 # interpretation guide (docs/interpretation-guide.md, "Magnitude Rules").

@@ -74,12 +74,7 @@ TARGETS = ("docs", "skills", "templates", "README.md")
 #: The list cannot rot, because an entry that becomes implemented is reported
 #: as an error in its own right. An allowlist nobody is forced to revisit is
 #: how a stale exemption survives a rewrite.
-PLANNED_BUT_UNIMPLEMENTED = {
-    # Track B: hypex sub-team integration (blocked on P7 / #68).
-    # Skills and templates reference `dde hypex ingest` and `dde hypex analyze`
-    # as the planned interface; the commands do not exist yet.
-    "hypex",
-}
+PLANNED_BUT_UNIMPLEMENTED: set[str] = set()
 
 # A placeholder is not a claim about the surface. The ellipsis appears
 # in both spellings — three dots and U+2026 — and matching only the
