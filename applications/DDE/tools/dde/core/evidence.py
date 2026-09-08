@@ -109,7 +109,7 @@ _ENTITY_TYPES = set(_ENTITY_REF_PATTERNS.keys())
 # ---------------------------------------------------------------------------
 
 _ASSESSMENT_REQUIRED_FIELDS = [
-    "id", "concept_ref", "claim", "evidence_status",
+    "schema", "id", "concept_ref", "claim", "evidence_status",
     "execution_outcome", "assessed_at", "assessed_by",
 ]
 
@@ -179,7 +179,7 @@ def validate_assessment(data: dict[str, Any]) -> list[str]:
 # ---------------------------------------------------------------------------
 
 _DECISION_REQUIRED_FIELDS = [
-    "id", "action", "affected_entity", "rationale",
+    "schema", "id", "action", "affected_entity", "rationale",
     "decided_at", "decided_by",
 ]
 
@@ -306,24 +306,31 @@ def validate_decision(
     # Human-approval gate  (design SS1.1, SS2.2 — review finding R1)
     #
     # This is the primary enforcement.  A terminate decision on a
-    # concept whose termination_authority is "human" MUST carry a
-    # populated human_approval.  Missing approval raises Refusal
-    # (exit 9) — not a validation error list.
+    # concept or program MUST carry a populated human_approval when
+    # the termination requires human authorization.
     #
-    # Safe-failure default: when termination_authority cannot be
-    # determined (concept record missing, lookup failed, record type
-    # not yet registered), treat it as "human".  Design principle #4
-    # ("must not enable autonomous program termination") and the
-    # program.yaml default (termination_authority: "human", §4.4.1)
-    # both point to "human" as the safe default.  An unknown
-    # authority must not silently become a permissive one.
+    # Covered entity types:
+    #   - "concept": gated by the concept record's termination_authority
+    #     field, with safe-failure default of "human" when the concept
+    #     cannot be looked up.
+    #   - "program": always requires human approval.  Design principle
+    #     #4 ("must not enable autonomous program termination") and
+    #     program.yaml's human_reserved list (§4.4.1) both name
+    #     program_termination as unconditionally human-reserved.
+    #
+    # Not covered (by design):
+    #   - "series": series termination (deprioritizing a compound
+    #     series) is within the program lead's normal authority and is
+    #     not named in human_reserved.
+    #   - "claim": claim termination (ceasing to pursue a claim) is
+    #     an operational decision, not a program-level gate.
     # ---------------------------------------------------------------
     if action == "terminate" and not errors:
         etype = entity.get("entity_type") if isinstance(entity, dict) else None
         eref = entity.get("entity_ref") if isinstance(entity, dict) else None
 
         if etype == "concept":
-            # Determine termination_authority.
+            # Determine termination_authority from the concept record.
             term_auth = None
 
             # 1. If a concept_loader is provided, look up the concept.
@@ -355,6 +362,27 @@ def validate_decision(
                         "obtain human approval for this termination and populate "
                         "the human_approval field (approver, approved_at, "
                         "approval_method) before retrying"
+                    ),
+                )
+
+        elif etype == "program":
+            # Program termination is unconditionally human-reserved.
+            # Design principle #4: "must not enable autonomous program
+            # termination."  program.yaml human_reserved (§4.4.1)
+            # names "program_termination" explicitly.
+            if approval is None:
+                detail_ref = eref or "(unknown)"
+                raise Refusal(
+                    "cannot terminate program: human approval is required",
+                    detail=(
+                        f"program {detail_ref!r} termination requires human "
+                        "approval per design principle #4 and program.yaml "
+                        "human_reserved policy"
+                    ),
+                    remedy=(
+                        "obtain human approval for this program termination "
+                        "and populate the human_approval field (approver, "
+                        "approved_at, approval_method) before retrying"
                     ),
                 )
 

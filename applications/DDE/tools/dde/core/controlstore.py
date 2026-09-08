@@ -353,6 +353,13 @@ def _default_concept_loader(project_root: Path):
     the validator treats unknown authority as ``"human"`` (safe default).
     """
     def _load(concept_id: str) -> dict[str, Any] | None:
+        # Defense-in-depth: validate concept_id format before touching
+        # the filesystem.  Upstream entity_ref validation should already
+        # block malformed input, but this guard prevents path traversal
+        # from unexpected callers.
+        if not re.match(r"^IC-\d{3,}$", concept_id):
+            return None
+
         # concept records may be stored as IC-NNN.json or IC-NNN-rN.json;
         # try the bare ID first, then scan for the latest revision.
         concepts_dir = project_root / CONTROL_DIR / "concepts"
