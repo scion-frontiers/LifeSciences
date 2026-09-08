@@ -194,12 +194,13 @@ run:
 ├── docking/          # docking results
 ├── assays/           # screening data, dose-response
 ├── compounds/        # computed molecular descriptors
-└── literature/       # co-scientist exports, literature references
+├── literature/       # literature references
+└── hypotheses/       # co-scientist exports, adopted hypothesis sets
 ```
 
 For co-scientist tournament exports specifically:
 
-1. Place the export under `raw/literature/` or the location specified in the
+1. Place the export under `raw/hypotheses/` or the location specified in the
    program directive.
 2. Include this path in the controller's program directive so the science lead
    knows the data exists.
