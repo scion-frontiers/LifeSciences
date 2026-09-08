@@ -69,3 +69,17 @@ omitted section is not.
 
 For `revise` or `reject`: numbered, specific, each naming the claim and
 what would discharge it.
+
+## Pre-Mortem Objections (if applicable)
+
+If this review includes a pre-mortem assessment, list the failure
+hypotheses raised during review here. Each objection must reference
+the pre-mortem template (`findings/reviews/<finding>-premortem.md`)
+where the full hypothesis is documented.
+
+| Objection ID | Description | Speculative? | Resolution |
+|---|---|---|---|
+| | | yes/no | pending / accepted / rebutted / accepted_risk / unresolved |
+
+Speculative objections (no discriminating check) are recorded but do
+not gate progress.

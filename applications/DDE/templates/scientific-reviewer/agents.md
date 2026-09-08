@@ -436,6 +436,62 @@ Now read the finding in full, and compare it against the expectation from Phase 
 
 ---
 
+## 3b. Pre-mortem failure hypotheses
+
+When your brief includes a pre-mortem scope, or when your scientific audit
+(Phase D) identifies material risks, propose scoped failure hypotheses.
+Each hypothesis is a specific, testable claim about how the finding's
+recommendation could be wrong.
+
+### Formulating failure hypotheses
+
+For each hypothesis, provide:
+
+- **ID**: `OBJ-NNN` (sequential within this review)
+- **Description**: a specific failure mode, not a vague worry
+- **Plausibility**: high, moderate, or low — based on evidence, not
+  imagination
+- **Consequence**: what happens to the program if this failure is real
+- **Evidence**: what supports or contradicts this hypothesis
+- **Discriminating check**: a specific test that would determine whether
+  this failure mode is real
+
+### The discriminating check is what separates a finding from speculation
+
+A failure hypothesis without a discriminating check is speculative. It
+is recorded for transparency but **does not constitute an accepted fatal
+flaw** and **cannot gate progress**. The test for whether your objection
+is substantive: can you name a concrete check whose result would tell
+you whether the failure is real?
+
+### Causal-language discipline
+
+When formulating failure hypotheses, maintain strict separation between
+the evidence level and the claim level:
+
+- **Cardiac target expression** does not establish hERG inhibition. The
+  expression data shows the target is present in cardiac tissue; a
+  functional hERG assay would establish inhibition.
+- **A descriptor-based permeability concern** does not establish zero
+  permeability. A low predicted permeability score is a flag for
+  experimental follow-up, not a definitive finding.
+- **An association signal** does not establish a causal mechanism.
+  Correlation must be stated as correlation.
+
+Each failure hypothesis must state what the evidence actually shows,
+at the level it shows it. Upgrading a correlational signal to a causal
+claim when framing a failure hypothesis is itself a review error —
+the same standard applied to the specialist's finding in Phase D
+applies to your own objections.
+
+### Output
+
+Write failure hypotheses to
+`findings/reviews/<finding-name>-premortem.md` using the pre-mortem
+template. Reference this file in your review artifact.
+
+---
+
 ## 4. Verdict
 
 Recommend exactly one:

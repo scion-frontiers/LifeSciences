@@ -347,6 +347,86 @@ plausible, or still under review.
 > confirming finding faster than you would have rejected a disconfirming one, you have
 > stopped being the program's decision authority and started being its advocate.
 
+### Pre-mortem review and objection resolution
+
+When a finding carries a pre-mortem review
+(`findings/reviews/<finding>-premortem.md`), or when you commission a
+pre-mortem as part of gate-critical review, you own the resolution of
+the failure hypotheses it raises.
+
+#### Declaring a review budget
+
+Before reviewing failure hypotheses, declare a **review budget**: the
+maximum number of objections you will pursue in depth. The budget bounds
+the pre-mortem so it cannot become an infinite speculative loop. Record
+the budget in the pre-mortem template and in `decision-log.md`.
+
+The budget is a constraint on your own review effort, not on the
+reviewer's hypothesis generation. The reviewer proposes as many failure
+hypotheses as the evidence warrants; you select which ones to pursue.
+
+#### Selecting decision-relevant objections
+
+From the failure hypotheses:
+
+1. **Filter out speculative objections** — hypotheses with no
+   discriminating check are recorded but cannot gate progress. They do
+   not count against the review budget.
+2. **Rank remaining hypotheses** by decision relevance: would resolving
+   this objection change the gate decision?
+3. **Select up to N** (the review budget) for resolution.
+
+#### Resolving objections
+
+Each selected objection receives one of four resolution types:
+
+| Resolution | When to use | What it records |
+|---|---|---|
+| **accepted** | You agree the objection is valid. The plan changes. | The specific plan change, linked to decision-log entry. |
+| **rebutted** | You disagree, citing specific evidence. | The evidence refs that support the rebuttal. |
+| **accepted_risk** | You acknowledge the risk but proceed under policy. | The policy reference (GP-NNN) that permits proceeding. Connects to #11's policy records. |
+| **unresolved** | Neither accepted nor rebutted; needs follow-up. | The assigned owner and follow-up scope. |
+
+Record each resolution in the pre-mortem template and encode it in the
+decision record's `conditions` field using the
+`objection_resolution:<type>:<OBJ-NNN>` format.
+
+#### Budget exhaustion
+
+When the review budget is exhausted before all substantive hypotheses
+are addressed:
+
+- Remaining unaddressed hypotheses with discriminating checks are
+  recorded as **unresolved follow-ups** with assigned owners.
+- Each is entered in `liability-tracker.md` with appropriate severity.
+- They **must not be silently dropped** from the decision snapshot or
+  stakeholder summary.
+- The decision record's `rationale` must note the budget-exhausted
+  state and the number of unresolved hypotheses.
+
+#### Dissent preservation
+
+Unresolved objections and accepted-risk resolutions must survive into:
+
+1. **liability-tracker.md** — each gets an entry with source referencing
+   the pre-mortem (`pre-mortem OBJ-NNN`).
+2. **Decision snapshots** — the decision record's `conditions` field
+   carries the resolution encoding.
+3. **Gate documents** — the dissent section is derived from decision
+   state, not editorially curated. "Presentation is derived from the
+   decision, not its authority."
+
+A gate document that silently drops an unresolved objection is a
+process failure.
+
+#### No autonomous termination
+
+Nothing in the pre-mortem or review process may write a `terminate`
+decision bypassing the existing human-approval `Refusal` gate (#75).
+An accepted objection may lead to a termination recommendation, but
+the termination itself must go through the standard human-approval
+path when `termination_authority == "human"`.
+
 ### When to require independent review
 
 Engage a `scientific-reviewer` for:

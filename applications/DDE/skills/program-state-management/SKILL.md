@@ -264,3 +264,41 @@ assessment and decision records (`.dde/control/assessments/`,
 N assessment records, M decision records."  A program with no
 assessment or decision records passes vacuously — the coverage line
 makes that visible.
+
+### Pre-mortem dissent preservation checks
+
+When pre-mortem review artifacts exist under
+`findings/reviews/*-premortem.md`, the integrity check additionally
+verifies:
+
+- **Unresolved objections tracked.** Every substantive (non-speculative)
+  failure hypothesis from a pre-mortem that has no resolution (accepted,
+  rebutted, accepted_risk, or unresolved-with-owner) must have a
+  corresponding entry in `liability-tracker.md`.  An unresolved
+  objection that exists in a pre-mortem but not in the liability tracker
+  is a **BLOCKED** finding — it represents dissent that has been
+  silently dropped.
+
+- **Resolution encoding in decision records.** Every objection
+  resolution recorded in a pre-mortem's resolutions section should have
+  a corresponding `objection_resolution:` condition string in the
+  associated decision record's `conditions` field.  A mismatch is a
+  **warning** — the pre-mortem and decision record are out of sync.
+
+- **Speculative hypotheses excluded from gating.** Failure hypotheses
+  with no `discriminating_check` must not appear in any gate-blocking
+  list or critical-severity liability entry.  A speculative hypothesis
+  recorded as a critical liability is a **warning** — it inflates the
+  severity of an untestable concern.
+
+- **Causal-language guard.** Failure hypotheses and liability entries
+  that upgrade correlational/descriptor-level signals to causal claims
+  are flagged as **warnings**.  Known patterns: "establishes hERG
+  inhibition" from expression data alone, "establishes zero
+  permeability" from descriptor-based prediction alone.  This check
+  is pattern-based and non-exhaustive — it catches known
+  problematic phrasings but does not replace scientific judgment.
+
+**Coverage reporting.** Extends the existing coverage line: "Checked
+N pre-mortem reviews, M unresolved objections, K liability-tracker
+cross-references."

@@ -43,6 +43,31 @@ models, where available.]
 before this gate. Each must have a recorded disposition: accepted
 risk, deferred to Stage 2, or blocking.]
 
+## Pre-Mortem Dissent Record
+
+[This section is mandatory when a pre-mortem review was conducted.
+It is derived from the decision record's conditions and the
+pre-mortem review artifacts — not editorially curated.
+"Presentation is derived from the decision, not its authority."
+
+An unresolved objection that exists in the underlying decision
+record or liability tracker MUST appear here. Dropping it in the
+gate-document generation step is a process failure.
+
+Use `generate_gate_dissent_section()` from `core/premortem.py` to
+produce this content from program state, or populate manually from
+the pre-mortem template and decision record conditions.]
+
+### Unresolved Objections
+
+[List each unresolved objection from the pre-mortem review:
+- OBJ-NNN: description, plausibility, consequence, discriminating check]
+
+### Accepted Risks
+
+[List each objection resolved as accepted_risk:
+- OBJ-NNN: rationale, policy reference]
+
 ## Evidence Snapshot
 
 | Finding | Path | Accepted | Reviewer |
