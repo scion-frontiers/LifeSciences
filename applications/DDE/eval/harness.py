@@ -131,6 +131,60 @@ def _place_synthetic_artifacts(
 
 
 # ---------------------------------------------------------------------------
+# Shared work-order transition helper
+# ---------------------------------------------------------------------------
+
+
+def _transition_work_order(
+    project: Path,
+    wo: dict[str, Any],
+    target_state: str,
+    metrics: FixtureMetrics,
+) -> str:
+    """Walk a work order through the state machine to *target_state*.
+
+    Transitions step-by-step from the work order's current state through
+    the standard lifecycle path.  Records each transition in *metrics*.
+    Returns the final state reached (which equals *target_state* on
+    success, or an earlier state if a transition fails).
+
+    Error handling is consistent: illegal transitions are caught and
+    recorded in ``metrics.error_messages`` rather than propagating.
+    """
+    # Standard lifecycle path.  Each tuple is (from, to).
+    lifecycle = [
+        ("proposed", "committed"),
+        ("committed", "queued"),
+        ("queued", "in_progress"),
+        ("in_progress", "submitted"),
+    ]
+    current_state = wo["state"]
+    for from_state, to_state in lifecycle:
+        if current_state != from_state:
+            continue
+        if to_state == target_state or lifecycle.index((from_state, to_state)) <= \
+                next((i for i, t in enumerate(lifecycle) if t[1] == target_state), len(lifecycle)):
+            try:
+                validate_transition("workorder", current_state, to_state)
+                wo_copy = dict(wo)
+                wo_copy["state"] = to_state
+                write_record(
+                    project, "work-order",
+                    f"{wo['id']}-r{wo['revision']}", wo_copy,
+                )
+                metrics.record_transition(current_state, to_state)
+                current_state = to_state
+            except Exception as exc:
+                metrics.error_messages.append(
+                    f"Transition {from_state}->{to_state} failed: {exc}"
+                )
+                break
+        if current_state == target_state:
+            break
+    return current_state
+
+
+# ---------------------------------------------------------------------------
 # Fixture runners — one per fixture category
 # ---------------------------------------------------------------------------
 
@@ -181,33 +235,13 @@ def _run_no_genetic_support(
                 f"Hypothesis adoption failed: {result.output.strip()}"
             )
 
-    # Step 2: Create work order via control store
+    # Step 2: Create work order and transition to submitted
     wo = fixture.work_order
     write_record(project, "work-order", f"{wo['id']}-r{wo['revision']}", wo)
     metrics.record_transition(None, wo["state"])
     metrics.observe(f"Work order {wo['id']} created in state '{wo['state']}'")
 
-    # Step 3: Transition through lifecycle to submitted
-    transitions = [
-        ("proposed", "committed"),
-        ("committed", "queued"),
-        ("queued", "in_progress"),
-        ("in_progress", "submitted"),
-    ]
-    current_state = wo["state"]
-    for from_state, to_state in transitions:
-        if current_state != from_state:
-            continue
-        try:
-            validate_transition("workorder", current_state, to_state)
-            wo_copy = dict(wo)
-            wo_copy["state"] = to_state
-            write_record(project, "work-order", f"{wo['id']}-r{wo['revision']}", wo_copy)
-            metrics.record_transition(current_state, to_state)
-            current_state = to_state
-        except Exception as exc:
-            metrics.error_messages.append(f"Transition {from_state}->{to_state} failed: {exc}")
-            break
+    current_state = _transition_work_order(project, wo, "submitted", metrics)
 
     # Step 4: Attempt validation — should fail because no genomics artifacts
     if current_state == "submitted":
@@ -293,22 +327,7 @@ def _run_negative_pocket(
     write_record(project, "work-order", f"{wo['id']}-r{wo['revision']}", wo)
     metrics.record_transition(None, wo["state"])
 
-    transitions = [
-        ("proposed", "committed"),
-        ("committed", "queued"),
-        ("queued", "in_progress"),
-        ("in_progress", "submitted"),
-    ]
-    current_state = wo["state"]
-    for from_state, to_state in transitions:
-        if current_state != from_state:
-            continue
-        validate_transition("workorder", current_state, to_state)
-        wo_copy = dict(wo)
-        wo_copy["state"] = to_state
-        write_record(project, "work-order", f"{wo['id']}-r{wo['revision']}", wo_copy)
-        metrics.record_transition(current_state, to_state)
-        current_state = to_state
+    current_state = _transition_work_order(project, wo, "submitted", metrics)
 
     # Verify synthetic artifact relay codes
     pocket_files = list((project / "raw" / "pocket").glob("*.meta.json"))
@@ -337,22 +356,7 @@ def _run_positive_geometry(
     write_record(project, "work-order", f"{wo['id']}-r{wo['revision']}", wo)
     metrics.record_transition(None, wo["state"])
 
-    transitions = [
-        ("proposed", "committed"),
-        ("committed", "queued"),
-        ("queued", "in_progress"),
-        ("in_progress", "submitted"),
-    ]
-    current_state = wo["state"]
-    for from_state, to_state in transitions:
-        if current_state != from_state:
-            continue
-        validate_transition("workorder", current_state, to_state)
-        wo_copy = dict(wo)
-        wo_copy["state"] = to_state
-        write_record(project, "work-order", f"{wo['id']}-r{wo['revision']}", wo_copy)
-        metrics.record_transition(current_state, to_state)
-        current_state = to_state
+    current_state = _transition_work_order(project, wo, "submitted", metrics)
 
     # Check that the positive artifact exists and is well-formed
     struct_files = list((project / "raw" / "structures").glob("*.json"))
@@ -382,28 +386,8 @@ def _run_modality_mismatch(
 
     # The current control plane does not check modality consistency.
     # Walk through transitions to see if anything catches the mismatch.
-    transitions = [
-        ("proposed", "committed"),
-        ("committed", "queued"),
-        ("queued", "in_progress"),
-        ("in_progress", "submitted"),
-    ]
-    current_state = wo["state"]
-    mismatch_caught = False
-    for from_state, to_state in transitions:
-        if current_state != from_state:
-            continue
-        try:
-            validate_transition("workorder", current_state, to_state)
-            wo_copy = dict(wo)
-            wo_copy["state"] = to_state
-            write_record(project, "work-order", f"{wo['id']}-r{wo['revision']}", wo_copy)
-            metrics.record_transition(current_state, to_state)
-            current_state = to_state
-        except Exception as exc:
-            metrics.error_messages.append(f"Transition blocked: {exc}")
-            mismatch_caught = True
-            break
+    current_state = _transition_work_order(project, wo, "submitted", metrics)
+    mismatch_caught = current_state != "submitted"
 
     metrics.observe(
         f"Modality mismatch caught: {mismatch_caught}. "
@@ -427,21 +411,7 @@ def _run_absent_entity(
 
     # The control plane accepts any dict for context — it doesn't validate
     # that required entity identifiers are present.
-    transitions = [
-        ("proposed", "committed"),
-        ("committed", "queued"),
-        ("queued", "in_progress"),
-    ]
-    current_state = wo["state"]
-    for from_state, to_state in transitions:
-        if current_state != from_state:
-            continue
-        validate_transition("workorder", current_state, to_state)
-        wo_copy = dict(wo)
-        wo_copy["state"] = to_state
-        write_record(project, "work-order", f"{wo['id']}-r{wo['revision']}", wo_copy)
-        metrics.record_transition(current_state, to_state)
-        current_state = to_state
+    current_state = _transition_work_order(project, wo, "in_progress", metrics)
 
     # Verify that the context fields are indeed empty
     stored_wo = read_record(
@@ -468,21 +438,7 @@ def _run_tool_failure(
     metrics.record_transition(None, wo["state"])
 
     # Transition WO to in_progress
-    wo_transitions = [
-        ("proposed", "committed"),
-        ("committed", "queued"),
-        ("queued", "in_progress"),
-    ]
-    current_wo_state = wo["state"]
-    for from_state, to_state in wo_transitions:
-        if current_wo_state != from_state:
-            continue
-        validate_transition("workorder", current_wo_state, to_state)
-        wo_copy = dict(wo)
-        wo_copy["state"] = to_state
-        write_record(project, "work-order", f"{wo['id']}-r{wo['revision']}", wo_copy)
-        metrics.record_transition(current_wo_state, to_state)
-        current_wo_state = to_state
+    current_wo_state = _transition_work_order(project, wo, "in_progress", metrics)
 
     # Create a run record
     run_data = fixture.run_data
@@ -631,22 +587,7 @@ def _run_bounded_review(
     metrics.record_transition(None, wo["state"])
 
     # First: transition to submitted
-    initial_transitions = [
-        ("proposed", "committed"),
-        ("committed", "queued"),
-        ("queued", "in_progress"),
-        ("in_progress", "submitted"),
-    ]
-    current_state = wo["state"]
-    for from_state, to_state in initial_transitions:
-        if current_state != from_state:
-            continue
-        validate_transition("workorder", current_state, to_state)
-        wo_copy = dict(wo)
-        wo_copy["state"] = to_state
-        write_record(project, "work-order", f"{wo['id']}-r{wo['revision']}", wo_copy)
-        metrics.record_transition(current_state, to_state)
-        current_state = to_state
+    current_state = _transition_work_order(project, wo, "submitted", metrics)
 
     # Cycle through validation_failed -> in_progress -> submitted
     cycle_count = 0

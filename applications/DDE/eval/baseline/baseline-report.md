@@ -1,7 +1,7 @@
 # DDE Evaluation Baseline Report
 
 **Evaluation version**: 1.0
-**Run timestamp**: 2026-09-08T14:57:33Z
+**Run timestamp**: 2026-09-08T15:07:57Z
 **Total fixtures**: 8
 **Completed**: 8/8
 
@@ -15,7 +15,7 @@
 | total_state_transitions | 48 | - | - |
 | total_relay_codes_fired | 4 | - | - |
 | total_artifacts_produced | 8 | - | - |
-| total_wall_clock_seconds | 0.0406 | - | - |
+| total_wall_clock_seconds | 0.0398 | - | - |
 | repeated_operations | 0 | 4 | 0.0 |
 | unsupported_claims_accepted | N/A | N/A | Requires LLM agent workflow execution with scientific review |
 | mistaken_rejections | N/A | N/A | Requires LLM agent workflow execution with review of declined candidates |
@@ -29,7 +29,7 @@
 - **ID**: EVAL-001
 - **Category**: no_genetic_support
 - **Completed**: True
-- **Wall clock**: 0.0091s
+- **Wall clock**: 0.009s
 - **CLI invocations**: 2 (2 ok, 0 failed)
 - **State transitions**: 5
 - **Relay codes**: hypothesis.adopted_not_generated
@@ -59,7 +59,7 @@
 - **ID**: EVAL-002
 - **Category**: negative_pocket_conformation
 - **Completed**: True
-- **Wall clock**: 0.0039s
+- **Wall clock**: 0.0046s
 - **CLI invocations**: 0 (0 ok, 0 failed)
 - **State transitions**: 5
 - **Relay codes**: fpocket.single_conformation
@@ -75,7 +75,7 @@
 - **ID**: EVAL-003
 - **Category**: positive_model_geometry
 - **Completed**: True
-- **Wall clock**: 0.0039s
+- **Wall clock**: 0.0038s
 - **CLI invocations**: 0 (0 ok, 0 failed)
 - **State transitions**: 5
 - **Relay codes**: none
@@ -91,7 +91,7 @@
 - **ID**: EVAL-004
 - **Category**: modality_mismatch
 - **Completed**: True
-- **Wall clock**: 0.0043s
+- **Wall clock**: 0.0035s
 - **CLI invocations**: 0 (0 ok, 0 failed)
 - **State transitions**: 5
 - **Relay codes**: none
@@ -106,7 +106,7 @@
 - **ID**: EVAL-005
 - **Category**: absent_entity_inputs
 - **Completed**: True
-- **Wall clock**: 0.0034s
+- **Wall clock**: 0.0031s
 - **CLI invocations**: 0 (0 ok, 0 failed)
 - **State transitions**: 4
 - **Relay codes**: none
@@ -137,7 +137,7 @@
 - **ID**: EVAL-007
 - **Category**: disputed_citation
 - **Completed**: True
-- **Wall clock**: 0.0058s
+- **Wall clock**: 0.0056s
 - **CLI invocations**: 2 (2 ok, 0 failed)
 - **State transitions**: 1
 - **Relay codes**: hypothesis.adopted_not_generated, hypothesis.unranked_set
@@ -178,7 +178,7 @@ This baseline establishes the following measurable properties of the current wor
 
 | Resource | Budget | Baseline Actual |
 |----------|--------|-----------------|
-| Wall clock (all fixtures) | 60s | 0.0406s |
+| Wall clock (all fixtures) | 60s | 0.0398s |
 | CLI invocations | 200 | 4 |
 | State transitions | 100 | 48 |
 

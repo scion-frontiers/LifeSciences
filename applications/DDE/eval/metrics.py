@@ -41,8 +41,12 @@ class FixtureMetrics:
     # Artifacts produced: list of (path_relative, schema)
     artifacts_produced: list[dict[str, str]] = field(default_factory=list)
 
-    # Repeated operations (same command with same args run >1 time)
+    # Repeated operations (same command run >1 time within this fixture).
+    # Tracked by _seen_commands; incremented in record_invocation().
     repeated_operations: int = 0
+
+    # Internal: command strings already seen (for repeat detection)
+    _seen_commands: set[str] = field(default_factory=set, repr=False)
 
     # Error messages collected
     error_messages: list[str] = field(default_factory=list)
@@ -80,7 +84,7 @@ class FixtureMetrics:
 
     def stop(self) -> None:
         self.end_time = time.monotonic()
-        self.completed = True
+        self.completed = len(self.error_messages) == 0
 
     def record_invocation(
         self,
@@ -88,6 +92,9 @@ class FixtureMetrics:
         exit_code: int,
         output: str = "",
     ) -> None:
+        if command in self._seen_commands:
+            self.repeated_operations += 1
+        self._seen_commands.add(command)
         self.cli_invocations.append({
             "command": command,
             "exit_code": exit_code,

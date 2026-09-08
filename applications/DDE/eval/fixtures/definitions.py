@@ -26,6 +26,9 @@ from datetime import datetime, timezone
 from typing import Any
 
 
+# Intentionally evaluated once at import time and shared across all
+# fixtures.  All synthetic records carry the same timestamp because they
+# represent a single evaluation snapshot, not a time-ordered sequence.
 _NOW = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 

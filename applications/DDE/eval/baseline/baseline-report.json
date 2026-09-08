@@ -1,6 +1,6 @@
 {
   "eval_version": "1.0",
-  "run_timestamp": "2026-09-08T14:57:33Z",
+  "run_timestamp": "2026-09-08T15:07:57Z",
   "summary": {
     "fixtures_completed": {
       "value": 8,
@@ -20,7 +20,7 @@
     "total_state_transitions": 48,
     "total_relay_codes_fired": 4,
     "total_artifacts_produced": 8,
-    "total_wall_clock_seconds": 0.0406,
+    "total_wall_clock_seconds": 0.0398,
     "repeated_operations": {
       "value": 0,
       "denominator": 4,
@@ -52,7 +52,7 @@
       "fixture_id": "EVAL-001",
       "fixture_label": "No genetic support \u2014 target lacks GWAS/genetic evidence",
       "scenario_category": "no_genetic_support",
-      "wall_clock_seconds": 0.0091,
+      "wall_clock_seconds": 0.009,
       "state_transitions": [
         {
           "from": null,
@@ -127,7 +127,7 @@
       "fixture_id": "EVAL-002",
       "fixture_label": "Negative pocket conformation \u2014 unfavorable druggability",
       "scenario_category": "negative_pocket_conformation",
-      "wall_clock_seconds": 0.0039,
+      "wall_clock_seconds": 0.0046,
       "state_transitions": [
         {
           "from": null,
@@ -181,7 +181,7 @@
       "fixture_id": "EVAL-003",
       "fixture_label": "Positive model geometry \u2014 favorable structural confidence",
       "scenario_category": "positive_model_geometry",
-      "wall_clock_seconds": 0.0039,
+      "wall_clock_seconds": 0.0038,
       "state_transitions": [
         {
           "from": null,
@@ -233,7 +233,7 @@
       "fixture_id": "EVAL-004",
       "fixture_label": "Modality mismatch \u2014 antibody target with small-molecule deliverables",
       "scenario_category": "modality_mismatch",
-      "wall_clock_seconds": 0.0043,
+      "wall_clock_seconds": 0.0035,
       "state_transitions": [
         {
           "from": null,
@@ -275,7 +275,7 @@
       "fixture_id": "EVAL-005",
       "fixture_label": "Absent entity inputs \u2014 missing required compound and target identifiers",
       "scenario_category": "absent_entity_inputs",
-      "wall_clock_seconds": 0.0034,
+      "wall_clock_seconds": 0.0031,
       "state_transitions": [
         {
           "from": null,
@@ -372,7 +372,7 @@
       "fixture_id": "EVAL-007",
       "fixture_label": "Disputed citation \u2014 finding references retracted paper",
       "scenario_category": "disputed_citation",
-      "wall_clock_seconds": 0.0058,
+      "wall_clock_seconds": 0.0056,
       "state_transitions": [
         {
           "from": null,
