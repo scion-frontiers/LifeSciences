@@ -76,13 +76,11 @@ from ..common import (
 )
 from ..core import http, provenance
 from ..core.errors import ArtifactError, Refusal, SchemaError, UsageError
+from ..core.qps import qps_for_host
 
 HPA_BASE = "https://www.proteinatlas.org"
 SEARCH_URL = f"{HPA_BASE}/api/search_download.php"
 DOWNLOAD_PAGE = f"{HPA_BASE}/about/download"
-
-# HPA asks for polite use of the API; one request per second per host.
-HPA_QPS = 1.0
 
 ENSG_RE = re.compile(r"^ENSG\d{11}$")
 
@@ -380,7 +378,7 @@ def _normalise_tissue(name: str) -> str:
 def _hpa_release() -> tuple[str | None, str | None]:
     """Scrape the HPA release label. Returns (version, failure_reason)."""
     try:
-        response = http.request("GET", DOWNLOAD_PAGE, qps=HPA_QPS, timeout=45.0)
+        response = http.request("GET", DOWNLOAD_PAGE, qps=qps_for_host("www.proteinatlas.org"), timeout=45.0)
     except Exception as exc:  # any transport or status failure
         return None, f"{type(exc).__name__}: {exc}"
     match = VERSION_RE.search(response.text or "")
@@ -439,7 +437,7 @@ def _search(term: str, columns: list[str]) -> list[dict[str, Any]]:
     url = f"{SEARCH_URL}?" + urlencode(
         {"search": term, "format": "json", "columns": ",".join(columns), "compress": "no"}
     )
-    payload = http.get_json(url, qps=HPA_QPS, timeout=90.0)
+    payload = http.get_json(url, qps=qps_for_host("www.proteinatlas.org"), timeout=90.0)
     if not isinstance(payload, list):
         raise SchemaError(
             f"HPA search for {term!r} did not return a list",
@@ -455,7 +453,7 @@ def _fetch_bytes(url: str, what: str) -> bytes:
     through `json.loads`/`json.dumps` would change the digest for
     formatting reasons and break the provenance anchor.
     """
-    response = http.request("GET", url, qps=HPA_QPS, timeout=90.0)
+    response = http.request("GET", url, qps=qps_for_host("www.proteinatlas.org"), timeout=90.0)
     body = response.content
     try:
         json.loads(body.decode("utf-8"))

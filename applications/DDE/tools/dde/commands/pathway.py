@@ -43,6 +43,7 @@ from ..common import (
     pass_state,
 )
 from ..core import http, provenance
+from ..core.qps import qps_for_host
 from ..core.errors import (
     ArtifactError,
     Refusal,
@@ -53,13 +54,10 @@ TOOL = "pathway"
 ARTIFACT_CLASS = "genomics"  # pathway data is genomics-adjacent
 
 REACTOME_API = "https://reactome.org/ContentService"
-REACTOME_QPS = 5.0
 
 QUICKGO_API = "https://www.ebi.ac.uk/QuickGO/services"
-QUICKGO_QPS = 5.0
 
 UNIPROT_API = "https://rest.uniprot.org"
-UNIPROT_QPS = 5.0
 
 
 def _resolve_uniprot_accession(gene: str) -> str:
@@ -80,7 +78,7 @@ def _resolve_uniprot_accession(gene: str) -> str:
         f"&fields=accession"
         f"&size=1"
     )
-    data = http.get_json(url, qps=UNIPROT_QPS, timeout=30.0)
+    data = http.get_json(url, qps=qps_for_host("rest.uniprot.org"), timeout=30.0)
     results = data.get("results", [])
     if not results:
         raise Refusal(
@@ -112,7 +110,7 @@ def _search_reactome(gene: str) -> tuple[bytes, list[dict[str, Any]]]:
     response = http.request(
         "GET",
         url,
-        qps=REACTOME_QPS,
+        qps=qps_for_host("reactome.org"),
         timeout=60.0,
         headers={"Accept": "application/json"},
     )
@@ -163,7 +161,7 @@ def _search_go(gene: str) -> tuple[bytes, list[dict[str, Any]]]:
         response = http.request(
             "GET",
             url,
-            qps=QUICKGO_QPS,
+            qps=qps_for_host("www.ebi.ac.uk"),
             timeout=60.0,
             headers={"Accept": "application/json"},
         )

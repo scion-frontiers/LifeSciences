@@ -66,12 +66,12 @@ from ..core.errors import (
     Refusal,
     SchemaError,
 )
+from ..core.qps import qps_for_host
 
 TOOL = "dice"
 ARTIFACT_CLASS = "genomics"
 
 DICE_API = "https://dice-database.org/downloads/genes/expression"
-DICE_QPS = 2.0  # be polite
 
 # Cell type to immunological category mapping. Derived from the DICE
 # database documentation and verified against the IFIH1 CSV response
@@ -110,7 +110,7 @@ def _fetch_dice(gene: str) -> tuple[bytes, str]:
     response = http.request(
         "GET",
         url,
-        qps=DICE_QPS,
+        qps=qps_for_host("dice-database.org"),
         timeout=60.0,
         tolerate_status=(500,),
     )

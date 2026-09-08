@@ -64,16 +64,15 @@ from ..core.errors import (
     UsageError,
 )
 from ..core.output import Emitter
+from ..core.qps import qps_for_host
 
 TOOL_AFDB = "alphafold-db"
 TOOL_AF3 = "alphafold3-vertex"
 ARTIFACT_CLASS = "structures"
 
 AFDB_API = "https://alphafold.ebi.ac.uk/api/prediction"
-AFDB_QPS = 1.0
 
 UNIPROT_API = "https://rest.uniprot.org/uniprotkb"
-UNIPROT_QPS = 3.0
 
 # AFDB v4 models proteins up to this length. Structural fact about the
 # database, not a judgement threshold.
@@ -98,7 +97,7 @@ def _canonical_length(accession: str) -> tuple[int | None, str | None]:
     """
     try:
         record = http.get_json(
-            f"{UNIPROT_API}/{accession}.json?fields=length,gene_primary", qps=UNIPROT_QPS
+            f"{UNIPROT_API}/{accession}.json?fields=length,gene_primary", qps=qps_for_host("rest.uniprot.org")
         )
     except Exception:
         return None, None
@@ -154,7 +153,7 @@ def fetch(state: AppState, uniprot_id: str, out: str | None, as_json: bool, quie
     )
 
     try:
-        data = http.get_json(api_url, qps=AFDB_QPS)
+        data = http.get_json(api_url, qps=qps_for_host("alphafold.ebi.ac.uk"))
     except EndpointError as exc:
         if "404" in (exc.detail or "") or "404" in exc.message:
             raise EndpointError(
@@ -229,7 +228,7 @@ def fetch(state: AppState, uniprot_id: str, out: str | None, as_json: bool, quie
     cif_url = entry.get("cifUrl")
     if cif_url:
         cif_path = target_dir / f"{stem}.cif"
-        cif_path.write_bytes(http.get_bytes(cif_url, qps=AFDB_QPS))
+        cif_path.write_bytes(http.get_bytes(cif_url, qps=qps_for_host("alphafold.ebi.ac.uk")))
         sidecar.add_output(cif_path)
         outputs["structure"] = cif_path
     else:
@@ -238,7 +237,7 @@ def fetch(state: AppState, uniprot_id: str, out: str | None, as_json: bool, quie
     pae_url = entry.get("paeDocUrl")
     if pae_url:
         pae_path = target_dir / f"{stem}.pae.json"
-        pae_path.write_bytes(http.get_bytes(pae_url, qps=AFDB_QPS))
+        pae_path.write_bytes(http.get_bytes(pae_url, qps=qps_for_host("alphafold.ebi.ac.uk")))
         sidecar.add_output(pae_path)
         outputs["pae"] = pae_path
     else:

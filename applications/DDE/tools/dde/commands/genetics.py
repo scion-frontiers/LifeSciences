@@ -73,14 +73,9 @@ from ..core.errors import (
     Refusal,
     SchemaError,
 )
+from ..core.qps import qps_for_host
 
 GNOMAD_API = "https://gnomad.broadinstitute.org/api"
-
-# gnomAD rate-limits well below one request per second in practice; five
-# back-to-back gene queries at 1 qps drew "Service overloaded" on the
-# fourth. Pace accordingly and retry, rather than reporting a real gene
-# as missing.
-GNOMAD_QPS = 0.35
 
 # gnomAD reports *everything* through the GraphQL `errors` array with an
 # HTTP 200, including its own rate limiting. "Gene not found" and
@@ -138,7 +133,7 @@ def _query_gnomad(symbol: str) -> tuple[bytes, dict[str, Any]]:
         response = http.request(
             "POST",
             GNOMAD_API,
-            qps=GNOMAD_QPS,
+            qps=qps_for_host("gnomad.broadinstitute.org"),
             timeout=60.0,
             headers={"Content-Type": "application/json"},
             data=body.encode("utf-8"),

@@ -40,12 +40,12 @@ from ..common import (
 )
 from ..core import http, provenance
 from ..core.errors import ArtifactError, Refusal, SchemaError
+from ..core.qps import qps_for_host
 
 TOOL = "disco"
 ARTIFACT_CLASS = "single-cell"
 
 DISCO_API = "https://immunesinglecell.com/disco_v3_api"
-DISCO_QPS = 3.0
 
 
 def _slugify(query: str) -> str:
@@ -87,7 +87,7 @@ def _fetch_samples(
         body["disease"] = [disease]
 
     url = f"{DISCO_API}/repository/get_all_metadata"
-    resp = http.request("POST", url, json=body, qps=DISCO_QPS, timeout=120.0)
+    resp = http.request("POST", url, json=body, qps=qps_for_host("immunesinglecell.com"), timeout=120.0)
 
     try:
         raw_data = resp.json()

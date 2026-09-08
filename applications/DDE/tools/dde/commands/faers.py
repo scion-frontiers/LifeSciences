@@ -39,13 +39,12 @@ from ..common import (
 )
 from ..core import http, provenance
 from ..core.errors import ArtifactError, SchemaError
+from ..core.qps import qps_for_host
 
 TOOL = "faers"
 ARTIFACT_CLASS = "safety"
 
 OPENFDA_API = "https://api.fda.gov/drug"
-OPENFDA_QPS = 4.0  # openFDA allows 240/min without key = 4/sec
-
 _ENDPOINT_PATHS = {"events": "event.json", "labeling": "label.json"}
 
 
@@ -76,7 +75,7 @@ def _search_events(drug: str, max_results: int) -> tuple[bytes, dict[str, Any]]:
     response = http.request(
         "GET",
         url,
-        qps=OPENFDA_QPS,
+        qps=qps_for_host("api.fda.gov"),
         timeout=60.0,
         tolerate_status=(404,),
     )
@@ -106,7 +105,7 @@ def _search_labels(drug: str, max_results: int) -> tuple[bytes, dict[str, Any]]:
     response = http.request(
         "GET",
         url,
-        qps=OPENFDA_QPS,
+        qps=qps_for_host("api.fda.gov"),
         timeout=60.0,
         tolerate_status=(404,),
     )

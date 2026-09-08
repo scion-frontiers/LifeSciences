@@ -47,6 +47,7 @@ from ..common import (
     pass_state,
 )
 from ..core import http, provenance
+from ..core.qps import qps_for_host
 from ..core.errors import (
     ArtifactError,
     Refusal,
@@ -57,16 +58,12 @@ TOOL = "gwas"
 ARTIFACT_CLASS = "genomics"  # co-locate with gnomAD data in raw/genomics/
 
 OPENTARGETS_API = "https://api.platform.opentargets.org/api/v4/graphql"
-OPENTARGETS_QPS = 5.0
 
 GWAS_CATALOG_API = "https://www.ebi.ac.uk/gwas/rest/api"
-GWAS_CATALOG_QPS = 2.0
 
 # NCBI E-utilities for ClinVar (public, unauthenticated).
 CLINVAR_ESEARCH = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
 CLINVAR_ESUMMARY = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
-# NCBI recommends max 3 requests/sec without an API key.
-CLINVAR_QPS = 3.0
 # Maximum variants to retrieve per gene. NCBI esearch default retmax is
 # 20; 500 covers most genes adequately. Heavily-studied genes (BRCA1,
 # TP53) may have more.
@@ -182,7 +179,7 @@ def _resolve_ensembl_id(symbol: str) -> tuple[str, str]:
     payload = _graphql_post(
         OPENTARGETS_API,
         _OT_SEARCH_QUERY % symbol.upper(),
-        OPENTARGETS_QPS,
+        qps_for_host("api.platform.opentargets.org"),
     )
     hits = (payload.get("data") or {}).get("search", {}).get("hits")
     if not hits:
@@ -205,7 +202,7 @@ def _resolve_disease_id(disease: str) -> tuple[str, str]:
     payload = _graphql_post(
         OPENTARGETS_API,
         _OT_DISEASE_SEARCH_QUERY % disease,
-        OPENTARGETS_QPS,
+        qps_for_host("api.platform.opentargets.org"),
     )
     hits = (payload.get("data") or {}).get("search", {}).get("hits")
     if not hits:
@@ -228,7 +225,7 @@ def _fetch_opentargets_disease(disease: str) -> tuple[bytes, dict[str, Any]]:
     payload = _graphql_post(
         OPENTARGETS_API,
         _OT_DISEASE_TARGETS_QUERY % disease_id,
-        OPENTARGETS_QPS,
+        qps_for_host("api.platform.opentargets.org"),
     )
     raw = json.dumps(payload, indent=2).encode("utf-8")
 
@@ -274,7 +271,7 @@ def _fetch_opentargets(symbol: str) -> tuple[bytes, dict[str, Any]]:
     payload = _graphql_post(
         OPENTARGETS_API,
         _OT_ASSOC_QUERY % ensembl_id,
-        OPENTARGETS_QPS,
+        qps_for_host("api.platform.opentargets.org"),
     )
     raw = json.dumps(payload, indent=2).encode("utf-8")
 
@@ -327,7 +324,7 @@ def _fetch_gwas_catalog(symbol: str) -> tuple[bytes, dict[str, Any]]:
     response = http.request(
         "GET",
         url,
-        qps=GWAS_CATALOG_QPS,
+        qps=qps_for_host("www.ebi.ac.uk"),
         timeout=60.0,
         headers={"Accept": "application/json"},
         tolerate_status=(404,),
@@ -443,7 +440,7 @@ def _fetch_clinvar(symbol: str) -> tuple[bytes, dict[str, Any]]:
     search_response = http.request(
         "GET",
         search_url,
-        qps=CLINVAR_QPS,
+        qps=qps_for_host("eutils.ncbi.nlm.nih.gov"),
         timeout=60.0,
     )
     try:
@@ -472,7 +469,7 @@ def _fetch_clinvar(symbol: str) -> tuple[bytes, dict[str, Any]]:
     summary_response = http.request(
         "GET",
         summary_url,
-        qps=CLINVAR_QPS,
+        qps=qps_for_host("eutils.ncbi.nlm.nih.gov"),
         timeout=120.0,
     )
     try:

@@ -41,12 +41,12 @@ from ..core.errors import (
     EndpointUnavailable,
     SchemaError,
 )
+from ..core.qps import qps_for_host
 
 TOOL = "dde.retro"
 ARTIFACT_CLASS = "retrosynthesis"
 
 ASKCOS_API = "https://askcos.mit.edu"
-ASKCOS_QPS = 1.0  # Conservative -- no documented rate limit
 
 # Async polling parameters.
 _POLL_INTERVAL = 2.0  # seconds between polls
@@ -73,7 +73,7 @@ def _fetch_askcos_retro(
     submit_response = http.request(
         "POST",
         submit_url,
-        qps=ASKCOS_QPS,
+        qps=qps_for_host("askcos.mit.edu"),
         timeout=30.0,
         headers={"Content-Type": "application/json"},
         data=body.encode("utf-8"),
@@ -108,7 +108,7 @@ def _fetch_askcos_retro(
         poll_response = http.request(
             "GET",
             poll_url,
-            qps=ASKCOS_QPS,
+            qps=qps_for_host("askcos.mit.edu"),
             timeout=30.0,
         )
         try:

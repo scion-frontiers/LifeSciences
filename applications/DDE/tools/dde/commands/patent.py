@@ -41,6 +41,7 @@ from ..common import (
     pass_state,
 )
 from ..core import http, provenance
+from ..core.qps import qps_for_host
 from ..core.errors import (
     ArtifactError,
     Refusal,
@@ -48,7 +49,6 @@ from ..core.errors import (
 )
 
 GOOGLE_PATENTS_API = "https://patents.google.com/xhr/query"
-GOOGLE_PATENTS_QPS = 0.5  # Very conservative — undocumented endpoint with aggressive rate limiting
 TOOL = "dde.patent"
 ARTIFACT_CLASS = "ip"
 
@@ -89,7 +89,7 @@ def _fetch_google_patents(query: str) -> tuple[bytes, dict[str, Any]]:
         response = http.request(
             "GET",
             url,
-            qps=GOOGLE_PATENTS_QPS,
+            qps=qps_for_host("patents.google.com"),
             timeout=60.0,
             tolerate_status=(503,),
         )

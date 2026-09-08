@@ -42,15 +42,14 @@ from ..common import (
 )
 from ..core import http, provenance
 from ..core.errors import SchemaError
+from ..core.qps import qps_for_host
 
 TOOL = "pubchem"
 ARTIFACT_CLASS = "compounds"
 
 PUBCHEM_API = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
-PUBCHEM_QPS = 5.0
 
 CHEMBL_API = "https://www.ebi.ac.uk/chembl/api/data"
-CHEMBL_QPS = 5.0
 
 SCHEMA = "dde.pubchem-annotation.v1"
 
@@ -76,7 +75,7 @@ def _fetch_synonyms(cid: int) -> tuple[str, bytes]:
     """
     url = f"{PUBCHEM_API}/compound/cid/{cid}/synonyms/JSON"
     response = http.request(
-        "GET", url, qps=PUBCHEM_QPS, timeout=60.0, tolerate_status=(404,),
+        "GET", url, qps=qps_for_host("pubchem.ncbi.nlm.nih.gov"), timeout=60.0, tolerate_status=(404,),
     )
     if response.status_code == 404:
         return url, json.dumps(
@@ -94,7 +93,7 @@ def _fetch_classification(cid: int) -> tuple[str, bytes]:
     """Fetch pharmacological classification for a CID from PubChem."""
     url = f"{PUBCHEM_API}/compound/cid/{cid}/classification/JSON"
     response = http.request(
-        "GET", url, qps=PUBCHEM_QPS, timeout=60.0, tolerate_status=(404,),
+        "GET", url, qps=qps_for_host("pubchem.ncbi.nlm.nih.gov"), timeout=60.0, tolerate_status=(404,),
     )
     if response.status_code == 404:
         return url, json.dumps(
@@ -114,7 +113,7 @@ def _fetch_inchikey(cid: int) -> tuple[str, bytes]:
     """Fetch InChIKey for CID-to-ChEMBL cross-reference."""
     url = f"{PUBCHEM_API}/compound/cid/{cid}/property/InChIKey/JSON"
     response = http.request(
-        "GET", url, qps=PUBCHEM_QPS, timeout=60.0, tolerate_status=(404,),
+        "GET", url, qps=qps_for_host("pubchem.ncbi.nlm.nih.gov"), timeout=60.0, tolerate_status=(404,),
     )
     if response.status_code == 404:
         return url, json.dumps(
@@ -138,7 +137,7 @@ def _fetch_chembl_molecule(inchikey: str) -> tuple[str, bytes]:
     """
     url = f"{CHEMBL_API}/molecule/{inchikey}.json"
     response = http.request(
-        "GET", url, qps=CHEMBL_QPS, timeout=60.0, tolerate_status=(404,),
+        "GET", url, qps=qps_for_host("www.ebi.ac.uk"), timeout=60.0, tolerate_status=(404,),
     )
     if response.status_code == 404:
         return url, json.dumps(
@@ -157,7 +156,7 @@ def _fetch_chembl_mechanism(chembl_id: str) -> tuple[str, bytes]:
     """Fetch mechanism of action for a ChEMBL molecule."""
     url = f"{CHEMBL_API}/mechanism.json?molecule_chembl_id={chembl_id}"
     response = http.request(
-        "GET", url, qps=CHEMBL_QPS, timeout=60.0, tolerate_status=(404,),
+        "GET", url, qps=qps_for_host("www.ebi.ac.uk"), timeout=60.0, tolerate_status=(404,),
     )
     if response.status_code == 404:
         return url, json.dumps(

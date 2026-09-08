@@ -42,6 +42,7 @@ from ..common import (
     pass_state,
 )
 from ..core import http, provenance
+from ..core.qps import qps_for_host
 from ..core.errors import (
     ArtifactError,
     Refusal,
@@ -54,7 +55,6 @@ TOOL = "ppi"
 ARTIFACT_CLASS = "genomics"
 
 STRING_API = "https://string-db.org/api"
-STRING_QPS = 1.0  # STRING asks for polite pacing
 
 # Evidence channel names returned by STRING's network endpoint.
 _EVIDENCE_CHANNELS = (
@@ -89,7 +89,7 @@ def _resolve_string_id(gene: str, species: int) -> str:
         f"?identifiers={quote(gene, safe='')}"
         f"&species={species}&limit=1"
     )
-    data = http.get_json(url, qps=STRING_QPS, timeout=60.0)
+    data = http.get_json(url, qps=qps_for_host("string-db.org"), timeout=60.0)
 
     if not data or not isinstance(data, list) or len(data) == 0:
         raise Refusal(
@@ -123,7 +123,7 @@ def _fetch_network(
     response = http.request(
         "GET",
         url,
-        qps=STRING_QPS,
+        qps=qps_for_host("string-db.org"),
         timeout=60.0,
     )
     raw = response.content

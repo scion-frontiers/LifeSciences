@@ -39,7 +39,8 @@ from ..common import (
 )
 from ..core import http, provenance
 from ..core.errors import ArtifactError, Refusal, SchemaError
-from ..core.ncbi import EUTILS_QPS, api_key_params
+from ..core.ncbi import api_key_params
+from ..core.qps import qps_for_host
 
 TOOL = "geo"
 ARTIFACT_CLASS = "transcriptomics"
@@ -151,7 +152,7 @@ def _fetch_geo(
             "term": constructed_term,
             **api_key_params(),
         },
-        qps=EUTILS_QPS,
+        qps=qps_for_host("eutils.ncbi.nlm.nih.gov"),
         timeout=60.0,
     )
 
@@ -196,7 +197,7 @@ def _fetch_geo(
             "retmode": "json",
             **api_key_params(),
         },
-        qps=EUTILS_QPS,
+        qps=qps_for_host("eutils.ncbi.nlm.nih.gov"),
         timeout=120.0,
     )
 

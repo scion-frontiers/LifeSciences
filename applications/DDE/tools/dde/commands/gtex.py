@@ -73,13 +73,11 @@ from ..common import (
     pass_state,
 )
 from ..core import http, provenance
+from ..core.qps import qps_for_host
 from ..core.errors import ArtifactError, Refusal, SchemaError
 
 GTEX_BASE = "https://gtexportal.org"
 GTEX_API = f"{GTEX_BASE}/api/v2"
-
-# GTEx asks for polite use; one request per second.
-GTEX_QPS = 1.0
 
 # The dataset version recorded in provenance. GTEx v8 is the current
 # release as of 2026-08-19.
@@ -118,7 +116,7 @@ def _resolve_gene(query: str) -> tuple[str, str, str]:
         "genomeBuild": GENOME_BUILD,
     })
 
-    payload = http.get_json(url, qps=GTEX_QPS, timeout=90.0)
+    payload = http.get_json(url, qps=qps_for_host("gtexportal.org"), timeout=90.0)
     if not isinstance(payload, dict) or "data" not in payload:
         raise SchemaError(
             f"GTEx gene lookup for {query!r} did not return the expected shape",
@@ -203,7 +201,7 @@ def _fetch_expression_bytes(gencode_id: str) -> bytes:
         "tissueSiteDetailId": TISSUE_ID,
     })
 
-    response = http.request("GET", url, qps=GTEX_QPS, timeout=90.0)
+    response = http.request("GET", url, qps=qps_for_host("gtexportal.org"), timeout=90.0)
     body = response.content
     try:
         json.loads(body.decode("utf-8"))

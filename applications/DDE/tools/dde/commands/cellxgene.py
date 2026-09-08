@@ -40,12 +40,12 @@ from ..common import (
 )
 from ..core import http, provenance
 from ..core.errors import ArtifactError, Refusal, SchemaError
+from ..core.qps import qps_for_host
 
 TOOL = "cellxgene"
 ARTIFACT_CLASS = "single-cell"
 
 CELLXGENE_API = "https://api.cellxgene.cziscience.com/curation/v1"
-CELLXGENE_QPS = 5.0
 
 
 def _slugify(query: str) -> str:
@@ -126,7 +126,7 @@ def _fetch_collections(
     Returns (verbatim response bytes, structured artifact dict).
     """
     url = f"{CELLXGENE_API}/collections"
-    raw_data = http.get_json(url, qps=CELLXGENE_QPS, timeout=120.0)
+    raw_data = http.get_json(url, qps=qps_for_host("api.cellxgene.cziscience.com"), timeout=120.0)
 
     if not isinstance(raw_data, list):
         raise SchemaError(

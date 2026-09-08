@@ -41,7 +41,8 @@ from ..common import (
 )
 from ..core import http, provenance
 from ..core.errors import ArtifactError, Refusal, SchemaError
-from ..core.ncbi import EUTILS_QPS, api_key_suffix
+from ..core.ncbi import api_key_suffix
+from ..core.qps import qps_for_host
 
 TOOL = "pubmed"
 ARTIFACT_CLASS = "literature"  # same as litref -- both produce literature artifacts
@@ -240,7 +241,7 @@ def search_cmd(
         f"&retmode=json"
         + api_key_suffix()
     )
-    esearch_data = http.get_json(esearch_url, qps=EUTILS_QPS, timeout=60.0)
+    esearch_data = http.get_json(esearch_url, qps=qps_for_host("eutils.ncbi.nlm.nih.gov"), timeout=60.0)
 
     esearch_result = esearch_data.get("esearchresult")
     if not isinstance(esearch_result, dict):
@@ -290,7 +291,7 @@ def search_cmd(
             f"&rettype=abstract"
             + api_key_suffix()
         )
-        efetch_bytes = http.get_bytes(efetch_url, qps=EUTILS_QPS, timeout=60.0)
+        efetch_bytes = http.get_bytes(efetch_url, qps=qps_for_host("eutils.ncbi.nlm.nih.gov"), timeout=60.0)
         efetch_path.write_bytes(efetch_bytes)
         articles = _parse_articles(efetch_bytes)
     else:

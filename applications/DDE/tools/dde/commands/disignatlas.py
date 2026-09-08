@@ -45,6 +45,7 @@ from ..common import (
 )
 from ..core import http, provenance
 from ..core.errors import ArtifactError, EndpointUnavailable, Refusal, SchemaError
+from ..core.qps import qps_for_host
 
 _log = logging.getLogger(__name__)
 
@@ -52,7 +53,6 @@ TOOL = "disignatlas"
 ARTIFACT_CLASS = "transcriptomics"
 
 DISIGNATLAS_BASE = "https://www.inbirg.com/disignatlas"
-DISIGNATLAS_QPS = 2.0
 
 # Field names for gene-search result arrays, in positional order.
 _GENE_FIELDS = (
@@ -182,7 +182,7 @@ def _fetch_disignatlas(
 
     try:
         response = http.request(
-            "GET", url, qps=DISIGNATLAS_QPS, timeout=120.0,
+            "GET", url, qps=qps_for_host("www.inbirg.com"), timeout=120.0,
             params={"search_method": search_method, "query_content": query},
         )
     except EndpointUnavailable as exc:

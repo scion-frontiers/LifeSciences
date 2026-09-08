@@ -44,15 +44,14 @@ from ..common import (
 )
 from ..core import http, provenance
 from ..core.errors import ArtifactError, DependencyError, Refusal
+from ..core.qps import qps_for_host
 
 TOOL = "similar"
 ARTIFACT_CLASS = "compounds"
 
 PUBCHEM_API = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
-PUBCHEM_QPS = 5.0
 
 CHEMBL_API = "https://www.ebi.ac.uk/chembl/api/data"
-CHEMBL_QPS = 5.0
 
 SCHEMA = "dde.similar.v1"
 
@@ -111,7 +110,7 @@ def _slug(smiles: str) -> str:
 
 
 def _poll_pubchem_listkey(
-    listkey: str, qps: float = PUBCHEM_QPS, timeout: float = 120,
+    listkey: str, qps: float = qps_for_host("pubchem.ncbi.nlm.nih.gov"), timeout: float = 120,
 ) -> list[int]:
     """Poll PubChem for async result.  Returns CID list or raises."""
     url = f"{PUBCHEM_API}/compound/listkey/{listkey}/cids/JSON"
@@ -148,7 +147,7 @@ def _fetch_pubchem_properties(cids: list[int]) -> list[dict[str, Any]]:
         f"{PUBCHEM_API}/compound/cid/{cid_str}"
         "/property/CanonicalSMILES,IUPACName,MolecularWeight,InChIKey/JSON"
     )
-    resp = http.get_json(url, qps=PUBCHEM_QPS)
+    resp = http.get_json(url, qps=qps_for_host("pubchem.ncbi.nlm.nih.gov"))
     return resp.get("PropertyTable", {}).get("Properties", [])
 
 
@@ -174,7 +173,7 @@ def _pubchem_similarity(
         f"{PUBCHEM_API}/compound/similarity/smiles/{encoded}/JSON"
         f"?Threshold={threshold_int}&MaxRecords={max_results}"
     )
-    resp = http.get_json(url, qps=PUBCHEM_QPS)
+    resp = http.get_json(url, qps=qps_for_host("pubchem.ncbi.nlm.nih.gov"))
 
     listkey = (resp.get("Waiting") or {}).get("ListKey")
     if not listkey:
@@ -221,7 +220,7 @@ def _pubchem_substructure(
         f"{PUBCHEM_API}/compound/substructure/smiles/{encoded}/JSON"
         f"?MaxRecords={max_results}"
     )
-    resp = http.get_json(url, qps=PUBCHEM_QPS)
+    resp = http.get_json(url, qps=qps_for_host("pubchem.ncbi.nlm.nih.gov"))
 
     listkey = (resp.get("Waiting") or {}).get("ListKey")
     if not listkey:
@@ -266,7 +265,7 @@ def _chembl_paginate(url: str, max_results: int) -> list[dict[str, Any]]:
     molecules: list[dict[str, Any]] = []
     current_url = url
     while current_url and len(molecules) < max_results:
-        resp = http.get_json(current_url, qps=CHEMBL_QPS)
+        resp = http.get_json(current_url, qps=qps_for_host("www.ebi.ac.uk"))
         mols = resp.get("molecules", [])
         if not mols:
             break

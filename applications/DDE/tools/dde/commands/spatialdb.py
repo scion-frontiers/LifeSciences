@@ -38,12 +38,12 @@ from ..common import (
 )
 from ..core import http, provenance
 from ..core.errors import ArtifactError, Refusal, SchemaError
+from ..core.qps import qps_for_host
 
 TOOL = "spatialdb"
 ARTIFACT_CLASS = "transcriptomics"
 
 SPATIALDB_SEARCH_URL = "https://www.spatialomics.org/SpatialDB/server/searchpage.php"
-SPATIALDB_QPS = 2.0
 
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 
@@ -91,7 +91,7 @@ def _fetch_gene(
         "POST",
         SPATIALDB_SEARCH_URL,
         data={"gene": gene, "species": species},
-        qps=SPATIALDB_QPS,
+        qps=qps_for_host("www.spatialomics.org"),
         timeout=120.0,
     )
 

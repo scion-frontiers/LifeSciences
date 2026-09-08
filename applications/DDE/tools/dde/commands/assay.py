@@ -36,6 +36,7 @@ from ..common import (
 )
 from ..core import http, provenance
 from ..core.errors import ArtifactError, Refusal, SchemaError, ThresholdError
+from ..core.qps import qps_for_host
 from ..core.output import Emitter
 
 TOOL = "assay"
@@ -43,10 +44,8 @@ ARTIFACT_CLASS = "assays"
 
 # Bioactivity fetch — external database endpoints and pacing.
 CHEMBL_API = "https://www.ebi.ac.uk/chembl/api/data"
-CHEMBL_QPS = 1.0
 
 PUBCHEM_API = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
-PUBCHEM_QPS = 4.0
 
 # Required top-level fields in a canonical assay record.
 _REQUIRED_FIELDS = (
@@ -847,7 +846,7 @@ def _fetch_chembl(compound_id: str, target: str | None) -> list[dict[str, Any]]:
     page_url: str | None = url
 
     while page_url:
-        resp = http.request("GET", page_url, qps=CHEMBL_QPS, tolerate_status=(404,))
+        resp = http.request("GET", page_url, qps=qps_for_host("www.ebi.ac.uk"), tolerate_status=(404,))
 
         # 404 means the compound was not found.
         if resp.status_code == 404:
@@ -917,7 +916,7 @@ def _fetch_chembl(compound_id: str, target: str | None) -> list[dict[str, Any]]:
 def _fetch_pubchem(compound_id: str, target: str | None) -> list[dict[str, Any]]:
     """Fetch bioactivity records from PubChem assay summary."""
     url = f"{PUBCHEM_API}/compound/cid/{compound_id}/assaysummary/JSON"
-    raw_resp = http.request("GET", url, qps=PUBCHEM_QPS, tolerate_status=(404,))
+    raw_resp = http.request("GET", url, qps=qps_for_host("pubchem.ncbi.nlm.nih.gov"), tolerate_status=(404,))
 
     if raw_resp.status_code == 404:
         raise Refusal(

@@ -45,15 +45,14 @@ from ..common import (
 )
 from ..core import http, provenance
 from ..core.errors import ArtifactError, Refusal, SchemaError, UsageError
+from ..core.qps import qps_for_host
 
 TOOL = "compreg"
 ARTIFACT_CLASS = "compounds"
 
 PUBCHEM_API = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
-PUBCHEM_QPS = 2.0
 
 CHEMBL_API = "https://www.ebi.ac.uk/chembl/api/data"
-CHEMBL_QPS = 2.0
 
 PUBCHEM_PROPERTIES = (
     "CanonicalSMILES,IUPACName,MolecularFormula,"
@@ -113,7 +112,7 @@ def _pubchem_by_cid(cid: str) -> tuple[str, bytes]:
         f"/property/{PUBCHEM_PROPERTIES}/JSON"
     )
     response = http.request(
-        "GET", url, qps=PUBCHEM_QPS, timeout=60.0, tolerate_status=(404,),
+        "GET", url, qps=qps_for_host("pubchem.ncbi.nlm.nih.gov"), timeout=60.0, tolerate_status=(404,),
     )
     if response.status_code == 404:
         return url, json.dumps(
@@ -137,7 +136,7 @@ def _pubchem_by_name(name: str) -> tuple[str, bytes]:
         f"/property/{PUBCHEM_PROPERTIES}/JSON"
     )
     response = http.request(
-        "GET", url, qps=PUBCHEM_QPS, timeout=60.0, tolerate_status=(404,),
+        "GET", url, qps=qps_for_host("pubchem.ncbi.nlm.nih.gov"), timeout=60.0, tolerate_status=(404,),
     )
     if response.status_code == 404:
         return url, json.dumps(
@@ -159,7 +158,7 @@ def _chembl_by_id(chembl_id: str) -> tuple[str, bytes]:
     """
     url = f"{CHEMBL_API}/molecule/{quote(chembl_id, safe='')}.json"
     response = http.request(
-        "GET", url, qps=CHEMBL_QPS, timeout=60.0, tolerate_status=(404,),
+        "GET", url, qps=qps_for_host("www.ebi.ac.uk"), timeout=60.0, tolerate_status=(404,),
     )
     if response.status_code == 404:
         return url, json.dumps(
@@ -181,7 +180,7 @@ def _chembl_by_name(name: str) -> tuple[str, bytes]:
     """
     url = f"{CHEMBL_API}/molecule/search.json?" + urlencode({"q": name})
     response = http.request(
-        "GET", url, qps=CHEMBL_QPS, timeout=60.0, tolerate_status=(404,),
+        "GET", url, qps=qps_for_host("www.ebi.ac.uk"), timeout=60.0, tolerate_status=(404,),
     )
     if response.status_code == 404:
         return url, json.dumps(

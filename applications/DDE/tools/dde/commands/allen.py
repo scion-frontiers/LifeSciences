@@ -44,12 +44,12 @@ from ..common import (
 )
 from ..core import http, provenance
 from ..core.errors import ArtifactError, Refusal, SchemaError
+from ..core.qps import qps_for_host
 
 TOOL = "allen"
 ARTIFACT_CLASS = "transcriptomics"
 
 ALLEN_API = "https://api.brain-map.org/api/v2"
-ALLEN_QPS = 5.0
 
 
 def _slugify(query: str) -> str:
@@ -69,7 +69,7 @@ def _fetch_gene(gene: str, organism: str | None) -> tuple[bytes, dict[str, Any]]
         f"{ALLEN_API}/data/Gene/query.json"
         f"?criteria=[acronym$eq'{gene_encoded}']&include=organism"
     )
-    gene_data = http.get_json(gene_url, qps=ALLEN_QPS, timeout=120.0)
+    gene_data = http.get_json(gene_url, qps=qps_for_host("api.brain-map.org"), timeout=120.0)
 
     if not isinstance(gene_data, dict):
         raise SchemaError(
@@ -102,7 +102,7 @@ def _fetch_gene(gene: str, organism: str | None) -> tuple[bytes, dict[str, Any]]
         f"?criteria=[genes.acronym$eq'{gene_encoded}']"
         f"&include=genes,products&num_rows=50"
     )
-    dataset_data = http.get_json(dataset_url, qps=ALLEN_QPS, timeout=120.0)
+    dataset_data = http.get_json(dataset_url, qps=qps_for_host("api.brain-map.org"), timeout=120.0)
 
     if not isinstance(dataset_data, dict):
         raise SchemaError(
@@ -198,7 +198,7 @@ def _fetch_donors(
         f"{ALLEN_API}/data/ApiTbiDonorDetail/query.json"
         f"?criteria={criteria}&num_rows=50"
     )
-    raw_data = http.get_json(url, qps=ALLEN_QPS, timeout=120.0)
+    raw_data = http.get_json(url, qps=qps_for_host("api.brain-map.org"), timeout=120.0)
 
     if not isinstance(raw_data, dict):
         raise SchemaError(

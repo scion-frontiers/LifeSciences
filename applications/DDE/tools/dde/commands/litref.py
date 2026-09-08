@@ -59,14 +59,11 @@ from ..common import (
     pass_state,
 )
 from ..core import http, provenance
+from ..core.qps import qps_for_host
 from ..core.errors import ArtifactError, Refusal, SchemaError, UsageError
 
 EPMC_SEARCH = "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
 CTGOV_BASE = "https://clinicaltrials.gov/api/v2/studies"
-
-# Both APIs are free and unauthenticated; pace politely.
-EPMC_QPS = 2.0
-CTGOV_QPS = 2.0
 
 CTGOV_FIELDS = (
     "NCTId,BriefTitle,OfficialTitle,Acronym,LeadSponsorName,OverallStatus,"
@@ -135,7 +132,7 @@ def _epmc_query(query: str, page_size: int, result_type: str) -> tuple[str, byte
             "pageSize": page_size,
         }
     )
-    return _fetch(url, EPMC_QPS, "Europe PMC")
+    return _fetch(url, qps_for_host("www.ebi.ac.uk"), "Europe PMC")
 
 
 def _ctgov_search(name: str, page_size: int) -> tuple[str, bytes]:
@@ -147,7 +144,7 @@ def _ctgov_search(name: str, page_size: int) -> tuple[str, bytes]:
             "fields": CTGOV_FIELDS,
         }
     )
-    return _fetch(url, CTGOV_QPS, "ClinicalTrials.gov")
+    return _fetch(url, qps_for_host("clinicaltrials.gov"), "ClinicalTrials.gov")
 
 
 def _ctgov_by_id(nct: str) -> tuple[str, bytes]:
@@ -161,7 +158,7 @@ def _ctgov_by_id(nct: str) -> tuple[str, bytes]:
     """
     url = f"{CTGOV_BASE}/{quote(nct)}?" + urlencode({"fields": CTGOV_FIELDS})
     response = http.request(
-        "GET", url, qps=CTGOV_QPS, timeout=60.0, tolerate_status=(404,)
+        "GET", url, qps=qps_for_host("clinicaltrials.gov"), timeout=60.0, tolerate_status=(404,)
     )
     if response.status_code == 404:
         return url, json.dumps(

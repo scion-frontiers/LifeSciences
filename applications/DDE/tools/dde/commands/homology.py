@@ -35,6 +35,7 @@ from ..common import (
     pass_state,
 )
 from ..core import http, provenance
+from ..core.qps import qps_for_host
 from ..core.errors import ArtifactError, EndpointError, Refusal, UsageError
 from ..core.output import Emitter
 
@@ -43,17 +44,13 @@ TOOL_FETCH = "homology-fetch"
 ARTIFACT_CLASS = "structures"
 
 UNIPROT_API = "https://rest.uniprot.org/uniprotkb"
-UNIPROT_QPS = 3.0
 
 RCSB_SEARCH_API = "https://search.rcsb.org/rcsbsearch/v2/query"
-RCSB_SEARCH_QPS = 1.0
 RCSB_SEARCH_TIMEOUT = 30.0
 
 RCSB_GRAPHQL_API = "https://data.rcsb.org/graphql"
-RCSB_GRAPHQL_QPS = 1.0
 
 RCSB_DOWNLOAD_BASE = "https://files.rcsb.org/download"
-RCSB_DOWNLOAD_QPS = 1.0
 
 _UNIPROT_RE = re.compile(
     r"^[A-NR-Z][0-9][A-Z0-9]{3}[0-9]$"
@@ -70,7 +67,7 @@ def _fetch_uniprot(accession: str) -> tuple[str, int, str | None]:
     required input here, not optional metadata.
     """
     url = f"{UNIPROT_API}/{accession}.json?fields=length,gene_primary,sequence"
-    record = http.get_json(url, qps=UNIPROT_QPS)
+    record = http.get_json(url, qps=qps_for_host("rest.uniprot.org"))
 
     seq_block = record.get("sequence") or {}
     sequence = seq_block.get("value")
@@ -152,7 +149,7 @@ def _blast_search(
         "POST",
         RCSB_SEARCH_API,
         json=payload,
-        qps=RCSB_SEARCH_QPS,
+        qps=qps_for_host("search.rcsb.org"),
         timeout=RCSB_SEARCH_TIMEOUT,
         tolerate_status=(204,),
     )
@@ -250,7 +247,7 @@ def _fetch_structure_metadata(
         "POST",
         RCSB_GRAPHQL_API,
         json={"query": query},
-        qps=RCSB_GRAPHQL_QPS,
+        qps=qps_for_host("data.rcsb.org"),
     )
 
     try:
@@ -840,7 +837,7 @@ def fetch_structure(
 
     # Download the coordinate file
     structure_path = target_dir / f"{pdb_id}.{fmt}"
-    structure_path.write_bytes(http.get_bytes(download_url, qps=RCSB_DOWNLOAD_QPS))
+    structure_path.write_bytes(http.get_bytes(download_url, qps=qps_for_host("files.rcsb.org")))
 
     # Write provenance sidecar
     sidecar = provenance.Sidecar(

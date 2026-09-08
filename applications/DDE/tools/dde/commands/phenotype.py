@@ -41,6 +41,7 @@ from ..common import (
     pass_state,
 )
 from ..core import http, provenance
+from ..core.qps import qps_for_host
 from ..core.errors import (
     ArtifactError,
     Refusal,
@@ -51,13 +52,10 @@ TOOL = "phenotype"
 ARTIFACT_CLASS = "genomics"
 
 MGI_API = "https://www.informatics.jax.org"
-MGI_QPS = 2.0
 
 HPO_API = "https://ontology.jax.org/api"
-HPO_QPS = 5.0
 
 AGR_API = "https://www.alliancegenome.org/api"
-AGR_QPS = 5.0
 
 
 def _fetch_mgi(gene: str) -> tuple[bytes, dict[str, Any]]:
@@ -81,7 +79,7 @@ def _fetch_mgi(gene: str) -> tuple[bytes, dict[str, Any]]:
     )
     search_data = http.get_json(
         search_url,
-        qps=MGI_QPS,
+        qps=qps_for_host("www.informatics.jax.org"),
         timeout=60.0,
     )
 
@@ -106,7 +104,7 @@ def _fetch_mgi(gene: str) -> tuple[bytes, dict[str, Any]]:
         detail_response = http.request(
             "GET",
             detail_url,
-            qps=MGI_QPS,
+            qps=qps_for_host("www.informatics.jax.org"),
             timeout=60.0,
             tolerate_status=(404,),
         )
@@ -126,7 +124,7 @@ def _fetch_mgi(gene: str) -> tuple[bytes, dict[str, Any]]:
     pheno_url = f"{AGR_API}/gene/{quote(mgi_id, safe=':')}/phenotypes?limit=200"
     pheno_data = http.get_json(
         pheno_url,
-        qps=AGR_QPS,
+        qps=qps_for_host("www.alliancegenome.org"),
         timeout=60.0,
     )
 
@@ -282,7 +280,7 @@ def _fetch_hpo(gene: str) -> tuple[bytes, dict[str, Any]]:
     search_url = f"{HPO_API}/network/search/gene?q={quote(gene, safe='')}"
     search_data = http.get_json(
         search_url,
-        qps=HPO_QPS,
+        qps=qps_for_host("ontology.jax.org"),
         timeout=60.0,
     )
 
@@ -302,7 +300,7 @@ def _fetch_hpo(gene: str) -> tuple[bytes, dict[str, Any]]:
     annot_url = f"{HPO_API}/network/annotation/{quote(gene_id, safe=':')}"
     annot_data = http.get_json(
         annot_url,
-        qps=HPO_QPS,
+        qps=qps_for_host("ontology.jax.org"),
         timeout=60.0,
     )
 

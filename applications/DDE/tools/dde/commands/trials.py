@@ -37,9 +37,9 @@ from ..core.errors import (
     ArtifactError,
     SchemaError,
 )
+from ..core.qps import qps_for_host
 
 CLINICALTRIALS_API = "https://clinicaltrials.gov/api/v2/studies"
-CLINICALTRIALS_QPS = 3.0
 TOOL = "dde.trials"
 ARTIFACT_CLASS = "pipeline"
 
@@ -114,7 +114,7 @@ def _fetch_clinicaltrials(query: str, search_by: str) -> tuple[bytes, dict[str, 
         response = http.request(
             "GET",
             url,
-            qps=CLINICALTRIALS_QPS,
+            qps=qps_for_host("clinicaltrials.gov"),
             timeout=60.0,
         )
         raw_pages.append(response.content)
