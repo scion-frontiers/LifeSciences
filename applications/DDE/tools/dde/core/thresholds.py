@@ -935,6 +935,29 @@ _declare(
     },
 )
 
+# --- Citation verification ------------------------------------------------
+# Token-overlap boundaries for title matching in citation verification.
+# These are structural defaults observed in a reference implementation of
+# citation-checking code, NOT values any external source publishes, and
+# they are token-overlap boundaries uncalibrated against any labelled
+# corpus. They separate "the resolver found the right paper" from "the
+# title is close but not matching" from "the title is completely wrong".
+_declare(
+    "citation-verification",
+    "1.0",
+    provenance=(
+        "structural defaults observed in a reference implementation of "
+        "citation-checking code; NOT values any external source publishes. "
+        "Token-overlap boundaries uncalibrated against any labelled corpus."
+    ),
+    values={
+        "title_match_tolerance": 0.75,
+        "title_suspect_floor": 0.45,
+        "max_phantom_citations": 0,
+        "max_suspect_citations": UNRESOLVED,
+    },
+)
+
 _declare(
     "trials",
     "1.0",

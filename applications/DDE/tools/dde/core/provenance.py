@@ -567,6 +567,22 @@ RELAY_CODES: dict[str, str] = {
         "operate. Check assignees, claim scope, and jurisdiction before "
         "proceeding."
     ),
+    "cite.phantom_citation": (
+        "Name the phantom references. A phantom citation invalidates the "
+        "claim resting on it, not merely the reference."
+    ),
+    "cite.suspect_title_match": (
+        "State that the reference resolved but the title did not match "
+        "within tolerance. Do not report it as verified."
+    ),
+    "cite.unresolved_offline": (
+        "Confine the verification claim to references that resolved. Do "
+        "not extend the conclusion to references that could not be checked."
+    ),
+    "cite.extraction_incomplete": (
+        "State that references were recovered by pattern match. A reference "
+        "the extractor missed is not in the manifest and was not checked."
+    ),
 }
 
 
