@@ -595,29 +595,31 @@ def _parse_fulltext_xml(xml_bytes: bytes) -> dict[str, Any]:
             pmid = aid.text.strip()
             break
 
-    # Body sections
-    sections: list[dict[str, str]] = []
-    body = article.find("body")
-    if body is not None:
-        for sec in body.findall("sec"):
-            heading = None
+    # Body sections — recursive walk so nested <sec> elements are captured
+    def _walk_sections(parent: ET.Element) -> list[dict[str, str]]:
+        sections: list[dict[str, str]] = []
+        for sec in parent.findall("sec"):
+            heading = ""
             title_el = sec.find("title")
             if title_el is not None:
                 heading = "".join(title_el.itertext()).strip()
-            # Collect all paragraph text in this section
-            paragraphs: list[str] = []
-            for p_el in sec.findall("p"):
-                text = "".join(p_el.itertext()).strip()
-                if text:
-                    paragraphs.append(text)
+            paragraphs = [
+                "".join(p.itertext()).strip()
+                for p in sec.findall("p")
+                if "".join(p.itertext()).strip()
+            ]
             if paragraphs:
-                sections.append({
-                    "heading": heading or "",
-                    "text": "\n\n".join(paragraphs),
-                })
+                sections.append({"heading": heading, "text": "\n\n".join(paragraphs)})
+            sections.extend(_walk_sections(sec))
+        return sections
+
+    sections: list[dict[str, str]] = []
+    body = article.find("body")
+    if body is not None:
+        sections = _walk_sections(body)
         # If no <sec> elements, grab top-level <p> elements
         if not sections:
-            paragraphs = []
+            paragraphs: list[str] = []
             for p_el in body.findall("p"):
                 text = "".join(p_el.itertext()).strip()
                 if text:

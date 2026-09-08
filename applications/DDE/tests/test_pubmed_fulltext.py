@@ -343,6 +343,48 @@ def test_relay_code_registered() -> None:
 
 
 # ---------------------------------------------------------------------------
+# 5. Nested <sec> elements are captured
+# ---------------------------------------------------------------------------
+
+
+def test_fulltext_nested_sections() -> None:
+    """Nested <sec> elements produce separate section entries."""
+    from dde.commands.pubmed import _parse_fulltext_xml
+
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        "<pmc-articleset>"
+        '<article article-type="research-article">'
+        "  <front><article-meta>"
+        '    <article-id pub-id-type="doi">10.1234/nested</article-id>'
+        "    <title-group><article-title>Nested Test</article-title></title-group>"
+        "    <contrib-group>"
+        '      <contrib contrib-type="author"><name>'
+        "        <surname>Doe</surname><given-names>Jane</given-names>"
+        "      </name></contrib>"
+        "    </contrib-group>"
+        "    <abstract><p>Abstract.</p></abstract>"
+        "  </article-meta></front>"
+        "  <body>"
+        "    <sec><title>Introduction</title><p>Intro text.</p>"
+        "      <sec><title>Background</title><p>Background text.</p></sec>"
+        "    </sec>"
+        "  </body>"
+        "</article></pmc-articleset>"
+    ).encode("utf-8")
+
+    result = _parse_fulltext_xml(xml)
+    headings = [s["heading"] for s in result["sections"]]
+    assert "Introduction" in headings, f"Missing 'Introduction' in {headings}"
+    assert "Background" in headings, f"Missing 'Background' in {headings}"
+    assert len(result["sections"]) >= 2, (
+        f"Expected at least 2 sections, got {len(result['sections'])}"
+    )
+
+    print("  PASS: nested <sec> elements produce separate section entries")
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
@@ -353,6 +395,7 @@ def main() -> None:
         ("test_fulltext_invalid_pmcid_format", test_fulltext_invalid_pmcid_format),
         ("test_fulltext_unavailable", test_fulltext_unavailable),
         ("test_relay_code_registered", test_relay_code_registered),
+        ("test_fulltext_nested_sections", test_fulltext_nested_sections),
     ]
 
     passed = 0
