@@ -986,6 +986,112 @@ _check("null delivery_assumptions => no delivery finding",
        test_null_delivery_no_finding)
 
 
+# ---------------------------------------------------------------------------
+# 16. Regression: artifact_dir("manufacturing") default-output resolution
+# ---------------------------------------------------------------------------
+print("\n--- Default artifact-dir resolution for manufacturing (#23 regression) ---")
+
+
+def test_artifact_dir_manufacturing_registered():
+    """ARTIFACT_DIRS must contain 'manufacturing' so that the default output
+    path works without --out.  This was missing when #23 merged, causing
+    `dde manufacturing assess-stage0` to fail with 'unknown artifact class'
+    on every invocation that didn't pass --out explicitly."""
+    from dde.core.context import ARTIFACT_DIRS
+
+    assert "manufacturing" in ARTIFACT_DIRS, (
+        "'manufacturing' missing from ARTIFACT_DIRS — the default-output "
+        "path in `dde manufacturing assess-stage0` is broken"
+    )
+    assert ARTIFACT_DIRS["manufacturing"] == "raw/manufacturing", (
+        f"expected 'raw/manufacturing', got {ARTIFACT_DIRS['manufacturing']!r}"
+    )
+
+
+_check("ARTIFACT_DIRS contains 'manufacturing' entry",
+       test_artifact_dir_manufacturing_registered)
+
+
+def test_manufacturing_cli_default_output_path():
+    """Run `dde manufacturing assess-stage0` via CliRunner WITHOUT --out.
+
+    This is the exact code path that was broken: the command resolves its
+    output directory via artifact_dir("manufacturing", None), which looks
+    up 'manufacturing' in ARTIFACT_DIRS.  Before the fix, this raised
+    ProjectRootError('unknown artifact class').
+
+    When click is unavailable, falls back to a direct artifact_dir() call
+    to verify the resolution succeeds (the same call the CLI makes).
+    """
+    import tempfile
+
+    try:
+        from click.testing import CliRunner
+        from dde.cli import cli
+        has_click = True
+    except ImportError:
+        has_click = False
+
+    if has_click:
+        runner = CliRunner()
+
+        with tempfile.TemporaryDirectory() as td:
+            project = Path(td) / "test-project"
+            project.mkdir()
+            (project / ".dde").mkdir()
+
+            # Write a concept record
+            concept = _small_molecule_concept()
+            concept_file = project / "concept.json"
+            concept_file.write_text(json.dumps(concept, indent=2), encoding="utf-8")
+
+            result = runner.invoke(cli, [
+                "--project", str(project),
+                "manufacturing", "assess-stage0",
+                str(concept_file),
+                "--json",
+            ])
+
+            assert result.exit_code == 0, (
+                f"CLI exited with code {result.exit_code}; "
+                f"output:\n{result.output}"
+            )
+
+            # Verify the output was written to the default location
+            mfg_dir = project / "raw" / "manufacturing"
+            assert mfg_dir.is_dir(), (
+                f"expected default output dir {mfg_dir} to be created"
+            )
+            output_files = list(mfg_dir.glob("*.manufacturing-stage0.json"))
+            assert len(output_files) == 1, (
+                f"expected 1 output file in {mfg_dir}, found {len(output_files)}: "
+                f"{output_files}"
+            )
+    else:
+        # click not installed — verify the core resolution path directly.
+        # This is the call that manufacturing.py:99 makes; a KeyError here
+        # is the exact bug this regression test exists to catch.
+        from dde.core.context import ProjectContext
+
+        with tempfile.TemporaryDirectory() as td:
+            project = Path(td) / "test-project"
+            project.mkdir()
+            (project / ".dde").mkdir()
+
+            ctx = ProjectContext(root=project, source="test")
+            target = ctx.artifact_dir("manufacturing", None)
+
+            assert target == project / "raw" / "manufacturing", (
+                f"expected {project / 'raw' / 'manufacturing'}, got {target}"
+            )
+            assert target.is_dir(), "artifact_dir must create the directory"
+        print("    (click not available — verified via direct artifact_dir() call)")
+
+
+_check("CLI assess-stage0 succeeds via default output path (no --out)",
+       test_manufacturing_cli_default_output_path)
+
+
 # ===========================================================================
 # Summary
 # ===========================================================================

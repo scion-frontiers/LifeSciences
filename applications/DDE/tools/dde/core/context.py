@@ -45,6 +45,7 @@ ARTIFACT_DIRS: dict[str, str] = {
     "gtex": "raw/gtex",
     "hypotheses": "raw/hypotheses",
     "literature": "raw/literature",
+    "manufacturing": "raw/manufacturing",
     "mmp": "raw/mmp",
     "mpo": "raw/mpo",
     "pk": "raw/pk",
