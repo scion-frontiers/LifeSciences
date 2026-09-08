@@ -460,7 +460,11 @@ def analyze(
         raise SchemaError(
             f"{path.name} is not a normalised tournament artifact",
             detail=f"expected schema dde.coscientist.v1, got {record.get('schema')!r}",
-            remedy="run `dde coscientist ingest` on the raw export first",
+            remedy=(
+                "this artifact's schema is "
+                f"{record.get('schema')!r}; use the matching strategy's "
+                "analyzer, or `dde hypothesis analyze` for cross-strategy reads"
+            ),
         )
 
     thresholds = load_thresholds(
@@ -592,6 +596,36 @@ def analyze(
         ),
     }
     assessment["recommendation"] = recommendation
+
+    # -- Assessment core (dde.hypothesis-assessment.v1) -------------------------
+    # Vendor-neutral assessment block emitted alongside all existing keys.
+    # Readers that understand only the shared core can ignore the rest;
+    # existing consumers ignore this key and read the coscientist-specific
+    # fields they already depend on.
+    source_sha256 = provenance.sha256_file(path)
+    assessment_candidates = []
+    for idea in ideas:
+        elo = idea.get("elo_rating")
+        assessment_candidates.append(
+            {
+                "candidate_id": idea.get("id"),
+                "statement": idea.get("title"),
+                "rank": idea.get("ranking"),
+                "score": (
+                    {"value": elo, "basis": "coscientist-elo@1.1"}
+                    if elo is not None
+                    else None
+                ),
+                "origin": "co-scientist",
+            }
+        )
+    assessment["assessment_core"] = {
+        "schema": "dde.hypothesis-assessment.v1",
+        "strategy": "co-scientist",
+        "source_artifact": str(project.relative(path)),
+        "source_sha256": source_sha256,
+        "candidates": assessment_candidates,
+    }
 
     # Carry forward any relays recorded at ingest (e.g. partial_export).
     relays: list[dict[str, str]] = []

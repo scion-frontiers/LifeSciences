@@ -70,7 +70,13 @@ advance through starting matter identification."
 
 The Science Program Lead creates a Research Operations Controller, defines the initial decision questions, and commits work orders with immutable context snapshots. The controller initializes the project, supervises specialist runs, performs mechanical artifact validation, and keeps the presentation layer synchronized. The science lead accepts or rejects interpretations, maintains Layer 2 program state, and routes the work that follows.
 
-## The Four-Stage Pipeline
+## The Pipeline
+
+### Stage 0: Hypothesis Entry
+
+Before the four invariant stages begin, a program acquires its initial hypothesis set through one of four strategies: sponsor-supplied adoption, charter-authored hypotheses, a Co-Scientist tournament export, or a hypex tournament run within the program. Stage 0 is how a program acquires something to take into Stage 1.
+
+### The Four Invariant Stages
 
 DDE follows the pre-clinical drug discovery value chain. The stages are invariant and modality-independent. What happens within each stage is dynamic — which roles participate, which workflows execute, and how work is sequenced all depend on the evolving scientific context.
 

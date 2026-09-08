@@ -75,6 +75,16 @@ These are not peer orchestrators. The controller cannot change a scientific ques
 
 ## 3. The Four Stages of Pre-Clinical R&D
 
+### Stage 0: Hypothesis Entry
+
+Before the four invariant stages begin, a program acquires its initial hypothesis set
+through one of four strategies: sponsor-supplied adoption, charter-authored hypotheses,
+a Co-Scientist tournament export, or a hypex tournament run within the program. This
+is Stage 0 — how a program acquires something to take into Stage 1. See the
+`hypothesis-entry` skill for strategy selection and availability.
+
+### The four invariant stages
+
 The four stages represent a universal abstraction of drug R&D, independent of modality. Every program — small molecule, biologic, RNA therapeutic, gene therapy, PROTAC, drug repurposing — passes through these stages, though the specific work within each stage varies dramatically by modality and scientific context.
 
 ### Stage 1: Identify & Validate the Intervention Point
