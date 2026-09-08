@@ -1,0 +1,7 @@
+schema_version: "1"
+description: "Hypothesis Generation Agent — explores scientific literature within an assigned focus area and produces falsifiable hypotheses for the hypothesis-exploration tournament"
+agent_instructions: agents.md
+system_prompt: system-prompt.md
+
+skills:
+  - uri: "https://github.com/scion-frontiers/LifeSciences/tree/DDE/applications/DDE/skills/artifact-conventions"

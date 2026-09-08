@@ -1,0 +1,7 @@
+schema_version: "1"
+description: "Hypothesis Reflection Agent — reviews hypotheses on correctness, novelty, testability, safety, goal alignment, and constraint compliance; screens for dual-use biosafety risk"
+agent_instructions: agents.md
+system_prompt: system-prompt.md
+
+skills:
+  - uri: "https://github.com/scion-frontiers/LifeSciences/tree/DDE/applications/DDE/skills/artifact-conventions"

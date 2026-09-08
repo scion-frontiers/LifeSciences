@@ -1,0 +1,7 @@
+schema_version: "1"
+description: "Hypothesis-Explorer Supervisor — orchestrates a hypothesis tournament sub-team within a DDE science program; manages generation, reflection, and tournament workers; implements the subgraph boundary contract"
+agent_instructions: agents.md
+system_prompt: system-prompt.md
+
+skills:
+  - uri: "https://github.com/scion-frontiers/LifeSciences/tree/DDE/applications/DDE/skills/artifact-conventions"

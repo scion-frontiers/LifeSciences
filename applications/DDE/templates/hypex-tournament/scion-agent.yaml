@@ -1,0 +1,7 @@
+schema_version: "1"
+description: "Hypothesis Tournament Agent — runs pairwise tournament matches between hypotheses, writes match records, and triggers Elo rating recomputation"
+agent_instructions: agents.md
+system_prompt: system-prompt.md
+
+skills:
+  - uri: "https://github.com/scion-frontiers/LifeSciences/tree/DDE/applications/DDE/skills/artifact-conventions"
