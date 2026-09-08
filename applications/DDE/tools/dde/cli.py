@@ -19,6 +19,7 @@ from .commands.analog import analog
 from .commands.assay import assay
 from .commands.compound import compound
 from .commands.compreg import compreg
+from .commands.cbioportal import cbioportal
 from .commands.cellxgene import cellxgene
 from .commands.conservation import conservation
 from .commands.coscientist import coscientist
@@ -326,6 +327,7 @@ cli.add_command(allen)
 cli.add_command(cite)
 cli.add_command(analog)
 cli.add_command(assay)
+cli.add_command(cbioportal)
 cli.add_command(cellxgene)
 cli.add_command(compound)
 cli.add_command(compreg)

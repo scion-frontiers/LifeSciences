@@ -1096,6 +1096,20 @@ _declare(
     },
 )
 
+# --- cBioPortal search (default parameters) --------------------------------
+# Default parameters for cBioPortal cancer genomics search.
+_declare(
+    "cbioportal-search",
+    "1.0",
+    provenance=(
+        "Default parameters for cBioPortal cancer genomics search; "
+        "configurable per program."
+    ),
+    values={
+        "max_results_default": 25,
+    },
+)
+
 # Warnings that must reach the report whenever these sets are applied.
 # The skill's interpretation contract names them; the sidecar is the
 # evidence they were emitted (tool-design-guidance §5).
