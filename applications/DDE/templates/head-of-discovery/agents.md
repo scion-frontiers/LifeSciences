@@ -23,7 +23,9 @@ Activate the tools environment:
 source /scion-volumes/tools/env.sh
 ```
 
-Read the brief your parent sent you. It contains:
+Read the brief from the agent that started you. To identify that agent: check the
+`SCION_PARENT_AGENT` environment variable; if unset, the agent name should be
+stated in your task prompt. It contains:
 
 - The **program objective** (from the directive).
 - The **program directory path** (where `program-state/` and `findings/` live).
