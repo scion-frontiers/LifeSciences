@@ -134,6 +134,7 @@ The build tool renders markdown to HTML deterministically but does not handle ev
 | Shared scroll context | Sidebar and main content scroll together | CSS/styling |
 | `.md` link paths | Internal links retain `.md` extension instead of `.html` | Link resolution |
 | Plain-text references | Evidence/artifact references not rendered as clickable links | Link resolution |
+| No theme system | Single hardcoded visual style with no user control over appearance | CSS/styling |
 
 ### Execution Model
 
@@ -158,6 +159,10 @@ python3 postbuild.py _site/
 ### Template Orchestrator
 
 A copy-and-adapt template orchestrator is provided at [`references/postbuild-template.py`](references/postbuild-template.py). Copy it into your project's root or `site-tools/` directory, add fix functions for program-specific gaps, and invoke it after every build.
+
+### Drop-in Theme System
+
+[`references/fix_add_themes.py`](references/fix_add_themes.py) provides a ready-to-use theme system. It injects a theme chooser dropdown into site navigation, defines five themes (Clean, Dark, Serif, Ocean, Forest) via CSS custom properties, and persists the user's choice in `localStorage` across pages and sessions. Add its `fix_add_themes` function to the orchestrator's `FIXES` list under the CSS/styling category.
 
 ### Auto-Linking Structured Identifiers
 
