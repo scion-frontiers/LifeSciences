@@ -12,6 +12,7 @@ import click
 
 from .commands.admet import admet
 from .commands.allen import allen
+from .commands.cite import cite
 from .commands.alphafold import alphafold
 from .commands.alphagenome import alphagenome
 from .commands.analog import analog
@@ -320,6 +321,7 @@ def relays(as_json: bool) -> None:
 
 cli.add_command(admet)
 cli.add_command(allen)
+cli.add_command(cite)
 cli.add_command(analog)
 cli.add_command(assay)
 cli.add_command(cellxgene)

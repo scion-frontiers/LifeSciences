@@ -63,6 +63,8 @@ HOST_QPS: dict[str, float] = {
     "dice-database.org": 2.0,               # dice=2
     "immunesinglecell.com": 3.0,            # disco=3
     "www.spatialomics.org": 2.0,            # spatialdb=2
+    # ── Citation verification ───────────────────────────────────────
+    "api.crossref.org": 2.0,                # cite/crossref=2
     # ── Other ────────────────────────────────────────────────────────
     "www.inbirg.com": 2.0,                  # disignatlas=2
     "patents.google.com": 0.5,              # patent=0.5
