@@ -159,6 +159,10 @@ python3 postbuild.py _site/
 
 A copy-and-adapt template orchestrator is provided at [`references/postbuild-template.py`](references/postbuild-template.py). Copy it into your project's root or `site-tools/` directory, add fix functions for program-specific gaps, and invoke it after every build.
 
+### Auto-Linking Structured Identifiers
+
+[`references/fix_autolink_codes.py`](references/fix_autolink_codes.py) provides a template post-build fix that auto-discovers linkable codes (e.g. WO-001, DEC-005) from built filenames and replaces bare text references with `<a>` links. It avoids double-linking, self-links, and modifications inside HTML attributes, `<code>`, and `<pre>` elements. Register it in your orchestrator's FIXES list under the Link Resolution category.
+
 ## Post-Build Verification
 
 After post-build processing, verify:
