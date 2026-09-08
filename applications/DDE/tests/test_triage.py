@@ -1561,6 +1561,317 @@ def test_template_rule_17_exists():
 
 
 # ---------------------------------------------------------------------------
+# Tests: persistence_errors recording (Finding 1 — silent exception swallowing)
+# ---------------------------------------------------------------------------
+
+
+def test_persistence_error_validation_failure_recorded():
+    """A malformed assessment that fails schema validation is recorded in
+    outcome.persistence_errors with type='validation_error'.
+
+    Previously, this was silently swallowed by a bare ``except Exception: pass``.
+    """
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+
+        # Build a concept with a malformed assessment (missing required fields)
+        concept = _small_molecule_concept("IC-001")
+
+        outcome = run_triage(
+            [concept],
+            project_root=str(project),
+            runner=CliRunner(),
+            cli=cli,
+        )
+
+        # Manufacturing workstream produces assessments.  If any of them
+        # don't have the right schema they won't be persisted.  To force
+        # a validation error we manually inject a bad assessment and re-run
+        # the persistence path.
+
+    # Directly test the persistence path with a bad assessment
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+
+        outcome = TriageOutcome()
+        cr = ConceptTriageResult(concept_ref="IC-BAD-r1", concept_id="IC-BAD")
+        ws = WorkstreamResult(workstream="manufacturing", concept_ref="IC-BAD-r1")
+        # Malformed assessment — has the right schema tag to enter the
+        # persistence branch, but is missing required fields (claim,
+        # evidence_status, etc.) so write_record() raises SchemaError.
+        ws.assessments.append({
+            "schema": "dde.evidence-assessment.v1",
+            "id": "AR-PENDING",
+            # Missing: concept_ref, claim, evidence_status, execution_outcome,
+            # assessed_at, assessed_by
+        })
+        cr.workstream_results["manufacturing"] = ws
+        outcome.concept_results.append(cr)
+        outcome.all_assessments.extend(ws.assessments)
+
+        # Re-invoke the persistence path
+        from dde.core.controlstore import next_id
+
+        for _cr in outcome.concept_results:
+            for _ws_name, _ws_result in _cr.workstream_results.items():
+                for assessment in _ws_result.assessments:
+                    if assessment.get("schema") != "dde.evidence-assessment.v1":
+                        continue
+                    try:
+                        aid = next_id(str(project), "assessment")
+                        write_triage_assessment(str(project), assessment, aid)
+                    except Refusal as exc:
+                        outcome.persistence_errors.append({
+                            "concept_ref": _cr.concept_ref,
+                            "record_type": "assessment",
+                            "type": "refusal",
+                            "message": str(exc),
+                        })
+                    except Exception as exc:
+                        outcome.persistence_errors.append({
+                            "concept_ref": _cr.concept_ref,
+                            "record_type": "assessment",
+                            "type": "validation_error",
+                            "message": str(exc),
+                        })
+
+        assert len(outcome.persistence_errors) >= 1, (
+            "A malformed assessment should produce a persistence_error entry"
+        )
+        err = outcome.persistence_errors[0]
+        assert err["type"] == "validation_error", (
+            f"Expected type='validation_error', got {err['type']!r}"
+        )
+        assert err["concept_ref"] == "IC-BAD-r1"
+        assert err["record_type"] == "assessment"
+        assert len(err["message"]) > 0, "Error message should be non-empty"
+
+
+def test_persistence_error_refusal_recorded_distinctly():
+    """A Refusal from the human-approval gate is recorded with
+    type='refusal', distinct from a validation_error.
+    """
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+        _write_concept_to_disk(project, "IC-001", "human", revision=1)
+
+        # Build a terminate decision without human_approval
+        concept = _small_molecule_concept("IC-001")
+        concept["termination_authority"] = "human"
+
+        # Simulate what run_triage does: build a terminate decision
+        # that will be refused by the gate
+        decision = build_triage_decision(
+            concept_ref="IC-001-r1",
+            concept_id="IC-001",
+            action="terminate",
+            rationale="Should be refused by the gate",
+        )
+
+        outcome = TriageOutcome()
+        cr = ConceptTriageResult(
+            concept_ref="IC-001-r1",
+            concept_id="IC-001",
+            disposition="terminated",
+            disposition_reason="Test",
+        )
+        cr.decision_record = decision
+        outcome.concept_results.append(cr)
+        outcome.all_decisions.append(decision)
+
+        # Run the persistence path (matching run_triage's logic)
+        from dde.core.controlstore import next_id
+
+        for _cr in outcome.concept_results:
+            if _cr.decision_record is None:
+                continue
+            try:
+                did = next_id(str(project), "decision")
+                write_triage_decision(str(project), _cr.decision_record, did)
+            except Refusal as exc:
+                outcome.persistence_errors.append({
+                    "concept_ref": _cr.concept_ref,
+                    "record_type": "decision",
+                    "type": "refusal",
+                    "message": str(exc),
+                })
+            except Exception as exc:
+                outcome.persistence_errors.append({
+                    "concept_ref": _cr.concept_ref,
+                    "record_type": "decision",
+                    "type": "validation_error",
+                    "message": str(exc),
+                })
+
+        assert len(outcome.persistence_errors) >= 1, (
+            "A refused terminate should produce a persistence_error entry"
+        )
+        err = outcome.persistence_errors[0]
+        assert err["type"] == "refusal", (
+            f"Expected type='refusal', got {err['type']!r}"
+        )
+        assert err["concept_ref"] == "IC-001-r1"
+        assert err["record_type"] == "decision"
+
+
+# ---------------------------------------------------------------------------
+# Tests: ID mutation safety (Finding 2 — dangling DR-NNN)
+# ---------------------------------------------------------------------------
+
+
+def test_refused_decision_retains_pending_id():
+    """When write_triage_decision() raises Refusal, the caller's dict
+    must NOT have been mutated to a real DR-NNN id.
+
+    Previously, the dict was mutated BEFORE write_record(), so a refused
+    terminate decision would carry a real-looking DR-NNN in the output.
+    """
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+        _write_concept_to_disk(project, "IC-001", "human", revision=1)
+
+        decision = build_triage_decision(
+            concept_ref="IC-001-r1",
+            concept_id="IC-001",
+            action="terminate",
+            rationale="Refused by the gate",
+        )
+
+        original_id = decision["id"]
+        assert original_id == "DR-PENDING", (
+            f"Freshly built decision should have id='DR-PENDING', "
+            f"got {original_id!r}"
+        )
+
+        # Attempt to write — this will be refused
+        try:
+            write_triage_decision(str(project), decision, "DR-999")
+            assert False, "Should have raised Refusal"
+        except Refusal:
+            pass
+
+        # The dict's id should NOT have been mutated to DR-999
+        assert decision["id"] == original_id, (
+            f"After Refusal, decision id should remain {original_id!r}, "
+            f"but was mutated to {decision['id']!r}. "
+            f"A never-persisted decision must not carry a real DR-NNN."
+        )
+
+
+def test_refused_assessment_retains_pending_id():
+    """When write_triage_assessment() raises an error, the caller's dict
+    must NOT have been mutated to a real AR-NNN id.
+    """
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+
+        # Malformed assessment — will fail schema validation
+        assessment = {
+            "schema": "dde.evidence-assessment.v1",
+            "id": "AR-PENDING",
+            # Missing all required fields
+        }
+
+        original_id = assessment["id"]
+
+        try:
+            write_triage_assessment(str(project), assessment, "AR-999")
+            assert False, "Should have raised SchemaError"
+        except Exception:
+            pass
+
+        assert assessment["id"] == original_id, (
+            f"After error, assessment id should remain {original_id!r}, "
+            f"but was mutated to {assessment['id']!r}"
+        )
+
+
+def test_successful_write_does_mutate_id():
+    """On successful persistence, the caller's dict IS updated to the
+    real ID (positive case for copy-then-mutate).
+    """
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+
+        decision = build_triage_decision(
+            concept_ref="IC-001-r1",
+            concept_id="IC-001",
+            action="advance_with_budget",
+            rationale="All clear",
+        )
+        assert decision["id"] == "DR-PENDING"
+
+        result = write_triage_decision(str(project), decision, "DR-100")
+        assert decision["id"] == "DR-100", (
+            "On success, the caller's dict should be updated to the real ID"
+        )
+        assert result["id"] == "DR-100"
+
+
+def test_run_triage_refused_terminate_not_real_id_in_output():
+    """End-to-end: when run_triage() encounters a Refusal for a terminate
+    decision, the decision in outcome.all_decisions must NOT carry a
+    real DR-NNN id — it should retain DR-PENDING.
+    """
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+        _write_concept_to_disk(project, "IC-001", "human", revision=1)
+
+        # Use check_policy_exclusion to trigger a terminate decision
+        # by providing a policy that excludes the concept's modality
+        concept = _small_molecule_concept("IC-001")
+        policy = {
+            "id": "GP-TEST",
+            "requirements": [{
+                "type": "hard_constraint",
+                "description": "No small molecules allowed",
+                "exclusion": {
+                    "modalities": ["small_molecule"],
+                },
+            }],
+        }
+
+        outcome = run_triage(
+            [concept],
+            policies=[policy],
+            project_root=str(project),
+            runner=CliRunner(),
+            cli=cli,
+        )
+
+        # The concept should have been terminated by policy
+        cr = outcome.concept_results[0]
+        assert cr.disposition == "terminated", (
+            f"Expected terminated by policy, got {cr.disposition!r}"
+        )
+
+        # The decision should be in all_decisions
+        assert len(outcome.all_decisions) >= 1
+        terminate_decision = outcome.all_decisions[0]
+        assert terminate_decision["action"] == "terminate"
+
+        # The id should NOT be a real DR-NNN because the Refusal gate
+        # should have blocked persistence.  It should remain DR-PENDING.
+        assert terminate_decision["id"] == "DR-PENDING", (
+            f"Refused terminate decision should retain 'DR-PENDING', "
+            f"got {terminate_decision['id']!r}. "
+            f"A never-persisted decision must not carry a real DR-NNN "
+            f"to avoid dangling references."
+        )
+
+        # There should be a persistence_error for this refusal
+        assert len(outcome.persistence_errors) >= 1, (
+            "The refused terminate should be recorded in persistence_errors"
+        )
+        refusal_errors = [
+            e for e in outcome.persistence_errors if e["type"] == "refusal"
+        ]
+        assert len(refusal_errors) >= 1, (
+            "Expected at least one refusal-type persistence error"
+        )
+
+
+# ---------------------------------------------------------------------------
 # Test runner
 # ---------------------------------------------------------------------------
 
@@ -1646,6 +1957,14 @@ _TESTS = [
     ("template_no_auto_veto_documented", test_template_no_auto_veto_documented),
     ("template_budget_exhaustion_documented", test_template_budget_exhaustion_documented),
     ("template_rule_17_exists", test_template_rule_17_exists),
+    # Persistence error recording (Finding 1)
+    ("persistence_error_validation_failure_recorded", test_persistence_error_validation_failure_recorded),
+    ("persistence_error_refusal_recorded_distinctly", test_persistence_error_refusal_recorded_distinctly),
+    # ID mutation safety (Finding 2)
+    ("refused_decision_retains_pending_id", test_refused_decision_retains_pending_id),
+    ("refused_assessment_retains_pending_id", test_refused_assessment_retains_pending_id),
+    ("successful_write_does_mutate_id", test_successful_write_does_mutate_id),
+    ("run_triage_refused_terminate_not_real_id_in_output", test_run_triage_refused_terminate_not_real_id_in_output),
 ]
 
 

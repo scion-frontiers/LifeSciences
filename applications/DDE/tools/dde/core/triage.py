@@ -165,6 +165,7 @@ class TriageOutcome:
     all_decisions: list[dict[str, Any]] = field(default_factory=list)
     unresolved_liabilities: list[dict[str, Any]] = field(default_factory=list)
     authorized_next_work: list[str] = field(default_factory=list)
+    persistence_errors: list[dict[str, Any]] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -829,10 +830,20 @@ def run_triage(
                     try:
                         aid = next_id(project_root, "assessment")
                         write_triage_assessment(project_root, assessment, aid)
-                    except Exception:
-                        # Assessment may not validate; it stays in the
-                        # in-memory outcome but is not persisted.
-                        pass
+                    except Refusal as exc:
+                        outcome.persistence_errors.append({
+                            "concept_ref": cr.concept_ref,
+                            "record_type": "assessment",
+                            "type": "refusal",
+                            "message": str(exc),
+                        })
+                    except Exception as exc:
+                        outcome.persistence_errors.append({
+                            "concept_ref": cr.concept_ref,
+                            "record_type": "assessment",
+                            "type": "validation_error",
+                            "message": str(exc),
+                        })
 
         # Persist decision records
         for cr in outcome.concept_results:
@@ -841,13 +852,22 @@ def run_triage(
             try:
                 did = next_id(project_root, "decision")
                 write_triage_decision(project_root, cr.decision_record, did)
-            except Refusal:
+            except Refusal as exc:
                 # Terminate without human approval — the gate works.
                 # The decision needs human approval before persistence.
-                pass
-            except Exception:
-                # Other validation errors; the decision stays in-memory.
-                pass
+                outcome.persistence_errors.append({
+                    "concept_ref": cr.concept_ref,
+                    "record_type": "decision",
+                    "type": "refusal",
+                    "message": str(exc),
+                })
+            except Exception as exc:
+                outcome.persistence_errors.append({
+                    "concept_ref": cr.concept_ref,
+                    "record_type": "decision",
+                    "type": "validation_error",
+                    "message": str(exc),
+                })
 
     return outcome
 
@@ -870,19 +890,28 @@ def write_triage_decision(
     real, unmodified ``write_record()`` — which enforces the
     human-approval ``Refusal`` gate.
 
+    Uses copy-then-mutate: the caller's dict is only updated with the
+    real ``decision_id`` after ``write_record()`` succeeds.  If
+    ``write_record()`` raises (e.g. ``Refusal``), the caller's dict
+    retains its original ``id`` value (e.g. ``"DR-PENDING"``), preventing
+    a never-persisted decision from carrying a real-looking ``DR-NNN``.
+
     Returns the written decision record, or raises Refusal if the
     human-approval gate blocks it.
     """
     from dde.core.controlstore import write_record
 
-    decision["id"] = decision_id
+    # Write a copy — don't mutate the caller's dict until persistence succeeds
+    to_write = {**decision, "id": decision_id}
     write_record(
         project_root,
         "decision",
         decision_id,
-        decision,
+        to_write,
         concept_loader=concept_loader,
     )
+    # Only update the caller's dict on success
+    decision["id"] = decision_id
     return decision
 
 
@@ -891,9 +920,16 @@ def write_triage_assessment(
     assessment: dict[str, Any],
     assessment_id: str,
 ) -> dict[str, Any]:
-    """Write a triage assessment through the REAL ``write_record()`` path."""
+    """Write a triage assessment through the REAL ``write_record()`` path.
+
+    Uses copy-then-mutate: the caller's dict is only updated with the
+    real ``assessment_id`` after ``write_record()`` succeeds.
+    """
     from dde.core.controlstore import write_record
 
+    # Write a copy — don't mutate the caller's dict until persistence succeeds
+    to_write = {**assessment, "id": assessment_id}
+    write_record(project_root, "assessment", assessment_id, to_write)
+    # Only update the caller's dict on success
     assessment["id"] = assessment_id
-    write_record(project_root, "assessment", assessment_id, assessment)
     return assessment

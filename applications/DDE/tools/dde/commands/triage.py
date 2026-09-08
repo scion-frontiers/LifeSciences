@@ -217,6 +217,19 @@ def run_cmd(
                 status = a.get("evidence_status", "?")
                 emit.line(f"      status: {status}")
 
+    # --- Surface persistence errors ---
+    if outcome.persistence_errors:
+        emit.line("")
+        emit.line(
+            f"WARNING: {len(outcome.persistence_errors)} record(s) failed "
+            f"to persist to the control store:"
+        )
+        for perr in outcome.persistence_errors:
+            emit.line(
+                f"  - [{perr['type']}] {perr.get('record_type', '?')} "
+                f"for {perr['concept_ref']}: {perr['message']}"
+            )
+
     emit.line("")
     emit.line(
         "Stage 0 triage is a lead-orchestrated decision process.  "
@@ -246,6 +259,7 @@ def run_cmd(
             "concept_results": [],
             "all_assessments": outcome.all_assessments,
             "all_decisions": outcome.all_decisions,
+            "persistence_errors": outcome.persistence_errors,
         }
         for cr in outcome.concept_results:
             cr_data: dict[str, Any] = {
@@ -286,5 +300,7 @@ def run_cmd(
             }
             for cr in outcome.concept_results
         ])
+        if outcome.persistence_errors:
+            emit.data("persistence_errors", outcome.persistence_errors)
 
     emit.flush()
