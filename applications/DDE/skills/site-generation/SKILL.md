@@ -184,6 +184,25 @@ dde site export -o custom-name.zip
 - Uses `--site-dir` to override the default `_site` source directory.
 - If `raw/` is not bundled in the site directory, the command prints a warning to stderr. Viewers in the exported archive may not resolve data files without bundled `raw/`.
 
+### Localizing CDN Resources for Offline Use
+
+Exported archives reference external CDN resources by default (Google Fonts, 3Dmol.js, Plotly.js, highlight.js). When opened offline or on restricted networks, viewers may not function correctly. Run [`references/fix_localize_cdn.py`](references/fix_localize_cdn.py) as a post-build step to download these resources into a local `vendor/` directory and rewrite HTML references to use local paths:
+
+```bash
+dde site build
+python3 fix_localize_cdn.py _site/
+dde site export
+```
+
+The script is idempotent and creates a `vendor/manifest.json` listing all localized resources. See the table below for the known CDN dependencies:
+
+| CDN Domain | Library | Used By |
+|---|---|---|
+| `fonts.googleapis.com` / `fonts.gstatic.com` | Google Fonts | Theme system, base styles |
+| `cdn.jsdelivr.net/npm/3dmol` | 3Dmol.js | structure-viewer, sdf-viewer, docking-viewer |
+| `cdn.jsdelivr.net/npm/plotly` | Plotly.js | pae-viewer, plddt-viewer, expression-viewer, admet-viewer, docking-scores-viewer |
+| `cdn.jsdelivr.net/gh/highlightjs` | highlight.js | json-viewer |
+
 ## Serving the Generated Site
 
 After building, an agent can serve the site locally and expose it through the Scion hub so stakeholders can view it in a browser.
