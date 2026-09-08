@@ -340,6 +340,27 @@ A major pivot requires:
 - Charter revision before new work orders commit (see section 3, "Charter revision on
   major pivot")
 
+### Blocked-on-tooling escalation
+
+When an open question is logged as "blocked on tooling" in
+`program-state/open-questions.md`, this starts a clock. Within **one cohort**, the
+Science Lead must take one of three actions:
+
+1. **Escalate:** Request the missing tool be built — escalate to the controller, who
+   routes to developers.
+2. **Workaround:** Dispatch a specialist to query the underlying database or source
+   directly, bypassing the missing tool wrapper.
+3. **Accept:** Explicitly accept the gap as a documented program risk, recording in
+   `decision-log.md` what the answer would need to be to change the next gate
+   verdict — making the assumed answer explicit rather than silent.
+
+"Blocked on tooling" is never a resting state. An open question blocked for more than
+one cohort without one of these three actions is a process failure.
+
+When a "blocked on tooling" gap is accepted at a gate, the gate decision must state
+what the answer would need to be to change the verdict — making the risk explicit
+rather than silent.
+
 ---
 
 ## 8. Cadence: batch and interrupt
@@ -572,6 +593,9 @@ not binding.
     in chromosomal locus, protein class, modality, or disease pathway that differs on two
     or more of these dimensions is a major pivot, not a target selection. Major pivots
     require charter revision before new work orders commit (section 3).
+14. **Escalate "blocked on tooling" within one cohort.** An open question blocked
+    on tooling must be escalated, worked around, or explicitly accepted as a risk
+    within one cohort. Parking it indefinitely is not an option (section 7).
 
 ---
 
