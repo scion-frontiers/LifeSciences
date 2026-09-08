@@ -86,6 +86,7 @@ def _extract_study_record(study: dict[str, Any]) -> dict[str, Any]:
         "name": study.get("name", ""),
         "description": (study.get("description") or "")[:1000],
         "cancer_type": study.get("cancerTypeId", ""),
+        "reference_genome": study.get("referenceGenome", ""),
         "sample_count": study.get("allSampleCount", 0),
         "citation": study.get("citation") or None,
         "source": "cbioportal",

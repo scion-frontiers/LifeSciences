@@ -12,7 +12,6 @@ Asserts:
 from __future__ import annotations
 
 import json
-import os
 import sys
 import unittest
 from pathlib import Path
@@ -20,12 +19,12 @@ from unittest.mock import MagicMock, patch
 
 # Patch optional dependencies before importing the module under test.
 # Keep the patch active for the entire module so @patch decorators work.
-_mock_click = MagicMock()
+# Note: click is NOT mocked — CliRunner tests need the real click package.
 _mock_requests = MagicMock()
 _mock_yaml = MagicMock()
 _module_patches = patch.dict(
     "sys.modules",
-    {"requests": _mock_requests, "click": _mock_click, "yaml": _mock_yaml},
+    {"requests": _mock_requests, "yaml": _mock_yaml},
 )
 _module_patches.start()
 
@@ -47,6 +46,7 @@ _SAMPLE_STUDIES = [
         "name": "Breast Invasive Carcinoma (TCGA, PanCancer Atlas)",
         "description": "Breast cancer study from TCGA PanCancer Atlas",
         "cancerTypeId": "brca",
+        "referenceGenome": "hg19",
         "allSampleCount": 1084,
         "citation": "TCGA PanCancer Atlas 2018",
     },
@@ -55,6 +55,7 @@ _SAMPLE_STUDIES = [
         "name": "Lung Adenocarcinoma (TCGA, Nature 2014)",
         "description": "Comprehensive molecular profiling of lung adenocarcinoma",
         "cancerTypeId": "luad",
+        "referenceGenome": "hg38",
         "allSampleCount": 517,
         "citation": "TCGA, Nature 2014",
     },
@@ -63,6 +64,7 @@ _SAMPLE_STUDIES = [
         "name": "Breast Cancer (METABRIC, Nature 2012 & Nat Commun 2016)",
         "description": "Breast cancer genomics from the METABRIC study",
         "cancerTypeId": "brca",
+        "referenceGenome": "hg19",
         "allSampleCount": 2509,
         "citation": "Curtis et al. Nature 2012",
     },
@@ -149,24 +151,64 @@ class TestRelayCodeRegistration(unittest.TestCase):
 
 
 class TestRelayGuards(unittest.TestCase):
-    """Relay codes fire only under correct conditions."""
+    """Relay codes fire conditionally in search_cmd via CliRunner."""
+
+    def _run_search(self, query, mock_studies, max_results=25):
+        """Run search_cmd through CliRunner with mocked HTTP, return sidecar."""
+        import tempfile
+
+        from click.testing import CliRunner
+
+        from dde.cli import cli
+
+        runner = CliRunner()
+        with tempfile.TemporaryDirectory() as td:
+            project = Path(td) / "test-project"
+            project.mkdir()
+            (project / ".dde").mkdir()
+            (project / "raw" / "expression").mkdir(parents=True)
+
+            with patch.object(
+                cbioportal_mod.http, "get_json", return_value=mock_studies,
+            ):
+                args = [
+                    "--project", str(project),
+                    "cbioportal", "search", query,
+                    "--max-results", str(max_results),
+                ]
+                result = runner.invoke(cli, args)
+
+            self.assertEqual(result.exit_code, 0, f"search failed: {result.output}")
+
+            # Find and parse the sidecar
+            meta_files = list((project / "raw" / "expression").glob("*.meta.json"))
+            self.assertEqual(len(meta_files), 1, "expected exactly one sidecar")
+            sidecar = json.loads(meta_files[0].read_text(encoding="utf-8"))
+            return sidecar
+
+    def _relay_codes(self, sidecar):
+        """Extract relay codes from a sidecar dict."""
+        relays = sidecar.get("mandatory_relays", [])
+        return [r["code"] for r in relays if "code" in r]
 
     def test_no_results_relay_fires_on_empty(self):
-        """cbioportal.no_results fires when there are zero results."""
-        with patch.object(cbioportal_mod.http, "get_json", return_value=[]):
-            raw, artifact, truncated = _fetch_studies(
-                "nonexistent-xyz-query", None, None, 25,
-            )
-        self.assertEqual(len(artifact["results"]), 0)
-        # The relay code is registered and would fire in the search command
-        self.assertIn("cbioportal.no_results", RELAY_CODES)
+        """cbioportal.no_results fires in sidecar when search returns zero results."""
+        sidecar = self._run_search("nonexistent-xyz-query", [])
+        codes = self._relay_codes(sidecar)
+        self.assertIn("cbioportal.no_results", codes)
 
     def test_no_results_relay_does_not_fire_when_results_exist(self):
         """cbioportal.no_results does NOT fire when results exist."""
-        with patch.object(cbioportal_mod.http, "get_json", return_value=list(_SAMPLE_STUDIES)):
-            raw, artifact, truncated = _fetch_studies("breast", None, None, 25)
-        # Results exist — no_results relay should NOT fire
-        self.assertGreater(len(artifact["results"]), 0)
+        sidecar = self._run_search("breast", list(_SAMPLE_STUDIES))
+        codes = self._relay_codes(sidecar)
+        self.assertNotIn("cbioportal.no_results", codes)
+
+    def test_query_truncated_relay_fires(self):
+        """cbioportal.query_truncated fires when results exceed max_results."""
+        # All 3 studies match "cancer" — set max_results=1 to trigger truncation
+        sidecar = self._run_search("cancer", list(_SAMPLE_STUDIES), max_results=1)
+        codes = self._relay_codes(sidecar)
+        self.assertIn("cbioportal.query_truncated", codes)
 
 
 class TestArtifactClass(unittest.TestCase):
@@ -180,130 +222,96 @@ class TestArtifactClass(unittest.TestCase):
 
 
 class TestAnalyzeEndToEnd(unittest.TestCase):
-    """Analyze subcommand reads search output and produces analysis."""
+    """Analyze subcommand via CliRunner — search then analyze end-to-end."""
 
-    def setUp(self):
-        """Create a temporary project directory with a search artifact."""
+    def _run_search_then_analyze(self, query, mock_studies, max_results=25):
+        """Run search_cmd + analyze_cmd through CliRunner, return analysis dict."""
         import tempfile
-        from dde.core import provenance
 
-        self.tmpdir = tempfile.mkdtemp()
-        self.project_dir = Path(self.tmpdir)
-        # Create the DDE project structure
-        (self.project_dir / ".dde").mkdir()
-        expression_dir = self.project_dir / "raw" / "expression"
-        expression_dir.mkdir(parents=True)
+        from click.testing import CliRunner
 
-        # Write a sample search artifact
-        self.artifact_data = {
-            "schema": "dde.cbioportal-search.v1",
-            "query": "breast",
-            "searched_at": "2026-09-08T00:00:00Z",
-            "total_results": 2,
-            "results": [
-                {
-                    "study_id": "brca_tcga",
-                    "name": "Breast Cancer (TCGA)",
-                    "description": "TCGA breast cancer study",
-                    "cancer_type": "brca",
-                    "sample_count": 1084,
-                    "citation": "TCGA 2018",
-                    "source": "cbioportal",
-                },
-                {
-                    "study_id": "brca_metabric",
-                    "name": "Breast Cancer (METABRIC)",
-                    "description": "METABRIC breast cancer study",
-                    "cancer_type": "brca",
-                    "sample_count": 2509,
-                    "citation": "Curtis 2012",
-                    "source": "cbioportal",
-                },
-            ],
-        }
-        self.artifact_path = expression_dir / "breast.cbioportal-search.json"
-        self.artifact_path.write_text(
-            json.dumps(self.artifact_data, indent=2) + "\n",
-            encoding="utf-8",
-        )
+        from dde.cli import cli
 
-    def tearDown(self):
-        import shutil
+        runner = CliRunner()
+        with tempfile.TemporaryDirectory() as td:
+            project = Path(td) / "test-project"
+            project.mkdir()
+            (project / ".dde").mkdir()
+            expr_dir = project / "raw" / "expression"
+            expr_dir.mkdir(parents=True)
 
-        shutil.rmtree(self.tmpdir, ignore_errors=True)
+            # Step 1: run search
+            with patch.object(
+                cbioportal_mod.http, "get_json", return_value=mock_studies,
+            ):
+                search_result = runner.invoke(cli, [
+                    "--project", str(project),
+                    "cbioportal", "search", query,
+                    "--max-results", str(max_results),
+                ])
+            self.assertEqual(
+                search_result.exit_code, 0,
+                f"search failed: {search_result.output}",
+            )
+
+            # Locate the search artifact written by search_cmd
+            search_artifacts = list(expr_dir.glob("*.cbioportal-search.json"))
+            self.assertEqual(
+                len(search_artifacts), 1,
+                f"expected 1 search artifact, got {search_artifacts}",
+            )
+            artifact_path = search_artifacts[0]
+
+            # Step 2: run analyze on the artifact
+            analyze_result = runner.invoke(cli, [
+                "--project", str(project),
+                "cbioportal", "analyze", str(artifact_path),
+            ])
+            self.assertEqual(
+                analyze_result.exit_code, 0,
+                f"analyze failed: {analyze_result.output}",
+            )
+
+            # Read the analysis JSON
+            analysis_files = list(expr_dir.glob("*.analysis.json"))
+            self.assertEqual(
+                len(analysis_files), 1,
+                f"expected 1 analysis file, got {analysis_files}",
+            )
+            analysis = json.loads(analysis_files[0].read_text(encoding="utf-8"))
+            return analysis
 
     def test_analyze_produces_analysis(self):
-        """Analyze reads search artifact and produces analysis JSON."""
-        from dde.core import provenance
+        """Search → analyze pipeline: correct metrics, assessment, and outcome."""
+        analysis = self._run_search_then_analyze("breast", list(_SAMPLE_STUDIES))
 
-        provenance.allow_overwrite(True)
-        try:
-            analysis_path = provenance.write_analysis(
-                self.artifact_path.parent
-                / "breast.cbioportal-search.analysis.json",
-                source=str(self.artifact_path),
-                threshold_set="cbioportal-search",
-                thresholds_applied={},
-                metrics={
-                    "n_results": 2,
-                    "total_samples": 3593,
-                    "n_cancer_types": 1,
-                },
-                assessment={
-                    "outcome": "results-found",
-                    "query": "breast",
-                    "n_results": 2,
-                    "total_samples": 3593,
-                    "cancer_types": {"brca": 2},
-                    "n_cancer_types": 1,
-                },
-                mandatory_relays=[],
-                suppress_warnings=True,
-            )
+        self.assertEqual(analysis["threshold_set"], "cbioportal-search")
+        assessment = analysis["assessment"]
+        self.assertEqual(assessment["outcome"], "results-found")
+        self.assertEqual(assessment["n_results"], 2)
+        # Two breast studies: total samples = 1084 + 2509 = 3593
+        self.assertEqual(assessment["total_samples"], 3593)
+        self.assertIn("brca", assessment["cancer_types"])
+        self.assertEqual(assessment["cancer_types"]["brca"], 2)
 
-            self.assertTrue(analysis_path.is_file())
-            analysis = json.loads(analysis_path.read_text(encoding="utf-8"))
-            self.assertEqual(analysis["threshold_set"], "cbioportal-search")
-            self.assertEqual(analysis["assessment"]["outcome"], "results-found")
-            self.assertEqual(analysis["metrics"]["n_results"], 2)
-        finally:
-            provenance.allow_overwrite(False)
+        metrics = analysis["metrics"]
+        self.assertEqual(metrics["n_results"], 2)
+        self.assertEqual(metrics["total_samples"], 3593)
+        self.assertEqual(metrics["n_cancer_types"], 1)
 
     def test_analyze_no_results_verdict(self):
-        """Analyze with no results produces no-results verdict."""
-        from dde.core import provenance
+        """Search → analyze pipeline with no results produces no-results verdict."""
+        analysis = self._run_search_then_analyze("nonexistent-xyz-query", [])
 
-        # Write an empty search artifact
-        empty_artifact = dict(self.artifact_data, results=[], total_results=0)
-        empty_path = self.artifact_path.parent / "empty.cbioportal-search.json"
-        empty_path.write_text(
-            json.dumps(empty_artifact, indent=2) + "\n", encoding="utf-8",
-        )
+        assessment = analysis["assessment"]
+        self.assertEqual(assessment["outcome"], "no-results")
+        self.assertEqual(assessment["n_results"], 0)
+        self.assertEqual(assessment["total_samples"], 0)
 
-        provenance.allow_overwrite(True)
-        try:
-            analysis_path = provenance.write_analysis(
-                self.artifact_path.parent
-                / "empty.cbioportal-search.analysis.json",
-                source=str(empty_path),
-                threshold_set="cbioportal-search",
-                thresholds_applied={},
-                metrics={"n_results": 0, "total_samples": 0, "n_cancer_types": 0},
-                assessment={
-                    "outcome": "no-results",
-                    "query": "breast",
-                    "n_results": 0,
-                    "total_samples": 0,
-                    "cancer_types": {},
-                    "n_cancer_types": 0,
-                },
-                mandatory_relays=[],
-                suppress_warnings=True,
-            )
-            analysis = json.loads(analysis_path.read_text(encoding="utf-8"))
-            self.assertEqual(analysis["assessment"]["outcome"], "no-results")
-        finally:
-            provenance.allow_overwrite(False)
+        metrics = analysis["metrics"]
+        self.assertEqual(metrics["n_results"], 0)
+        self.assertEqual(metrics["total_samples"], 0)
+        self.assertEqual(metrics["n_cancer_types"], 0)
 
 
 class TestPhaseTwoGuard(unittest.TestCase):
@@ -351,6 +359,7 @@ class TestSchemaAndStructure(unittest.TestCase):
             self.assertIn("name", result)
             self.assertIn("description", result)
             self.assertIn("cancer_type", result)
+            self.assertIn("reference_genome", result)
             self.assertIn("sample_count", result)
             self.assertIn("citation", result)
             self.assertIn("source", result)
