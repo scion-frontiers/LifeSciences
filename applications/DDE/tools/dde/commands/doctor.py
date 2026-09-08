@@ -607,12 +607,12 @@ def _check_credentials(report: Report) -> None:
                 kind=CAPABILITY,
             )
 
-    # --- NCBI_API_KEY: env var presence only ---
+    # --- NCBI_API_KEY: env var presence → key sent on requests ---
     if os.environ.get("NCBI_API_KEY"):
         report.add(
             "credential NCBI_API_KEY",
             OK,
-            "present (NCBI E-utilities QPS lifted from 3 to 10)",
+            "present — sent on E-utilities requests (QPS 10)",
         )
     else:
         report.add(

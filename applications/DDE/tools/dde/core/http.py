@@ -17,6 +17,7 @@ design.
 from __future__ import annotations
 
 import fcntl
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -51,6 +52,23 @@ _PACE_DIR = Path.home() / ".cache" / "dde" / "pace"
 
 # In-process fallback when disk pacing is unavailable.
 _last_call: dict[str, float] = {}
+
+# Query-string parameter names that must never appear in error messages,
+# log lines, or exception detail.  Checked case-insensitively.
+_SENSITIVE_PARAMS = re.compile(
+    r"([?&])(api_key|apikey|key|token|secret)=[^&]*",
+    re.IGNORECASE,
+)
+
+
+def _sanitize_url(url: str) -> str:
+    """Strip credential-bearing query parameters from *url*.
+
+    Used in every error message that includes a URL so that an API key
+    passed as a query parameter cannot leak through exception text,
+    stderr, or sidecar records.
+    """
+    return _SENSITIVE_PARAMS.sub(r"\1\2=<REDACTED>", url)
 
 
 def _require_requests():
@@ -181,7 +199,7 @@ def request(
     """
     if _network_forbidden:
         raise PhaseContractError(
-            f"a phase-2 command attempted {method} {url}",
+            f"a phase-2 command attempted {method} {_sanitize_url(url)}",
             detail=_network_forbidden,
             remedy=(
                 "phase 2 reads what phase 1 wrote and applies thresholds to it. "
@@ -210,7 +228,7 @@ def request(
             last_status = None
             if attempt == max_attempts:
                 raise EndpointUnavailable(
-                    f"transport failure calling {url}",
+                    f"transport failure calling {_sanitize_url(url)}",
                     detail=last_detail,
                     remedy="check network access and endpoint health, then retry",
                 )
@@ -228,7 +246,7 @@ def request(
                 if cl > max_response_bytes:
                     response.close()
                     raise EndpointError(
-                        f"response from {url} exceeds size limit "
+                        f"response from {_sanitize_url(url)} exceeds size limit "
                         f"({max_response_bytes} bytes)",
                         detail=f"Content-Length: {content_length}",
                         remedy="if this endpoint legitimately returns large "
@@ -243,7 +261,7 @@ def request(
                 if total > max_response_bytes:
                     response.close()
                     raise EndpointError(
-                        f"response from {url} exceeds size limit "
+                        f"response from {_sanitize_url(url)} exceeds size limit "
                         f"({max_response_bytes} bytes)",
                         detail="size exceeded during streaming read",
                         remedy="if this endpoint legitimately returns large "
@@ -263,7 +281,7 @@ def request(
             retry_after = response.headers.get("Retry-After")
             if attempt == max_attempts:
                 raise EndpointUnavailable(
-                    f"{url} still returning {response.status_code} after "
+                    f"{_sanitize_url(url)} still returning {response.status_code} after "
                     f"{max_attempts} attempts",
                     detail=last_detail,
                     remedy=(
@@ -278,12 +296,12 @@ def request(
             continue
 
         raise EndpointError(
-            f"{url} returned HTTP {response.status_code}",
+            f"{_sanitize_url(url)} returned HTTP {response.status_code}",
             detail=body or None,
         )
 
     raise EndpointUnavailable(
-        f"exhausted attempts calling {url}",
+        f"exhausted attempts calling {_sanitize_url(url)}",
         detail=last_detail or f"last status {last_status}",
     )
 
@@ -294,7 +312,7 @@ def get_json(url: str, **kwargs: Any) -> Any:
         return response.json()
     except ValueError as exc:
         raise EndpointError(
-            f"{url} did not return valid JSON", detail=str(exc)
+            f"{_sanitize_url(url)} did not return valid JSON", detail=str(exc)
         )
 
 

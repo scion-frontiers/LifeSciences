@@ -39,13 +39,13 @@ from ..common import (
 )
 from ..core import http, provenance
 from ..core.errors import ArtifactError, Refusal, SchemaError
+from ..core.ncbi import EUTILS_QPS, api_key_params
 
 TOOL = "geo"
 ARTIFACT_CLASS = "transcriptomics"
 
 ESEARCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
 ESUMMARY_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
-NCBI_QPS = 3.0  # NCBI's limit without an API key
 
 VALID_ENTRY_TYPES = ("gse", "gds", "gpl", "gsm")
 
@@ -149,8 +149,9 @@ def _fetch_geo(
             "retmode": "json",
             "retmax": max_results,
             "term": constructed_term,
+            **api_key_params(),
         },
-        qps=NCBI_QPS,
+        qps=EUTILS_QPS,
         timeout=60.0,
     )
 
@@ -193,8 +194,9 @@ def _fetch_geo(
             "db": "gds",
             "id": ",".join(id_list),
             "retmode": "json",
+            **api_key_params(),
         },
-        qps=NCBI_QPS,
+        qps=EUTILS_QPS,
         timeout=120.0,
     )
 

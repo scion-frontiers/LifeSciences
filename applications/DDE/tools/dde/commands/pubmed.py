@@ -41,12 +41,12 @@ from ..common import (
 )
 from ..core import http, provenance
 from ..core.errors import ArtifactError, Refusal, SchemaError
+from ..core.ncbi import EUTILS_QPS, api_key_suffix
 
 TOOL = "pubmed"
 ARTIFACT_CLASS = "literature"  # same as litref -- both produce literature artifacts
 
 EUTILS_BASE = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
-EUTILS_QPS = 3.0  # NCBI allows 3/sec without API key, 10/sec with
 
 
 def _slugify(query: str) -> str:
@@ -238,6 +238,7 @@ def search_cmd(
         f"&retmax={max_results}"
         f"&sort={sort}"
         f"&retmode=json"
+        + api_key_suffix()
     )
     esearch_data = http.get_json(esearch_url, qps=EUTILS_QPS, timeout=60.0)
 
@@ -287,6 +288,7 @@ def search_cmd(
             f"&id={pmid_list}"
             f"&retmode=xml"
             f"&rettype=abstract"
+            + api_key_suffix()
         )
         efetch_bytes = http.get_bytes(efetch_url, qps=EUTILS_QPS, timeout=60.0)
         efetch_path.write_bytes(efetch_bytes)
