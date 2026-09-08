@@ -563,12 +563,9 @@ RELAY_CODES: dict[str, str] = {
         "that the target is validated — a trial is a bet, not a result."
     ),
     "patent.fto_risk_identified": (
-        "Report that a significant number of recent patents exist for this "
-        "target or query. A crowded patent landscape may constrain freedom to "
-        "operate. Name the top assignees and the patent count. Do not treat "
-        "the presence of patents as a definitive FTO block — a formal FTO "
-        "analysis by patent counsel is required to determine actual "
-        "freedom-to-operate constraints."
+        "Patent landscape shows recent filings that may affect freedom to "
+        "operate. Check assignees, claim scope, and jurisdiction before "
+        "proceeding."
     ),
 }
 

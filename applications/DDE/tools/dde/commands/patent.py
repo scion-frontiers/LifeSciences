@@ -24,6 +24,7 @@ queries are paced at 0.5 QPS.
 
 from __future__ import annotations
 
+import datetime
 import json
 import re
 from typing import Any
@@ -404,8 +405,6 @@ def _analyze_patents(
 
     Returns (metrics, assessment).
     """
-    import datetime
-
     current_year = datetime.date.today().year
     cutoff_year = current_year - 5
 
@@ -449,8 +448,8 @@ def _analyze_patents(
     else:
         verdict = "fto_risk_low"
 
-    # Relay for high FTO risk.
-    if verdict == "fto_risk_high":
+    # Relay for high or moderate FTO risk.
+    if verdict == "fto_risk_high" or verdict == "fto_risk_moderate":
         recent_assignees = set()
         for p in recent_patents:
             a = p.get("assignee", "")
