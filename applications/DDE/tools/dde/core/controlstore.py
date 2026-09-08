@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from .concepts import CONCEPT_STATES, validate_concept
 from .errors import ArtifactError, SchemaError
 from .evidence import validate_assessment, validate_decision
 from .statemachine import RUN_STATES, WORK_ORDER_STATES
@@ -37,6 +38,7 @@ RECORD_TYPES: dict[str, str] = {
     "lease": "leases",
     "assessment": "assessments",
     "decision": "decisions",
+    "concept": "concepts",
 }
 
 _SUBDIRS = list(RECORD_TYPES.values())
@@ -296,6 +298,7 @@ _VALIDATORS: dict[str, Callable[[dict[str, Any]], list[str]]] = {
     "lease": _validate_lease,
     "assessment": validate_assessment,
     "decision": validate_decision,
+    "concept": validate_concept,
 }
 
 
@@ -589,6 +592,7 @@ _WO_PREFIX_RE = re.compile(r"^WO-(\d{3,})")
 _RUN_PREFIX_RE = re.compile(r"^RUN-(\d{3,})")
 _AR_PREFIX_RE = re.compile(r"^AR-(\d{3,})")
 _DR_PREFIX_RE = re.compile(r"^DR-(\d{3,})")
+_IC_PREFIX_RE = re.compile(r"^IC-(\d{3,})")
 
 
 def next_id(project_root: str | Path, record_type: str) -> str:
@@ -600,17 +604,20 @@ def next_id(project_root: str | Path, record_type: str) -> str:
     For ``"run"``: scans ``runs/`` for the highest ``RUN-NNN`` and
     returns the next.  Defaults to ``RUN-001``.
 
+    For ``"concept"``: scans ``concepts/`` for the highest
+    ``IC-NNN`` and returns the next.  Defaults to ``IC-001``.
+
     Parameters
     ----------
     project_root:
         Path to the dde project root.
     record_type:
-        ``"work-order"`` or ``"run"``.
+        ``"work-order"``, ``"run"``, or ``"concept"``.
 
     Returns
     -------
     str
-        The next ID, e.g. ``"WO-003"`` or ``"RUN-001"``.
+        The next ID, e.g. ``"WO-003"``, ``"RUN-001"``, or ``"IC-001"``.
     """
     root = Path(project_root)
 
@@ -630,10 +637,14 @@ def next_id(project_root: str | Path, record_type: str) -> str:
         directory = _control_path(root, "decision")
         pattern = _DR_PREFIX_RE
         prefix = "DR"
+    elif record_type == "concept":
+        directory = _control_path(root, "concept")
+        pattern = _IC_PREFIX_RE
+        prefix = "IC"
     else:
         raise SchemaError(
             f"next_id does not support record type {record_type!r}",
-            detail="supported types: work-order, run, assessment, decision",
+            detail="supported types: work-order, run, assessment, decision, concept",
         )
 
     if not directory.is_dir():

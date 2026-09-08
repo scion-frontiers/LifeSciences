@@ -106,6 +106,19 @@ on human approval boundaries is not finished.
 
 Record the objective and the charter decision in `program-state/decision-log.md`.
 
+### Charter-linkage requirement for concept activation
+
+When intervention-concept records are in use, a concept in `draft` state cannot
+transition to `active` until its `charter_ref` field references the originating
+charter decision (e.g. `DEC-001`).  This is enforced by the concept validator:
+calling `validate_transition("concept", "draft", "active")` succeeds, but the
+concept record writer checks `charter_ref` before writing the state change and
+raises `Refusal` (exit 9) if it is missing.
+
+This formalizes the existing rule that the charter must exist before work can be
+routed, without adding a new mechanism — the concept record simply requires the
+link.
+
 ### Charter revision on major pivot
 
 When a decision is classified as a **major pivot** (per the detection rule in section 7),
@@ -401,6 +414,19 @@ A major pivot requires:
 - The explicit label **"major pivot"** in `decision-log.md` (not "target selection")
 - Charter revision before new work orders commit (see section 3, "Charter revision on
   major pivot")
+
+When intervention-concept records are in use, a major pivot is managed through the
+`pivoting` state:
+
+1. Transition the concept to `pivoting` (from `active` or `under_review`).
+2. Create a new revision with the changed key fields.
+3. The concept can only exit `pivoting` by going to `active` (pivot completed, charter
+   revised) or `terminated`.
+4. Record both the old and new concept revision IDs in the decision log entry.
+
+The 2-of-4 dimension check (chromosomal locus, protein class, modality, disease pathway)
+remains a judgment criterion — the schema provides the structured fields that make the
+comparison possible, but does not automate the classification.
 
 ### Blocked-on-tooling escalation
 

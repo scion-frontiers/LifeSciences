@@ -138,6 +138,49 @@ Before acting on Layer 2 state, the orchestrator verifies:
   decision entries. A mismatch is **BLOCKED** — either an entry was
   added without its index row, or vice versa.
 
+### Concept lifecycle rules
+
+When concept records exist under `.dde/control/concepts/`, the
+following additional rules apply:
+
+**Concept state machine.** Concept state transitions follow the
+transition table in `core/concepts.py` (`CONCEPT_TRANSITIONS`).
+Use `validate_transition("concept", current, target)` from
+`statemachine.py` to enforce legal transitions.  Terminal states
+(`terminated`, `withdrawn`) have no outgoing transitions.
+
+**Charter-linkage gate.** A concept cannot transition from `draft`
+to `active` without a non-empty `charter_ref` field.  This enforces
+the lead template's rule that a charter must exist before work is
+routed.
+
+**Pivot governance.** When a concept enters `pivoting`:
+1. The previous revision is preserved (revisions are immutable).
+2. A new revision is created with the changed key fields.
+3. `pivoting` can only go to `active` (pivot completed, charter
+   revised) or `terminated`.
+4. The decision log entry for the pivot must reference both the old
+   and new concept revisions.
+
+**Revision triggers.** A material change to any key field (see
+`concepts.KEY_FIELDS`) requires a new revision.  Non-key fields
+(`notes`, `work_order_refs`, `decision_log_refs`, etc.) can be
+updated in place without a revision bump.
+
+**Biomarker assumptions.** Each biomarker entry must have a valid
+category (`patient_selection`, `target_engagement`, `response`,
+`companion_diagnostic`).  When `status` is `unknown` or
+`not_applicable`, a `rationale` must be provided explaining the gap.
+
+**Concept integrity checks.** The pre-routing integrity check
+additionally verifies:
+- Every concept in `active` state has at least one assessment record
+  (when assessment records exist — this check is skipped when no
+  assessment infrastructure has been adopted).
+- Every concept record passes schema validation
+  (`validate_concept`).
+- Concept state is a legal value from `CONCEPT_STATES`.
+
 **Coverage, not just findings.** The check states what it examined:
 "Checked N liability entries, M open questions, K decision records
 across four documents." A program with zero critical liabilities

@@ -28,6 +28,7 @@ from ..common import (
     pass_state,
 )
 from ..core import controlstore
+from ..core.concepts import CONCEPT_SCHEMA, validate_concept
 from ..core.errors import ArtifactError, Refusal, SchemaError
 
 
@@ -916,4 +917,246 @@ def resume_cmd(
             )
         emit.line(f"Summary: {', '.join(summary_parts)}")
 
+    emit.flush()
+
+
+# ---------------------------------------------------------------------------
+# migrate-concepts
+# ---------------------------------------------------------------------------
+
+_SERIES_HEADING_RE = re.compile(r"^##\s+(.+)$")
+_CONCEPT_ID_RE_FIELD = re.compile(
+    r"\*\*Concept ID\*\*:\s*(.+?)(?:\s*$)", re.MULTILINE,
+)
+_STATUS_RE = re.compile(
+    r"\*\*Status\*\*:\s*(.+?)(?:\s*$)", re.MULTILINE,
+)
+
+
+def _parse_active_series(text: str) -> list[dict[str, Any]]:
+    """Parse ``active-series.md`` into a list of series entry dicts.
+
+    Each dict has keys: ``name``, ``status``, ``concept_id`` (if present).
+    Entries inside HTML comments are skipped (template blocks).
+    """
+    # Strip HTML comments (template blocks).
+    import re as _re
+
+    cleaned = _re.sub(r"<!--.*?-->", "", text, flags=_re.DOTALL)
+
+    entries: list[dict[str, Any]] = []
+    current_name: str | None = None
+    current_lines: list[str] = []
+
+    def _flush() -> None:
+        if current_name is None:
+            return
+        block = "\n".join(current_lines)
+        entry: dict[str, Any] = {"name": current_name}
+
+        # Extract concept ID if present.
+        cid_match = _CONCEPT_ID_RE_FIELD.search(block)
+        if cid_match:
+            cid_val = cid_match.group(1).strip()
+            if cid_val and cid_val.lower() not in (
+                "not yet assigned", "n/a", "none", "",
+            ):
+                entry["concept_id"] = cid_val
+
+        # Extract status.
+        status_match = _STATUS_RE.search(block)
+        if status_match:
+            entry["status"] = status_match.group(1).strip()
+
+        entries.append(entry)
+
+    for line in cleaned.splitlines():
+        heading_match = _SERIES_HEADING_RE.match(line)
+        if heading_match:
+            _flush()
+            current_name = heading_match.group(1).strip()
+            current_lines = []
+        elif current_name is not None:
+            current_lines.append(line)
+
+    _flush()
+    return entries
+
+
+def _propose_concept_record(
+    entry: dict[str, Any],
+    concept_id: str,
+    now: str,
+) -> dict[str, Any]:
+    """Build a proposed concept record from an active-series entry.
+
+    Gaps are declared as null, following design §3.4 point 2.
+    """
+    return {
+        "schema": CONCEPT_SCHEMA,
+        "id": concept_id,
+        "revision": 1,
+        "state": "draft",
+        "disease_context": {
+            "indication": None,
+            "stage": None,
+            "patient_population": None,
+        },
+        "target_pathway": {
+            "gene": entry["name"],
+            "protein": None,
+            "pathway": None,
+            "mechanism_hypothesis": None,
+        },
+        "modality": None,
+        "entity_ref": None,
+        "delivery_assumptions": None,
+        "biomarker_assumptions": None,
+        "charter_ref": None,
+        "hypothesis_refs": None,
+        "work_order_refs": None,
+        "decision_log_refs": None,
+        "applicable_policies": None,
+        "termination_authority": None,
+        "notes": f"Migrated from active-series.md entry: {entry['name']}",
+        "created_at": now,
+    }
+
+
+@program.command("migrate-concepts")
+@click.option(
+    "--active-series",
+    "series_path",
+    type=click.Path(exists=True),
+    default=None,
+    help="Path to active-series.md; defaults to program-state/active-series.md "
+    "under the project root.",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Show proposed records without writing.",
+)
+@output_options
+@pass_state
+def migrate_concepts_cmd(
+    state: AppState,
+    series_path: str | None,
+    dry_run: bool,
+    as_json: bool,
+    quiet: bool,
+) -> None:
+    """Propose concept records from active-series.md entries.
+
+    Reads ``active-series.md``, identifies entries without a concept
+    ID, and proposes draft concept records with gaps declared as null.
+    Use ``--dry-run`` to preview without writing.
+
+    Entries that already have a Concept ID field are skipped.
+    """
+    emit = emitter(as_json, quiet)
+    project = state.project()
+    dest_root = project.root
+
+    # Resolve active-series.md path.
+    if series_path is None:
+        candidates = [
+            dest_root / "program-state" / "active-series.md",
+            dest_root / "artifact-templates" / "program-state" / "active-series.md",
+        ]
+        resolved = None
+        for c in candidates:
+            if c.is_file():
+                resolved = c
+                break
+        if resolved is None:
+            raise ArtifactError(
+                "active-series.md not found",
+                detail="looked in program-state/ and artifact-templates/program-state/",
+                remedy="provide an explicit --active-series path",
+            )
+    else:
+        resolved = Path(series_path)
+
+    text = resolved.read_text(encoding="utf-8")
+    entries = _parse_active_series(text)
+
+    if not entries:
+        if not quiet:
+            emit.line("No entries found in active-series.md.")
+        emit.flush()
+        return
+
+    # Filter to entries without a concept ID.
+    to_migrate = [e for e in entries if "concept_id" not in e]
+    already_linked = [e for e in entries if "concept_id" in e]
+
+    if not to_migrate:
+        if not quiet:
+            emit.line(
+                f"All {len(entries)} entries already have concept IDs. "
+                "Nothing to migrate."
+            )
+        emit.flush()
+        return
+
+    # Ensure control dirs exist.
+    controlstore.ensure_control_dirs(dest_root)
+
+    # Generate IDs.
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    next_concept_id = controlstore.next_id(dest_root, "concept")
+    # Parse the numeric part to increment.
+    next_num = int(re.search(r"\d+", next_concept_id).group())
+
+    proposed: list[tuple[str, dict[str, Any]]] = []
+    for entry in to_migrate:
+        concept_id = f"IC-{next_num:03d}"
+        record = _propose_concept_record(entry, concept_id, now)
+        identifier = f"{concept_id}-r1"
+        proposed.append((identifier, record))
+        next_num += 1
+
+    # Report.
+    if not quiet:
+        emit.line(f"Found {len(entries)} entries in active-series.md:")
+        emit.line(f"  {len(already_linked)} already linked to concept records")
+        emit.line(f"  {len(to_migrate)} to migrate")
+        emit.line("")
+
+        for identifier, record in proposed:
+            emit.line(f"  {identifier}: {record['target_pathway']['gene']}")
+
+    emit.data("proposed", [
+        {"identifier": ident, "record": rec} for ident, rec in proposed
+    ])
+    emit.data("already_linked", [e["name"] for e in already_linked])
+
+    if dry_run:
+        if not quiet:
+            emit.line("")
+            emit.line("Dry run — no records written.")
+        emit.flush()
+        return
+
+    # Write records.
+    written: list[str] = []
+    for identifier, record in proposed:
+        controlstore.write_record(dest_root, "concept", identifier, record)
+        written.append(identifier)
+
+    # Log event.
+    controlstore.append_event(dest_root, {
+        "type": "concept.migrated",
+        "source": str(resolved),
+        "records": written,
+        "actor": None,
+    })
+
+    if not quiet:
+        emit.line("")
+        emit.line(f"Wrote {len(written)} concept record(s).")
+
+    emit.data("written", written)
     emit.flush()
