@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from .concepts import CONCEPT_STATES, validate_concept
 from .errors import ArtifactError, SchemaError
 from .statemachine import RUN_STATES, WORK_ORDER_STATES
 
@@ -34,6 +35,7 @@ RECORD_TYPES: dict[str, str] = {
     "run": "runs",
     "validation": "validations",
     "lease": "leases",
+    "concept": "concepts",
 }
 
 _SUBDIRS = list(RECORD_TYPES.values())
@@ -291,6 +293,7 @@ _VALIDATORS: dict[str, Callable[[dict[str, Any]], list[str]]] = {
     "run": _validate_run,
     "validation": _validate_validation,
     "lease": _validate_lease,
+    "concept": validate_concept,
 }
 
 
@@ -515,6 +518,7 @@ def write_publish_state(project_root: str | Path, data: dict[str, Any]) -> Path:
 
 _WO_PREFIX_RE = re.compile(r"^WO-(\d{3,})")
 _RUN_PREFIX_RE = re.compile(r"^RUN-(\d{3,})")
+_IC_PREFIX_RE = re.compile(r"^IC-(\d{3,})")
 
 
 def next_id(project_root: str | Path, record_type: str) -> str:
@@ -526,17 +530,20 @@ def next_id(project_root: str | Path, record_type: str) -> str:
     For ``"run"``: scans ``runs/`` for the highest ``RUN-NNN`` and
     returns the next.  Defaults to ``RUN-001``.
 
+    For ``"concept"``: scans ``concepts/`` for the highest
+    ``IC-NNN`` and returns the next.  Defaults to ``IC-001``.
+
     Parameters
     ----------
     project_root:
         Path to the dde project root.
     record_type:
-        ``"work-order"`` or ``"run"``.
+        ``"work-order"``, ``"run"``, or ``"concept"``.
 
     Returns
     -------
     str
-        The next ID, e.g. ``"WO-003"`` or ``"RUN-001"``.
+        The next ID, e.g. ``"WO-003"``, ``"RUN-001"``, or ``"IC-001"``.
     """
     root = Path(project_root)
 
@@ -548,10 +555,14 @@ def next_id(project_root: str | Path, record_type: str) -> str:
         directory = _control_path(root, "run")
         pattern = _RUN_PREFIX_RE
         prefix = "RUN"
+    elif record_type == "concept":
+        directory = _control_path(root, "concept")
+        pattern = _IC_PREFIX_RE
+        prefix = "IC"
     else:
         raise SchemaError(
             f"next_id does not support record type {record_type!r}",
-            detail="supported types: work-order, run",
+            detail="supported types: work-order, run, concept",
         )
 
     if not directory.is_dir():

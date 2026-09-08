@@ -35,6 +35,7 @@ elsewhere in the CLI for "change the input; retrying cannot help."
 
 from __future__ import annotations
 
+from .concepts import CONCEPT_TRANSITIONS
 from .errors import Refusal
 
 # ---------------------------------------------------------------------------
@@ -110,6 +111,7 @@ TERMINAL_RUN_STATES: set[str] = {
 _MACHINES: dict[str, dict[str | None, set[str]]] = {
     "workorder": WORK_ORDER_TRANSITIONS,
     "run": RUN_TRANSITIONS,
+    "concept": CONCEPT_TRANSITIONS,
 }
 
 
