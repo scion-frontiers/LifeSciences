@@ -39,7 +39,7 @@ from ..common import (
 )
 from ..core import provenance
 from ..core.errors import ArtifactError, DependencyError, Refusal
-from ..core.output import Emitter
+from ..core.output import Emitter, warn
 
 ARTIFACT_CLASS = "compounds"
 
@@ -208,6 +208,50 @@ def _build_sidecar(
     return sidecar
 
 
+def _overwrite_option(func):
+    """--overwrite: bypass overwrite protection for phase-1 artifacts."""
+    return click.option(
+        "--overwrite",
+        is_flag=True,
+        help="Replace existing artifacts that differ from the new output. "
+        "Without it, a conflicting write is refused (exit 9).",
+    )(func)
+
+
+def _safe_write_artifact(path: Path, content: str, *, overwrite: bool) -> bool:
+    """Write artifact content with overwrite protection.
+
+    Returns True if the file was written (new file or overwrite mode).
+    Returns False if skipped because identical content already exists.
+    Raises :class:`Refusal` if the file exists with different content
+    and *overwrite* is False.
+    """
+    path = Path(path)
+    if not path.exists():
+        path.write_text(content, encoding="utf-8")
+        return True
+    if overwrite:
+        path.write_text(content, encoding="utf-8")
+        return True
+
+    existing_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+    new_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+    if existing_hash == new_hash:
+        warn(
+            f"artifact already exists with identical content, skipping: "
+            f"{path.name}"
+        )
+        return False
+
+    raise Refusal(
+        f"artifact {path} already exists with different content",
+        detail=f"existing SHA-256: {existing_hash}, new SHA-256: {new_hash}",
+        remedy="use --overwrite to replace, or use --out to write to a "
+        "different location",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
@@ -227,6 +271,7 @@ def compound() -> None:
 @click.argument("smiles")
 @out_option
 @name_option
+@_overwrite_option
 @output_options
 @pass_state
 def validate_cmd(
@@ -234,6 +279,7 @@ def validate_cmd(
     smiles: str,
     out: str | None,
     name: str | None,
+    overwrite: bool,
     as_json: bool,
     quiet: bool,
 ) -> None:
@@ -267,11 +313,12 @@ def validate_cmd(
         record["multi_fragment"] = fragment_notes
 
     record_path = target_dir / f"{slug}.validate.json"
-    record_path.write_text(
-        json.dumps(record, indent=2) + "\n", encoding="utf-8"
-    )
-    sidecar.add_output(record_path)
-    meta_path = sidecar.write(target_dir / f"{slug}.validate.meta.json")
+    content = json.dumps(record, indent=2) + "\n"
+    written = _safe_write_artifact(record_path, content, overwrite=overwrite)
+    meta_path = target_dir / f"{slug}.validate.meta.json"
+    if written:
+        sidecar.add_output(record_path)
+        meta_path = sidecar.write(meta_path)
 
     emit.data("canonical_smiles", canonical)
     emit.data("parse_status", "valid")
@@ -289,6 +336,7 @@ def validate_cmd(
 @click.argument("smiles")
 @out_option
 @name_option
+@_overwrite_option
 @output_options
 @pass_state
 def descriptors_cmd(
@@ -296,6 +344,7 @@ def descriptors_cmd(
     smiles: str,
     out: str | None,
     name: str | None,
+    overwrite: bool,
     as_json: bool,
     quiet: bool,
 ) -> None:
@@ -334,11 +383,12 @@ def descriptors_cmd(
     }
 
     record_path = target_dir / f"{slug}.descriptors.json"
-    record_path.write_text(
-        json.dumps(record, indent=2) + "\n", encoding="utf-8"
-    )
-    sidecar.add_output(record_path)
-    meta_path = sidecar.write(target_dir / f"{slug}.descriptors.meta.json")
+    content = json.dumps(record, indent=2) + "\n"
+    written = _safe_write_artifact(record_path, content, overwrite=overwrite)
+    meta_path = target_dir / f"{slug}.descriptors.meta.json"
+    if written:
+        sidecar.add_output(record_path)
+        meta_path = sidecar.write(meta_path)
 
     emit.data("canonical_smiles", canonical)
     emit.data("descriptors", descriptors)
@@ -356,6 +406,7 @@ def descriptors_cmd(
 @click.argument("smiles")
 @out_option
 @name_option
+@_overwrite_option
 @output_options
 @pass_state
 def alerts_cmd(
@@ -363,6 +414,7 @@ def alerts_cmd(
     smiles: str,
     out: str | None,
     name: str | None,
+    overwrite: bool,
     as_json: bool,
     quiet: bool,
 ) -> None:
@@ -433,11 +485,12 @@ def alerts_cmd(
     }
 
     record_path = target_dir / f"{slug}.alerts.json"
-    record_path.write_text(
-        json.dumps(record, indent=2) + "\n", encoding="utf-8"
-    )
-    sidecar.add_output(record_path)
-    meta_path = sidecar.write(target_dir / f"{slug}.alerts.meta.json")
+    content = json.dumps(record, indent=2) + "\n"
+    written = _safe_write_artifact(record_path, content, overwrite=overwrite)
+    meta_path = target_dir / f"{slug}.alerts.meta.json"
+    if written:
+        sidecar.add_output(record_path)
+        meta_path = sidecar.write(meta_path)
 
     emit.data("canonical_smiles", canonical)
     emit.data("n_alerts", len(all_hits))
@@ -596,6 +649,7 @@ def prepare_3d_cmd(
 @click.argument("smiles")
 @out_option
 @name_option
+@_overwrite_option
 @output_options
 @pass_state
 def sa_score_cmd(
@@ -603,6 +657,7 @@ def sa_score_cmd(
     smiles: str,
     out: str | None,
     name: str | None,
+    overwrite: bool,
     as_json: bool,
     quiet: bool,
 ) -> None:
@@ -639,17 +694,67 @@ def sa_score_cmd(
     }
 
     record_path = target_dir / f"{slug}.sa-score.json"
-    record_path.write_text(
-        json.dumps(record, indent=2) + "\n", encoding="utf-8"
-    )
-    sidecar.add_output(record_path)
-    meta_path = sidecar.write(target_dir / f"{slug}.sa-score.meta.json")
+    content = json.dumps(record, indent=2) + "\n"
+    written = _safe_write_artifact(record_path, content, overwrite=overwrite)
+    meta_path = target_dir / f"{slug}.sa-score.meta.json"
+    if written:
+        sidecar.add_output(record_path)
+        meta_path = sidecar.write(meta_path)
 
     emit.data("canonical_smiles", canonical)
     emit.data("sa_score", score)
     emit.path(record_path, role="sa-score")
     emit.path(meta_path, role="sidecar")
     emit.flush()
+
+
+# ---------------------------------------------------------------------------
+# Phase 1 — profile (batch: validate + descriptors + alerts + sa-score)
+# ---------------------------------------------------------------------------
+
+
+@compound.command("profile")
+@click.argument("smiles")
+@name_option
+@out_option
+@_overwrite_option
+@output_options
+@pass_state
+def profile_cmd(
+    state: AppState,
+    smiles: str,
+    name: str | None,
+    out: str | None,
+    overwrite: bool,
+    as_json: bool,
+    quiet: bool,
+) -> None:
+    """Run all phase-1 steps: validate, descriptors, alerts, sa-score.
+
+    This is a convenience wrapper that preserves the same individual
+    artifacts and sidecars as running each command separately.  Stops
+    on the first failure (if validate refuses, descriptors is not run).
+    """
+    ctx = click.get_current_context()
+    steps = [
+        ("validate", validate_cmd),
+        ("descriptors", descriptors_cmd),
+        ("alerts", alerts_cmd),
+        ("sa-score", sa_score_cmd),
+    ]
+
+    for step_name, cmd_func in steps:
+        if not quiet and not as_json:
+            click.echo(f"--- {step_name} ---")
+        ctx.invoke(
+            cmd_func,
+            smiles=smiles,
+            name=name,
+            out=out,
+            overwrite=overwrite,
+            as_json=as_json,
+            quiet=quiet,
+        )
 
 
 # ---------------------------------------------------------------------------
