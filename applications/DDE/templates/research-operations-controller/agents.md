@@ -175,6 +175,7 @@ Parse the JSON output and build your **capability exclusion list** for the sessi
 | `google.cloud.aiplatform` | `protein-structure-confidence` (AF3), AlphaGenome-dependent skills |
 | `alphagenome` | AlphaGenome-dependent skills |
 | `rdkit` | `compound-property-profile`, `admet-property-prediction`, `sar-series-analysis` (compound validation, molecular descriptors, and structural alerts) |
+| `hypex`, `elo`, `prox` | `hypothesis-exploration` (hypex tournament sub-team — all three binaries are required to run a tournament) |
 | `thresholds` | Analyses that depend on the named threshold set (match the `thresholds` prefix and cross-reference the threshold tag against which skills/analyses use that threshold set) |
 
 > If a `kind: "capability"` warning's check name does not match any row in the table
@@ -223,7 +224,8 @@ layers:
 ```text
 raw/{structures,docking,assay-data,descriptors,literature,hypotheses}/
 findings/{structural-biology,computational-biology,medicinal-chemistry,
-          computational-chemistry,admet-dmpk,experimental-biology,regulatory,reviews}/
+          computational-chemistry,admet-dmpk,experimental-biology,regulatory,
+          reviews,hypothesis-exploration}/
 program-state/{active-series.md,liability-tracker.md,decision-log.md,open-questions.md}
 gates/{stage1-target-nomination,stage2-hit-declaration,
        stage3-candidate-dossier,stage4-ind-package}/
@@ -401,9 +403,12 @@ AlphaFold 3 Vertex endpoint).
 | `resource_class` | Resource | Constraint | Default TTL |
 |---|---|---|---|
 | `af3` | AlphaFold 3 Vertex endpoint | Max one concurrent prediction | 45 min |
+| `hypex-tournament` | Hypothesis-explorer tournament | Max one concurrent tournament program-wide | 120 min |
 
 New single-flight resources are added to this table; the lease
-protocol above applies to all of them.
+protocol above applies to all of them. For `hypex-tournament`, up to
+3 extensions of 30 minutes each are allowed (210-minute ceiling),
+since tournaments run longer than single predictions.
 
 ---
 

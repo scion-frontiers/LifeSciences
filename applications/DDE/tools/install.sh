@@ -268,6 +268,83 @@ install_fpocket() {
     log "fpocket ${FPOCKET_VERSION} installed at ${target} (static)"
 }
 
+# --- hypex ---
+# Hypothesis-explorer datastore lifecycle and integrity CLI, used by
+# the hypex sub-team for tournament management (init-run, add-hypothesis,
+# add-match, set-status, validate, etc.).
+#
+# PLACEHOLDER URLs — the scion-frontiers/hypex repo has not published
+# GitHub releases yet.  Replace with real release URLs once available.
+HYPEX_VERSION="1.0.0"
+HYPEX_URL="PLACEHOLDER://github.com/scion-frontiers/hypex/releases/download/v${HYPEX_VERSION}/hypex_${HYPEX_VERSION}_linux_amd64"
+
+install_hypex() {
+    local target="${BIN_DIR}/hypex"
+    if [ -x "$target" ]; then
+        log "hypex already installed at ${target}"
+        return 0
+    fi
+    log "Downloading hypex ${HYPEX_VERSION}"
+    if curl -fsSL -o "$target" "$HYPEX_URL" 2>/dev/null; then
+        chmod +x "$target"
+        log "hypex installed at ${target}"
+    else
+        warn "Could not download hypex (network may be unavailable or release"
+        warn "not yet published). Skipping."
+        rm -f "$target"
+        return 1
+    fi
+}
+
+# --- elo ---
+# ELO rating engine for hypothesis tournaments.  Computes pairwise
+# ratings from match ledgers and produces per-epoch standings.
+HYPEX_ELO_VERSION="1.0.0"
+HYPEX_ELO_URL="PLACEHOLDER://github.com/scion-frontiers/hypex/releases/download/v${HYPEX_ELO_VERSION}/elo_${HYPEX_ELO_VERSION}_linux_amd64"
+
+install_elo() {
+    local target="${BIN_DIR}/elo"
+    if [ -x "$target" ]; then
+        log "elo already installed at ${target}"
+        return 0
+    fi
+    log "Downloading elo ${HYPEX_ELO_VERSION}"
+    if curl -fsSL -o "$target" "$HYPEX_ELO_URL" 2>/dev/null; then
+        chmod +x "$target"
+        log "elo installed at ${target}"
+    else
+        warn "Could not download elo (network may be unavailable or release"
+        warn "not yet published). Skipping."
+        rm -f "$target"
+        return 1
+    fi
+}
+
+# --- prox ---
+# Proximity / similarity tool for hypothesis clustering.  Computes
+# TF-IDF similarity between hypotheses and produces cluster
+# assignments that feed ELO pairing and merge recommendations.
+HYPEX_PROX_VERSION="0.1.0"
+HYPEX_PROX_URL="PLACEHOLDER://github.com/scion-frontiers/hypex/releases/download/v${HYPEX_PROX_VERSION}/prox_${HYPEX_PROX_VERSION}_linux_amd64"
+
+install_prox() {
+    local target="${BIN_DIR}/prox"
+    if [ -x "$target" ]; then
+        log "prox already installed at ${target}"
+        return 0
+    fi
+    log "Downloading prox ${HYPEX_PROX_VERSION}"
+    if curl -fsSL -o "$target" "$HYPEX_PROX_URL" 2>/dev/null; then
+        chmod +x "$target"
+        log "prox installed at ${target}"
+    else
+        warn "Could not download prox (network may be unavailable or release"
+        warn "not yet published). Skipping."
+        rm -f "$target"
+        return 1
+    fi
+}
+
 # --- rate4site ---
 # Evolutionary conservation scoring engine used by conservation analysis.
 # Built from source with g++; no cmake, no autotools, no external
@@ -310,7 +387,7 @@ install_rate4site() {
 }
 
 BINARY_STATUS=""
-for tool in vina fpocket rate4site; do
+for tool in vina fpocket rate4site hypex elo prox; do
     if "install_${tool}"; then
         BINARY_STATUS="${BINARY_STATUS} ${tool}=ok"
     else

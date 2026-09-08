@@ -442,6 +442,21 @@ _PROVISIONED_BINARIES = {
         "docking — structural-biologist and computational-chemist skills",
         "re-provision with `tools/install.sh --binaries-only`",
     ),
+    "hypex": (
+        "hypothesis-explorer datastore lifecycle — tournament management "
+        "(init-run, add-hypothesis, add-match, validate)",
+        "re-provision with `tools/install.sh --binaries-only`",
+    ),
+    "elo": (
+        "ELO rating engine — pairwise rankings and per-epoch standings "
+        "for hypothesis tournaments",
+        "re-provision with `tools/install.sh --binaries-only`",
+    ),
+    "prox": (
+        "proximity / similarity — hypothesis clustering for tournament "
+        "pairing and merge recommendations",
+        "re-provision with `tools/install.sh --binaries-only`",
+    ),
     "mk_prepare_receptor.py": (
         "receptor PDBQT preparation for docking (installed by meeko)",
         "install meeko and gemmi into the tools environment "
