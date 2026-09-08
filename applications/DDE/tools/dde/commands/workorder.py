@@ -13,6 +13,7 @@ control records.
 from __future__ import annotations
 
 import hashlib
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -158,6 +159,59 @@ def _find_latest_revision(
             remedy="check the ID and try again",
         )
     return max(records, key=lambda r: r.get("revision", 0))
+
+
+def _find_critical_liabilities(project_root: Path) -> list[str]:
+    """Return names of active Critical liabilities from the tracker.
+
+    Searches for ``liability-tracker.md`` under *project_root* and parses
+    it for sections where severity is Critical and status is NOT
+    ``mitigated`` or ``accepted``.
+
+    Returns an empty list if the tracker does not exist or contains no
+    active Critical entries.  An absent tracker is not an error — not
+    every project has liabilities registered.
+    """
+    candidates = list(project_root.rglob("liability-tracker.md"))
+    if not candidates:
+        return []
+    tracker_path = candidates[0]
+    try:
+        text = tracker_path.read_text(encoding="utf-8")
+    except OSError:
+        return []
+
+    # Parse markdown H2 sections looking for Critical severity + active status.
+    _SECTION_RE = re.compile(r"^##\s+(.+)", re.MULTILINE)
+    _SEVERITY_RE = re.compile(
+        r"\*\*Severity\*\*\s*:\s*(.+)", re.IGNORECASE,
+    )
+    _STATUS_RE = re.compile(
+        r"\*\*Status\*\*\s*:\s*(.+)", re.IGNORECASE,
+    )
+
+    sections = _SECTION_RE.split(text)
+    # sections alternates: [preamble, name1, body1, name2, body2, ...]
+    critical: list[str] = []
+    for i in range(1, len(sections), 2):
+        name = sections[i].strip()
+        body = sections[i + 1] if i + 1 < len(sections) else ""
+
+        sev_match = _SEVERITY_RE.search(body)
+        if not sev_match:
+            continue
+        severity = sev_match.group(1).strip().lower()
+        if severity != "critical":
+            continue
+
+        status_match = _STATUS_RE.search(body)
+        status = status_match.group(1).strip().lower() if status_match else "open"
+        if status in ("mitigated", "accepted"):
+            continue
+
+        critical.append(name)
+
+    return critical
 
 
 def _log_transition(
@@ -396,6 +450,24 @@ def _perform_commit(
                             remedy="ensure the artifact exists before committing",
                         )
                     link["sha256"] = sha256_file(artifact_path)
+
+    # Check for Critical liabilities requiring justification.
+    critical_liabilities = _find_critical_liabilities(project_root)
+    if critical_liabilities:
+        justification = record.get("liability_justification")
+        if not justification:
+            raise Refusal(
+                f"Critical liabilities exist but work order {wo_id} has no "
+                f"liability_justification field",
+                detail=f"Active Critical liabilities: {', '.join(critical_liabilities)}",
+                remedy=(
+                    "Add a liability_justification field to the work order "
+                    "linking to each Critical liability and explaining why "
+                    "work should proceed despite it. Example:\n"
+                    "  liability_justification:\n"
+                    '    L-2: "This cohort validates the contradicted claims"'
+                ),
+            )
 
     # Build context snapshot.
     # 256 KB default cap (design §4 Q2); configurable via program.yaml
