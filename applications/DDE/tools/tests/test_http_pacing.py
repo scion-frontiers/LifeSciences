@@ -227,11 +227,12 @@ class TestResolvePaceDir(unittest.TestCase):
         self.assertIn(_PACE_TIER, {"shared", "local", "memory"})
 
     # ------------------------------------------------------------------
-    # 10. DDE_PACE_REQUIRE_SHARED raises when shared unavailable
+    # 10. DDE_PACE_REQUIRE_SHARED — _resolve_pace_dir does NOT raise
     # ------------------------------------------------------------------
-    def test_resolve_pace_dir_require_shared_raises(self):
+    def test_resolve_pace_dir_require_shared_does_not_raise(self):
         """When DDE_PACE_REQUIRE_SHARED=1 and no shared path is available,
-        _resolve_pace_dir raises Refusal."""
+        _resolve_pace_dir falls through (local/memory) without raising.
+        The strict-mode check is deferred to _pace()."""
         env_clean = os.environ.copy()
         env_clean.pop("DDE_PACE_DIR", None)
         env_clean["DDE_PACE_REQUIRE_SHARED"] = "1"
@@ -241,8 +242,9 @@ class TestResolvePaceDir(unittest.TestCase):
 
         with patch.dict(os.environ, env_clean, clear=True):
             with patch.object(Path, "mkdir", _always_fail):
-                with self.assertRaises(Refusal):
-                    _resolve_pace_dir()
+                # Should NOT raise — falls through to memory tier.
+                path, tier = _resolve_pace_dir()
+        self.assertEqual(tier, "memory")
 
     # ------------------------------------------------------------------
     # 11. Memory tier skips disk pacing
@@ -259,6 +261,24 @@ class TestResolvePaceDir(unittest.TestCase):
                 mock_mem.assert_called_once()
         finally:
             http._PACE_TIER = orig_tier
+
+    # ------------------------------------------------------------------
+    # 12. Deferred strict-mode check: import succeeds, _pace raises
+    # ------------------------------------------------------------------
+    def test_deferred_strict_mode_raises_in_pace(self):
+        """With DDE_PACE_REQUIRE_SHARED=1 and a non-shared tier,
+        importing http.py must succeed but calling _pace() must raise
+        Refusal.  This ensures ``dde doctor`` can still run."""
+        orig_tier = http._PACE_TIER
+        orig_required = http._PACE_SHARED_REQUIRED
+        try:
+            http._PACE_TIER = "local"
+            http._PACE_SHARED_REQUIRED = True
+            with self.assertRaises(Refusal):
+                _pace("https://example.com/resource", qps=1.0)
+        finally:
+            http._PACE_TIER = orig_tier
+            http._PACE_SHARED_REQUIRED = orig_required
 
 
 if __name__ == "__main__":

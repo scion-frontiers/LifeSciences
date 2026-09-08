@@ -60,9 +60,10 @@ def _resolve_pace_dir() -> tuple[Path, str]:
     - "local" — container-local (~/.cache/dde/pace)
     - "memory" — in-process only (no disk pacing)
 
-    When ``DDE_PACE_REQUIRE_SHARED=1`` is set, failure to resolve a
-    shared tier raises :class:`Refusal` instead of falling back to
-    container-local.  This is opt-in: single-agent DDE must not regress.
+    Always completes without raising — even when
+    ``DDE_PACE_REQUIRE_SHARED=1`` is set and no shared tier is found.
+    The strict-mode check is deferred to :func:`_pace` so that the CLI
+    (including ``dde doctor``) can import this module without crashing.
     """
     # Tier 1: explicit env var override
     env_path = os.environ.get("DDE_PACE_DIR", "")
@@ -70,9 +71,13 @@ def _resolve_pace_dir() -> tuple[Path, str]:
         p = Path(env_path)
         try:
             p.mkdir(parents=True, exist_ok=True)
-            return p, "shared"
         except OSError:
             pass
+        else:
+            if p.is_dir():
+                return p, "shared"
+            # DDE_PACE_DIR exists as a file — misconfiguration; fall through
+            # and let ``dde doctor`` show the resolved tier.
 
     # Tier 2: shared project volume (scion default)
     shared = Path("/scion-volumes/scratchpad/pace")
@@ -81,16 +86,6 @@ def _resolve_pace_dir() -> tuple[Path, str]:
         return shared, "shared"
     except OSError:
         pass
-
-    # Strict mode: refuse rather than silently downgrade
-    require_shared = os.environ.get("DDE_PACE_REQUIRE_SHARED", "") == "1"
-    if require_shared:
-        raise Refusal(
-            "DDE_PACE_REQUIRE_SHARED is set but no shared pacing path is available",
-            detail="Set DDE_PACE_DIR to a shared path or ensure "
-            "/scion-volumes/scratchpad is mounted",
-            remedy="unset DDE_PACE_REQUIRE_SHARED to allow container-local fallback",
-        )
 
     # Tier 3: container-local (today's behavior)
     local = Path.home() / ".cache" / "dde" / "pace"
@@ -105,6 +100,10 @@ def _resolve_pace_dir() -> tuple[Path, str]:
 
 
 _PACE_DIR, _PACE_TIER = _resolve_pace_dir()
+
+# Strict-mode flag: deferred from _resolve_pace_dir() so the import
+# succeeds and ``dde doctor`` can report the resolved tier.
+_PACE_SHARED_REQUIRED = os.environ.get("DDE_PACE_REQUIRE_SHARED", "") == "1"
 
 # In-process fallback when disk pacing is unavailable.
 _last_call: dict[str, float] = {}
@@ -169,6 +168,13 @@ def _pace(url: str, qps: float) -> None:
     """
     if qps <= 0:
         return
+    if _PACE_SHARED_REQUIRED and _PACE_TIER != "shared":
+        raise Refusal(
+            "DDE_PACE_REQUIRE_SHARED is set but pacing is not using a shared path",
+            detail=f"Resolved tier: {_PACE_TIER}, path: {_PACE_DIR}",
+            remedy="set DDE_PACE_DIR to a shared path or ensure "
+            "/scion-volumes/scratchpad is mounted",
+        )
     host = urlparse(url).netloc
     interval = 1.0 / qps
     if _PACE_TIER == "memory":
@@ -211,7 +217,7 @@ def _pace_memory(host: str, interval: float) -> None:
     if previous is not None:
         wait = interval - (now - previous)
         if wait > 0:
-            time.sleep(wait)
+            time.sleep(min(wait, interval))
     _last_call[host] = time.monotonic()
 
 

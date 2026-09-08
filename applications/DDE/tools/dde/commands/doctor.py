@@ -704,7 +704,7 @@ def _check_pacing(report: Report) -> None:
         report.add(
             "HTTP pacing",
             WARN,
-            "in-memory only — no cross-invocation coordination",
+            f"in-memory only — no cross-invocation coordination (attempted: {_PACE_DIR})",
             kind=CAVEAT,
         )
 
