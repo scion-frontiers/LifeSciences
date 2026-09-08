@@ -314,11 +314,10 @@ def validate_cmd(
 
     record_path = target_dir / f"{slug}.validate.json"
     content = json.dumps(record, indent=2) + "\n"
-    written = _safe_write_artifact(record_path, content, overwrite=overwrite)
+    _safe_write_artifact(record_path, content, overwrite=overwrite)
     meta_path = target_dir / f"{slug}.validate.meta.json"
-    if written:
-        sidecar.add_output(record_path)
-        meta_path = sidecar.write(meta_path)
+    sidecar.add_output(record_path)
+    meta_path = sidecar.write(meta_path)
 
     emit.data("canonical_smiles", canonical)
     emit.data("parse_status", "valid")
@@ -384,11 +383,10 @@ def descriptors_cmd(
 
     record_path = target_dir / f"{slug}.descriptors.json"
     content = json.dumps(record, indent=2) + "\n"
-    written = _safe_write_artifact(record_path, content, overwrite=overwrite)
+    _safe_write_artifact(record_path, content, overwrite=overwrite)
     meta_path = target_dir / f"{slug}.descriptors.meta.json"
-    if written:
-        sidecar.add_output(record_path)
-        meta_path = sidecar.write(meta_path)
+    sidecar.add_output(record_path)
+    meta_path = sidecar.write(meta_path)
 
     emit.data("canonical_smiles", canonical)
     emit.data("descriptors", descriptors)
@@ -462,11 +460,11 @@ def alerts_cmd(
 
     # --- Aggregator patterns (custom SMARTS; no built-in catalog) ---
     aggregator_hits: list[dict[str, str]] = []
-    for name, smarts in _AGGREGATOR_PATTERNS:
+    for agg_name, smarts in _AGGREGATOR_PATTERNS:
         pattern = Chem.MolFromSmarts(smarts)
         if pattern is not None and mol.HasSubstructMatch(pattern):
             aggregator_hits.append({
-                "pattern_name": name,
+                "pattern_name": agg_name,
                 "smarts": smarts,
                 "source": "aggregator",
             })
@@ -486,11 +484,10 @@ def alerts_cmd(
 
     record_path = target_dir / f"{slug}.alerts.json"
     content = json.dumps(record, indent=2) + "\n"
-    written = _safe_write_artifact(record_path, content, overwrite=overwrite)
+    _safe_write_artifact(record_path, content, overwrite=overwrite)
     meta_path = target_dir / f"{slug}.alerts.meta.json"
-    if written:
-        sidecar.add_output(record_path)
-        meta_path = sidecar.write(meta_path)
+    sidecar.add_output(record_path)
+    meta_path = sidecar.write(meta_path)
 
     emit.data("canonical_smiles", canonical)
     emit.data("n_alerts", len(all_hits))
@@ -695,11 +692,10 @@ def sa_score_cmd(
 
     record_path = target_dir / f"{slug}.sa-score.json"
     content = json.dumps(record, indent=2) + "\n"
-    written = _safe_write_artifact(record_path, content, overwrite=overwrite)
+    _safe_write_artifact(record_path, content, overwrite=overwrite)
     meta_path = target_dir / f"{slug}.sa-score.meta.json"
-    if written:
-        sidecar.add_output(record_path)
-        meta_path = sidecar.write(meta_path)
+    sidecar.add_output(record_path)
+    meta_path = sidecar.write(meta_path)
 
     emit.data("canonical_smiles", canonical)
     emit.data("sa_score", score)
@@ -746,15 +742,20 @@ def profile_cmd(
     for step_name, cmd_func in steps:
         if not quiet and not as_json:
             click.echo(f"--- {step_name} ---")
-        ctx.invoke(
-            cmd_func,
-            smiles=smiles,
-            name=name,
-            out=out,
-            overwrite=overwrite,
-            as_json=as_json,
-            quiet=quiet,
-        )
+        try:
+            ctx.invoke(
+                cmd_func,
+                smiles=smiles,
+                name=name,
+                out=out,
+                overwrite=overwrite,
+                as_json=as_json,
+                quiet=quiet,
+            )
+        except Exception as exc:
+            if not quiet and not as_json:
+                click.echo(f"--- {step_name} FAILED ---")
+            raise
 
 
 # ---------------------------------------------------------------------------
