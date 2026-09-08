@@ -67,6 +67,7 @@ HOST_QPS: dict[str, float] = {
     "api.crossref.org": 2.0,                # cite/crossref=2
     # ── Preprint servers ────────────────────────────────────────────
     "export.arxiv.org": 0.333,              # preprint/arxiv; politeness minimum
+    "api.biorxiv.org": 3.0,                 # preprint/biorxiv; design spec §4.1.2
     # ── Other ────────────────────────────────────────────────────────
     "www.inbirg.com": 2.0,                  # disignatlas=2
     "patents.google.com": 0.5,              # patent=0.5
