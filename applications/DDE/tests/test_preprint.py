@@ -8,6 +8,9 @@ Covers:
   - Relay guards: preprint.no_results does NOT fire when results exist
   - Manifest schema: all required fields present in results
   - Slug generation from query string
+  - preprint.query_truncated fires when results are truncated
+  - preprint.query_truncated does NOT fire when results fit within max
+  - End-to-end: search then analyze produces correct analysis
 """
 
 from __future__ import annotations
@@ -473,6 +476,277 @@ def test_parse_arxiv_entries() -> None:
 
 
 # ---------------------------------------------------------------------------
+# 9. Relay: preprint.query_truncated fires when results are truncated
+# ---------------------------------------------------------------------------
+
+
+def test_query_truncated_fires() -> None:
+    """preprint.query_truncated fires when results are truncated."""
+    from click.testing import CliRunner
+    from dde.cli import cli
+
+    entries = [
+        {
+            "id": "2301.00001",
+            "title": "Paper One",
+            "authors": ["Author A"],
+            "abstract": "Abstract one.",
+            "published": "2023-01-01T00:00:00Z",
+            "updated": "2023-01-02T00:00:00Z",
+            "categories": ["cs.AI"],
+            "doi": None,
+        },
+        {
+            "id": "2301.00002",
+            "title": "Paper Two",
+            "authors": ["Author B"],
+            "abstract": "Abstract two.",
+            "published": "2023-01-03T00:00:00Z",
+            "updated": "2023-01-04T00:00:00Z",
+            "categories": ["cs.LG"],
+            "doi": None,
+        },
+    ]
+    # 2 entries returned, but 10 total — triggers truncation with --max-results 2
+    xml_bytes = _arxiv_atom_response(entries, total=10)
+
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+        runner = CliRunner()
+
+        with mock.patch("dde.commands.preprint.http.request") as mock_req:
+            mock_req.return_value = _mock_http_response(xml_bytes)
+            result = runner.invoke(
+                cli,
+                [
+                    "--project", str(project),
+                    "preprint", "search",
+                    "--source", "arxiv",
+                    "--max-results", "2",
+                    "truncation test query",
+                ],
+                catch_exceptions=False,
+            )
+
+        assert result.exit_code == 0, f"Exit {result.exit_code}\n{result.output}"
+
+        lit_dir = project / "raw" / "literature"
+        meta_files = list(lit_dir.glob("*.meta.json"))
+        assert len(meta_files) >= 1
+        meta = json.loads(meta_files[0].read_text(encoding="utf-8"))
+        relay_codes = [r["code"] for r in meta.get("mandatory_relays", [])]
+        assert "preprint.query_truncated" in relay_codes, (
+            f"preprint.query_truncated not fired; relays: {relay_codes}"
+        )
+
+        # The warning message should mention truncation
+        relay_messages = {
+            r["code"]: r.get("message", "") for r in meta.get("mandatory_relays", [])
+        }
+        msg = relay_messages.get("preprint.query_truncated", "")
+        assert "10" in msg or "truncat" in msg.lower(), (
+            f"Truncation warning message does not mention total or truncation: {msg!r}"
+        )
+
+    print("  PASS: preprint.query_truncated fires when results are truncated")
+
+
+# ---------------------------------------------------------------------------
+# 10. Relay: preprint.query_truncated does NOT fire when not truncated
+# ---------------------------------------------------------------------------
+
+
+def test_query_truncated_no_fire() -> None:
+    """preprint.query_truncated does NOT fire when results are not truncated."""
+    from click.testing import CliRunner
+    from dde.cli import cli
+
+    entries = [
+        {
+            "id": "2301.10001",
+            "title": "Paper Alpha",
+            "authors": ["Author X"],
+            "abstract": "Abstract alpha.",
+            "published": "2023-01-01T00:00:00Z",
+            "updated": "2023-01-02T00:00:00Z",
+            "categories": ["cs.AI"],
+            "doi": None,
+        },
+        {
+            "id": "2301.10002",
+            "title": "Paper Beta",
+            "authors": ["Author Y"],
+            "abstract": "Abstract beta.",
+            "published": "2023-01-03T00:00:00Z",
+            "updated": "2023-01-04T00:00:00Z",
+            "categories": ["cs.LG"],
+            "doi": None,
+        },
+        {
+            "id": "2301.10003",
+            "title": "Paper Gamma",
+            "authors": ["Author Z"],
+            "abstract": "Abstract gamma.",
+            "published": "2023-01-05T00:00:00Z",
+            "updated": "2023-01-06T00:00:00Z",
+            "categories": ["q-bio.BM"],
+            "doi": None,
+        },
+    ]
+    # 3 entries returned, 3 total, max_results=5 — no truncation
+    xml_bytes = _arxiv_atom_response(entries, total=3)
+
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+        runner = CliRunner()
+
+        with mock.patch("dde.commands.preprint.http.request") as mock_req:
+            mock_req.return_value = _mock_http_response(xml_bytes)
+            result = runner.invoke(
+                cli,
+                [
+                    "--project", str(project),
+                    "preprint", "search",
+                    "--source", "arxiv",
+                    "--max-results", "5",
+                    "non truncated query",
+                ],
+                catch_exceptions=False,
+            )
+
+        assert result.exit_code == 0, f"Exit {result.exit_code}\n{result.output}"
+
+        lit_dir = project / "raw" / "literature"
+        meta_files = list(lit_dir.glob("*.meta.json"))
+        assert len(meta_files) >= 1
+        meta = json.loads(meta_files[0].read_text(encoding="utf-8"))
+        relay_codes = [r["code"] for r in meta.get("mandatory_relays", [])]
+        assert "preprint.query_truncated" not in relay_codes, (
+            "preprint.query_truncated fired when results are not truncated"
+        )
+
+    print("  PASS: preprint.query_truncated does NOT fire when not truncated")
+
+
+# ---------------------------------------------------------------------------
+# 11. End-to-end: search then analyze
+# ---------------------------------------------------------------------------
+
+
+def test_analyze_end_to_end() -> None:
+    """analyze subcommand reads search output and produces analysis."""
+    from click.testing import CliRunner
+    from dde.cli import cli
+
+    entries = [
+        {
+            "id": "2301.20001",
+            "title": "Analysis Paper One",
+            "authors": ["Author P"],
+            "abstract": "Abstract for analysis test.",
+            "published": "2023-01-10T00:00:00Z",
+            "updated": "2023-01-11T00:00:00Z",
+            "categories": ["cs.AI"],
+            "doi": "10.1234/analysis.001",
+        },
+        {
+            "id": "2301.20002",
+            "title": "Analysis Paper Two",
+            "authors": ["Author Q"],
+            "abstract": "Second abstract for analysis.",
+            "published": "2023-01-12T00:00:00Z",
+            "updated": "2023-01-13T00:00:00Z",
+            "categories": ["cs.LG", "q-bio.BM"],
+            "doi": None,
+        },
+        {
+            "id": "2301.20003",
+            "title": "Analysis Paper Three",
+            "authors": ["Author R", "Author S"],
+            "abstract": "Third abstract for analysis.",
+            "published": "2023-01-14T00:00:00Z",
+            "updated": "2023-01-15T00:00:00Z",
+            "categories": ["q-bio.BM"],
+            "doi": "10.5678/analysis.003",
+        },
+    ]
+    xml_bytes = _arxiv_atom_response(entries, total=3)
+
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+        runner = CliRunner()
+
+        # Phase 1: search
+        with mock.patch("dde.commands.preprint.http.request") as mock_req:
+            mock_req.return_value = _mock_http_response(xml_bytes)
+            search_result = runner.invoke(
+                cli,
+                [
+                    "--project", str(project),
+                    "preprint", "search",
+                    "--source", "arxiv",
+                    "analysis end to end test",
+                ],
+                catch_exceptions=False,
+            )
+
+        assert search_result.exit_code == 0, (
+            f"Search exit {search_result.exit_code}\n{search_result.output}"
+        )
+
+        # Find the artifact written by search
+        lit_dir = project / "raw" / "literature"
+        artifact_files = list(lit_dir.glob("*.preprint-search.json"))
+        assert len(artifact_files) == 1, f"Expected 1 artifact, got {artifact_files}"
+        artifact_name = artifact_files[0].name
+
+        # Phase 2: analyze (reads from same directory, no network)
+        analyze_result = runner.invoke(
+            cli,
+            [
+                "--project", str(project),
+                "preprint", "analyze",
+                artifact_name,
+                "--from", str(lit_dir),
+            ],
+            catch_exceptions=False,
+        )
+
+        assert analyze_result.exit_code == 0, (
+            f"Analyze exit {analyze_result.exit_code}\n{analyze_result.output}"
+        )
+
+        # Check analysis output file exists
+        analysis_files = list(lit_dir.glob("*.preprint-search.analysis.json"))
+        assert len(analysis_files) == 1, (
+            f"Expected 1 analysis file, got {analysis_files}"
+        )
+
+        analysis = json.loads(analysis_files[0].read_text(encoding="utf-8"))
+
+        # Outcome
+        assert analysis["assessment"]["outcome"] == "results-found", (
+            f"Expected outcome 'results-found', got {analysis['assessment']['outcome']!r}"
+        )
+
+        # Source breakdown: all 3 are arxiv
+        source_breakdown = analysis["assessment"]["source_breakdown"]
+        assert "arxiv" in source_breakdown, (
+            f"arxiv not in source_breakdown: {source_breakdown}"
+        )
+        assert source_breakdown["arxiv"] == 3, (
+            f"Expected 3 arxiv results, got {source_breakdown['arxiv']}"
+        )
+
+        # Threshold set
+        assert analysis["threshold_set"] == "preprint-search", (
+            f"Expected threshold_set 'preprint-search', got {analysis['threshold_set']!r}"
+        )
+
+    print("  PASS: analyze end-to-end — search then analyze produces correct analysis")
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
@@ -488,6 +762,9 @@ def main() -> None:
         ("test_manifest_schema", test_manifest_schema),
         ("test_slugify", test_slugify),
         ("test_parse_arxiv_entries", test_parse_arxiv_entries),
+        ("test_query_truncated_fires", test_query_truncated_fires),
+        ("test_query_truncated_no_fire", test_query_truncated_no_fire),
+        ("test_analyze_end_to_end", test_analyze_end_to_end),
     ]
 
     passed = 0
