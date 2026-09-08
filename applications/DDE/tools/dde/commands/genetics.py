@@ -295,21 +295,6 @@ def analyze_cmd(
 
     pli = constraint.get("pLI")
     loeuf = constraint.get("oe_lof_upper")
-    if pli is None or loeuf is None:
-        raise SchemaError(
-            f"gnomAD constraint record for {resolved} lacks pLI or oe_lof_upper",
-            detail=f"pLI={pli!r} oe_lof_upper={loeuf!r}",
-        )
-
-    by_pli = "intolerant" if pli >= pli_cut else ("tolerant" if pli < pli_floor else "indeterminate")
-    by_loeuf = "intolerant" if loeuf < loeuf_cut else "tolerant"
-
-    if by_pli == "intolerant" or by_loeuf == "intolerant":
-        verdict = "lof_intolerant"
-    elif by_pli == "tolerant":
-        verdict = "lof_tolerant"
-    else:
-        verdict = "indeterminate"
 
     warnings: list[str] = []
     relays: list[dict[str, str]] = []
@@ -318,27 +303,53 @@ def analyze_cmd(
         if not any(r["code"] == code for r in relays):
             relays.append(provenance.relay(code, message))
 
-    # gnomAD's own documented unreliability criterion, quoted: "Intermediate
-    # pLI scores (0.1-0.9) are typically an indication that the gene was too
-    # small to be confidently categorized."
-    if pli_floor <= pli < pli_cut:
+    if pli is None or loeuf is None:
+        # Missing pLI/LOEUF is an expected gnomAD state (no_exp_lof flag),
+        # not a schema violation.  Return indeterminate with whatever IS
+        # present so the provenance chain stays intact.
+        verdict = "indeterminate"
+        by_pli = None
+        by_loeuf = None
+
         add_relay(
-            "gnomad.constraint_unreliable",
-            f"pLI {pli:.3f} lies in the intermediate band [{pli_floor}, {pli_cut}), "
-            "which gnomAD documents as an indication that the gene was too small "
-            "to be confidently categorised",
+            "gnomad.constraint_not_estimable",
+            f"gnomAD constraint record for {resolved} lacks "
+            f"pLI={pli!r} oe_lof_upper={loeuf!r}; loss-of-function "
+            "intolerance could not be assessed",
         )
+    else:
+        by_pli = "intolerant" if pli >= pli_cut else ("tolerant" if pli < pli_floor else "indeterminate")
+        by_loeuf = "intolerant" if loeuf < loeuf_cut else "tolerant"
+
+        if by_pli == "intolerant" or by_loeuf == "intolerant":
+            verdict = "lof_intolerant"
+        elif by_pli == "tolerant":
+            verdict = "lof_tolerant"
+        else:
+            verdict = "indeterminate"
+
+        # gnomAD's own documented unreliability criterion, quoted: "Intermediate
+        # pLI scores (0.1-0.9) are typically an indication that the gene was too
+        # small to be confidently categorized."
+        if pli_floor <= pli < pli_cut:
+            add_relay(
+                "gnomad.constraint_unreliable",
+                f"pLI {pli:.3f} lies in the intermediate band [{pli_floor}, {pli_cut}), "
+                "which gnomAD documents as an indication that the gene was too small "
+                "to be confidently categorised",
+            )
+        if by_pli != "indeterminate" and by_pli != by_loeuf:
+            add_relay(
+                "gnomad.constraint_unreliable",
+                f"pLI says {by_pli} ({pli:.3f} vs {pli_cut}) and LOEUF says {by_loeuf} "
+                f"({loeuf:.3f} vs {loeuf_cut}); the two metrics disagree, so this gene "
+                "sits at the boundary rather than in either class",
+            )
+
     if constraint.get("flags"):
         add_relay(
             "gnomad.constraint_unreliable",
             f"gnomAD flagged this transcript: {constraint['flags']}",
-        )
-    if by_pli != "indeterminate" and by_pli != by_loeuf:
-        add_relay(
-            "gnomad.constraint_unreliable",
-            f"pLI says {by_pli} ({pli:.3f} vs {pli_cut}) and LOEUF says {by_loeuf} "
-            f"({loeuf:.3f} vs {loeuf_cut}); the two metrics disagree, so this gene "
-            "sits at the boundary rather than in either class",
         )
 
     # Conditional on purpose. On a LoF-tolerant gene there is no
@@ -359,15 +370,20 @@ def analyze_cmd(
             f"[{constraint.get('oe_lof_lower')}, {loeuf}] directly"
         )
 
-    assessment = {
+    assessment: dict[str, Any] = {
         "verdict": verdict,
-        "verdict_by_pli": by_pli,
-        "verdict_by_loeuf": by_loeuf,
         "symbol": resolved,
         "gene_id": gene.get("gene_id"),
         "warnings": warnings,
     }
-    metrics = {
+    if by_pli is not None:
+        assessment["verdict_by_pli"] = by_pli
+    if by_loeuf is not None:
+        assessment["verdict_by_loeuf"] = by_loeuf
+    if pli is None or loeuf is None:
+        assessment["reason"] = "constraint_not_estimable"
+
+    metrics: dict[str, Any] = {
         "pLI": pli,
         "loeuf": loeuf,
         "oe_lof": constraint.get("oe_lof"),
@@ -397,11 +413,17 @@ def analyze_cmd(
     emit.data("metrics", metrics)
     emit.data("relays", relays)
     emit.line(f"{resolved} ({gene.get('gene_id')}) -> {verdict.upper()}")
-    emit.line(
-        f"pLI {pli:.4g} (>= {pli_cut} intolerant) | LOEUF {loeuf:.4g} "
-        f"(< {loeuf_cut} constrained) | obs/exp LoF "
-        f"{constraint.get('obs_lof')}/{constraint.get('exp_lof'):.1f}"
-    )
+    if pli is not None and loeuf is not None:
+        emit.line(
+            f"pLI {pli:.4g} (>= {pli_cut} intolerant) | LOEUF {loeuf:.4g} "
+            f"(< {loeuf_cut} constrained) | obs/exp LoF "
+            f"{constraint.get('obs_lof')}/{constraint.get('exp_lof'):.1f}"
+        )
+    else:
+        emit.line(
+            f"pLI={pli!r} LOEUF={loeuf!r} — constraint not estimable "
+            f"(reason: no_exp_lof or insufficient data)"
+        )
     for warning in warnings:
         emit.line(f"warning: {warning}")
     for record in relays:

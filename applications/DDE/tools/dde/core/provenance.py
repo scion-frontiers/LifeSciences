@@ -223,6 +223,12 @@ RELAY_CODES: dict[str, str] = {
         "tissue-average verdict is the best obtainable and cannot be refined "
         "by fetching more. Do not leave the reader expecting a follow-up."
     ),
+    "gnomad.constraint_not_estimable": (
+        "gnomAD could not estimate loss-of-function constraint for this gene "
+        "(insufficient expected LoF variants). Any finding about this gene's "
+        "essentiality must state that LoF intolerance could not be assessed, "
+        "not silently omit it."
+    ),
     "gnomad.constraint_unreliable": (
         "Report the constraint metric with its 90% confidence interval and say "
         "the gene could not be confidently categorised. Do not quote pLI or "
