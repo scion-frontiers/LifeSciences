@@ -503,6 +503,217 @@ def test_analyze_long_recommendation_truncated_in_cli() -> None:
 
 
 # ---------------------------------------------------------------------------
+# 3. Assessment core tests — dde.hypothesis-assessment.v1
+# ---------------------------------------------------------------------------
+
+
+def test_assessment_core_present_in_analysis() -> None:
+    """analyze output contains assessment_core key with correct schema."""
+    from click.testing import CliRunner
+    from dde.cli import cli
+
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+        record = _make_tournament(
+            top_ideas_summary=_MD_WITH_RECOMMENDATION,
+            reviews_overview="Some reviews.",
+        )
+        artifact_path = _write_tournament(project, record)
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--project", str(project), "coscientist", "analyze", str(artifact_path)],
+            catch_exceptions=False,
+        )
+        assert result.exit_code == 0
+
+        analysis_path = artifact_path.with_name(
+            artifact_path.name.replace(".tournament.json", ".analysis.json")
+        )
+        analysis = json.loads(analysis_path.read_text(encoding="utf-8"))
+
+        core = analysis["assessment"]["assessment_core"]
+        assert core["schema"] == "dde.hypothesis-assessment.v1"
+        assert core["strategy"] == "co-scientist"
+        assert "source_artifact" in core
+        assert "source_sha256" in core
+        assert isinstance(core["candidates"], list)
+        assert len(core["candidates"]) == 2
+        for candidate in core["candidates"]:
+            assert candidate["origin"] == "generated"
+    print("  PASS: assessment_core present in analysis")
+
+
+def test_assessment_core_score_is_object() -> None:
+    """Assessment core score is {value, basis} — never a bare number."""
+    from click.testing import CliRunner
+    from dde.cli import cli
+
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+        record = _make_tournament(n_ideas=3, n_generated=10)
+        artifact_path = _write_tournament(project, record)
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--project", str(project), "coscientist", "analyze", str(artifact_path)],
+            catch_exceptions=False,
+        )
+        assert result.exit_code == 0
+
+        analysis_path = artifact_path.with_name(
+            artifact_path.name.replace(".tournament.json", ".analysis.json")
+        )
+        analysis = json.loads(analysis_path.read_text(encoding="utf-8"))
+
+        for candidate in analysis["assessment"]["assessment_core"]["candidates"]:
+            score = candidate["score"]
+            assert isinstance(score, dict), (
+                f"score must be a dict, got {type(score).__name__}: {score}"
+            )
+            assert "value" in score
+            assert "basis" in score
+            assert isinstance(score["value"], (int, float))
+    print("  PASS: assessment_core score is object")
+
+
+def test_assessment_core_strategy_is_coscientist() -> None:
+    """Assessment core strategy is 'co-scientist'."""
+    from click.testing import CliRunner
+    from dde.cli import cli
+
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+        record = _make_tournament()
+        artifact_path = _write_tournament(project, record)
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--project", str(project), "coscientist", "analyze", str(artifact_path)],
+            catch_exceptions=False,
+        )
+        assert result.exit_code == 0
+
+        analysis_path = artifact_path.with_name(
+            artifact_path.name.replace(".tournament.json", ".analysis.json")
+        )
+        analysis = json.loads(analysis_path.read_text(encoding="utf-8"))
+        assert analysis["assessment"]["assessment_core"]["strategy"] == "co-scientist"
+    print("  PASS: assessment_core strategy is co-scientist")
+
+
+def test_assessment_core_basis_is_coscientist_elo() -> None:
+    """Assessment core basis is 'coscientist-elo@1.1'."""
+    from click.testing import CliRunner
+    from dde.cli import cli
+
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+        record = _make_tournament()
+        artifact_path = _write_tournament(project, record)
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--project", str(project), "coscientist", "analyze", str(artifact_path)],
+            catch_exceptions=False,
+        )
+        assert result.exit_code == 0
+
+        analysis_path = artifact_path.with_name(
+            artifact_path.name.replace(".tournament.json", ".analysis.json")
+        )
+        analysis = json.loads(analysis_path.read_text(encoding="utf-8"))
+        for candidate in analysis["assessment"]["assessment_core"]["candidates"]:
+            if candidate["score"] is not None:
+                assert candidate["score"]["basis"] == "coscientist-elo@1.1"
+    print("  PASS: assessment_core basis is coscientist-elo@1.1")
+
+
+def test_assessment_core_backward_compatible() -> None:
+    """Existing output keys are unchanged (backward compatibility)."""
+    from click.testing import CliRunner
+    from dde.cli import cli
+
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+        record = _make_tournament(
+            top_ideas_summary=_MD_WITH_RECOMMENDATION,
+            reviews_overview="Some reviews.",
+        )
+        artifact_path = _write_tournament(project, record)
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--project", str(project), "coscientist", "analyze", str(artifact_path)],
+            catch_exceptions=False,
+        )
+        assert result.exit_code == 0
+
+        analysis_path = artifact_path.with_name(
+            artifact_path.name.replace(".tournament.json", ".analysis.json")
+        )
+        analysis = json.loads(analysis_path.read_text(encoding="utf-8"))
+
+        # Existing top-level keys must still be present
+        assert "source" in analysis
+        assert "threshold_set" in analysis
+        assert "thresholds_applied" in analysis
+        assert "metrics" in analysis
+        assert "assessment" in analysis
+
+        # Existing assessment keys must still be present
+        assessment = analysis["assessment"]
+        assert "verdict" in assessment
+        assert "leader" in assessment
+        assert "elo_gap_to_runner_up" in assessment
+        assert "leader_gap_is_decisive" in assessment
+        assert "n_ideas_flagged" in assessment
+        assert "ideas" in assessment
+        assert "recommendation" in assessment
+
+        # assessment_core is additive
+        assert "assessment_core" in assessment
+    print("  PASS: assessment_core backward compatible")
+
+
+def test_assessment_core_null_rank_score() -> None:
+    """Ideas without elo_rating / ranking produce rank: null, score: null."""
+    from click.testing import CliRunner
+    from dde.cli import cli
+
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+        record = _make_tournament(n_ideas=1, n_generated=5)
+        # Strip elo_rating and ranking to simulate missing data
+        idea = record["ideas"][0]
+        del idea["elo_rating"]
+        del idea["ranking"]
+        artifact_path = _write_tournament(project, record)
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["--project", str(project), "coscientist", "analyze", str(artifact_path)],
+            catch_exceptions=False,
+        )
+        assert result.exit_code == 0
+
+        analysis_path = artifact_path.with_name(
+            artifact_path.name.replace(".tournament.json", ".analysis.json")
+        )
+        analysis = json.loads(analysis_path.read_text(encoding="utf-8"))
+        candidate = analysis["assessment"]["assessment_core"]["candidates"][0]
+        assert candidate["rank"] is None, f"expected rank=null, got {candidate['rank']}"
+        assert candidate["score"] is None, f"expected score=null, got {candidate['score']}"
+    print("  PASS: assessment_core null rank/score for missing elo")
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
@@ -525,6 +736,13 @@ def main() -> None:
         ("test_analyze_cli_no_recommendation_message_when_empty", test_analyze_cli_no_recommendation_message_when_empty),
         ("test_analyze_json_includes_recommendation", test_analyze_json_includes_recommendation),
         ("test_analyze_long_recommendation_truncated_in_cli", test_analyze_long_recommendation_truncated_in_cli),
+        # Assessment core tests
+        ("test_assessment_core_present_in_analysis", test_assessment_core_present_in_analysis),
+        ("test_assessment_core_score_is_object", test_assessment_core_score_is_object),
+        ("test_assessment_core_strategy_is_coscientist", test_assessment_core_strategy_is_coscientist),
+        ("test_assessment_core_basis_is_coscientist_elo", test_assessment_core_basis_is_coscientist_elo),
+        ("test_assessment_core_backward_compatible", test_assessment_core_backward_compatible),
+        ("test_assessment_core_null_rank_score", test_assessment_core_null_rank_score),
     ]
 
     passed = 0

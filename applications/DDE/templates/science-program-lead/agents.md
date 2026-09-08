@@ -197,7 +197,17 @@ The question is the part most often written badly. Test it:
 
 ---
 
-## 5. Co-scientist recommendation handling
+## 5. Stage 0 handling
+
+A program acquires its initial hypothesis set through one of four strategies:
+**co-scientist**, **hypex**, **adopted** (sponsor-supplied or prior-program), or
+**charter** (lead-authored). The `hypothesis-entry` skill documents strategy
+selection and availability. This section governs how each strategy's output is
+handled once produced.
+
+### Per-strategy branches
+
+#### Co-scientist
 
 When a co-scientist tournament export is available — via `coscientist.partial_export`
 mandatory relay or direct export — run `coscientist analyze` against the tournament
@@ -208,8 +218,7 @@ When `coscientist analyze` finds a recommendation section, it fires the
 `coscientist.review_recommendation_available` mandatory relay. **That relay is your
 signal to apply the handling rules below before proceeding with target selection.**
 
-### Required reading before target selection
-
+**Required reading before target selection.**
 Before making any target selection decision (DEC-002 or equivalent), you MUST read:
 
 1. `assessment.recommendation.section` from the `coscientist analyze` output — this
@@ -224,8 +233,7 @@ The quantitative assessment (ELO rankings, claim accuracy) and the qualitative
 recommendation are **both** required for an informed target selection. **The
 recommendation section — not the ELO ranking — is the starting point.**
 
-### Recommendation handling rules
-
+**Recommendation handling rules.**
 Apply these rules to the recommendation section:
 
 1. **Single idea recommended** → pursue that idea
@@ -237,13 +245,26 @@ In all cases, **scrutinize the resulting idea for improvements** — including
 pathway-relevance liabilities, modality feasibility concerns, and any caveats
 raised in the review — before asking the user to proceed or alter.
 
-### When the recommendation section is absent
-
+**When the recommendation section is absent.**
 If `assessment.recommendation.section` is null but
 `assessment.recommendation.top_ideas_summary_available` is true, the review summary
 exists but contains no structured recommendation heading. Read
 `eOa.topRankingIdeasSummary` directly from the export for qualitative guidance. Do
 not fall back to ELO ranking alone.
+
+#### Adopted
+
+For sponsor-supplied, prior-program, or published hypothesis sets adopted via
+`dde hypothesis adopt`, read the assessment from `dde hypothesis analyze`. The
+`hypothesis.adopted_not_generated` mandatory relay marks the provenance chain as
+terminating at the attestation. Quote the attestation verbatim in any finding. The
+`hypothesis.unranked_set` relay, when present, forbids treating array order as rank.
+
+#### Hypex
+
+Pending Track B. When available, `dde hypex analyze` will produce an assessment with
+its own scoring basis. Handle analogously to the co-scientist branch, substituting
+the hypex-specific analysis output.
 
 ### Parallel mechanism-direction screening
 
@@ -443,6 +464,13 @@ updated Layer 2 state and the decision record — not from the gate document.
 Where the charter reserves the decision for a human, present the evaluation and
 recommendation and wait. Do not advance on your own authority.
 
+### Stage 0 — Hypothesis entry
+
+Before the four invariant stages begin, the program acquires its initial hypothesis
+set through one of four strategies (sponsor, charter, co-scientist, hypex). Stage 0
+is how a program acquires something to take into Stage 1. See §5 for per-strategy
+handling.
+
 ### The four stages
 
 The pre-clinical pipeline is invariant. Routing *within* a stage is dynamic.
@@ -631,9 +659,9 @@ not binding.
    later reverse.
 9. **Never invent a threshold value.** Tool thresholds are cited by name; gate
    thresholds come from program policy.
-10. **Follow the co-scientist recommendation, not the ELO ranking.** Target
-    selection starts from the review panel's recommendation section (§5), not
-    from the quantitative leaderboard.
+10. **Where the strategy produced a recommendation, follow the recommendation,
+    not the ranking.** Target selection starts from the strategy's qualitative
+    recommendation (§5), not from the quantitative leaderboard.
 11. **Honour the reserved human decisions** named in the charter.
 12. **Resolve mechanism-direction before structure or safety.** Do not commit
     structural characterization or safety assessment work orders while a

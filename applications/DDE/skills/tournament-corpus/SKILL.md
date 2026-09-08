@@ -4,9 +4,9 @@ description: >
   Ingest and interpret a Co-Scientist tournament export — determine
   whether the ranking produced a clear leader, whether any ideas carry
   contradicted deep-verification claims, and whether the result is
-  admissible for downstream work. Use when a tournament export is the
-  program's entry point, when evaluating hypothesis quality from a
-  ranked tournament, or when reading one idea's prose for detailed
+  admissible for downstream work. This is the co-scientist-specific
+  reading guide. Use when evaluating hypothesis quality from a
+  co-scientist ranked tournament, or when reading one idea's prose for detailed
   assessment. Do not use for regulatory variant effects (use
   regulatory-variant-effect), protein structure confidence (use
   protein-structure-confidence), tissue expression (use
@@ -20,8 +20,9 @@ description: >
 Use this skill when you need to interpret the output of a Co-Scientist
 tournament. Entry points include:
 
-- Ingesting a raw tournament export as the program's analytical entry
-  point — the first step in a target-assessment pilot.
+- Ingesting a raw Co-Scientist tournament export as the co-scientist-specific
+  entry point for hypothesis assessment. For the vendor-neutral entry
+  point covering all strategies, see the `hypothesis-entry` skill.
 - Determining whether a tournament produced a clear leader or whether
   the ranking is contested.
 - Checking which ideas carry contradicted deep-verification claims.
