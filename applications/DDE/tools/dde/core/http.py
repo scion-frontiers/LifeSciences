@@ -114,11 +114,14 @@ def _pace_disk(host: str, interval: float) -> None:
         try:
             f.seek(0)
             content = f.read().strip()
-            previous = float(content) if content else 0.0
+            try:
+                previous = float(content) if content else 0.0
+            except ValueError:
+                previous = 0.0
             now = time.time()
             wait = interval - (now - previous)
             if wait > 0:
-                time.sleep(wait)
+                time.sleep(min(wait, interval))
             f.seek(0)
             f.truncate()
             f.write(str(time.time()))
@@ -194,7 +197,7 @@ def request(
     kwargs["stream"] = True
 
     # Inject default User-Agent unless the caller supplied one.
-    headers = kwargs.pop("headers", {})
+    headers = kwargs.pop("headers", None) or {}
     headers.setdefault("User-Agent", USER_AGENT)
     kwargs["headers"] = headers
 
