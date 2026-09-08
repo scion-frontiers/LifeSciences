@@ -542,11 +542,27 @@ resources to expensive characterization that becomes valueless if early question
 2. Mechanism-direction check — does modulating this target affect the disease pathway
    in the right direction?
 3. Competitive landscape / FTO screen — is there freedom to operate on this target?
-   Use `dde patent`, `dde trials`, and `dde pubchem` to answer:
+   Use `dde patent`, `dde differentiation`, `dde trials`, and `dde pubchem` to answer:
    - Are there published inhibitors or modulators of this target?
    - Are there active clinical programs targeting this gene/protein?
    - Are there patent filings covering this target, binding site strategy, or indication?
    - Where is the white space for differentiation?
+
+   The competitive landscape / FTO screen produces three **separate dimensions**
+   (competitor activity, patentability/novelty, freedom to operate) that must not
+   be collapsed into a single score. A concept with strong differentiation but
+   a real FTO concern must show both, not net them into one number. Existing
+   competitor activity is **not by itself** a scientific or commercial veto — a
+   crowded field with a genuinely differentiated angle is "differentiated despite
+   crowding", not automatically rejected.
+
+   > **FTO disclaimer:** Patent search results from `dde patent` and
+   > `dde differentiation` are based on public database searches and publicly
+   > available information. A public search or structural similarity analysis is
+   > **not formal legal clearance**. Material FTO conclusions require a formal
+   > freedom-to-operate opinion by qualified patent counsel. Always state search
+   > dates, scope, and coverage limits — no patent search may be presented as
+   > exhaustive.
 
 If step 1 or 2 fails: **terminate** the target. If step 3 reveals blocking IP
 with no white space: **terminate**. If white space exists: **pivot** to exploit it.
@@ -706,7 +722,9 @@ not binding.
     commitment (section 5).
 16. **Screen for competitive landscape and FTO before structural work.** Before
     committing to Cohort B characterization, verify there is freedom to operate on
-    the target using `dde patent`, `dde trials`, and `dde pubchem` (section 9).
+    the target using `dde patent`, `dde differentiation`, `dde trials`, and
+    `dde pubchem` (section 9). Patent search results are not formal legal clearance;
+    material FTO conclusions require qualified patent counsel.
 
 ---
 

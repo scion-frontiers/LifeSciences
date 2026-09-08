@@ -56,6 +56,7 @@ from .commands.scp import scp
 from .commands.spatialdb import spatialdb
 from .commands.pk import pk
 from .commands.tox import tox
+from .commands.differentiation import differentiation
 from .commands.patent import patent
 from .commands.trials import trials
 from .commands.pocket import pocket
@@ -377,6 +378,7 @@ cli.add_command(screen)
 cli.add_command(spatialdb)
 cli.add_command(similar)
 cli.add_command(tox)
+cli.add_command(differentiation)
 cli.add_command(patent)
 cli.add_command(trials)
 

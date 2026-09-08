@@ -571,6 +571,21 @@ RELAY_CODES: dict[str, str] = {
         "operate. Check assignees, claim scope, and jurisdiction before "
         "proceeding."
     ),
+    "differentiation.crowded_landscape": (
+        "Competitive landscape shows significant activity. Existing "
+        "competitor activity is informational, not a go/no-go gate — "
+        "a crowded field with a genuinely differentiated angle should "
+        "surface as 'differentiated despite crowding', not be rejected. "
+        "State the coverage limits of the search."
+    ),
+    "differentiation.not_legal_clearance": (
+        "This assessment is based on public patent database searches and "
+        "publicly available information. It is NOT formal legal clearance. "
+        "A public search or structural similarity analysis cannot "
+        "substitute for a formal freedom-to-operate opinion by qualified "
+        "patent counsel. Material FTO conclusions require qualified legal "
+        "review."
+    ),
     "cite.phantom_citation": (
         "Name the phantom references. A phantom citation invalidates the "
         "claim resting on it, not merely the reference."
