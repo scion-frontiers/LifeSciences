@@ -275,3 +275,66 @@ documents, gate documents, evidence-reuse mechanism). This directly violated the
 - test_triage.py: 57/57 passed (was 54/54, +3 new persistence/cancellation tests)
 - All pre-existing tests unchanged (concepts 74/74, evidence 49/49, manufacturing 35/35,
   differentiation 25/25, premortem 42/42, policy OK)
+
+---
+
+## Fix: Silent exception swallowing and ID-mutation-before-persistence (2026-09-08, Phase 4 quality gate)
+
+### Findings
+
+Two independent Phase 4 reviews (code-reviewer + security-auditor) identified two
+related bugs in `triage.py`'s persistence path:
+
+**Finding 1 (code-reviewer, Required): Silent exception swallowing.**
+The persistence loops in `run_triage()` had bare `except Exception: pass` blocks that
+silently swallowed all errors — filesystem permission errors, counter corruption,
+`SchemaError` from malformed records, any future bug in the write helpers. If 5
+assessments entered the persistence loop and only 3 landed on disk, nothing indicated
+this happened.
+
+**Finding 2 (security-auditor, Medium): Decision ID mutated before persistence succeeds.**
+`write_triage_decision()` mutated the caller's dict `id` field to a real `DR-NNN` BEFORE
+calling `write_record()`. When `write_record()` raised `Refusal` (blocking an unapproved
+terminate), the same dict object held by `outcome.all_decisions` already carried the real
+`DR-NNN`. The serialized output file (`stage0-triage-outcome.json`) would then show a
+real-looking ID for a never-persisted decision — creating dangling-reference risk and
+misleading reviewers.
+
+### Fixes applied
+
+1. **Added `persistence_errors` field** to `TriageOutcome` dataclass — structured list
+   of `{"concept_ref", "record_type", "type", "message"}` dicts.
+
+2. **Replaced bare `except` handlers** in `run_triage()`'s persistence loops:
+   - `except Refusal as exc` → appends `type: "refusal"` entry
+   - `except Exception as exc` → appends `type: "validation_error"` entry
+   - Both recorded with `concept_ref`, `record_type`, and error message
+
+3. **Copy-then-mutate** in `write_triage_decision()` and `write_triage_assessment()`:
+   - `to_write = {**decision, "id": decision_id}` — shallow copy with real ID
+   - `write_record()` writes the copy
+   - `decision["id"] = decision_id` only executes on success
+   - If `write_record()` raises, the caller's dict retains `"DR-PENDING"`
+
+4. **CLI output updated** (`commands/triage.py`):
+   - Emits `WARNING: N record(s) failed to persist` when `persistence_errors` non-empty
+   - `persistence_errors` included in the serialized `stage0-triage-outcome.json`
+   - `persistence_errors` included in JSON output mode
+
+5. **Six new tests**:
+   - `test_persistence_error_validation_failure_recorded` — malformed assessment produces
+     `type: "validation_error"` in `persistence_errors`
+   - `test_persistence_error_refusal_recorded_distinctly` — refused terminate produces
+     `type: "refusal"` distinct from validation errors
+   - `test_refused_decision_retains_pending_id` — after `Refusal`, decision `id` remains
+     `"DR-PENDING"`, not `"DR-999"`
+   - `test_refused_assessment_retains_pending_id` — same for assessments
+   - `test_successful_write_does_mutate_id` — positive case: on success, `id` IS updated
+   - `test_run_triage_refused_terminate_not_real_id_in_output` — end-to-end: policy-excluded
+     terminate decision in `outcome.all_decisions` retains `"DR-PENDING"` and produces a
+     refusal-type persistence error
+
+### Test results after fix
+
+- test_triage.py: 63/63 passed (was 57/57, +6 new tests)
+- No regressions in existing 57 tests
