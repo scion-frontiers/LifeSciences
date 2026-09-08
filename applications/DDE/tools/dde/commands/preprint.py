@@ -50,6 +50,8 @@ ARXIV_NS = "http://arxiv.org/schemas/atom"
 
 # bioRxiv API returns up to 100 records per page.
 _BIORXIV_PAGE_SIZE = 100
+# Maximum number of pages to fetch when scanning bioRxiv (cap at 3,000 preprints).
+_BIORXIV_MAX_PAGES = 30
 # Default window (days) to search when querying bioRxiv by date range.
 _BIORXIV_SEARCH_DAYS = 60
 
@@ -205,7 +207,6 @@ def _parse_biorxiv_collection(
         date = (item.get("date") or "").strip() or None
         version = item.get("version")
         category = (item.get("category") or "").strip() or None
-        server = (item.get("server") or "bioRxiv").strip()
 
         # Build a PDF URL from the DOI when available.
         pdf_url = f"https://www.biorxiv.org/content/{doi}v{version}.full.pdf" if doi and version else None
@@ -407,6 +408,7 @@ def _search_biorxiv(
     results: list[dict[str, Any]] = []
     cursor = 0
     total_scanned = 0
+    scan_capped = False
     raw_collections: list[dict[str, Any]] = []
 
     while len(results) < max_results:
@@ -429,6 +431,10 @@ def _search_biorxiv(
             break
 
         cursor += _BIORXIV_PAGE_SIZE
+
+        if cursor // _BIORXIV_PAGE_SIZE >= _BIORXIV_MAX_PAGES:
+            scan_capped = True
+            break
 
     # Trim to requested size.
     results = results[:max_results]
@@ -477,6 +483,8 @@ def _search_biorxiv(
         "date-range fetch with client-side keyword filtering "
         "(bioRxiv has no keyword search endpoint)",
     )
+    if scan_capped:
+        sidecar.note("biorxiv_scan_capped", True)
 
     sidecar.add_output(raw_path)
     sidecar.add_output(artifact_path)
@@ -548,7 +556,7 @@ def analyze_cmd(
     if not artifact_path.is_file():
         raise ArtifactError(
             f"no preprint search artifact: {artifact} under {source_dir}",
-            remedy="run `dde preprint search --source arxiv <QUERY>` first",
+            remedy="run `dde preprint search --source <SOURCE> <QUERY>` first",
         )
 
     data = provenance.read_json(artifact_path, "preprint search artifact")

@@ -27,7 +27,13 @@ TOOLS_DIR = Path(__file__).resolve().parent.parent / "tools"
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
-from dde.commands.preprint import _slugify, _parse_arxiv_entries, _parse_biorxiv_collection
+from dde.commands.preprint import (
+    _slugify,
+    _parse_arxiv_entries,
+    _parse_biorxiv_collection,
+    _BIORXIV_MAX_PAGES,
+    _BIORXIV_PAGE_SIZE,
+)
 from dde.core import provenance
 
 
@@ -1030,6 +1036,80 @@ def test_parse_biorxiv_collection() -> None:
 
 
 # ---------------------------------------------------------------------------
+# 16. bioRxiv: pagination cap limits API calls
+# ---------------------------------------------------------------------------
+
+
+def test_biorxiv_pagination_cap() -> None:
+    """bioRxiv search respects _BIORXIV_MAX_PAGES and notes cap in sidecar."""
+    from click.testing import CliRunner
+    from dde.cli import cli
+
+    # Build a full page of 100 items that do NOT match the search query.
+    # This keeps len(results) == 0 so the loop continues until the cap fires.
+    non_matching_items = [
+        {
+            "doi": f"10.1101/2023.01.01.{i:06d}",
+            "title": f"Unrelated paper number {i}",
+            "authors": "Author A; Author B",
+            "abstract": f"Study about something completely different #{i}.",
+            "date": "2023-01-15",
+            "version": "1",
+            "category": "genetics",
+            "server": "bioRxiv",
+        }
+        for i in range(_BIORXIV_PAGE_SIZE)
+    ]
+    full_page = _biorxiv_api_response(non_matching_items, total=_BIORXIV_PAGE_SIZE)
+
+    call_count = 0
+
+    def mock_get_json(url: str, **kwargs: Any) -> dict[str, Any]:
+        nonlocal call_count
+        call_count += 1
+        # Always return a full page so the loop would run forever without the cap.
+        return full_page
+
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+        runner = CliRunner()
+
+        with mock.patch("dde.commands.preprint.http.get_json", side_effect=mock_get_json):
+            result = runner.invoke(
+                cli,
+                [
+                    "--project", str(project),
+                    "preprint", "search",
+                    "--source", "biorxiv",
+                    "--max-results", "20",
+                    "xyzuniquequerythatwontmatch42",
+                ],
+                catch_exceptions=False,
+            )
+
+        assert result.exit_code == 0, f"Exit {result.exit_code}\n{result.output}"
+
+        # The loop should have stopped at _BIORXIV_MAX_PAGES (not run indefinitely).
+        # We add 1 because the cap check happens after the cursor increment, so
+        # the last allowed page fires the cap.
+        assert call_count <= _BIORXIV_MAX_PAGES + 1, (
+            f"Expected at most {_BIORXIV_MAX_PAGES + 1} API calls, got {call_count}"
+        )
+
+        # Verify the sidecar records that the scan was capped.
+        # sidecar.note() stores values as top-level keys in the meta dict.
+        lit_dir = project / "raw" / "literature"
+        meta_files = list(lit_dir.glob("*.meta.json"))
+        assert len(meta_files) >= 1
+        meta = json.loads(meta_files[0].read_text(encoding="utf-8"))
+        assert meta.get("biorxiv_scan_capped") is True, (
+            f"Expected biorxiv_scan_capped=True in sidecar, got {meta.get('biorxiv_scan_capped')}"
+        )
+
+    print("  PASS: bioRxiv pagination cap limits API calls and notes in sidecar")
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
@@ -1052,6 +1132,7 @@ def main() -> None:
         ("test_biorxiv_search_zero_results", test_biorxiv_search_zero_results),
         ("test_biorxiv_source_accepted", test_biorxiv_source_accepted),
         ("test_parse_biorxiv_collection", test_parse_biorxiv_collection),
+        ("test_biorxiv_pagination_cap", test_biorxiv_pagination_cap),
     ]
 
     passed = 0
