@@ -160,17 +160,29 @@ def _extract_regex(text: str) -> list[dict[str, Any]]:
     return results
 
 
+MAX_INPUT_BYTES = 50 * 1024 * 1024  # 50 MB
+
+
 def _extract_citations(file_path: Path) -> tuple[list[dict[str, Any]], str]:
     """Extract citations from a file. Returns (citations, extraction_basis)."""
+    size = file_path.stat().st_size
+    if size > MAX_INPUT_BYTES:
+        raise ArtifactError(
+            f"input file is {size / 1024 / 1024:.0f} MB, limit is "
+            f"{MAX_INPUT_BYTES / 1024 / 1024:.0f} MB",
+            remedy="pass a smaller file or split it",
+        )
     text = file_path.read_text(encoding="utf-8", errors="replace")
 
     structured_citations: list[dict[str, Any]] = []
     regex_citations: list[dict[str, Any]] = []
+    is_structured = False
 
     # Try structured extraction from JSON
     try:
         data = json.loads(text)
-        if isinstance(data, dict):
+        if isinstance(data, dict) and ("citations" in data or "references" in data):
+            is_structured = True
             structured_citations = _extract_structured(data)
     except (json.JSONDecodeError, ValueError):
         pass
@@ -195,7 +207,7 @@ def _extract_citations(file_path: Path) -> tuple[list[dict[str, Any]], str]:
     if regex_citations:
         return regex_citations, "regex-fallback"
 
-    return [], "regex-fallback"
+    return [], "structured" if is_structured else "regex-fallback"
 
 
 # ---------------------------------------------------------------------------
@@ -684,7 +696,7 @@ def analyze_cmd(
                 "recovered by pattern match",
             )
         )
-    if total == 0:
+    elif total == 0:
         relays.append(
             provenance.relay(
                 "cite.extraction_incomplete",

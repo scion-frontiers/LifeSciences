@@ -329,6 +329,80 @@ def test_suspect_not_verified_regression() -> None:
 
 
 # ---------------------------------------------------------------------------
+# 3b. §3.3 isolation: suspect-only fixture (no phantoms, no network errors)
+# ---------------------------------------------------------------------------
+
+
+def test_suspect_only_not_verified() -> None:
+    """With ONLY resolvable citations (no phantoms, no network errors), a
+    suspect title match must still prevent all_verified from being True.
+    This isolates the §3.3 invariant from confounding phantom/error counts."""
+    from click.testing import CliRunner
+    from dde.cli import cli
+
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+        doc = {
+            "citations": [
+                {"doi": "10.1056/verified-ok", "title": "Exact matching title here"},
+                {
+                    "doi": "10.5555/suspect-range",
+                    "title": "A study on therapeutic protein binding efficacy",
+                },
+            ]
+        }
+        doc_path = _write_json_document(project, "suspect-only.json", doc)
+
+        # The suspect DOI resolves, but with a title that is only partially
+        # similar (in the suspect range: >= 0.45 and < 0.75).
+        side_effect = _verify_side_effect(
+            doi_responses={
+                "verified-ok": _crossref_found("Exact matching title here"),
+                "suspect-range": _crossref_found(
+                    "A review of therapeutic protein binding studies"
+                ),
+            },
+        )
+
+        runner = CliRunner()
+        with mock.patch("dde.commands.cite.http.request") as mock_req:
+            mock_req.side_effect = side_effect
+            result = runner.invoke(
+                cli,
+                ["--project", str(project), "cite", "verify", str(doc_path)],
+                catch_exceptions=False,
+            )
+
+        assert result.exit_code == 0, f"Exit {result.exit_code}\n{result.output}"
+
+        manifest_path = project / "raw" / "literature" / "suspect-only.citations.json"
+        assert manifest_path.is_file(), "Manifest not written"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+        summary = manifest["summary"]
+        # No phantoms, no unverified — only verified and suspect
+        assert summary["phantom"] == 0, f"Expected 0 phantoms, got {summary}"
+        assert summary["unverified"] == 0, f"Expected 0 unverified, got {summary}"
+        assert summary["suspect"] >= 1, f"Expected >=1 suspect, got {summary}"
+
+        # §3.3 CRITICAL: all_verified must be False when suspect > 0
+        assert summary["all_verified"] is False, (
+            f"CRITICAL §3.3: all_verified should be False with suspect > 0, "
+            f"got {summary}"
+        )
+
+        # No citation in the suspect similarity range should have status "verified"
+        for c in manifest["citations"]:
+            sim = c.get("title_similarity", 0.0)
+            if 0.45 <= sim < 0.75:
+                assert c["status"] != "verified", (
+                    f"§3.3 REGRESSION: citation with title_similarity {sim} "
+                    f"has status 'verified': {c}"
+                )
+    print("  PASS: §3.3 isolation — suspect-only prevents all_verified")
+
+
+# ---------------------------------------------------------------------------
 # 4. --tolerance flag changes status
 # ---------------------------------------------------------------------------
 
@@ -451,9 +525,14 @@ def test_no_citations_exit_zero() -> None:
         analysis = json.loads(analysis_files[0].read_text(encoding="utf-8"))
         assert analysis["assessment"]["verdict"] == "no-citations-found"
 
-        # Check extraction_incomplete relay fires
+        # Check extraction_incomplete relay fires exactly once (not double-fired)
         relay_codes = [r["code"] for r in analysis.get("mandatory_relays", [])]
         assert "cite.extraction_incomplete" in relay_codes
+        extraction_incomplete_count = relay_codes.count("cite.extraction_incomplete")
+        assert extraction_incomplete_count == 1, (
+            f"cite.extraction_incomplete should fire exactly once, "
+            f"fired {extraction_incomplete_count} times"
+        )
     print("  PASS: no citations → exit 0, no-citations-found")
 
 
@@ -561,6 +640,115 @@ def test_analyze_overwrite_guard() -> None:
         original_writer = analysis.get("written_by")
         assert original_writer is not None
     print("  PASS: analyze overwrite guard")
+
+
+# ---------------------------------------------------------------------------
+# 7b. Overwrite guard — refusal path
+# ---------------------------------------------------------------------------
+
+
+def test_analyze_overwrite_refusal() -> None:
+    """Re-running analyze after modifying the manifest (different verdict)
+    refuses without --overwrite."""
+    from click.testing import CliRunner
+    from dde.cli import cli
+
+    with tempfile.TemporaryDirectory() as td:
+        project = _make_project(Path(td))
+        lit_dir = project / "raw" / "literature"
+
+        # Write a canned manifest — 1 suspect, 0 phantom
+        manifest = {
+            "schema": "dde.citation-manifest.v1",
+            "target_file": "refusal-test.json",
+            "verified_at": "2026-09-08T00:00:00Z",
+            "verifier": "dde-cite/0.3.0",
+            "summary": {
+                "total": 2, "verified": 1, "suspect": 1,
+                "phantom": 0, "unverified": 0, "all_verified": False,
+            },
+            "extraction_basis": "structured",
+            "citations": [
+                {
+                    "id": "10.1056/good", "raw_id": "10.1056/good",
+                    "source": "crossref", "status": "verified", "reason": "ok",
+                    "claimed_title": "Title", "resolved_title": "Title",
+                    "title_similarity": 1.0, "verified_via": "https://example.com",
+                    "url": "https://doi.org/10.1056/good", "error": None,
+                },
+                {
+                    "id": "10.1056/suspect", "raw_id": "10.1056/suspect",
+                    "source": "crossref", "status": "suspect-title-match",
+                    "reason": "title_mismatch",
+                    "claimed_title": "Claimed", "resolved_title": "Different",
+                    "title_similarity": 0.55, "verified_via": "https://example.com",
+                    "url": "https://doi.org/10.1056/suspect", "error": None,
+                },
+            ],
+        }
+        manifest_path = lit_dir / "refusal-test.citations.json"
+        manifest_path.write_text(
+            json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+        )
+
+        runner = CliRunner()
+
+        # First run — should succeed
+        result1 = runner.invoke(
+            cli,
+            ["--project", str(project), "cite", "analyze", "--from",
+             str(lit_dir)],
+            catch_exceptions=False,
+        )
+        assert result1.exit_code == 0, f"First run failed: {result1.output}"
+        analysis_path = lit_dir / "refusal-test.analysis.json"
+        assert analysis_path.is_file()
+
+        # Modify the manifest to produce a DIFFERENT verdict — add a phantom
+        manifest["summary"]["phantom"] = 2
+        manifest["summary"]["total"] = 4
+        manifest["citations"].append({
+            "id": "10.9999/phantom1", "raw_id": "10.9999/phantom1",
+            "source": "crossref", "status": "phantom", "reason": "not_found",
+            "claimed_title": "Phantom Paper", "resolved_title": None,
+            "title_similarity": 0.0, "verified_via": "https://example.com",
+            "url": None, "error": None,
+        })
+        manifest["citations"].append({
+            "id": "10.9999/phantom2", "raw_id": "10.9999/phantom2",
+            "source": "crossref", "status": "phantom", "reason": "not_found",
+            "claimed_title": "Another Phantom", "resolved_title": None,
+            "title_similarity": 0.0, "verified_via": "https://example.com",
+            "url": None, "error": None,
+        })
+        manifest_path.write_text(
+            json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+        )
+
+        # Second run WITHOUT --overwrite — should fail (Refusal)
+        result2 = runner.invoke(
+            cli,
+            ["--project", str(project), "cite", "analyze", "--from",
+             str(lit_dir)],
+            catch_exceptions=True,
+        )
+        assert result2.exit_code != 0, (
+            f"Expected non-zero exit on conflicting re-run without --overwrite, "
+            f"got exit {result2.exit_code}\n{result2.output}"
+        )
+
+        # Third run WITH --overwrite — should succeed
+        result3 = runner.invoke(
+            cli,
+            ["--project", str(project), "cite", "analyze", "--from",
+             str(lit_dir), "--overwrite"],
+            catch_exceptions=False,
+        )
+        assert result3.exit_code == 0, (
+            f"Re-run with --overwrite should succeed, "
+            f"got exit {result3.exit_code}\n{result3.output}"
+        )
+    print("  PASS: analyze overwrite refusal path")
 
 
 # ---------------------------------------------------------------------------
@@ -852,6 +1040,8 @@ def main() -> None:
         ("test_title_similarity_none", test_title_similarity_none),
         # §3.3 regression (most important test)
         ("test_suspect_not_verified_regression", test_suspect_not_verified_regression),
+        # §3.3 isolation — suspect-only fixture
+        ("test_suspect_only_not_verified", test_suspect_only_not_verified),
         # --tolerance flag
         ("test_tolerance_flag_changes_status", test_tolerance_flag_changes_status),
         # No citations
@@ -860,6 +1050,8 @@ def main() -> None:
         ("test_analyze_phase_two_contract", test_analyze_phase_two_contract),
         # Overwrite guard
         ("test_analyze_overwrite_guard", test_analyze_overwrite_guard),
+        # Overwrite guard — refusal path
+        ("test_analyze_overwrite_refusal", test_analyze_overwrite_refusal),
         # Registration
         ("test_relay_codes_registered", test_relay_codes_registered),
         ("test_threshold_set_registered", test_threshold_set_registered),
