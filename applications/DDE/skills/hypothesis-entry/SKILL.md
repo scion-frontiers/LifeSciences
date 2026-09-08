@@ -1,14 +1,16 @@
 ---
 name: hypothesis-entry
 description: >
-  Stage 0: how hypotheses enter a DDE science program. Four strategies
+  Hypothesis entry: how hypotheses enter a DDE science program. Four strategies
   exist, each producing a Layer 0 artifact under raw/hypotheses/ with
   its own schema and threshold set. Use this skill when planning or
   executing hypothesis entry — deciding which strategy to use, running
-  the adopt command, or interpreting the assessment output. Do not use
-  this skill for downstream analysis of hypotheses (stage 1+), for
-  reading co-scientist tournament details (use tournament-corpus), or
-  for running a hypex tournament (use the hypex work-order path).
+  the adopt command, or interpreting the assessment output. Hypothesis entry
+  feeds into Stage 0 bounded portfolio triage (see science-program-lead
+  template §5a). Do not use this skill for downstream analysis of hypotheses
+  (stage 1+), for reading co-scientist tournament details (use
+  tournament-corpus), or for running a hypex tournament (use the hypex
+  work-order path).
 ---
 
 ## 1. The four strategies

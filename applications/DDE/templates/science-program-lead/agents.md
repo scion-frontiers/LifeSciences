@@ -210,13 +210,13 @@ The question is the part most often written badly. Test it:
 
 ---
 
-## 5. Stage 0 handling
+## 5. Hypothesis Entry Handling
 
 A program acquires its initial hypothesis set through one of four strategies:
 **co-scientist**, **hypex**, **adopted** (sponsor-supplied or prior-program), or
 **charter** (lead-authored). The `hypothesis-entry` skill documents strategy
 selection and availability. This section governs how each strategy's output is
-handled once produced.
+handled once produced, before it enters Stage 0 triage (§5a).
 
 ### Per-strategy branches
 
@@ -316,6 +316,194 @@ per-target mechanism-direction pre-commit check in section 4. The portfolio scre
 happens once, early, before target commitment. The section 4 check is ongoing
 enforcement that catches mechanism-direction questions that arise later during the
 validation process. Both are needed.
+
+**Relationship to Stage 0.** The parallel mechanism-direction screen described above
+is one component of Stage 0's broader portfolio triage (§5a, Workstream 1). When
+Stage 0 is active, mechanism-direction screening runs as part of the rationale
+verification workstream rather than as a standalone step — the portfolio-level
+assessment rules above still apply within that workstream.
+
+---
+
+## 5a. Stage 0 — Bounded Portfolio Triage
+
+Stage 0 is a **lead-orchestrated, bounded decision process** that compares
+intervention concepts (#74 concept records, not raw targets) before final
+target/modality commitment, and authorizes a defined next investment. It operates
+on concept revisions produced by hypothesis entry (§5) and uses the existing
+assessment/decision record semantics (#75).
+
+**Stage 0 is not an autonomous gate.** Workstreams raise findings and potential
+stops; the Science Program Lead makes the reviewed decision under the charter.
+
+### Purpose
+
+Hypothesis entry (§5) produces candidate concepts. Stage 0 determines which of
+those concepts — if any — merit the investment of full Stage 1 validation. It
+does this by running three parallel workstreams of lightweight, inexpensive checks
+across all eligible alternatives, comparing them at portfolio level, and recording
+a reviewed decision.
+
+### The three workstreams
+
+Stage 0 dispatches three parallel workstreams. Each workstream produces assessment
+records (AR-NNN) against the concept under review. No workstream has automatic veto
+power — each raises findings that inform the lead's decision.
+
+**Workstream 1: Rationale verification.**
+Verify the foundational claims behind each concept using independent evidence.
+This workstream generalizes the parallel mechanism-direction screening described
+in §5 to cover the full set of pivotal rationale checks:
+
+- Genetic anchor verification — is the causal gene assignment independently
+  supported?
+- Mechanism-direction check — does modulating this target affect the disease
+  pathway in the right direction? (This is the §5 mechanism-direction screen,
+  now executed as part of Stage 0.)
+- Claim verification — are the material claims from the hypothesis entry strategy
+  independently confirmed, or are key claims contradicted/unverified?
+
+These checks use existing tools and the foundational claim review mechanics from
+#25/#26. The pre-mortem/dissent review step (#76, `tools/dde/core/premortem.py`)
+extends claim review for gate-critical assessments.
+
+**Workstream 2: Modality tractability.**
+Assess whether the target can be modulated by the proposed modality. This
+workstream uses:
+
+- `dde structure-screen run` (#38) for scoped rapid structural assessment
+- Competitive landscape / FTO screen via `dde differentiation assess` (#37) for
+  competitive positioning and freedom-to-operate
+
+The three dimensions of competitive differentiation (competitor activity,
+patentability/novelty, freedom to operate) remain independent — they are never
+blended into a single score (per #37's design). Crowding is not by itself a
+veto; a crowded field with a genuinely differentiated angle is "differentiated
+despite crowding."
+
+**Workstream 3: Preliminary manufacturing feasibility.**
+Screen production/product feasibility for the likely modality using:
+
+- `dde manufacturing assess-stage0` (#23) for progressive manufacturing assessment
+
+This workstream produces `not_yet_applicable` when no physical entity exists —
+that is the correct Stage 0 behavior, not a failure or a veto. Manufacturing
+assessment becomes entity-specific at Stage 2 when a physical entity is identified.
+
+### Batching and scheduling
+
+Stage 0 batches independent inexpensive checks under shared pacing:
+
+1. **Inexpensive checks first.** All three workstreams' lightweight checks
+   (genetic anchor, mechanism-direction, platform fit, competitive landscape)
+   run in parallel across all eligible concepts as a single batch.
+2. **Deeper work after prerequisites.** More constrained or expensive checks
+   (e.g., structure screening requiring retrieval) are scheduled only after
+   relevant prerequisite checks clear. Record a justification for any deliberate
+   parallel expensive work.
+3. **Cancellation on accepted decision.** When a concept is accepted and a
+   competing alternative for the same slot exists, cancel the competitor's
+   in-flight deeper checks. The cancellation is recorded — alternatives are
+   never silently dropped.
+
+### Budget and stopping
+
+Stage 0 is bounded. It stops at the earliest of:
+
+- **Sufficient evidence** for the next allocation decision (one or more concepts
+  have enough evidence to proceed, and the lead makes the decision).
+- **No eligible concepts remaining** (all concepts terminated or parked).
+- **Budget exhaustion** — wall-clock, compute/retrieval spending, or scarce-resource
+  limits reached.
+
+**Budget exhaustion is incomplete, not scientific failure.** When Stage 0 stops
+due to budget exhaustion:
+- Concepts with incomplete evidence are recorded with action `investigate` (more
+  evidence needed) or `park` (set aside for later), never `terminate`.
+- The `terminate` action is reserved for actual negative scientific findings or
+  program-constraint rejections — never for "ran out of budget."
+- The decision record's rationale states the budget-exhausted condition and what
+  evidence would be needed to resume.
+
+### No automatic veto
+
+Stage 0 must not produce automatic vetoes from:
+- Absent genetic or ligand evidence
+- A single unfavorable pocket score
+- Missing manufacturing inputs
+
+These conditions already produce the correct bounded signals at the tool layer:
+- Pocket druggability's anti-overclaim guards (#38) produce `insufficient` with
+  relay codes, not `contradicted`
+- Manufacturing assessment (#23) produces `not_yet_applicable` for missing entities
+- Structure screening preserves `fpocket.single_conformation` relays
+
+**Stage 0 must not aggregate these tool outputs into a naive kill rule.** For
+example, do not write `if pocket_score < threshold: terminate` — that defeats
+the per-tool interpretation guards one level down. The tools produce scoped,
+qualified evidence; Stage 0 presents that evidence to the lead for a reviewed
+decision.
+
+### Program-constraint rejection vs. scientific refutation
+
+Stage 0 records rejections from two distinct sources, and they must not be
+conflated:
+
+- **Program-constraint rejection** cites an applicable policy (GP-NNN from #11,
+  `tools/dde/core/policy.py`). Example: "The charter excludes gene therapy
+  modalities."
+- **Scientific refutation** cites a pivotal assessment (AR-NNN). Example:
+  "Mechanism-direction evidence contradicts the proposed mode of action."
+
+Both produce decision records (DR-NNN), but the `rationale` and
+`supporting_assessments` fields distinguish them. A program-constraint rejection
+references the policy; a scientific refutation references the evidence.
+
+### Recording
+
+Stage 0 records:
+- The **shortlist** of concepts that proceed to Stage 1
+- **Alternatives considered** and their disposition (accepted, parked, terminated,
+  withdrawn)
+- **Evidence** — assessment records (AR-NNN) from each workstream
+- **Unresolved liabilities** — entered in `liability-tracker.md`
+- **Review** — the lead's reviewed decision, including any pre-mortem review
+- **Applicable policy** — which policies applied and how
+- **Authorized next work** — what Stage 1 is authorized to do
+
+A lone sponsor hypothesis is not automatically cleared or rejected — it goes
+through the same three-workstream evaluation as any other concept, even when it
+is the only one available.
+
+### Relationship to Stage 1
+
+Stage 0 produces accepted evidence and a reviewed decision. Stage 1 **consumes**
+that evidence rather than re-running the same checks:
+
+- Genetic anchor verification, mechanism-direction checks, and competitive
+  landscape/FTO screening (formerly "Cohort A — Fast-fail" in §9) are now
+  Stage 0 responsibilities. Stage 1 receives their accepted results.
+- Structural characterization, safety assessment (Cohort B), and functional
+  validation (Cohort C) remain Stage 1 post-commitment work.
+- The evidence-reuse mechanism (#77) automates the handoff: Stage 1 work orders
+  reference Stage 0's accepted assessment records as dependencies rather than
+  re-dispatching the same questions.
+
+### Provenance across hypothesis-entry strategies
+
+Stage 0 covers all four hypothesis-entry strategies while preserving their
+provenance and score basis:
+
+| Strategy | Stage 0 input | Provenance preserved |
+|---|---|---|
+| Co-Scientist | Concept records derived from tournament recommendation | ELO ranking, review panel recommendation, claim accuracy |
+| Hypex | Concept records derived from hypex assessment | Hypex scoring basis (Track B) |
+| Adopted | Concept records from `dde hypothesis adopt` | Attestation, unranked-set relay |
+| Charter | Concept records from charter-authored hypotheses | Charter decision reference |
+
+The `hypothesis.adopted_not_generated` and `hypothesis.unranked_set` relays
+from adopted sets carry through into Stage 0's assessment context — they are
+never silently dropped.
 
 ---
 
@@ -570,12 +758,13 @@ updated Layer 2 state and the decision record — not from the gate document.
 Where the charter reserves the decision for a human, present the evaluation and
 recommendation and wait. Do not advance on your own authority.
 
-### Stage 0 — Hypothesis entry
+### Program Initiation — Hypothesis Entry
 
 Before the four invariant stages begin, the program acquires its initial hypothesis
-set through one of four strategies (sponsor, charter, co-scientist, hypex). Stage 0
-is how a program acquires something to take into Stage 1. See §5 for per-strategy
-handling.
+set through one of four strategies (sponsor, charter, co-scientist, hypex).
+Hypothesis entry is how a program acquires candidate concepts to take into Stage 0
+triage (§5a), which in turn produces the accepted evidence that Stage 1 consumes.
+See §5 for per-strategy handling.
 
 ### The four stages
 
@@ -617,24 +806,24 @@ The following ordering is **recommended, not enforced**. It reflects the lesson 
 cheapest, most discriminating questions should be answered first — before committing
 resources to expensive characterization that becomes valueless if early questions fail.
 
-**Cohort A — Fast-fail** (cheapest, most discriminating):
+**Cohort A — Consumed from Stage 0** (pre-commitment evidence):
+
+Genetic anchor verification, mechanism-direction checks, and competitive landscape /
+FTO screening are now performed during Stage 0 bounded portfolio triage (§5a). Stage 1
+**consumes the accepted evidence** from Stage 0 rather than re-running these checks.
+
+When Stage 0 assessment records exist for a concept:
+- Reference the accepted AR-NNN records as dependencies in Stage 1 work orders.
+- Do not re-dispatch the same questions unless Stage 0's evidence is explicitly
+  flagged as stale or superseded by new information.
+- The evidence-reuse mechanism (#77) automates the handoff.
+
+If Stage 0 was not run (e.g., legacy programs or single-concept fast-track), the
+checks below still apply as Stage 1 prerequisites before Cohort B:
 1. Genetic anchor verification — is the causal gene assignment correct?
 2. Mechanism-direction check — does modulating this target affect the disease pathway
    in the right direction?
 3. Competitive landscape / FTO screen — is there freedom to operate on this target?
-   Use `dde patent`, `dde differentiation`, `dde trials`, and `dde pubchem` to answer:
-   - Are there published inhibitors or modulators of this target?
-   - Are there active clinical programs targeting this gene/protein?
-   - Are there patent filings covering this target, binding site strategy, or indication?
-   - Where is the white space for differentiation?
-
-   The competitive landscape / FTO screen produces three **separate dimensions**
-   (competitor activity, patentability/novelty, freedom to operate) that must not
-   be collapsed into a single score. A concept with strong differentiation but
-   a real FTO concern must show both, not net them into one number. Existing
-   competitor activity is **not by itself** a scientific or commercial veto — a
-   crowded field with a genuinely differentiated angle is "differentiated despite
-   crowding", not automatically rejected.
 
    > **FTO disclaimer:** Patent search results from `dde patent` and
    > `dde differentiation` are based on public database searches and publicly
@@ -644,9 +833,8 @@ resources to expensive characterization that becomes valueless if early question
    > dates, scope, and coverage limits — no patent search may be presented as
    > exhaustive.
 
-If step 1 or 2 fails: **terminate** the target. If step 3 reveals blocking IP
-with no white space: **terminate**. If white space exists: **pivot** to exploit it.
-Do not proceed to Cohort B until all three pass.
+Do not proceed to Cohort B until the Stage 0 evidence (or fallback checks above) is
+accepted.
 
 **Cohort B — Characterization** (moderate cost, target-specific):
 4. Structural characterization and druggability assessment
@@ -796,15 +984,21 @@ not binding.
 14. **Escalate "blocked on tooling" within one cohort.** An open question blocked
     on tooling must be escalated, worked around, or explicitly accepted as a risk
     within one cohort. Parking it indefinitely is not an option (section 7).
-15. **Screen all candidates for mechanism-direction before committing to one.**
-    After tournament analysis, dispatch parallel mechanism-direction checks for
-    all viable candidates. Evaluate the portfolio-level result before target
-    commitment (section 5).
+15. **Run Stage 0 triage before target commitment.** After hypothesis entry
+    produces candidate concepts, run the three-workstream Stage 0 triage (§5a)
+    across all viable candidates. This includes mechanism-direction screening
+    (§5), competitive landscape, and manufacturing feasibility. Evaluate the
+    portfolio-level result before target commitment.
 16. **Screen for competitive landscape and FTO before structural work.** Before
     committing to Cohort B characterization, verify there is freedom to operate on
     the target using `dde patent`, `dde differentiation`, `dde trials`, and
     `dde pubchem` (section 9). Patent search results are not formal legal clearance;
     material FTO conclusions require qualified patent counsel.
+17. **Do not aggregate tool outputs into naive kill rules.** Stage 0 presents
+    tool evidence to the lead for a reviewed decision. It must not collapse
+    scoped tool outputs (pocket scores, manufacturing flags, competitive
+    dimensions) into automatic termination logic that defeats the per-tool
+    interpretation guards (#38, #23, #37).
 
 ---
 
