@@ -319,7 +319,14 @@ def test_validate_target_pathway_missing_gene() -> None:
 def test_validate_modality_not_string() -> None:
     record = _make_minimal_concept(modality=42)
     errors = validate_concept(record)
-    assert any("modality must be a string" in e for e in errors)
+    assert any("modality must be a string or null" in e for e in errors)
+
+
+def test_validate_modality_null_ok() -> None:
+    """Null modality is valid — gap declared as null per §3.4."""
+    record = _make_minimal_concept(modality=None)
+    errors = validate_concept(record)
+    assert not any("modality" in e for e in errors)
 
 
 def test_validate_termination_authority_enum() -> None:
@@ -659,6 +666,64 @@ def test_write_record_draft_concept_without_charter_succeeds() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Tests: Migration-shaped record through real write_record() path
+# ---------------------------------------------------------------------------
+
+def test_write_record_migration_shaped_record() -> None:
+    """A migration-shaped record (modality=None, gaps as null) must write
+    successfully through the real write_record() path.
+
+    This is the integration test for the migrate-concepts -> write_record
+    -> validate_concept chain.  The record mirrors exactly what
+    _propose_concept_record() produces: draft state, modality=None,
+    indication=None, most optional fields null.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        ensure_control_dirs(root)
+
+        migration_record = {
+            "schema": CONCEPT_SCHEMA,
+            "id": "IC-001",
+            "revision": 1,
+            "state": "draft",
+            "disease_context": {
+                "indication": None,
+                "stage": None,
+                "patient_population": None,
+            },
+            "target_pathway": {
+                "gene": "CDK4",
+                "protein": None,
+                "pathway": None,
+                "mechanism_hypothesis": None,
+            },
+            "modality": None,
+            "entity_ref": None,
+            "delivery_assumptions": None,
+            "biomarker_assumptions": None,
+            "charter_ref": None,
+            "hypothesis_refs": None,
+            "work_order_refs": None,
+            "decision_log_refs": None,
+            "applicable_policies": None,
+            "termination_authority": None,
+            "notes": "Migrated from active-series.md entry: CDK4",
+            "created_at": _NOW,
+        }
+
+        # Must succeed — no SchemaError, no Refusal.
+        path = write_record(root, "concept", "IC-001-r1", migration_record)
+        assert path.is_file()
+
+        read_back = read_record(root, "concept", "IC-001-r1")
+        assert read_back["modality"] is None
+        assert read_back["state"] == "draft"
+        assert read_back["disease_context"]["indication"] is None
+        assert read_back["charter_ref"] is None
+
+
+# ---------------------------------------------------------------------------
 # Tests: Control store registration
 # ---------------------------------------------------------------------------
 
@@ -938,6 +1003,7 @@ def main() -> int:
         ("validate_target_pathway_not_dict", test_validate_target_pathway_not_dict),
         ("validate_target_pathway_missing_gene", test_validate_target_pathway_missing_gene),
         ("validate_modality_not_string", test_validate_modality_not_string),
+        ("validate_modality_null_ok", test_validate_modality_null_ok),
         ("validate_termination_authority_enum", test_validate_termination_authority_enum),
 
         # Biomarker validation
@@ -982,6 +1048,9 @@ def main() -> int:
         ("write_record_active_with_charter_ok", test_write_record_active_concept_with_charter_succeeds),
         ("write_record_active_empty_charter_refusal", test_write_record_active_concept_empty_charter_raises_refusal),
         ("write_record_draft_no_charter_ok", test_write_record_draft_concept_without_charter_succeeds),
+
+        # Migration-shaped record through real write_record() path
+        ("write_record_migration_shaped", test_write_record_migration_shaped_record),
 
         # Control store registration
         ("concept_in_record_types", test_concept_in_record_types),

@@ -181,3 +181,43 @@ write a concept with `state: "active"` and `charter_ref: null` through
    - `write_record_active_with_charter_ok`: real path succeeds with charter set
    - `write_record_active_empty_charter_refusal`: empty string charter raises `Refusal` through real path
    - `write_record_draft_no_charter_ok`: draft without charter writes successfully
+
+---
+
+## Post-review fix 2 (2026-09-08): modality=None rejected by validate_concept
+
+**Finding**: Code review found that `_propose_concept_record()` sets
+`modality: None` for migration records (design §3.4 "gaps declared as
+null"), but `validate_concept()` rejected `None` modality because the
+check was `not isinstance(data["modality"], str)` — `None` is not a
+`str`. Every `migrate-concepts` invocation for an entry with unknown
+modality would fail at `write_record()` with `SchemaError`. Third
+instance of the same "works in unit tests, fails through real path"
+bug class.
+
+**Fix (3 changes)**:
+
+1. **Updated modality check to allow `None`.** Changed from
+   `not isinstance(data["modality"], str)` to
+   `data["modality"] is not None and not isinstance(data["modality"], str)`.
+   The key is still required (in `_REQUIRED_FIELDS`), but the value
+   may be `None` for migrated records — required-but-nullable,
+   matching the design's "declare gaps as null" pattern.
+
+2. **Audited all other nullable fields in `_propose_concept_record()`.**
+   Checked every field that migration sets to `None` against its
+   `validate_concept()` check:
+   - `disease_context.indication = None`: validator checks key presence
+     only (`"indication" not in dc`), key IS present → passes. No bug.
+   - `target_pathway.protein/pathway/mechanism_hypothesis = None`:
+     validator only checks `gene` presence → passes. No bug.
+   - `modality = None`: **was the bug** — type check rejected None.
+   No sibling cases found.
+
+3. **Added 2 tests** (74 total, up from 72):
+   - `validate_modality_null_ok`: `validate_concept()` accepts null modality
+   - `write_record_migration_shaped`: **the critical integration test** —
+     writes a record shaped exactly like `_propose_concept_record()`
+     output (modality=None, indication=None, all optional fields null)
+     through the real `write_record()` path and confirms it succeeds,
+     then reads it back and verifies null values are preserved
