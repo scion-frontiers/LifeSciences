@@ -240,6 +240,35 @@ class TestCommitLiabilityCheckpoint(unittest.TestCase):
         self.assertIn("liability_justification", exc.message)
         self.assertIn("L-2", exc.detail)
 
+    def test_commit_refused_with_partial_justification(self):
+        """Active Critical liabilities + partial justification => Refusal naming uncovered."""
+        ps = self.root / "program-state"
+        ps.mkdir(parents=True)
+        (ps / "liability-tracker.md").write_text(
+            "# Liability Tracker\n\n"
+            "## L-2 IFIH1 contradictions\n\n"
+            "**Severity**: critical\n"
+            "**Status**: open\n\n"
+            "First critical problem.\n\n"
+            "## L-5 Sample degradation\n\n"
+            "**Severity**: critical\n"
+            "**Status**: open\n\n"
+            "Second critical problem.\n",
+            encoding="utf-8",
+        )
+        # Justification covers only L-2, not L-5.
+        _make_proposed_wo(
+            self.root,
+            liability_justification={
+                "L-2 IFIH1 contradictions": "This WO investigates L-2",
+            },
+        )
+        with self.assertRaises(Refusal) as ctx:
+            _perform_commit(self.root, "WO-001")
+        exc = ctx.exception
+        self.assertIn("L-5 Sample degradation", exc.message)
+        self.assertNotIn("L-2 IFIH1 contradictions", exc.message)
+
     def test_commit_succeeds_when_all_critical_mitigated(self):
         """All Critical liabilities mitigated => commit proceeds without justification."""
         ps = self.root / "program-state"

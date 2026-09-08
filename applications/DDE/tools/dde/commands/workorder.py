@@ -85,6 +85,14 @@ NON_OVERRIDABLE_CHECKS: set[str] = {
 
 
 # ---------------------------------------------------------------------------
+# Liability-tracker markdown patterns (compiled once at module level).
+# ---------------------------------------------------------------------------
+
+_SECTION_RE = re.compile(r"^##\s+(.+)", re.MULTILINE)
+_SEVERITY_RE = re.compile(r"\*\*Severity\*\*\s*:\s*(\S+)", re.IGNORECASE)
+_STATUS_RE = re.compile(r"\*\*Status\*\*\s*:\s*(.+)", re.IGNORECASE)
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -164,31 +172,21 @@ def _find_latest_revision(
 def _find_critical_liabilities(project_root: Path) -> list[str]:
     """Return names of active Critical liabilities from the tracker.
 
-    Searches for ``liability-tracker.md`` under *project_root* and parses
-    it for sections where severity is Critical and status is NOT
+    Reads ``program-state/liability-tracker.md`` under *project_root* and
+    parses it for sections where severity is Critical and status is NOT
     ``mitigated`` or ``accepted``.
 
     Returns an empty list if the tracker does not exist or contains no
     active Critical entries.  An absent tracker is not an error — not
     every project has liabilities registered.
     """
-    candidates = list(project_root.rglob("liability-tracker.md"))
-    if not candidates:
+    tracker_path = project_root / "program-state" / "liability-tracker.md"
+    if not tracker_path.is_file():
         return []
-    tracker_path = candidates[0]
     try:
         text = tracker_path.read_text(encoding="utf-8")
     except OSError:
         return []
-
-    # Parse markdown H2 sections looking for Critical severity + active status.
-    _SECTION_RE = re.compile(r"^##\s+(.+)", re.MULTILINE)
-    _SEVERITY_RE = re.compile(
-        r"\*\*Severity\*\*\s*:\s*(.+)", re.IGNORECASE,
-    )
-    _STATUS_RE = re.compile(
-        r"\*\*Status\*\*\s*:\s*(.+)", re.IGNORECASE,
-    )
 
     sections = _SECTION_RE.split(text)
     # sections alternates: [preamble, name1, body1, name2, body2, ...]
@@ -468,6 +466,16 @@ def _perform_commit(
                     '    L-2: "This cohort validates the contradicted claims"'
                 ),
             )
+        if isinstance(justification, dict):
+            unjustified = [lid for lid in critical_liabilities
+                           if lid not in justification]
+            if unjustified:
+                raise Refusal(
+                    f"liability_justification does not cover all active Critical "
+                    f"liabilities: {', '.join(unjustified)}",
+                    detail=f"Active Critical liabilities: {', '.join(critical_liabilities)}",
+                    remedy="add a justification entry for each listed liability",
+                )
 
     # Build context snapshot.
     # 256 KB default cap (design §4 Q2); configurable via program.yaml
