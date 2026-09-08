@@ -34,6 +34,8 @@ RECORD_TYPES: dict[str, str] = {
     "run": "runs",
     "validation": "validations",
     "lease": "leases",
+    "policy": "policies",
+    "snapshot": "snapshots",
 }
 
 _SUBDIRS = list(RECORD_TYPES.values())
@@ -285,12 +287,26 @@ def _validate_lease(data: dict[str, Any]) -> list[str]:
     return errors
 
 
+def _validate_policy_record(data: dict[str, Any]) -> list[str]:
+    """Delegate to policy module's validator."""
+    from .policy import validate_policy
+    return validate_policy(data)
+
+
+def _validate_snapshot_record(data: dict[str, Any]) -> list[str]:
+    """Delegate to policy module's validator."""
+    from .policy import validate_snapshot
+    return validate_snapshot(data)
+
+
 _VALIDATORS: dict[str, Callable[[dict[str, Any]], list[str]]] = {
     "work-order": _validate_work_order,
     "context": _validate_context,
     "run": _validate_run,
     "validation": _validate_validation,
     "lease": _validate_lease,
+    "policy": _validate_policy_record,
+    "snapshot": _validate_snapshot_record,
 }
 
 
