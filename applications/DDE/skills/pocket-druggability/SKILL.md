@@ -213,6 +213,63 @@ count at or below the configured `min_alpha_spheres` threshold), the
 analysis carries an advisory. Treat such a pocket as a candidate to
 inspect, not as a characterised site.
 
+### Bundle-void advisory
+
+Multi-helix transmembrane proteins — GPCRs especially — produce a
+central cavity where the transmembrane helices surround an internal
+void. fpocket correctly identifies this as a pocket and may score it
+highly (drug score near 1.0), but it is a structural feature of the
+fold, not a discrete drug-binding cavity.
+
+**Recognition pattern.** The following three indicators together
+suggest a bundle void rather than a binding pocket:
+
+- **High alpha-sphere count** — 200+ alpha spheres, vs. a typical
+  20–80 for drug-binding pockets.
+- **Large volume** — 1500+ cubic Ångström, vs. a typical 200–800 for
+  drug-binding pockets.
+- **Large CoM-to-max-sphere distance** — 20+ Ångström
+  (`centre_of_mass_max_sphere_distance`), vs. a typical 8–15 for
+  compact cavities.
+
+No single indicator is conclusive — a large binding pocket can be
+voluminous, and a multi-site groove can have many alpha spheres. When
+all three indicators are present AND the target is a multi-helix
+transmembrane protein, flag the pocket as a potential bundle-void
+artifact in the finding.
+
+A high drug score on a bundle void does not mean the target is
+druggable at that site. The scoring function responds to the enclosed
+hydrophobic environment, which is a property of the fold rather than a
+binding site. This is interpretive guidance, not a mandatory relay —
+the tool emits correct numbers; the skill's job is to help the reader
+recognise when those numbers describe a fold feature rather than a drug
+target.
+
+### Forming `--near` queries
+
+`--near` queries require the user to supply residue numbers that define
+the region of interest. The tool validates that the residues exist in
+the structure, not that they are the right residues for the biological
+question — a wrong selection produces a confident, well-provenanced
+answer about the wrong pocket (see Named pathologies below).
+
+Best practices for selecting residues:
+
+- **Well-characterised target families** — for families with known
+  binding-site architecture (e.g. GPCRs: TM3/TM6/TM7 for orthosteric
+  sites), the relevant residues can be derived from family-specific
+  databases such as UniProt topology annotations or GPCRdb.
+- **Protein–protein interaction interfaces** — interface residues can
+  be derived from complex structures (PDB entries or AlphaFold 3
+  predictions of the complex).
+- **Unknown target family or binding site** — when the site is not
+  characterised, `--near` is less useful. Use the unfiltered pocket
+  list and rank by drug score instead.
+
+Automating interface-residue derivation from complex structures is a
+tooling gap under consideration (see issue #94).
+
 ### Consequence rules
 
 - **Druggable pocket present**: state the pocket rank, the drug score,
