@@ -1,21 +1,20 @@
 ---
 name: literature-search
 description: >
-  Search PubMed for publications matching a query and summarise the
-  result set — year distribution, journal distribution, and top MeSH
-  terms. Use when discovering what has been published on a topic, gene,
-  compound, or disease, when establishing the volume and recency of
-  literature for a target, or when identifying relevant MeSH terms for
-  further search refinement. Do not use to verify that a specific
-  citation exists (use citation-resolution), to read or summarise a
-  paper's contents, or to assess whether a paper supports a claim — this
-  tool retrieves metadata and abstracts, not full-text evaluation.
+  Search and retrieve scientific literature — PubMed, preprint servers
+  (arXiv, bioRxiv), and PubMed Central full text. Use when discovering
+  what has been published on a topic, gene, compound, or disease, when
+  establishing the volume and recency of literature for a target, when
+  retrieving full-text articles, or when searching preprint servers for
+  recent work. Do not use to verify that a specific citation exists (use
+  citation-verification), to search cancer genomics databases (use
+  dde cbioportal), or to assess whether a paper supports a claim.
 ---
 
 ## 1. When to use, and when not
 
-Use this skill when you need to discover what has been published on a
-topic. Entry points include:
+Use this skill when you need to discover, search, or retrieve scientific
+literature. Entry points include:
 
 - Finding publications related to a gene, pathway, compound, or disease
   as part of target validation or literature review.
@@ -27,15 +26,30 @@ topic. Entry points include:
 - Checking whether a claimed literature consensus exists — does the
   published record support the assertion that "multiple studies have
   shown X"?
+- Retrieving the full text of a PubMed Central article for detailed
+  analysis or citation extraction.
+- Searching preprint servers for recent, not-yet-peer-reviewed work.
 
 **Do not use when:**
 
 - You need to verify that a specific PMID, DOI, or NCT number resolves
-  to a real record -> `citation-resolution`.
-- You need to read a paper's full text or assess whether it supports a
-  claim — this tool returns titles, abstracts, and metadata only.
+  to a real record → `citation-verification`.
+- You need cancer genomics study data → `dde cbioportal search`.
 - You need to count how many papers support a specific claim — a keyword
   search counts matches, not evidence.
+
+### Question-type routing
+
+| Question type | Command | Skill |
+|---|---|---|
+| What has been published on a topic? | `dde pubmed search` | this skill |
+| What does the result set look like? | `dde pubmed analyze` | this skill |
+| Fetch full text of a PMC article | `dde pubmed fulltext` | this skill |
+| Find recent preprints (physics, CS, math) | `dde preprint search --source arxiv` | this skill |
+| Find recent preprints (biology, life sciences) | `dde preprint search --source biorxiv` | this skill |
+| Verify a citation (PMID, DOI, NCT) exists | `dde cite verify` | citation-verification |
+| Resolve a literature identifier | `dde litref resolve` | citation-resolution |
+| Find cancer genomics studies | `dde cbioportal search` | (genomics) |
 
 ## 2. Preconditions
 
