@@ -82,7 +82,7 @@ class TestNoLocalQPSConstants(unittest.TestCase):
             self.skipTest(f"commands directory not found: {_COMMANDS_DIR}")
 
         violations: list[str] = []
-        for py_file in sorted(_COMMANDS_DIR.glob("*.py")):
+        for py_file in sorted(_COMMANDS_DIR.rglob("*.py")):
             if py_file.name.startswith("_"):
                 continue
             try:
@@ -129,7 +129,7 @@ class TestCallSitesUseRegistry(unittest.TestCase):
             self.skipTest(f"commands directory not found: {_COMMANDS_DIR}")
 
         violations: list[str] = []
-        for py_file in sorted(_COMMANDS_DIR.glob("*.py")):
+        for py_file in sorted(_COMMANDS_DIR.rglob("*.py")):
             if py_file.name.startswith("_"):
                 continue
             try:
@@ -158,6 +158,65 @@ class TestCallSitesUseRegistry(unittest.TestCase):
                 "All qps= keyword arguments in command modules must use "
                 "qps_for_host() from dde.core.qps.\n"
                 + "\n".join(f"  {v}" for v in violations)
+            )
+            self.fail(msg)
+
+
+class TestHostnameExistence(unittest.TestCase):
+    """Every hostname passed to ``qps_for_host()`` in command modules must
+    exist as a key in ``HOST_QPS``.
+
+    This catches typos like ``qps_for_host("www.ebi.ac.uk.typo")`` that
+    would silently fall back to the default 2.0 instead of using the
+    intended registry entry.
+    """
+
+    def test_all_qps_for_host_args_in_registry(self):
+        if not _COMMANDS_DIR.is_dir():
+            self.skipTest(f"commands directory not found: {_COMMANDS_DIR}")
+
+        missing: list[str] = []
+        seen_hosts: set[str] = set()
+
+        for py_file in sorted(_COMMANDS_DIR.rglob("*.py")):
+            if py_file.name.startswith("_"):
+                continue
+            try:
+                tree = ast.parse(py_file.read_text(), filename=str(py_file))
+            except SyntaxError:
+                continue
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                # Match calls to qps_for_host(...)
+                func = node.func
+                if isinstance(func, ast.Name) and func.id == "qps_for_host":
+                    pass
+                elif isinstance(func, ast.Attribute) and func.attr == "qps_for_host":
+                    pass
+                else:
+                    continue
+                # Extract the first positional argument if it's a string literal
+                if node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+                    hostname = node.args[0].value
+                    seen_hosts.add(hostname)
+                    if hostname not in HOST_QPS:
+                        missing.append(
+                            f"{py_file.name}:{node.lineno}: "
+                            f"qps_for_host({hostname!r}) not in HOST_QPS"
+                        )
+
+        self.assertTrue(
+            len(seen_hosts) > 0,
+            "Expected to find at least one qps_for_host() call with a "
+            "string literal hostname in command modules",
+        )
+
+        if missing:
+            msg = (
+                "Hostnames passed to qps_for_host() must exist in HOST_QPS.  "
+                "Add missing hosts to dde/core/qps.py.\n"
+                + "\n".join(f"  {m}" for m in missing)
             )
             self.fail(msg)
 
