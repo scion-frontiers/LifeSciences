@@ -235,6 +235,10 @@ RELAY_CODES: dict[str, str] = {
         "nothing about partial, reversible, adult pharmacological inhibition, "
         "and reading it as toxicology would eliminate most viable targets."
     ),
+    "pubmed.fulltext_unavailable": (
+        "The requested article is not available in PubMed Central open access. "
+        "The PMCID may be incorrect or the article may not be in the OA subset."
+    ),
     "pubmed.search_not_exhaustive": (
         "A PubMed keyword search returns results matching the query terms but "
         "cannot guarantee exhaustive coverage. Relevant publications may use "

@@ -1,4 +1,4 @@
-"""`dde pubmed` -- keyword-based PubMed literature search.
+"""`dde pubmed` -- keyword-based PubMed literature search and full-text retrieval.
 
 Where `litref` asks "does this *known* citation exist?", this tool asks
 "what publications match this *query*?" -- the discovery half of the
@@ -6,12 +6,15 @@ literature workflow.  It searches PubMed via the NCBI E-utilities and
 returns structured records with title, authors, journal, year, abstract,
 DOI and MeSH terms.
 
-Two phases:
+Three subcommands:
 
-  search   queries PubMed (esearch + efetch) and writes the verbatim
-           responses to Layer 0 with a sidecar.
-  analyze  reads those responses and produces a summary analysis: year
-           distribution, journal distribution, top MeSH terms. No network.
+  search    queries PubMed (esearch + efetch) and writes the verbatim
+            responses to Layer 0 with a sidecar.
+  analyze   reads those responses and produces a summary analysis: year
+            distribution, journal distribution, top MeSH terms. No network.
+  fulltext  fetches the full-text XML of a PubMed Central article by
+            PMCID and writes a structured record with title, authors,
+            abstract, body sections, references, DOI and PMID.
 
 A keyword search is inherently non-exhaustive: relevant publications may
 use different terminology, be indexed under different MeSH headings, or
@@ -26,6 +29,7 @@ import json
 import re
 import xml.etree.ElementTree as ET
 from collections import Counter
+from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import quote_plus
 
@@ -492,4 +496,302 @@ def analyze_cmd(
     for record in relays:
         emit.line(f"relay {record['code']}: {record['message']}")
     emit.path(analysis_path, role="analysis")
+    emit.flush()
+
+
+# ---------------------------------------------------------------------------
+# Fulltext helpers
+# ---------------------------------------------------------------------------
+
+
+_PMCID_RE = re.compile(r"^PMC\d+$")
+
+
+def _parse_fulltext_xml(xml_bytes: bytes) -> dict[str, Any]:
+    """Parse a PMC efetch JATS XML response into a structured record.
+
+    Extracts title, authors, abstract, body sections, references, DOI,
+    and PMID from the JATS/NLM XML format used by PubMed Central.
+    Gracefully handles missing fields.
+    """
+    try:
+        root = ET.fromstring(xml_bytes)
+    except ET.ParseError as exc:
+        raise SchemaError("PMC efetch response is not valid XML", detail=str(exc))
+
+    # The response may be a <pmc-articleset> wrapping one <article>,
+    # or just an <article> at the root.
+    article = root.find(".//article")
+    if article is None:
+        # May be the article itself at the root
+        if root.tag == "article":
+            article = root
+        else:
+            return {}
+
+    front = article.find("front")
+    if front is None:
+        return {}
+
+    article_meta = front.find("article-meta")
+    if article_meta is None:
+        return {}
+
+    # Title
+    title = None
+    title_group = article_meta.find("title-group")
+    if title_group is not None:
+        title_el = title_group.find("article-title")
+        if title_el is not None:
+            title = "".join(title_el.itertext()).strip()
+
+    # Authors
+    authors: list[str] = []
+    contrib_group = article_meta.find("contrib-group")
+    if contrib_group is not None:
+        for contrib in contrib_group.findall("contrib"):
+            if contrib.get("contrib-type") != "author":
+                continue
+            name_el = contrib.find("name")
+            if name_el is not None:
+                surname = name_el.find("surname")
+                given = name_el.find("given-names")
+                parts = []
+                if surname is not None and surname.text:
+                    parts.append(surname.text)
+                if given is not None and given.text:
+                    parts.append(given.text)
+                if parts:
+                    authors.append(" ".join(parts))
+            else:
+                # Collab / collective author
+                collab = contrib.find("collab")
+                if collab is not None and collab.text:
+                    authors.append(collab.text.strip())
+
+    # Abstract
+    abstract = None
+    abstract_el = article_meta.find("abstract")
+    if abstract_el is not None:
+        parts = []
+        for text_el in abstract_el.iter():
+            if text_el.text:
+                parts.append(text_el.text.strip())
+            if text_el.tail:
+                parts.append(text_el.tail.strip())
+        abstract = " ".join(p for p in parts if p) if parts else None
+
+    # DOI
+    doi = None
+    for aid in article_meta.findall("article-id"):
+        if aid.get("pub-id-type") == "doi" and aid.text:
+            doi = aid.text.strip()
+            break
+
+    # PMID
+    pmid = None
+    for aid in article_meta.findall("article-id"):
+        if aid.get("pub-id-type") == "pmid" and aid.text:
+            pmid = aid.text.strip()
+            break
+
+    # Body sections
+    sections: list[dict[str, str]] = []
+    body = article.find("body")
+    if body is not None:
+        for sec in body.findall("sec"):
+            heading = None
+            title_el = sec.find("title")
+            if title_el is not None:
+                heading = "".join(title_el.itertext()).strip()
+            # Collect all paragraph text in this section
+            paragraphs: list[str] = []
+            for p_el in sec.findall("p"):
+                text = "".join(p_el.itertext()).strip()
+                if text:
+                    paragraphs.append(text)
+            if paragraphs:
+                sections.append({
+                    "heading": heading or "",
+                    "text": "\n\n".join(paragraphs),
+                })
+        # If no <sec> elements, grab top-level <p> elements
+        if not sections:
+            paragraphs = []
+            for p_el in body.findall("p"):
+                text = "".join(p_el.itertext()).strip()
+                if text:
+                    paragraphs.append(text)
+            if paragraphs:
+                sections.append({
+                    "heading": "",
+                    "text": "\n\n".join(paragraphs),
+                })
+
+    # References
+    references: list[str] = []
+    back = article.find("back")
+    if back is not None:
+        ref_list = back.find("ref-list")
+        if ref_list is not None:
+            for ref_el in ref_list.findall("ref"):
+                # Try to get the citation text
+                citation = ref_el.find(".//mixed-citation")
+                if citation is None:
+                    citation = ref_el.find(".//element-citation")
+                if citation is not None:
+                    ref_text = "".join(citation.itertext()).strip()
+                    if ref_text:
+                        references.append(ref_text)
+
+    return {
+        "title": title,
+        "authors": authors,
+        "abstract": abstract,
+        "sections": sections,
+        "references": references,
+        "doi": doi,
+        "pmid": pmid,
+    }
+
+
+# ---------------------------------------------------------------------------
+# fulltext subcommand
+# ---------------------------------------------------------------------------
+
+
+@pubmed.command("fulltext")
+@click.argument("pmcid")
+@out_option
+@output_options
+@pass_state
+def fulltext_cmd(
+    state: AppState,
+    pmcid: str,
+    out: str | None,
+    as_json: bool,
+    quiet: bool,
+) -> None:
+    """Fetch full-text article from PubMed Central by PMCID.
+
+    PMCID must be a PubMed Central identifier (e.g. PMC1234567).
+    Fetches the JATS XML from NCBI and writes a structured record
+    with title, authors, abstract, body sections, references, DOI
+    and PMID.
+    """
+    emit = emitter(as_json, quiet)
+
+    # Validate PMCID format
+    if not _PMCID_RE.match(pmcid):
+        raise click.UsageError(
+            f"Invalid PMCID format: {pmcid!r}. "
+            "Expected format: PMC followed by digits (e.g. PMC1234567)."
+        )
+
+    target_dir = state.project().artifact_dir(ARTIFACT_CLASS, out)
+    pmcid_lower = pmcid.lower()
+
+    # Fetch full text from PMC via efetch
+    efetch_url = (
+        f"{EUTILS_BASE}/efetch.fcgi?db=pmc"
+        f"&id={pmcid}"
+        f"&rettype=full"
+        f"&retmode=xml"
+        + api_key_suffix()
+    )
+    efetch_bytes = http.get_bytes(
+        efetch_url,
+        qps=qps_for_host("eutils.ncbi.nlm.nih.gov"),
+        timeout=60.0,
+    )
+
+    # Save the raw XML
+    xml_path = target_dir / f"{pmcid_lower}.fulltext.xml"
+    xml_path.write_bytes(efetch_bytes)
+
+    # Parse the XML
+    parsed = _parse_fulltext_xml(efetch_bytes)
+
+    # Check if we got meaningful content
+    if not parsed or not parsed.get("title"):
+        # Article not available in OA subset
+        sidecar = provenance.Sidecar(
+            tool=TOOL,
+            subcommand="fulltext",
+            endpoint=EUTILS_BASE,
+            parameters={"pmcid": pmcid},
+        )
+        sidecar.warn(
+            f"The article {pmcid} is not available in PubMed Central open "
+            "access. The PMCID may be incorrect or the article may not be "
+            "in the OA subset.",
+            code="pubmed.fulltext_unavailable",
+        )
+        sidecar.add_output(xml_path)
+        meta_path = sidecar.write(target_dir / f"{pmcid_lower}.fulltext.meta.json")
+
+        emit.data("pmcid", pmcid)
+        emit.data("available", False)
+        emit.path(xml_path, role="xml")
+        emit.path(meta_path, role="sidecar")
+        emit.line(f"PubMed Central fulltext: {pmcid}")
+        emit.line("  Article not available in open access")
+        emit.flush()
+        return
+
+    # Build the structured artifact
+    artifact = {
+        "schema": "dde.pubmed-fulltext.v1",
+        "pmcid": pmcid,
+        "title": parsed["title"],
+        "authors": parsed["authors"],
+        "abstract": parsed["abstract"],
+        "sections": parsed["sections"],
+        "references": parsed["references"],
+        "doi": parsed["doi"],
+        "pmid": parsed["pmid"],
+        "fetched_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+
+    artifact_path = target_dir / f"{pmcid_lower}.fulltext.json"
+    artifact_path.write_text(
+        json.dumps(artifact, indent=2) + "\n", encoding="utf-8"
+    )
+
+    # Sidecar
+    sidecar = provenance.Sidecar(
+        tool=TOOL,
+        subcommand="fulltext",
+        endpoint=EUTILS_BASE,
+        parameters={"pmcid": pmcid},
+    )
+    sidecar.note("source", "PubMed Central (NCBI/NLM)")
+    sidecar.note("licence", "NLM Terms of Service — PMC Open Access")
+    sidecar.note("n_sections", str(len(parsed["sections"])))
+    sidecar.note("n_references", str(len(parsed["references"])))
+
+    sidecar.add_output(xml_path)
+    sidecar.add_output(artifact_path)
+
+    meta_path = sidecar.write(target_dir / f"{pmcid_lower}.fulltext.meta.json")
+
+    # Emit
+    emit.data("pmcid", pmcid)
+    emit.data("available", True)
+    emit.data("title", parsed["title"])
+    emit.data("n_authors", len(parsed["authors"]))
+    emit.data("n_sections", len(parsed["sections"]))
+    emit.data("n_references", len(parsed["references"]))
+    emit.path(xml_path, role="xml")
+    emit.path(artifact_path, role="artifact")
+    emit.path(meta_path, role="sidecar")
+    emit.line(f"PubMed Central fulltext: {pmcid}")
+    emit.line(f"  Title: {(parsed['title'] or '(no title)')[:80]}")
+    emit.line(f"  Authors: {len(parsed['authors'])}")
+    emit.line(f"  Sections: {len(parsed['sections'])}")
+    emit.line(f"  References: {len(parsed['references'])}")
+    if parsed["doi"]:
+        emit.line(f"  DOI: {parsed['doi']}")
+    if parsed["pmid"]:
+        emit.line(f"  PMID: {parsed['pmid']}")
     emit.flush()

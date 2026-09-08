@@ -61,6 +61,7 @@ topic. Entry points include:
 |---|---|---|
 | What has been published on this topic? | `dde pubmed search <QUERY> [--max-results N] [--sort relevance\|date]` | `raw/literature/<slug>.esearch.json`<br>`raw/literature/<slug>.efetch.xml`<br>`raw/literature/<slug>.pubmed-search.json`<br>`raw/literature/<slug>.meta.json` |
 | What does the result set look like? | `dde pubmed analyze <QUERY>` | `raw/literature/<slug>.pubmed-search.analysis.json` |
+| Fetch full text of a PMC article | `dde pubmed fulltext <PMCID>` | `raw/literature/<pmcid>.fulltext.json` |
 | Find preprints on a topic | `dde preprint search --source arxiv <QUERY>` | `raw/literature/<slug>.preprint-search.json` |
 
 Run `search` before `analyze`. `analyze` reads from disk and produces
