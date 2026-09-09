@@ -285,9 +285,19 @@ def _check_project(report: Report, state: AppState) -> None:
     try:
         ctx = state.project()
     except DDEError as exc:
-        report.add("project root", FAIL, exc.message, exc.remedy or "")
+        detail = exc.message
+        if exc.detail:
+            detail = f"{detail} — {exc.detail}"
+        report.add("project root", FAIL, detail, exc.remedy or "")
         return
-    report.add("project root", OK, f"{ctx.root} (via {ctx.source})")
+
+    if ctx.source == "DDE_PROJECT":
+        detail = f"{ctx.root} (resolved from DDE_PROJECT environment variable)"
+    elif ".dde" in ctx.source:
+        detail = f"{ctx.root} (auto-detected .dde/ marker by walking up from CWD)"
+    else:
+        detail = f"{ctx.root} (via {ctx.source})"
+    report.add("project root", OK, detail)
 
 
 #: Bound on the sidecar walk. A doctor run must stay fast enough that
@@ -1253,7 +1263,13 @@ def _verdict(report: Report, *, strict: bool = False) -> None:
 )
 @pass_state
 def doctor(state: AppState, as_json: bool, strict: bool) -> None:
-    """Assert tools, credentials and environment version. Exits non-zero if broken."""
+    """Assert tools, credentials and environment version. Exits non-zero if broken.
+
+    Project root is resolved in order: (1) DDE_PROJECT environment variable,
+    (2) walk up from CWD looking for a .dde/ marker directory, (3) fail with
+    guidance. Run `dde init <dir>` to create a project directory, or set
+    DDE_PROJECT explicitly.
+    """
     report = Report()
     _check_python(report)
     _check_environment(report)
