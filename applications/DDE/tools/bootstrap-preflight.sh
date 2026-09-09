@@ -30,6 +30,50 @@ set -uo pipefail   # deliberately NOT -e: this script's job is to keep
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# ---------------------------------------------------------------------------
+# Known C-extension prerequisites (science stack)
+# ---------------------------------------------------------------------------
+#
+# The science stack (prody, numpy, scipy, biopython, etc.) compiles C
+# extensions.  These OS packages must be present for those compilations:
+#
+#   python3-dev        Python.h and the CPython development headers
+#   build-essential    gcc, g++, make, and the standard toolchain
+#   libc6-dev          static libc archive (libc.a) for -static linking
+#   libstdc++-N-dev    static C++ runtime for the vendored molfile plugin
+#
+# fpocket also builds from source and requires the same toolchain plus
+# the static archives.  Without these, install.sh produces exit 3
+# (science stack failure) or exit 4 (missing binary).
+#
+# Standard C/C++ headers needed by specific packages:
+#   Python.h           prody (no CPython 3.11 wheel), numpy, scipy
+#   stdio.h etc.       fpocket (compiled from source, linked -static)
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Options
+# ---------------------------------------------------------------------------
+
+REMEDIATE=true
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --remediate)    REMEDIATE=true;  shift ;;
+        --no-remediate) REMEDIATE=false; shift ;;
+        -h|--help)
+            printf 'Usage: %s [--remediate|--no-remediate]\n' "${0##*/}"
+            printf '\n'
+            printf 'Options:\n'
+            printf '  --remediate      auto-install missing OS packages when\n'
+            printf '                   passwordless sudo (or root) is available (default)\n'
+            printf '  --no-remediate   detect and report only; install nothing\n'
+            exit 0
+            ;;
+        *) printf 'Unknown option: %s\n' "$1" >&2; exit 2 ;;
+    esac
+done
+
 ok()   { printf '  \033[1;32mok\033[0m      %s\n' "$*"; }
 miss() { printf '  \033[1;31mMISSING\033[0m %s\n' "$*"; }
 warn() { printf '  \033[1;33mwarn\033[0m    %s\n' "$*"; }
@@ -314,6 +358,51 @@ else
     warn "obabel not found — install.sh notes this and continues"
     info "        Used by computational-chemist skills for format conversion."
     info "        Not required for install.sh to exit 0. apt package: openbabel"
+fi
+
+# ---------------------------------------------------------------------------
+# Auto-remediation
+# ---------------------------------------------------------------------------
+#
+# Rule: fail-stop applies to conditions the agent CANNOT remediate, not
+# to conditions with a documented remedy in hand.  When the preflight
+# knows exactly which packages are missing AND can install them (root or
+# passwordless sudo on a Debian-family system), it does so automatically
+# and re-runs itself with --no-remediate to verify.
+#
+# It reports blocked only when:
+#   - remediation is impossible (no root, no passwordless sudo), or
+#   - the re-check still fails after remediation, or
+#   - --no-remediate was passed explicitly.
+
+if [ "$FAILED" = 1 ] && [ -n "$MISSING_PKGS" ] && \
+   [ "$CAN_INSTALL" = true ] && [ "$REMEDIATE" = true ]; then
+    if [ "$DEBIAN" = true ]; then
+        head_ "Auto-remediation"
+        info "Missing packages:$MISSING_PKGS"
+        info "Attempting install (passwordless sudo / root available)..."
+        printf '\n'
+        # shellcheck disable=SC2086
+        if ${APT_PREFIX}apt-get update -qq 2>&1 && \
+           ${APT_PREFIX}apt-get install -y -qq $MISSING_PKGS 2>&1; then
+            printf '\n'
+            INSTALLED_PKGS="$MISSING_PKGS"
+            info "Installed:$INSTALLED_PKGS"
+            info "Re-running preflight to verify..."
+            printf '\n'
+            exec "$SCRIPT_DIR/bootstrap-preflight.sh" --no-remediate
+        else
+            printf '\n'
+            miss "apt-get failed — manual intervention required"
+            info "The packages could not be installed automatically."
+            info "Install them manually and re-run this preflight."
+        fi
+    else
+        head_ "Auto-remediation"
+        info "Auto-remediation is available only on Debian-family systems."
+        info "Translate the package names below for this distribution and"
+        info "install them manually."
+    fi
 fi
 
 # ---------------------------------------------------------------------------

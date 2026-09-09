@@ -30,7 +30,7 @@ Read the rest if the preflight says it is not, or if anything fails.
 
 ```bash
 cd tools
-./bootstrap-preflight.sh        # writes nothing, needs no privilege
+./bootstrap-preflight.sh        # auto-installs missing packages when sudo is available
 ./install.sh                    # ~10-20 min, mostly pip and the fpocket build
 source /scion-volumes/tools/env.sh
 dde doctor; echo "doctor exit=$?"
@@ -40,7 +40,7 @@ Four commands, and **each exit code matters**:
 
 | command | 0 | non-zero |
 |---|---|---|
-| `bootstrap-preflight.sh` | ready | 1 = missing prerequisites (it prints the `apt-get` line), 2 = could not check |
+| `bootstrap-preflight.sh` | ready (auto-remediated if needed) | 1 = missing prerequisites that could not be auto-installed, 2 = could not check |
 | `install.sh` | complete | 3 = science stack failed, 4 = a declared binary is missing |
 | `dde doctor` | usable | something is wrong; read the output, it names what |
 
@@ -140,18 +140,53 @@ reachable from a remote. Without git, everything installs, everything
 runs, and every artifact carries an environment that cannot be
 reproduced by anyone.
 
-### If you cannot install them
+### Fail-stop precedence: when to stop, when to fix and continue
 
-The preflight reports whether you are root, have passwordless sudo, or
-have neither. If you have neither, **this is a blocked task**. Report it
-and name the packages.
+**Rule: fail-stop applies to conditions the agent _cannot_ remediate,
+not to conditions with a documented remedy in hand.**
 
-Do not work around it. The available workarounds — build fpocket
-dynamically, skip the science stack quietly, fetch a wheel from
-elsewhere — each produce an environment that is not the one its
-`ENV_VERSION` describes, and the `ENV_VERSION` is the only claim anyone
-downstream can check. A missing tool is a blocked task; a
-misrepresented environment is bad data with provenance attached.
+The preflight script distinguishes three cases:
+
+1. **Missing packages + root or passwordless sudo (Debian-family):**
+   The preflight auto-remediates — it runs `apt-get install` for the
+   missing packages and re-runs itself (`--no-remediate`) to verify.
+   This is the default behavior (`--remediate` flag, on by default).
+   The agent continues if the re-check passes.
+
+2. **Missing packages + no sudo / no root:**
+   This is a **blocked task**. The preflight prints the exact package
+   list and exits 1. Report it and name the packages. Do not work
+   around it.
+
+3. **Re-check still fails after remediation:**
+   Also blocked. The auto-install ran but something is still wrong —
+   possibly a non-package issue (architecture, network, disk). The
+   preflight's output names what is still missing.
+
+The available workarounds — build fpocket dynamically, skip the
+science stack quietly, fetch a wheel from elsewhere — each produce an
+environment that is not the one its `ENV_VERSION` describes, and the
+`ENV_VERSION` is the only claim anyone downstream can check. A missing
+tool is a blocked task; a misrepresented environment is bad data with
+provenance attached.
+
+The same precedence rule applies to every other fail-stop step in
+this bootstrap:
+
+| Step | Remediable? | Action |
+|---|---|---|
+| Missing OS packages | Yes, with sudo | Auto-remediate, re-check |
+| Wrong architecture (not x86_64) | No | Blocked — report it |
+| Network unreachable (pypi, github) | No (from inside the container) | Blocked — report it |
+| Insufficient disk | No (from inside the container) | Blocked — report it |
+| Python too old (< 3.10) | Sometimes (if the right version is available to install) | Blocked unless another Python can be installed |
+| `install.sh` exits 3 or 4 | Depends on cause | Re-run preflight, fix what it finds, retry |
+
+To suppress auto-remediation (detect-only mode):
+
+```bash
+./bootstrap-preflight.sh --no-remediate
+```
 
 ---
 
