@@ -1829,42 +1829,55 @@ def validate() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _perform_validation(
+def _resolve_wo_record(
     project_root: Path,
     wo_id: str,
     revision_num: int | None = None,
-) -> tuple[dict[str, Any], Path, str, list[dict[str, Any]], list[str], str, str]:
-    """Execute the full 9-check mechanical validation on a submitted WO.
+) -> dict[str, Any]:
+    """Resolve and return a work-order record.
 
-    Resolves the work-order record, enforces ``submitted`` state,
-    runs all 9 mechanical checks, writes the validation record,
-    performs the state transition, and appends the event log entry.
-
-    This is the shared core behind ``validate check`` and
-    ``workorder accept``.  Both code paths call this function so the
-    validation logic — including the ``submitted``-state guard (#237)
-    — is never reimplemented or bypassed.
-
-    Returns ``(wo_record, validation_record_path, overall_result,
-    checks, checks_failed, from_state, to_state)``.
+    When *revision_num* is provided, reads that specific revision;
+    otherwise finds the latest.  Validates that the ``deliverables``
+    field is a dict.
 
     Raises
     ------
-    Refusal
-        If the WO is not in ``submitted`` state.
     SchemaError
         If the deliverables field is malformed.
     """
-    # Resolve work-order record.
     if revision_num is not None:
         identifier = f"{wo_id}-r{revision_num}"
-        wo_record = controlstore.read_record(project_root, "work-order", identifier)
-    else:
-        wo_record = _find_latest_revision(project_root, wo_id)
+        return controlstore.read_record(project_root, "work-order", identifier)
+    return _find_latest_revision(project_root, wo_id)
 
+
+def _run_all_checks(
+    project_root: Path,
+    wo_record: dict[str, Any],
+) -> tuple[list[dict[str, Any]], str, list[str]]:
+    """Run all mechanical validation checks and return results.
+
+    This is the pure check-running logic, separated from record
+    writing, state transitions, and state guards.  It can be called
+    in any WO state (used by ``--dry-run``) or from the recording
+    path (used by ``_perform_validation``).
+
+    Parameters
+    ----------
+    project_root:
+        Root of the project directory.
+    wo_record:
+        The resolved work-order record dict.
+
+    Returns
+    -------
+    (checks, overall_result, checks_failed)
+        *checks* is the list of individual check result dicts,
+        *overall_result* is the severity-model verdict string,
+        *checks_failed* is the list of check names that failed.
+    """
     wo_id = wo_record["id"]
     revision = wo_record["revision"]
-    current_state = wo_record["state"]
     deliverables_raw = wo_record.get("deliverables", {})
     if not isinstance(deliverables_raw, dict):
         raise SchemaError(
@@ -1874,16 +1887,6 @@ def _perform_validation(
 
     # Normalize deliverable keys: accept both layer_0 and layer_0_classes.
     deliverables = normalize_deliverables(deliverables_raw)
-
-    # The WO must be in submitted state for validation.  Fail fast
-    # before running any checks — otherwise we'd write an orphaned
-    # validation record that no state transition references.
-    if current_state != "submitted":
-        raise Refusal(
-            f"work order {wo_id} is in state {current_state!r}, expected 'submitted'",
-            detail="validation can only be run against submitted work orders",
-            remedy="transition the work order to 'submitted' first",
-        )
 
     # Pre-flight: check whether the deliverable schema is recognizable.
     # If not, emit an explicit finding rather than silently skipping
@@ -1910,6 +1913,54 @@ def _perform_validation(
     # Determine overall result using the severity-model verdict.
     overall_result = _overall_verdict(checks)
     checks_failed = [c["name"] for c in checks if c["result"] == "fail"]
+
+    return checks, overall_result, checks_failed
+
+
+def _perform_validation(
+    project_root: Path,
+    wo_id: str,
+    revision_num: int | None = None,
+) -> tuple[dict[str, Any], Path, str, list[dict[str, Any]], list[str], str, str]:
+    """Execute the full 9-check mechanical validation on a submitted WO.
+
+    Resolves the work-order record, enforces ``submitted`` state,
+    runs all 9 mechanical checks, writes the validation record,
+    performs the state transition, and appends the event log entry.
+
+    This is the shared core behind ``validate check`` and
+    ``workorder accept``.  Both code paths call this function so the
+    validation logic — including the ``submitted``-state guard (#237)
+    — is never reimplemented or bypassed.
+
+    Returns ``(wo_record, validation_record_path, overall_result,
+    checks, checks_failed, from_state, to_state)``.
+
+    Raises
+    ------
+    Refusal
+        If the WO is not in ``submitted`` state.
+    SchemaError
+        If the deliverables field is malformed.
+    """
+    wo_record = _resolve_wo_record(project_root, wo_id, revision_num)
+
+    wo_id = wo_record["id"]
+    revision = wo_record["revision"]
+    current_state = wo_record["state"]
+
+    # The WO must be in submitted state for validation.  Fail fast
+    # before running any checks — otherwise we'd write an orphaned
+    # validation record that no state transition references.
+    if current_state != "submitted":
+        raise Refusal(
+            f"work order {wo_id} is in state {current_state!r}, expected 'submitted'",
+            detail="validation can only be run against submitted work orders",
+            remedy="transition the work order to 'submitted' first",
+        )
+
+    # Run all checks (shared logic with --dry-run).
+    checks, overall_result, checks_failed = _run_all_checks(project_root, wo_record)
 
     # Find the latest run for this WO revision (informational).
     runs = controlstore.list_records(
@@ -1970,19 +2021,99 @@ def _perform_validation(
     default=None,
     help="Validate a specific revision (default: latest).",
 )
+@click.option(
+    "--dry-run", "--preflight", "dry_run",
+    is_flag=True,
+    default=False,
+    help=(
+        "Run all checks without requiring submitted state, "
+        "writing a validation record, or performing a state transition. "
+        "Advisory only."
+    ),
+)
 @output_options
 @pass_state
 def check_cmd(
     state: AppState,
     work_order_id: str,
     revision_num: int | None,
+    dry_run: bool,
     as_json: bool,
     quiet: bool,
 ) -> None:
-    """Run 10 mechanical validation checks against a submitted work order."""
+    """Run 10 mechanical validation checks against a submitted work order.
+
+    With --dry-run (alias --preflight), runs all checks against the
+    current workspace regardless of work-order state.  No validation
+    record is written and no state transition is performed.  The output
+    is clearly marked as advisory.  Exits non-zero on any check failure
+    so it can be composed in scripts.
+    """
+    import sys as _sys
+
     emit = emitter(as_json, quiet)
     project = state.project()
 
+    if dry_run:
+        # Dry-run mode: skip state guard, run checks only, no recording.
+        wo_record = _resolve_wo_record(
+            project.root, work_order_id, revision_num,
+        )
+        wo_id = wo_record["id"]
+        revision = wo_record["revision"]
+
+        checks, overall_result, checks_failed = _run_all_checks(
+            project.root, wo_record,
+        )
+
+        has_failure = bool(checks_failed)
+
+        # --- Output ---
+        if as_json:
+            emit.data("mode", "dry_run")
+            emit.data("work_order_id", wo_id)
+            emit.data("work_order_revision", revision)
+            emit.data("result", overall_result)
+            emit.data("checks", checks)
+            if checks_failed:
+                emit.data("checks_failed", checks_failed)
+            emit.flush()
+            if has_failure:
+                _sys.exit(1)
+            return
+
+        if quiet:
+            emit.line(f"{overall_result.upper()}")
+            emit.flush()
+            if has_failure:
+                _sys.exit(1)
+            return
+
+        # Human-readable dry-run report.
+        emit.line("=== PREFLIGHT VALIDATION (dry run) ===")
+        emit.line("")
+        emit.line(
+            f"Validation: {wo_id} revision {revision}  "
+            f"[{overall_result.upper()}]"
+        )
+        emit.line("")
+        for c in checks:
+            status = c["result"].upper()
+            emit.line(f"  {c['name']:<25} {status}")
+        emit.line("")
+        if checks_failed:
+            emit.line(f"Failed checks: {', '.join(checks_failed)}")
+            emit.line("")
+        emit.line(
+            "This is an advisory check. "
+            "No validation record has been written."
+        )
+        emit.flush()
+        if has_failure:
+            _sys.exit(1)
+        return
+
+    # --- Normal (non-dry-run) path: full validation with recording ---
     wo_record, record_path, overall_result, checks, checks_failed, current_state, target_state = (
         _perform_validation(project.root, work_order_id, revision_num)
     )
