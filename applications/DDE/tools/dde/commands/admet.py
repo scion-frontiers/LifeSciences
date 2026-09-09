@@ -26,6 +26,7 @@ import csv
 import hashlib
 import io
 import json
+import math
 import re
 from pathlib import Path
 from typing import Any
@@ -901,6 +902,221 @@ def predict_batch_cmd(
     emit.data("compounds", summary_rows)
     emit.path(batch_path, role="batch-summary")
     emit.path(meta_path, role="sidecar")
+    emit.flush()
+
+
+# ---------------------------------------------------------------------------
+# Phase 1 — topical (Potts-Guy skin permeability)
+# ---------------------------------------------------------------------------
+
+
+def _compute_mw_from_smiles(smiles: str) -> float:
+    """Compute molecular weight from SMILES using RDKit if available,
+    otherwise raise DependencyError."""
+    Chem, Descriptors, _ = _require_rdkit()
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        raise Refusal(
+            f"unparseable SMILES: {smiles!r}",
+            detail="RDKit could not interpret this as a valid molecular structure",
+            remedy="check the SMILES syntax",
+        )
+    return round(Descriptors.MolWt(mol), 2)
+
+
+def _compute_logp_from_smiles(smiles: str) -> float:
+    """Compute LogP from SMILES using RDKit."""
+    Chem, Descriptors, _ = _require_rdkit()
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        raise Refusal(
+            f"unparseable SMILES: {smiles!r}",
+            detail="RDKit could not interpret this as a valid molecular structure",
+            remedy="check the SMILES syntax",
+        )
+    return round(Descriptors.MolLogP(mol), 2)
+
+
+@admet.command("topical")
+@click.argument("smiles")
+@click.option(
+    "--logp",
+    type=float,
+    default=None,
+    help="LogP value. If not provided, computed from SMILES via RDKit.",
+)
+@click.option(
+    "--solubility",
+    type=float,
+    default=None,
+    help="Aqueous solubility Sw (mg/mL). Required for Jmax calculation.",
+)
+@out_option
+@name_option
+@_overwrite_option
+@output_options
+@pass_state
+def topical_cmd(
+    state: AppState,
+    smiles: str,
+    logp: float | None,
+    solubility: float | None,
+    out: str | None,
+    name: str | None,
+    overwrite: bool,
+    as_json: bool,
+    quiet: bool,
+) -> None:
+    """Predict skin permeability using the Potts-Guy (1992) model.
+
+    Computes log Kp (skin permeability coefficient), log Ksc/w (stratum
+    corneum/water partition coefficient), and optionally Jmax (maximum
+    flux) from a SMILES string.
+
+    The Potts-Guy equation:
+      log Kp = -2.72 + 0.71 * logP - 0.0061 * MW
+
+    Where Kp is in cm/hr.  This is the gold-standard QSPR for skin
+    permeability (Potts & Guy, Pharm Res 1992;9:663-669).
+
+    \b
+    Outputs:
+      {slug}.admet-topical.json       -- topical permeability prediction
+      {slug}.admet-topical.meta.json  -- provenance sidecar
+    """
+    emit = Emitter(as_json=as_json, quiet=quiet)
+    target_dir = state.project().artifact_dir(ARTIFACT_CLASS, out)
+
+    # --- Resolve logP ---
+    if logp is not None:
+        logp_used = logp
+        logp_source = "user-provided"
+    else:
+        try:
+            logp_used = _compute_logp_from_smiles(smiles)
+            logp_source = "RDKit MolLogP"
+        except DependencyError:
+            raise Refusal(
+                "RDKit is not available and --logp was not provided",
+                detail="logP is required for the Potts-Guy equation",
+                remedy="install RDKit or provide --logp explicitly",
+            )
+
+    # --- Compute MW from SMILES ---
+    mw = _compute_mw_from_smiles(smiles)
+
+    # --- Parse SMILES for canonical form ---
+    mol, canonical, fragment_notes, _ = _parse_smiles(smiles)
+    slug = _slug(name) if name else _slug(canonical)
+
+    # --- Potts-Guy log Kp ---
+    # Potts & Guy, Pharm Res 1992;9:663-669
+    log_kp = -2.72 + 0.71 * logp_used - 0.0061 * mw
+    log_kp = round(log_kp, 4)
+
+    # --- Log Ksc/w (stratum corneum/water partition) ---
+    # Potts-Guy companion equation
+    log_kscw = 0.71 * logp_used - 0.061
+    log_kscw = round(log_kscw, 4)
+
+    # --- Kp in cm/hr ---
+    kp_cm_hr = 10 ** log_kp
+
+    # --- Jmax (maximum flux) ---
+    jmax = None
+    solubility_used = solubility
+    if solubility is not None:
+        if solubility <= 0:
+            raise Refusal(
+                f"--solubility must be positive, got {solubility}",
+                remedy="provide aqueous solubility in mg/mL as a positive number",
+            )
+        # Jmax = Kp * Sw, convert Sw from mg/mL to ug/mL (* 1000)
+        # then Jmax in ug/cm2/hr
+        jmax = kp_cm_hr * (solubility * 1000)  # ug/cm2/hr
+        jmax = round(jmax, 6)
+
+    # --- Permeability classification (Potts-Guy thresholds) ---
+    if log_kp > -1.0:
+        permeability_class = "high"
+    elif log_kp < -3.0:
+        permeability_class = "low"
+    else:
+        permeability_class = "moderate"
+
+    # --- Build output record ---
+    record: dict[str, Any] = {
+        "tool": "admet",
+        "subcommand": "topical",
+        "schema": "dde.admet-topical.v1",
+        "canonical_smiles": canonical,
+        "fragment_notes": fragment_notes,
+        "log_kp": log_kp,
+        "log_kscw": log_kscw,
+        "kp_cm_hr": round(kp_cm_hr, 8),
+        "logP_used": logp_used,
+        "logP_source": logp_source,
+        "mw": mw,
+        "permeability_class": permeability_class,
+        "classification_thresholds": {
+            "high": "log_kp > -1.0",
+            "moderate": "-3.0 <= log_kp <= -1.0",
+            "low": "log_kp < -3.0",
+        },
+        "model": {
+            "name": "Potts-Guy",
+            "equation": "log Kp = -2.72 + 0.71 * logP - 0.0061 * MW",
+            "citation": (
+                "Potts & Guy, 'Predicting Skin Permeability', "
+                "Pharm Res 1992;9:663-669"
+            ),
+        },
+    }
+
+    if jmax is not None:
+        record["jmax_ug_cm2_hr"] = jmax
+        record["solubility_used"] = solubility_used
+    else:
+        record["jmax_ug_cm2_hr"] = None
+        record["solubility_used"] = None
+
+    record_path = target_dir / f"{slug}.admet-topical.json"
+    content = json.dumps(record, indent=2, allow_nan=False) + "\n"
+    _safe_write_artifact(record_path, content, overwrite=overwrite)
+
+    # --- Provenance sidecar ---
+    sidecar = _build_sidecar("topical", smiles, canonical, fragment_notes)
+    if name:
+        sidecar.note("compound_name", name)
+    sidecar.note("log_kp", log_kp)
+    sidecar.note("log_kscw", log_kscw)
+    sidecar.note("permeability_class", permeability_class)
+    sidecar.note("logP_used", logp_used)
+    sidecar.note("logP_source", logp_source)
+    sidecar.note("mw", mw)
+
+    # Mandatory relay: prediction_not_measurement (#84 cross-cutting principle)
+    sidecar.warn(
+        "Skin permeability (log Kp) is a Potts-Guy QSPR estimate, not "
+        "measured ex-vivo or in-vivo permeability.",
+        code="admet.prediction_not_measurement",
+    )
+
+    sidecar.add_output(record_path)
+    meta_path = sidecar.write(target_dir / f"{slug}.admet-topical.meta.json")
+
+    # --- Emit summary ---
+    emit.data("canonical_smiles", canonical)
+    emit.data("log_kp", log_kp)
+    emit.data("permeability_class", permeability_class)
+    emit.path(record_path, role="topical")
+    emit.path(meta_path, role="sidecar")
+    emit.line(f"{canonical}")
+    emit.line(f"log Kp = {log_kp} ({permeability_class} permeability)")
+    emit.line(f"log Ksc/w = {log_kscw}")
+    emit.line(f"MW = {mw}, logP = {logp_used} ({logp_source})")
+    if jmax is not None:
+        emit.line(f"Jmax = {jmax} ug/cm2/hr (Sw = {solubility_used} mg/mL)")
     emit.flush()
 
 

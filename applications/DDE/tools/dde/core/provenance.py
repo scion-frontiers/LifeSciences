@@ -402,6 +402,14 @@ RELAY_CODES: dict[str, str] = {
         "species for reliable CL prediction. A human dose projection from one "
         "species should not be presented as a validated estimate."
     ),
+    "pk.dermal_partition_estimated": (
+        "Dermal partition parameters are estimated from steady-state assumptions "
+        "and Fick's first law. The steady-state model assumes infinite dose, "
+        "constant vehicle concentration at the skin surface, and homogeneous "
+        "membrane permeation. Real dermal absorption is affected by formulation "
+        "depletion, skin hydration, occlusion, and site-specific differences in "
+        "stratum corneum thickness."
+    ),
     "screening.prefilter_excludes_not_rejects": (
         "Compounds excluded by the descriptor pre-filter were not docked, not "
         "proven inactive. The pre-filter is a compute-saving heuristic based on "

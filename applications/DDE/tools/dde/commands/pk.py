@@ -61,7 +61,7 @@ ARTIFACT_CLASS = "pk"
 # Recognised unit strings — anything else is refused as ambiguous.
 VALID_TIME_UNITS = {"h", "min", "s"}
 VALID_CONC_UNITS = {"ng/mL", "ug/mL", "mg/mL", "uM", "nM"}
-VALID_ROUTES = {"iv", "oral", "sc", "im", "ip"}
+VALID_ROUTES = {"iv", "oral", "sc", "im", "ip", "dermal", "topical", "inhaled", "ophthalmic", "intranasal"}
 
 
 # ---------------------------------------------------------------------------
@@ -120,7 +120,7 @@ def _validate_study(doc: dict[str, Any]) -> None:
         raise Refusal(
             f"unrecognised route: {route!r}",
             detail=f"accepted values: {sorted(VALID_ROUTES)}",
-            remedy="use one of: iv, oral, sc, im, ip",
+            remedy=f"use one of: {', '.join(sorted(VALID_ROUTES))}",
         )
 
     # dose_mg_kg positivity
@@ -851,6 +851,14 @@ def _extract_pk_for_scaling(
         )
 
     return cl, vd, cl_units, vd_units
+
+
+# NOTE (issue #136): Dermal and oral NCA yields apparent clearance
+# (CL/F) and apparent volume of distribution (Vd/F), not true CL and Vd.
+# Absolute bioavailability (F) requires an IV reference arm.  Without it,
+# CL/F and Vd/F cannot be deconvolved into CL and F individually, and a
+# human dose projection from dermal NCA carries this confound.  See FDA
+# Guidance for Industry: Bioavailability and Bioequivalence Studies.
 
 
 @pk.command("scale")
@@ -1795,3 +1803,182 @@ def _analyze_ddi(
     else:
         verdict = "acceptable"
     assessment["verdict"] = verdict
+
+
+# ---------------------------------------------------------------------------
+# pk dermal-partition — steady-state dermal absorption estimate
+# ---------------------------------------------------------------------------
+
+
+@pk.command("dermal-partition")
+@click.option(
+    "--kp",
+    type=float,
+    required=True,
+    help="Skin permeability coefficient Kp (cm/hr).",
+)
+@click.option(
+    "--strength",
+    type=float,
+    required=True,
+    help="Formulation strength (% w/w).",
+)
+@click.option(
+    "--area",
+    type=float,
+    required=True,
+    help="Application area (cm2).",
+)
+@click.option(
+    "--dose-interval",
+    type=float,
+    required=True,
+    help="Dosing interval (hr).",
+)
+@click.option(
+    "--density",
+    type=float,
+    default=1.0,
+    show_default=True,
+    help="Formulation density (g/mL). Default 1.0 for aqueous.",
+)
+@out_option
+@output_options
+@pass_state
+def dermal_partition_cmd(
+    state: AppState,
+    kp: float,
+    strength: float,
+    area: float,
+    dose_interval: float,
+    density: float,
+    out: str | None,
+    as_json: bool,
+    quiet: bool,
+) -> None:
+    """Estimate steady-state dermal absorption from Fick's first law.
+
+    Computes steady-state flux (Jss), total absorption rate, and total
+    absorbed dose per interval from the permeability coefficient (Kp),
+    formulation strength, application area, and dosing interval.
+
+    Kp should come from ``dde admet topical`` (Potts-Guy estimate) or
+    from measured ex-vivo/in-vivo permeability data.
+
+    \b
+    Outputs:
+      dermal-partition.pk-dermal.json       -- dermal partition estimate
+      dermal-partition.pk-dermal.meta.json  -- provenance sidecar
+    """
+    emit = Emitter(as_json=as_json, quiet=quiet)
+    target_dir = state.project().artifact_dir(ARTIFACT_CLASS, out)
+
+    # --- Input validation ---
+    if kp <= 0:
+        raise Refusal(
+            f"--kp must be positive, got {kp}",
+            remedy="provide a positive permeability coefficient in cm/hr",
+        )
+    if strength <= 0 or strength > 100:
+        raise Refusal(
+            f"--strength must be between 0 and 100 (% w/w), got {strength}",
+            remedy="provide formulation strength as a percentage (0-100)",
+        )
+    if area <= 0:
+        raise Refusal(
+            f"--area must be positive, got {area}",
+            remedy="provide a positive application area in cm2",
+        )
+    if dose_interval <= 0:
+        raise Refusal(
+            f"--dose-interval must be positive, got {dose_interval}",
+            remedy="provide a positive dosing interval in hours",
+        )
+    if density <= 0:
+        raise Refusal(
+            f"--density must be positive, got {density}",
+            remedy="provide a positive density in g/mL",
+        )
+
+    # --- Compute dermal partition parameters ---
+    # Cv (vehicle concentration in ug/mL) = strength (%) * density (g/mL) * 10000
+    # The factor 10000 converts from g/100mL (% w/w * density) to ug/mL:
+    #   strength/100 * density * 1e6 ug/g = strength * density * 10000
+    cv = strength * density * 10000  # ug/mL
+
+    # Steady-state flux: Jss = Kp * Cv (ug/cm2/hr)
+    jss = kp * cv
+
+    # Total absorption rate: absorption_rate = Jss * area (ug/hr)
+    absorption_rate = jss * area
+
+    # Total absorbed per interval: total_absorbed = absorption_rate * dose_interval (ug)
+    total_absorbed = absorption_rate * dose_interval
+
+    # --- Build output record ---
+    record: dict[str, Any] = {
+        "tool": "pk",
+        "subcommand": "dermal-partition",
+        "schema": "dde.pk-dermal.v1",
+        "parameters": {
+            "kp_cm_hr": kp,
+            "strength_pct": strength,
+            "area_cm2": area,
+            "dose_interval_hr": dose_interval,
+            "density_g_ml": density,
+        },
+        "computed": {
+            "cv_ug_ml": round(cv, 4),
+            "jss_ug_cm2_hr": round(jss, 6),
+            "absorption_rate_ug_hr": round(absorption_rate, 4),
+            "total_absorbed_ug": round(total_absorbed, 4),
+        },
+        "assumptions": [
+            "Steady-state (infinite dose, constant Cv at skin surface)",
+            "Fick's first law of diffusion",
+            "Homogeneous membrane (stratum corneum as rate-limiting barrier)",
+        ],
+    }
+
+    record_path = target_dir / "dermal-partition.pk-dermal.json"
+    record_path.write_text(
+        json.dumps(record, indent=2) + "\n", encoding="utf-8"
+    )
+
+    # --- Provenance sidecar ---
+    sidecar = provenance.Sidecar(
+        tool="pk",
+        subcommand="dermal-partition",
+        endpoint=None,
+        parameters={
+            "kp_cm_hr": kp,
+            "strength_pct": strength,
+            "area_cm2": area,
+            "dose_interval_hr": dose_interval,
+            "density_g_ml": density,
+        },
+    )
+    sidecar.note("cv_ug_ml", round(cv, 4))
+    sidecar.note("jss_ug_cm2_hr", round(jss, 6))
+    sidecar.note("absorption_rate_ug_hr", round(absorption_rate, 4))
+    sidecar.note("total_absorbed_ug", round(total_absorbed, 4))
+
+    sidecar.warn(
+        "Dermal partition parameters are estimated from steady-state "
+        "assumptions and Fick's first law.",
+        code="pk.dermal_partition_estimated",
+    )
+
+    sidecar.add_output(record_path)
+    meta_path = sidecar.write(
+        target_dir / "dermal-partition.pk-dermal.meta.json"
+    )
+
+    # --- Emit summary ---
+    emit.path(record_path, role="dermal-partition")
+    emit.path(meta_path, role="sidecar")
+    emit.line(f"Cv = {cv:.1f} ug/mL")
+    emit.line(f"Jss = {jss:.4f} ug/cm2/hr")
+    emit.line(f"Absorption rate = {absorption_rate:.2f} ug/hr")
+    emit.line(f"Total absorbed per interval = {total_absorbed:.2f} ug")
+    emit.flush()
