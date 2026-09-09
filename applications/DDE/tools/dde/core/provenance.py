@@ -74,6 +74,13 @@ _VOLATILE_ANALYSIS_FIELDS = (
     # capability_state records which optional backends were available.
     # A snapshot of deployment state, not of the verdict.
     "capability_state",
+    # work_order_id is an attribution field — it records *who requested*
+    # the analysis, not what the analysis found.  Same rationale as
+    # written_by: a reviewer in WO-B re-running a specialist's WO-A
+    # analysis that produces identical science should not trigger exit-9.
+    # Cross-WO overwrite protection is independent: _check_cross_wo_overwrite
+    # reads work_order_id straight off disk, never through _comparable().
+    "work_order_id",
 )
 
 #: Fields that ``_comparable()`` normalises before comparison.  These
@@ -1344,7 +1351,12 @@ def _may_write(path: Path, record: dict[str, Any], *, suppress_warnings: bool = 
     except (OSError, ValueError):
         existing = None
 
-    if isinstance(existing, dict) and _comparable(existing) == _comparable(record):
+    try:
+        records_agree = isinstance(existing, dict) and _comparable(existing) == _comparable(record)
+    except ArtifactError:
+        records_agree = False
+
+    if records_agree:
         if not suppress_warnings:
             previous = existing.get("written_by")
             when = existing.get("timestamp") or "an earlier run"

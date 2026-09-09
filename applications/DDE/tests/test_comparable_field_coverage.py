@@ -38,8 +38,10 @@ from dde.core.provenance import (
     _NORMALIZED_ANALYSIS_FIELDS,
     _VOLATILE_ANALYSIS_FIELDS,
     _comparable,
+    _may_write,
     _normalize_source,
 )
+from dde.core.errors import ArtifactError
 
 
 # ---------------------------------------------------------------------------
@@ -59,7 +61,6 @@ _SCIENTIFIC_ANALYSIS_FIELDS = frozenset({
     "threshold_sources",
     "threshold_provenance",
     "thresholds_unresolved",
-    "work_order_id",
     "source_sha256",
 })
 
@@ -393,3 +394,68 @@ class TestUnchangedRerunExitsClean:
         rerun["cli_integrity"] = "new-sha"
 
         assert _comparable(stored) == _comparable(rerun)
+
+
+# ---------------------------------------------------------------------------
+# work_order_id is volatile — different WO, same science, should agree
+# ---------------------------------------------------------------------------
+
+
+class TestWorkOrderIdVolatile:
+    """work_order_id is an attribution field, not scientific content.
+    Two records with identical science but different work_order_id
+    must compare equal via _comparable()."""
+
+    def test_different_work_order_id_compares_equal(self) -> None:
+        """WO-A specialist and WO-B reviewer produce identical science."""
+        wo_a = _maximal_record()
+        wo_a["work_order_id"] = "WO-A"
+
+        wo_b = _maximal_record()
+        wo_b["work_order_id"] = "WO-B"
+
+        assert _comparable(wo_a) == _comparable(wo_b)
+
+    def test_work_order_id_absent_vs_present(self) -> None:
+        """A record without work_order_id should compare equal to one
+        with it, since the field is volatile."""
+        without = _maximal_record()
+        del without["work_order_id"]
+
+        with_wo = _maximal_record()
+        with_wo["work_order_id"] = "WO-123"
+
+        assert _comparable(without) == _comparable(with_wo)
+
+
+# ---------------------------------------------------------------------------
+# ArtifactError from _normalize_source() caught by _may_write()
+# ---------------------------------------------------------------------------
+
+
+class TestArtifactErrorCaughtInMayWrite:
+    """A pathological source path that causes _normalize_source() to raise
+    ArtifactError must not propagate uncaught from _may_write().  Instead
+    it falls into the 'cannot be shown to agree' branch (Refusal/exit-9)."""
+
+    def test_artifact_error_does_not_propagate(self, tmp_path: Path) -> None:
+        """_may_write() catches ArtifactError from _comparable() and
+        raises Refusal rather than letting ArtifactError escape."""
+        import json as _json
+        from dde.core.errors import Refusal
+
+        # Write a stored record with a pathological source that will
+        # make _normalize_source() raise ArtifactError.
+        stored = _maximal_record()
+        stored["source"] = "/etc/passwd/../../../escape"
+
+        analysis_path = tmp_path / "compound.analysis.json"
+        analysis_path.write_text(_json.dumps(stored), encoding="utf-8")
+
+        new_record = _maximal_record()
+
+        # _may_write should NOT raise ArtifactError.  It should raise
+        # Refusal (the "cannot be shown to agree" path) because the
+        # comparison cannot be completed.
+        with pytest.raises(Refusal):
+            _may_write(analysis_path, new_record)
