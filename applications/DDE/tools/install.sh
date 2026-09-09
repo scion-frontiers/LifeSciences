@@ -428,9 +428,25 @@ install_rate4site() {
     log "rate4site installed at ${target}"
 }
 
+# Map a tool name to the name of its SHA256 variable so the loop can
+# detect PLACEHOLDER binaries generically.  Tools without a SHA256
+# variable (vina downloads a fixed URL, rate4site pins a commit) return
+# empty — they are never PLACEHOLDER.
+_sha_var_for() {
+    case "$1" in
+        hypex) echo "HYPEX_SHA256" ;;
+        elo)   echo "HYPEX_ELO_SHA256" ;;
+        prox)  echo "HYPEX_PROX_SHA256" ;;
+        *)     echo "" ;;
+    esac
+}
+
 BINARY_STATUS=""
 for tool in vina fpocket rate4site hypex elo prox; do
-    if "install_${tool}"; then
+    sha_var="$(_sha_var_for "$tool")"
+    if [ -n "$sha_var" ] && [ "${!sha_var}" = "PLACEHOLDER" ]; then
+        BINARY_STATUS="${BINARY_STATUS} ${tool}=PLACEHOLDER"
+    elif "install_${tool}"; then
         BINARY_STATUS="${BINARY_STATUS} ${tool}=ok"
     else
         BINARY_STATUS="${BINARY_STATUS} ${tool}=MISSING"
@@ -631,6 +647,11 @@ fi
 # partial one. But the script exits non-zero so nothing upstream records
 # this as a completed provisioning, and `dde doctor` names the
 # missing binary directly.
+if [[ "$BINARY_STATUS" == *PLACEHOLDER* ]]; then
+    warn "Some declared binaries have PLACEHOLDER hashes (unreleased): check above warnings."
+    warn "These do not block bootstrap. Update hashes when releases are published."
+fi
+
 if [[ "$BINARY_STATUS" == *MISSING* ]]; then
     warn "Exiting non-zero: a declared binary did not install:${BINARY_STATUS}"
     exit 4
