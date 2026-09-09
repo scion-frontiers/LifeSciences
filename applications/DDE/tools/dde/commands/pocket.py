@@ -351,17 +351,227 @@ def _detect_non_protein_chains(structure_path: Path) -> tuple[bool, list[str]]:
     return bool(non_protein_chains), non_protein_chains
 
 
+def _detect_short_chains(
+    structure_path: Path,
+    threshold: int = 20,
+) -> list[dict[str, Any]]:
+    """Detect chains with fewer than *threshold* residues.
+
+    Short chains in crystal structures are often peptidic ligands
+    built from standard amino acid residues.  Because they look like
+    protein to chain-detection heuristics, they are silently retained
+    as part of the receptor, occlude the binding site, and produce
+    confidently low druggability scores on targets that are druggable
+    in an appropriate conformation.
+
+    Returns a list of dicts::
+
+        [{"chain": "B", "residues": 12, "note": "Possible peptide ligand"}]
+    """
+    text = structure_path.read_text(encoding="utf-8", errors="replace")[:500_000]
+    fmt = detect_structure_format(structure_path)
+
+    # Collect unique residue identifiers per chain.
+    chain_residues: dict[str, set[tuple[str, int]]] = {}
+
+    if fmt == "cif":
+        lines = text.splitlines()
+        columns: list[str] = []
+        data_start = 0
+        in_atom_site = False
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped.startswith("_atom_site."):
+                in_atom_site = True
+                columns.append(stripped.split(".")[1])
+            elif in_atom_site:
+                data_start = i
+                break
+
+        col_comp = columns.index("label_comp_id") if "label_comp_id" in columns else None
+        col_chain = None
+        for name in ("auth_asym_id", "label_asym_id"):
+            if name in columns:
+                col_chain = columns.index(name)
+                break
+        col_resnum = None
+        for name in ("auth_seq_id", "label_seq_id"):
+            if name in columns:
+                col_resnum = columns.index(name)
+                break
+
+        if col_comp is not None and col_chain is not None and col_resnum is not None:
+            for line in lines[data_start:]:
+                if not line.startswith(("ATOM", "HETATM")):
+                    continue
+                fields = line.split()
+                try:
+                    resname = fields[col_comp]
+                    chain = fields[col_chain]
+                    resnum = int(fields[col_resnum])
+                except (IndexError, ValueError):
+                    continue
+                # Only count standard amino acid residues toward
+                # chain length — ligands and waters are not chain
+                # residues for this purpose.
+                if resname in _STANDARD_AMINO_ACIDS:
+                    chain_residues.setdefault(chain, set()).add((resname, resnum))
+    else:
+        # PDB format — fixed-column layout.
+        for line in text.splitlines():
+            if not line.startswith(("ATOM  ", "HETATM")):
+                continue
+            resname = line[17:20].strip()
+            chain = line[21:22].strip() or "_"
+            try:
+                resnum = int(line[22:26])
+            except (ValueError, IndexError):
+                continue
+            if resname in _STANDARD_AMINO_ACIDS:
+                chain_residues.setdefault(chain, set()).add((resname, resnum))
+
+    short_chains: list[dict[str, Any]] = []
+    for chain, residues in sorted(chain_residues.items()):
+        n_residues = len(residues)
+        if 0 < n_residues < threshold:
+            short_chains.append({
+                "chain": chain,
+                "residues": n_residues,
+                "note": "Possible peptide ligand",
+            })
+
+    return short_chains
+
+
+def _strip_chains(
+    structure_path: Path,
+    chains_to_strip: set[str],
+    output_path: Path,
+) -> dict[str, Any]:
+    """Remove specified chains from a structure file.
+
+    Supports both PDB and mmCIF formats.  Removes all ATOM/HETATM
+    records belonging to the specified chain IDs.
+
+    Returns a dict with provenance information::
+
+        {"stripped_chains": ["B", "C"], "removed_atom_count": 142}
+    """
+    text = structure_path.read_text(encoding="utf-8", errors="replace")
+    fmt = structure_path.suffix.lower()
+
+    kept_lines: list[str] = []
+    removed_atom_count = 0
+
+    if fmt in (".cif", ".mmcif"):
+        lines = text.splitlines(keepends=True)
+        columns: list[str] = []
+        data_start = 0
+        in_atom_site = False
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped.startswith("_atom_site."):
+                in_atom_site = True
+                columns.append(stripped.split(".")[1])
+            elif in_atom_site:
+                data_start = i
+                break
+
+        col_chain = None
+        for name in ("auth_asym_id", "label_asym_id"):
+            if name in columns:
+                col_chain = columns.index(name)
+                break
+
+        kept_lines.extend(lines[:data_start])
+
+        for line in lines[data_start:]:
+            if not line.startswith(("ATOM", "HETATM")):
+                kept_lines.append(line)
+                continue
+            if col_chain is not None:
+                fields = line.split()
+                try:
+                    chain_id = fields[col_chain]
+                except IndexError:
+                    chain_id = ""
+                if chain_id in chains_to_strip:
+                    removed_atom_count += 1
+                    continue
+            kept_lines.append(line)
+    else:
+        # PDB format.
+        for line in text.splitlines(keepends=True):
+            if not line.startswith(("ATOM  ", "HETATM")):
+                kept_lines.append(line)
+                continue
+            chain_id = line[21:22].strip() or "_"
+            if chain_id in chains_to_strip:
+                removed_atom_count += 1
+            else:
+                kept_lines.append(line)
+
+    output_path.write_text("".join(kept_lines), encoding="utf-8")
+
+    return {
+        "stripped_chains": sorted(chains_to_strip),
+        "removed_atom_count": removed_atom_count,
+    }
+
+
+#: Default druggability score threshold below which a score is
+#: considered "low" for the purpose of peptide-occlusion and
+#: holo-structure advisories.
+_LOW_DRUGGABILITY_THRESHOLD = 0.5
+
+
 @pocket.command()
 @click.argument("structure", type=click.Path())
+@click.option(
+    "--strip-peptides/--keep-peptides",
+    default=False,
+    show_default=True,
+    help="Automatically remove chains shorter than --peptide-threshold "
+    "residues before running fpocket. Stripped chains are recorded "
+    "in the sidecar.",
+)
+@click.option(
+    "--peptide-threshold",
+    default=20,
+    type=int,
+    show_default=True,
+    help="Maximum residue count for a chain to be considered a possible "
+    "peptide ligand (used by --strip-peptides and short-chain detection).",
+)
+@click.option(
+    "--ignore-chain",
+    multiple=True,
+    help="Chain ID(s) to remove before running fpocket. May be specified "
+    "multiple times (e.g. --ignore-chain B --ignore-chain C).",
+)
 @out_option
 @output_options
 @pass_state
-def run(state: AppState, structure: str, out: str | None, as_json: bool, quiet: bool) -> None:
+def run(
+    state: AppState,
+    structure: str,
+    strip_peptides: bool,
+    peptide_threshold: int,
+    ignore_chain: tuple[str, ...],
+    out: str | None,
+    as_json: bool,
+    quiet: bool,
+) -> None:
     """Detect pockets in a structure. Writes descriptors, judges nothing.
 
     Runs fpocket over a copy of the input, so the program's structure
     file is never modified and fpocket's output tree never lands beside
     it by accident.
+
+    When ``--strip-peptides`` is given, chains shorter than
+    ``--peptide-threshold`` residues are removed before fpocket runs.
+    When ``--ignore-chain`` is given, the specified chains are removed.
+    Both options record which chains were stripped in the sidecar.
     """
     binary = _require_fpocket()
     source = resolve_artifact(state, structure, "structure")
@@ -381,77 +591,104 @@ def run(state: AppState, structure: str, out: str | None, as_json: bool, quiet: 
     # --- detect non-protein chains before fpocket invocation ---
     has_non_protein, non_protein_chains = _detect_non_protein_chains(source)
 
+    # --- detect short chains (possible peptide ligands) ---
+    short_chains = _detect_short_chains(source, threshold=peptide_threshold)
+
+    # --- determine chains to strip ---
+    chains_to_strip: set[str] = set()
+    if strip_peptides and short_chains:
+        chains_to_strip.update(sc["chain"] for sc in short_chains)
+    if ignore_chain:
+        chains_to_strip.update(ignore_chain)
+
+    sidecar_params: dict[str, Any] = {
+        "structure": source.name,
+        "fpocket_defaults": True,
+        "peptide_threshold": peptide_threshold,
+    }
+    if strip_peptides:
+        sidecar_params["strip_peptides"] = True
+    if ignore_chain:
+        sidecar_params["ignore_chain"] = list(ignore_chain)
+
     sidecar = provenance.Sidecar(
         tool=TOOL,
         subcommand="run",
         endpoint=None,
-        parameters={"structure": source.name, "fpocket_defaults": True},
+        parameters=sidecar_params,
     )
     sidecar.note("structure_sha256", provenance.sha256_file(source))
     sidecar.note("experimental_structure", experimental)
     sidecar.note("structure_origin_evidence", evidence)
 
-    with tempfile.TemporaryDirectory(prefix="dde-fpocket-") as tmp:
-        work = Path(tmp) / source.name
-        shutil.copyfile(source, work)
-        completed = subprocess.run(
-            [binary, "-f", str(work)],
-            capture_output=True,
-            text=True,
-            cwd=tmp,
-            check=False,
-        )
-        produced = Path(tmp) / f"{work.stem}_out"
-        info = produced / f"{work.stem}_info.txt"
-        if completed.returncode != 0 or not info.is_file():
-            raise ArtifactError(
-                f"fpocket produced no result for {source.name}",
-                detail=(completed.stderr or completed.stdout or "no output").strip()[:400],
-                remedy="check the file is a parseable structure with protein atoms; "
-                "fpocket exits 0 on some malformed inputs without writing output, "
-                "so a missing info.txt is treated as a failure here",
-            )
+    # --- optionally strip chains before fpocket ---
+    strip_info: dict[str, Any] | None = None
+    _strip_tmpdir: str | None = None
+    effective_source = source
+    if chains_to_strip:
+        _strip_tmpdir = tempfile.mkdtemp(prefix="dde-strip-pocket-")
+        stripped_path = Path(_strip_tmpdir) / source.name
+        strip_info = _strip_chains(source, chains_to_strip, stripped_path)
+        effective_source = stripped_path
 
-        pockets = _parse_info(info.read_text(encoding="utf-8", errors="replace"))
-        empty_residue_pockets: list[int] = []
-        for entry in pockets:
-            atm = _find_pocket_atm(produced / "pockets", entry["rank"])
-            if atm is not None:
-                entry["residues"] = _parse_residues(atm)
-                if not entry["residues"]:
+    try:
+        with tempfile.TemporaryDirectory(prefix="dde-fpocket-") as tmp:
+            work = Path(tmp) / effective_source.name
+            shutil.copyfile(effective_source, work)
+            completed = subprocess.run(
+                [binary, "-f", str(work)],
+                capture_output=True,
+                text=True,
+                cwd=tmp,
+                check=False,
+            )
+            produced = Path(tmp) / f"{work.stem}_out"
+            info = produced / f"{work.stem}_info.txt"
+            if completed.returncode != 0 or not info.is_file():
+                raise ArtifactError(
+                    f"fpocket produced no result for {source.name}",
+                    detail=(completed.stderr or completed.stdout or "no output").strip()[:400],
+                    remedy="check the file is a parseable structure with protein atoms; "
+                    "fpocket exits 0 on some malformed inputs without writing output, "
+                    "so a missing info.txt is treated as a failure here",
+                )
+
+            pockets = _parse_info(info.read_text(encoding="utf-8", errors="replace"))
+            empty_residue_pockets: list[int] = []
+            for entry in pockets:
+                atm = _find_pocket_atm(produced / "pockets", entry["rank"])
+                if atm is not None:
+                    entry["residues"] = _parse_residues(atm)
+                    if not entry["residues"]:
+                        empty_residue_pockets.append(entry["rank"])
+                else:
                     empty_residue_pockets.append(entry["rank"])
-            else:
-                empty_residue_pockets.append(entry["rank"])
-                entry["residues"] = []
+                    entry["residues"] = []
 
-        # Every real pocket has lining residues — an empty list means the
-        # parser failed to extract them, not that the pocket is unlinded.
-        # A silent empty list here becomes a confident "no pocket at site"
-        # three steps downstream in `analyze --near`, which is a false
-        # negative fabricated from a parsing failure.  Per
-        # tool-design-guidance §8: failure to answer is never an answer
-        # of "no".
-        if empty_residue_pockets:
-            ranks = ", ".join(str(r) for r in empty_residue_pockets)
-            raise ArtifactError(
-                f"fpocket detected pockets but residue extraction failed "
-                f"for pocket(s) {ranks} in {source.name}",
-                detail="every pocket has lining residues; an empty residue "
-                "list is a parsing failure, not a legitimate finding of "
-                "'no residues line this pocket'. The pocket atom file may "
-                "be missing, empty, or in an unrecognised format.",
-                remedy="check the pocket atom files in the fpocket output "
-                "directory; if the format has changed, _parse_residues "
-                "needs updating",
-            )
+            # Every real pocket has lining residues — an empty list means the
+            # parser failed to extract them, not that the pocket is unlinded.
+            if empty_residue_pockets:
+                ranks = ", ".join(str(r) for r in empty_residue_pockets)
+                raise ArtifactError(
+                    f"fpocket detected pockets but residue extraction failed "
+                    f"for pocket(s) {ranks} in {source.name}",
+                    detail="every pocket has lining residues; an empty residue "
+                    "list is a parsing failure, not a legitimate finding of "
+                    "'no residues line this pocket'. The pocket atom file may "
+                    "be missing, empty, or in an unrecognised format.",
+                    remedy="check the pocket atom files in the fpocket output "
+                    "directory; if the format has changed, _parse_residues "
+                    "needs updating",
+                )
 
-        # fpocket's own tree, kept whole. It holds the per-pocket
-        # coordinate files a docking run needs, and re-deriving them
-        # later would mean re-running a tool whose numbers move.
-        tree = target_dir / f"{stem}_fpocket"
-        if tree.exists():
-            shutil.rmtree(tree)
-        shutil.copytree(produced, tree)
+            # fpocket's own tree, kept whole.
+            tree = target_dir / f"{stem}_fpocket"
+            if tree.exists():
+                shutil.rmtree(tree)
+            shutil.copytree(produced, tree)
+    finally:
+        if _strip_tmpdir:
+            shutil.rmtree(_strip_tmpdir, ignore_errors=True)
 
     record: dict[str, Any] = {
         "tool": TOOL,
@@ -473,14 +710,33 @@ def run(state: AppState, structure: str, out: str | None, as_json: bool, quiet: 
             "Scores may differ from protein-only analysis."
         )
 
+    # --- short chain context ---
+    # Short chains that were NOT stripped are recorded so downstream
+    # consumers know the pocket score may be affected by peptide
+    # occlusion.
+    retained_short_chains = [
+        sc for sc in short_chains if sc["chain"] not in chains_to_strip
+    ]
+    if retained_short_chains:
+        record["short_chains_retained"] = retained_short_chains
+
+    # --- stripped chain context ---
+    if strip_info is not None:
+        record["stripped_chains"] = strip_info["stripped_chains"]
+        record["stripped_atom_count"] = strip_info["removed_atom_count"]
+
     record_path = target_dir / f"{stem}.pockets.json"
     record_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
 
     sidecar.note("n_pockets", len(pockets))
     sidecar.add_output(record_path)
-    # The fpocket tree is a directory, and add_output hashes files. Its
-    # name is recorded instead of a digest invented for it.
     sidecar.note("fpocket_output_dir", tree.name)
+
+    if short_chains:
+        sidecar.note("short_chains_detected", short_chains)
+    if strip_info is not None:
+        sidecar.note("stripped_chains", strip_info["stripped_chains"])
+        sidecar.note("stripped_atom_count", strip_info["removed_atom_count"])
 
     if has_non_protein:
         sidecar.note("non_protein_chains", non_protein_chains)
@@ -492,6 +748,56 @@ def run(state: AppState, structure: str, out: str | None, as_json: bool, quiet: 
             "accurate druggability assessment.",
             code="fpocket.ligand_present_in_input",
         )
+
+    # --- SAFETY-CRITICAL: peptide occlusion relay (#133 Item 2) ---
+    # When short chains are retained AND any pocket scores below the
+    # druggability threshold, fire a mandatory relay.  A 0.004 score on
+    # a druggable target kills programs — the fix makes it impossible
+    # to report a confident low score without flagging potential
+    # occlusion.
+    if retained_short_chains and pockets:
+        low_scoring_pockets = [
+            p for p in pockets
+            if (p.get("druggability_score") or 0.0) < _LOW_DRUGGABILITY_THRESHOLD
+        ]
+        if low_scoring_pockets:
+            chains_str = ", ".join(sc["chain"] for sc in retained_short_chains)
+            residue_counts = ", ".join(
+                f"{sc['chain']}({sc['residues']} residues)"
+                for sc in retained_short_chains
+            )
+            worst = min(low_scoring_pockets, key=lambda p: p.get("druggability_score") or 0.0)
+            worst_score = worst.get("druggability_score") or 0.0
+            sidecar.warn(
+                f"Pocket {worst.get('rank', '?')} scored {worst_score:.3f} "
+                f"but the input structure contains short chain(s) {chains_str} "
+                f"({residue_counts}) that may be peptidic ligands occluding "
+                "the binding site. Rerun on an apo or small-molecule-bound "
+                "conformation before concluding the target is undruggable.",
+                code="fpocket.possible_peptide_occlusion",
+            )
+
+    # --- Item 3: Low-score advisory on holo structures ---
+    # When the structure contains ANY non-receptor content (ligands,
+    # peptides, cofactors, non-protein chains, or retained short chains)
+    # AND produces a low druggability score, fire a general advisory.
+    has_non_receptor_content = has_non_protein or bool(retained_short_chains)
+    if has_non_receptor_content and pockets:
+        low_scoring = [
+            p for p in pockets
+            if (p.get("druggability_score") or 0.0) < _LOW_DRUGGABILITY_THRESHOLD
+        ]
+        if low_scoring:
+            worst = min(low_scoring, key=lambda p: p.get("druggability_score") or 0.0)
+            worst_score = worst.get("druggability_score") or 0.0
+            sidecar.warn(
+                f"Low druggability score ({worst_score:.3f}) computed on a "
+                "structure containing non-receptor chain(s). Pocket scores are "
+                "conformation-dependent; assess druggability from an apo or "
+                "alternate-conformation structure before concluding "
+                "undruggability.",
+                code="fpocket.low_score_holo_structure",
+            )
 
     sidecar.warn(
         "Pocket volume is a Monte Carlo estimate seeded from the clock; fpocket "
@@ -514,6 +820,12 @@ def run(state: AppState, structure: str, out: str | None, as_json: bool, quiet: 
     emit = Emitter(as_json=as_json, quiet=quiet)
     emit.data("n_pockets", len(pockets))
     emit.data("experimental_structure", experimental)
+    if short_chains:
+        emit.data("short_chains_detected", short_chains)
+    if retained_short_chains:
+        emit.data("short_chains_retained", retained_short_chains)
+    if strip_info is not None:
+        emit.data("stripped_chains", strip_info["stripped_chains"])
     emit.path(record_path, role="pockets")
     emit.path(tree, role="fpocket_tree")
     emit.path(meta_path, role="sidecar")

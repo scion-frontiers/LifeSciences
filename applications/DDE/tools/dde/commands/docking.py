@@ -365,7 +365,89 @@ def _strip_non_protein(
     }
 
 
-def _convert_receptor_to_pdbqt(structure_path: Path, output_path: Path) -> None:
+def _resolve_highest_occupancy_altloc(structure_path: Path) -> str:
+    """Determine the altloc label with the highest mean occupancy.
+
+    Scans ATOM/HETATM records for alternate conformations (altloc
+    indicator in PDB column 16, or ``label_alt_id`` in mmCIF).
+    Returns the label (e.g. ``"A"`` or ``"B"``) whose atoms have
+    the highest average occupancy value.  Falls back to ``"A"`` if
+    no altlocs are found.
+
+    PDB format: altloc is column 16 (0-indexed), occupancy is
+    columns 54-60.
+    """
+    text = structure_path.read_text(encoding="utf-8", errors="replace")
+    fmt = structure_path.suffix.lower()
+
+    # Collect occupancy values per altloc label.
+    altloc_occupancies: dict[str, list[float]] = {}
+
+    if fmt in (".cif", ".mmcif"):
+        lines = text.splitlines()
+        columns: list[str] = []
+        data_start = 0
+        in_atom_site = False
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped.startswith("_atom_site."):
+                in_atom_site = True
+                columns.append(stripped.split(".")[1])
+            elif in_atom_site:
+                data_start = i
+                break
+
+        col_alt = columns.index("label_alt_id") if "label_alt_id" in columns else None
+        col_occ = columns.index("occupancy") if "occupancy" in columns else None
+
+        if col_alt is not None and col_occ is not None:
+            for line in lines[data_start:]:
+                if not line.startswith(("ATOM", "HETATM")):
+                    continue
+                fields = line.split()
+                try:
+                    alt_id = fields[col_alt]
+                    occ = float(fields[col_occ])
+                except (IndexError, ValueError):
+                    continue
+                if alt_id and alt_id != ".":
+                    altloc_occupancies.setdefault(alt_id, []).append(occ)
+    else:
+        # PDB format: altloc indicator is column 16, occupancy is 54:60.
+        for line in text.splitlines():
+            if not line.startswith(("ATOM  ", "HETATM")):
+                continue
+            if len(line) < 60:
+                continue
+            alt = line[16:17].strip()
+            if not alt:
+                continue
+            try:
+                occ = float(line[54:60])
+            except (ValueError, IndexError):
+                continue
+            altloc_occupancies.setdefault(alt, []).append(occ)
+
+    if not altloc_occupancies:
+        return "A"
+
+    # Return the label with the highest mean occupancy.
+    best_label = "A"
+    best_mean = -1.0
+    for label, occs in sorted(altloc_occupancies.items()):
+        mean_occ = sum(occs) / len(occs)
+        if mean_occ > best_mean:
+            best_mean = mean_occ
+            best_label = label
+
+    return best_label
+
+
+def _convert_receptor_to_pdbqt(
+    structure_path: Path,
+    output_path: Path,
+    altloc: str = "A",
+) -> None:
     """Convert a receptor structure to PDBQT format using mk_prepare_receptor.py.
 
     Invokes meeko's mk_prepare_receptor.py as a subprocess — the
@@ -374,11 +456,29 @@ def _convert_receptor_to_pdbqt(structure_path: Path, output_path: Path) -> None:
     handles both PDB and mmCIF formats through a single code path.
     This is important because AlphaFold DB structures arrive as CIF,
     not PDB.
+
+    ``altloc`` selects which alternate conformation to use when the
+    structure contains altlocs:
+
+    - ``"A"`` (default): select altloc A (conventionally highest occupancy)
+    - ``"B"``: select altloc B
+    - ``"highest"``: select the altloc with the highest occupancy value
+
+    Without ``--default_altloc``, Meeko crashes on structures with
+    alternate conformations (#133).
     """
     script = _require_mk_prepare_receptor()
 
+    # Map the altloc option to Meeko's --default_altloc flag.
+    # "highest" is not directly supported by Meeko; we resolve it
+    # to the actual altloc label by scanning occupancy values.
+    effective_altloc = altloc
+    if altloc == "highest":
+        effective_altloc = _resolve_highest_occupancy_altloc(structure_path)
+
     completed = subprocess.run(
         [script, "--read_with_prody", str(structure_path),
+         "--default_altloc", effective_altloc,
          "-p", str(output_path)],
         capture_output=True,
         text=True,
@@ -790,6 +890,17 @@ def docking() -> None:
     help="Strip non-protein chains and heteroatoms before receptor preparation. "
     "Records removed chains in the sidecar. Recommended for AF3 complex outputs.",
 )
+@click.option(
+    "--altloc",
+    default="A",
+    type=click.Choice(["A", "B", "highest"], case_sensitive=False),
+    show_default=True,
+    help="Which alternate conformation to select when the structure "
+    "contains altlocs. 'A' (default) selects altloc A (conventionally "
+    "highest occupancy); 'B' selects altloc B; 'highest' selects the "
+    "altloc with the highest occupancy value. Without this, Meeko "
+    "crashes on structures with alternate conformations.",
+)
 @out_option
 @output_options
 @pass_state
@@ -799,6 +910,7 @@ def prepare_cmd(
     pocket_record: str,
     pocket_rank: int,
     protein_only: bool,
+    altloc: str,
     out: str | None,
     as_json: bool,
     quiet: bool,
@@ -890,7 +1002,7 @@ def prepare_cmd(
     # --- convert receptor to PDBQT via mk_prepare_receptor.py ---
     receptor_path = target_dir / f"{stem}.receptor.pdbqt"
     try:
-        _convert_receptor_to_pdbqt(effective_structure, receptor_path)
+        _convert_receptor_to_pdbqt(effective_structure, receptor_path, altloc=altloc)
     finally:
         if _strip_tmpdir:
             shutil.rmtree(_strip_tmpdir, ignore_errors=True)
@@ -914,6 +1026,7 @@ def prepare_cmd(
         "structure": structure_path.name,
         "pocket_record": pocket_record_path.name,
         "pocket_rank": pocket_rank,
+        "altloc": altloc,
     }
     if protein_only:
         prepare_params["protein_only"] = True

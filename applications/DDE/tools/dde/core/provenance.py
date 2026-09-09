@@ -176,6 +176,19 @@ RELAY_CODES: dict[str, str] = {
         "Drug scores may be inflated relative to apo-structure scoring. Compare "
         "with protein-only analysis for accurate druggability assessment."
     ),
+    "fpocket.possible_peptide_occlusion": (
+        "A low druggability score was computed on a structure containing short "
+        "chain(s) that may be peptidic ligands occluding the binding site. "
+        "Rerun on an apo or small-molecule-bound conformation before concluding "
+        "the target is undruggable. Use --strip-peptides to remove short chains "
+        "automatically."
+    ),
+    "fpocket.low_score_holo_structure": (
+        "A low druggability score was computed on a structure containing "
+        "non-receptor chain(s). Pocket scores are conformation-dependent; "
+        "assess druggability from an apo or alternate-conformation structure "
+        "before concluding undruggability."
+    ),
     "coscientist.partial_export": (
         "Confine conclusions to the ideas present in the export. Do not "
         "treat absence from it as evidence against an idea."
