@@ -809,6 +809,27 @@ RELAY_CODES: dict[str, str] = {
         "regulatory interpretation. Each forwarded relay retains its "
         "original code and source artifact reference."
     ),
+    # --- structural superposition ---
+    "structure.low_sequence_identity": (
+        "Fewer than 50% of residues could be matched between the two "
+        "structures. The global RMSD is computed over a minority of the "
+        "total residues and does not describe the full structural relationship. "
+        "State the matched fraction alongside any RMSD value."
+    ),
+    # --- docking pose validation ---
+    "docking.no_pose_control": (
+        "Pose-reproduction RMSD exceeds the threshold but was run with "
+        "--warn-only. The docking protocol has not demonstrated pose "
+        "reproduction and downstream binding-energy predictions rest on "
+        "poses whose geometric accuracy is unvalidated."
+    ),
+    "docking.pose_reproduction_failed": (
+        "The docked pose deviates from the reference ligand placement by "
+        "more than the threshold RMSD. The docking protocol did not "
+        "reproduce the known binding mode. Do not trust ranked poses from "
+        "this receptor/grid configuration without investigating the source "
+        "of the deviation."
+    ),
 }
 
 

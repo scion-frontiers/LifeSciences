@@ -1520,3 +1520,678 @@ def surface_cmd(
     emit.path(artifact_path, role="surface")
     emit.path(meta_path, role="sidecar")
     emit.flush()
+
+
+# ---------------------------------------------------------------------------
+# superimpose command
+# ---------------------------------------------------------------------------
+
+SUPERIMPOSE_ARTIFACT_SCHEMA = "dde.structure-superposition.v1"
+
+#: Standard one-letter codes for three-letter amino acid names.
+_AA_3TO1: dict[str, str] = {
+    "ALA": "A", "ARG": "R", "ASN": "N", "ASP": "D", "CYS": "C",
+    "GLN": "Q", "GLU": "E", "GLY": "G", "HIS": "H", "ILE": "I",
+    "LEU": "L", "LYS": "K", "MET": "M", "PHE": "F", "PRO": "P",
+    "SER": "S", "THR": "T", "TRP": "W", "TYR": "Y", "VAL": "V",
+    "MSE": "M",  # selenomethionine → methionine
+}
+
+#: Backbone atom names used for --atoms backbone mode.
+_BACKBONE_ATOMS: frozenset[str] = frozenset({"N", "CA", "C", "O"})
+
+
+def _parse_atoms_with_names_pdb(text: str) -> list[dict[str, Any]]:
+    """Parse PDB ATOM records including atom name (for superposition)."""
+    atoms: list[dict[str, Any]] = []
+    for line in text.splitlines():
+        if not line.startswith(("ATOM", "HETATM")):
+            continue
+        try:
+            atom_name = line[12:16].strip()
+            resname = line[17:20].strip()
+            chain = line[21].strip() or "_"
+            resnum = int(line[22:26])
+            x = float(line[30:38])
+            y = float(line[38:46])
+            z = float(line[46:54])
+        except (ValueError, IndexError):
+            continue
+        # Skip hydrogens
+        element = line[76:78].strip() if len(line) >= 78 else ""
+        if not element:
+            element = atom_name.lstrip("0123456789")[:1]
+        if element in ("H", "D"):
+            continue
+        atoms.append({
+            "chain": chain,
+            "resnum": resnum,
+            "resname": resname,
+            "atom_name": atom_name,
+            "x": x,
+            "y": y,
+            "z": z,
+            "element": element,
+        })
+    return atoms
+
+
+def _parse_atoms_with_names_cif(text: str) -> list[dict[str, Any]]:
+    """Parse mmCIF ATOM records including atom name (for superposition)."""
+    lines = text.splitlines()
+    columns: list[str] = []
+    data_start = 0
+    in_atom_site = False
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("_atom_site."):
+            in_atom_site = True
+            columns.append(stripped.split(".")[1])
+        elif in_atom_site:
+            data_start = i
+            break
+
+    if not columns:
+        return []
+
+    def _col(preferred: str, fallback: str) -> int | None:
+        if preferred in columns:
+            return columns.index(preferred)
+        if fallback in columns:
+            return columns.index(fallback)
+        return None
+
+    col_chain = _col("auth_asym_id", "label_asym_id")
+    col_resnum = _col("auth_seq_id", "label_seq_id")
+    col_resname = _col("label_comp_id", "label_comp_id")
+    col_atom_name = _col("auth_atom_id", "label_atom_id")
+    col_x = columns.index("Cartn_x") if "Cartn_x" in columns else None
+    col_y = columns.index("Cartn_y") if "Cartn_y" in columns else None
+    col_z = columns.index("Cartn_z") if "Cartn_z" in columns else None
+    col_element = columns.index("type_symbol") if "type_symbol" in columns else None
+
+    required = (col_chain, col_resnum, col_resname, col_atom_name, col_x, col_y, col_z)
+    if any(c is None for c in required):
+        return []
+
+    atoms: list[dict[str, Any]] = []
+    for line in lines[data_start:]:
+        if not line.startswith(("ATOM", "HETATM")):
+            continue
+        fields = line.split()
+        try:
+            chain = fields[col_chain] or "_"  # type: ignore[index]
+            resnum = int(fields[col_resnum])  # type: ignore[index]
+            resname = fields[col_resname]  # type: ignore[index]
+            atom_name = fields[col_atom_name]  # type: ignore[index]
+            x = float(fields[col_x])  # type: ignore[index]
+            y = float(fields[col_y])  # type: ignore[index]
+            z = float(fields[col_z])  # type: ignore[index]
+        except (ValueError, IndexError):
+            continue
+        element = ""
+        if col_element is not None:
+            try:
+                element = fields[col_element]
+            except IndexError:
+                pass
+        if not element:
+            element = atom_name.lstrip("0123456789")[:1]
+        if element in ("H", "D"):
+            continue
+        atoms.append({
+            "chain": chain,
+            "resnum": resnum,
+            "resname": resname,
+            "atom_name": atom_name,
+            "x": x,
+            "y": y,
+            "z": z,
+            "element": element,
+        })
+    return atoms
+
+
+def _collect_residues(
+    atoms: list[dict[str, Any]],
+    chain_filter: str | None,
+) -> list[dict[str, Any]]:
+    """Group atoms by (chain, resnum) and collect per-atom coordinates.
+
+    Returns sorted list of residue dicts with keys: chain, resnum,
+    resname, one_letter, atom_coords (dict mapping atom_name → (x,y,z)).
+    """
+    grouped: dict[tuple[str, int], dict[str, Any]] = {}
+    for atom in atoms:
+        if chain_filter is not None and atom["chain"] != chain_filter:
+            continue
+        key = (atom["chain"], atom["resnum"])
+        if key not in grouped:
+            grouped[key] = {
+                "chain": atom["chain"],
+                "resnum": atom["resnum"],
+                "resname": atom["resname"],
+                "one_letter": _AA_3TO1.get(atom["resname"], "X"),
+                "atom_coords": {},
+            }
+        grouped[key]["atom_coords"][atom["atom_name"]] = (
+            atom["x"], atom["y"], atom["z"],
+        )
+    return [grouped[k] for k in sorted(grouped)]
+
+
+def _sequence_from_residues(residues: list[dict[str, Any]]) -> str:
+    """Build a one-letter sequence string from residue list."""
+    return "".join(r["one_letter"] for r in residues)
+
+
+def _align_sequences(seq_ref: str, seq_mob: str) -> list[tuple[int, int]]:
+    """Align two sequences and return matched position pairs.
+
+    Uses a simple Needleman-Wunsch global alignment with identity scoring:
+    match=+2, mismatch=-1, gap=-2.  Returns a list of (ref_idx, mob_idx)
+    tuples for aligned non-gap positions.
+
+    This is a self-contained implementation to avoid external alignment
+    dependencies.  For the structural comparison use-case (same or closely
+    related proteins), even a simple aligner produces correct residue
+    correspondence.
+    """
+    n, m = len(seq_ref), len(seq_mob)
+    if n == 0 or m == 0:
+        return []
+
+    # Scoring parameters
+    match_score = 2
+    mismatch_score = -1
+    gap_penalty = -2
+
+    # DP matrix
+    score = [[0] * (m + 1) for _ in range(n + 1)]
+    for i in range(1, n + 1):
+        score[i][0] = i * gap_penalty
+    for j in range(1, m + 1):
+        score[0][j] = j * gap_penalty
+
+    for i in range(1, n + 1):
+        for j in range(1, m + 1):
+            s = match_score if seq_ref[i - 1] == seq_mob[j - 1] else mismatch_score
+            score[i][j] = max(
+                score[i - 1][j - 1] + s,
+                score[i - 1][j] + gap_penalty,
+                score[i][j - 1] + gap_penalty,
+            )
+
+    # Traceback
+    pairs: list[tuple[int, int]] = []
+    i, j = n, m
+    while i > 0 and j > 0:
+        s = match_score if seq_ref[i - 1] == seq_mob[j - 1] else mismatch_score
+        if score[i][j] == score[i - 1][j - 1] + s:
+            pairs.append((i - 1, j - 1))
+            i -= 1
+            j -= 1
+        elif score[i][j] == score[i - 1][j] + gap_penalty:
+            i -= 1
+        else:
+            j -= 1
+
+    pairs.reverse()
+    return pairs
+
+
+def _kabsch_superimpose(
+    ref_coords: np.ndarray,
+    mob_coords: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, float]:
+    """Compute optimal rotation and translation to superimpose mob onto ref.
+
+    Uses the Kabsch algorithm (SVD of the cross-covariance matrix).
+    This is the same algorithm used by BioPython's Bio.PDB.Superimposer.
+
+    Parameters
+    ----------
+    ref_coords : (N, 3) array — reference coordinates
+    mob_coords : (N, 3) array — mobile coordinates
+
+    Returns
+    -------
+    rotation : (3, 3) rotation matrix
+    translation : (3,) translation vector
+    rmsd : float — RMSD after optimal superposition
+
+    The transformed mobile coordinates are: mob_coords @ rotation.T + translation
+
+    Raises
+    ------
+    ArtifactError
+        If the SVD fails (degenerate coordinate set) — per #84,
+        an SVD failure must never read as a biological finding.
+    """
+    n = ref_coords.shape[0]
+    if n < 3:
+        raise ArtifactError(
+            f"only {n} matched atom(s) — need at least 3 for superposition",
+            detail="SVD-based superposition requires 3 non-collinear points",
+            remedy="check chain selection and sequence matching; the two "
+            "structures may share too few residues",
+        )
+
+    # Center both coordinate sets
+    ref_center = ref_coords.mean(axis=0)
+    mob_center = mob_coords.mean(axis=0)
+    ref_centered = ref_coords - ref_center
+    mob_centered = mob_coords - mob_center
+
+    # Cross-covariance matrix
+    H = mob_centered.T @ ref_centered
+
+    try:
+        U, S, Vt = np.linalg.svd(H)
+    except np.linalg.LinAlgError as exc:
+        raise ArtifactError(
+            "SVD failed during superposition — this is an alignment failure, "
+            "not a finding about the structures",
+            detail=str(exc),
+            remedy="check that the coordinate sets are not degenerate "
+            "(e.g. all atoms collinear)",
+        )
+
+    # Ensure proper rotation (det = +1, not reflection)
+    d = np.linalg.det(Vt.T @ U.T)
+    sign_matrix = np.eye(3)
+    sign_matrix[2, 2] = np.sign(d)
+
+    rotation = Vt.T @ sign_matrix @ U.T
+    translation = ref_center - mob_center @ rotation.T
+
+    # Compute RMSD
+    transformed = mob_coords @ rotation.T + translation
+    diff = ref_coords - transformed
+    rmsd = float(np.sqrt(np.mean(np.sum(diff * diff, axis=1))))
+
+    return rotation, translation, rmsd
+
+
+def _write_transformed_pdb(
+    atoms: list[dict[str, Any]],
+    rotation: np.ndarray,
+    translation: np.ndarray,
+    output_path: Path,
+) -> None:
+    """Write a PDB file with transformed coordinates.
+
+    Applies the rotation and translation to all atom coordinates and
+    writes standard PDB ATOM records.
+    """
+    lines: list[str] = []
+    lines.append("REMARK   Aligned by dde structure superimpose\n")
+    for i, atom in enumerate(atoms, start=1):
+        coord = np.array([atom["x"], atom["y"], atom["z"]])
+        transformed = coord @ rotation.T + translation
+        x, y, z = transformed
+        atom_name = atom.get("atom_name", "CA")
+        # Pad atom name to 4 characters as per PDB format
+        if len(atom_name) < 4:
+            atom_name_fmt = f" {atom_name:<3s}"
+        else:
+            atom_name_fmt = f"{atom_name:<4s}"
+        chain = atom.get("chain", "_")
+        if chain == "_":
+            chain = " "
+        resname = atom.get("resname", "UNK")
+        resnum = atom.get("resnum", 0)
+        element = atom.get("element", "")
+        lines.append(
+            f"ATOM  {i:5d} {atom_name_fmt}{resname:>3s} {chain}{resnum:4d}    "
+            f"{x:8.3f}{y:8.3f}{z:8.3f}  1.00  0.00          {element:>2s}\n"
+        )
+    lines.append("END\n")
+    output_path.write_text("".join(lines), encoding="utf-8")
+
+
+@structure.command("superimpose")
+@click.argument("ref", type=click.Path())
+@click.argument("mobile", type=click.Path())
+@click.option(
+    "--chain-ref",
+    default=None,
+    help="Chain ID to use from the reference structure.",
+)
+@click.option(
+    "--chain-mobile",
+    default=None,
+    help="Chain ID to use from the mobile structure.",
+)
+@click.option(
+    "--atoms",
+    "atom_mode",
+    type=click.Choice(["ca", "backbone", "all"], case_sensitive=False),
+    default="ca",
+    show_default=True,
+    help="Which atoms to use for RMSD: ca (C-alpha only), backbone "
+    "(N, CA, C, O), or all heavy atoms.",
+)
+@out_option
+@output_options
+@pass_state
+def superimpose_cmd(
+    state: AppState,
+    ref: str,
+    mobile: str,
+    chain_ref: str | None,
+    chain_mobile: str | None,
+    atom_mode: str,
+    out: str | None,
+    as_json: bool,
+    quiet: bool,
+) -> None:
+    """Superimpose two structures and compute RMSD.
+
+    Reads a reference and mobile structure (PDB or mmCIF), aligns
+    sequences to establish residue correspondence, then computes the
+    optimal rigid-body superposition using the Kabsch (SVD) algorithm.
+
+    Reports global RMSD, per-residue distances, matched residue count,
+    and the transformation matrix.  Writes the aligned mobile structure
+    to a PDB file.
+
+    RMSD > 2.0 A is flagged as significant structural divergence.
+
+    \b
+    Outputs:
+      {stem}.superimposed.pdb           — aligned mobile structure
+      {stem}.superposition.artifact.json — superposition record
+      {stem}.superposition.meta.json     — provenance sidecar
+    """
+    emit = Emitter(as_json=as_json, quiet=quiet)
+
+    # --- resolve inputs ---
+    ref_path = resolve_artifact(state, ref, "reference structure")
+    mob_path = resolve_artifact(state, mobile, "mobile structure")
+
+    ref_fmt = detect_structure_format(ref_path)
+    mob_fmt = detect_structure_format(mob_path)
+
+    ref_text = ref_path.read_text(encoding="utf-8", errors="replace")
+    mob_text = mob_path.read_text(encoding="utf-8", errors="replace")
+
+    # --- parse atoms with names ---
+    if ref_fmt == "cif":
+        ref_atoms = _parse_atoms_with_names_cif(ref_text)
+    else:
+        ref_atoms = _parse_atoms_with_names_pdb(ref_text)
+
+    if mob_fmt == "cif":
+        mob_atoms = _parse_atoms_with_names_cif(mob_text)
+    else:
+        mob_atoms = _parse_atoms_with_names_pdb(mob_text)
+
+    if not ref_atoms:
+        raise ArtifactError(
+            f"no atom coordinates found in reference {ref_path.name}",
+            detail="the structure file appears empty or unparseable",
+            remedy="check that the file is a valid PDB or mmCIF structure",
+        )
+    if not mob_atoms:
+        raise ArtifactError(
+            f"no atom coordinates found in mobile {mob_path.name}",
+            detail="the structure file appears empty or unparseable",
+            remedy="check that the file is a valid PDB or mmCIF structure",
+        )
+
+    # --- collect residues with chain filter ---
+    ref_residues = _collect_residues(ref_atoms, chain_ref)
+    mob_residues = _collect_residues(mob_atoms, chain_mobile)
+
+    if not ref_residues:
+        chains = sorted({a["chain"] for a in ref_atoms})
+        raise UsageError(
+            f"no residues found in reference"
+            + (f" chain {chain_ref}" if chain_ref else ""),
+            detail=f"available chains: {', '.join(chains)}",
+        )
+    if not mob_residues:
+        chains = sorted({a["chain"] for a in mob_atoms})
+        raise UsageError(
+            f"no residues found in mobile"
+            + (f" chain {chain_mobile}" if chain_mobile else ""),
+            detail=f"available chains: {', '.join(chains)}",
+        )
+
+    # --- sequence alignment for residue correspondence ---
+    ref_seq = _sequence_from_residues(ref_residues)
+    mob_seq = _sequence_from_residues(mob_residues)
+
+    aligned_pairs = _align_sequences(ref_seq, mob_seq)
+
+    if not aligned_pairs:
+        raise ArtifactError(
+            "no residues could be matched between the two structures",
+            detail="sequence alignment produced no aligned positions",
+            remedy="check that the structures contain overlapping protein sequences; "
+            "use --chain-ref and --chain-mobile to select the correct chains",
+        )
+
+    # --- extract atom coordinates for matched residues ---
+    ref_coord_list: list[np.ndarray] = []
+    mob_coord_list: list[np.ndarray] = []
+    matched_residue_info: list[dict[str, Any]] = []
+
+    for ref_idx, mob_idx in aligned_pairs:
+        ref_res = ref_residues[ref_idx]
+        mob_res = mob_residues[mob_idx]
+        ref_ac = ref_res["atom_coords"]
+        mob_ac = mob_res["atom_coords"]
+
+        if atom_mode == "ca":
+            # C-alpha only
+            if "CA" in ref_ac and "CA" in mob_ac:
+                ref_coord_list.append(np.array(ref_ac["CA"]))
+                mob_coord_list.append(np.array(mob_ac["CA"]))
+                matched_residue_info.append({
+                    "ref_chain": ref_res["chain"],
+                    "ref_resnum": ref_res["resnum"],
+                    "ref_resname": ref_res["resname"],
+                    "mob_chain": mob_res["chain"],
+                    "mob_resnum": mob_res["resnum"],
+                    "mob_resname": mob_res["resname"],
+                })
+        elif atom_mode == "backbone":
+            # All backbone atoms present in both
+            common = _BACKBONE_ATOMS & set(ref_ac.keys()) & set(mob_ac.keys())
+            if common:
+                for aname in sorted(common):
+                    ref_coord_list.append(np.array(ref_ac[aname]))
+                    mob_coord_list.append(np.array(mob_ac[aname]))
+                matched_residue_info.append({
+                    "ref_chain": ref_res["chain"],
+                    "ref_resnum": ref_res["resnum"],
+                    "ref_resname": ref_res["resname"],
+                    "mob_chain": mob_res["chain"],
+                    "mob_resnum": mob_res["resnum"],
+                    "mob_resname": mob_res["resname"],
+                })
+        else:
+            # All heavy atoms — match by atom name
+            common = set(ref_ac.keys()) & set(mob_ac.keys())
+            if common:
+                for aname in sorted(common):
+                    ref_coord_list.append(np.array(ref_ac[aname]))
+                    mob_coord_list.append(np.array(mob_ac[aname]))
+                matched_residue_info.append({
+                    "ref_chain": ref_res["chain"],
+                    "ref_resnum": ref_res["resnum"],
+                    "ref_resname": ref_res["resname"],
+                    "mob_chain": mob_res["chain"],
+                    "mob_resnum": mob_res["resnum"],
+                    "mob_resname": mob_res["resname"],
+                })
+
+    if not ref_coord_list:
+        raise ArtifactError(
+            "no atom pairs found for superposition after sequence matching",
+            detail=f"atom mode: {atom_mode}, matched residue pairs: "
+            f"{len(aligned_pairs)}, but no common atoms found",
+            remedy="try --atoms all or check that both structures have "
+            "the expected atom types",
+        )
+
+    ref_coords = np.array(ref_coord_list)
+    mob_coords = np.array(mob_coord_list)
+
+    # --- superposition (Kabsch / SVD) ---
+    rotation, translation, global_rmsd = _kabsch_superimpose(ref_coords, mob_coords)
+
+    # --- per-residue Ca distances (always computed on Ca for interpretability) ---
+    per_residue_distances: list[dict[str, Any]] = []
+    for ref_idx, mob_idx in aligned_pairs:
+        ref_res = ref_residues[ref_idx]
+        mob_res = mob_residues[mob_idx]
+        ref_ac = ref_res["atom_coords"]
+        mob_ac = mob_res["atom_coords"]
+        if "CA" in ref_ac and "CA" in mob_ac:
+            ref_ca = np.array(ref_ac["CA"])
+            mob_ca = np.array(mob_ac["CA"])
+            # Apply transformation to mobile CA
+            mob_ca_transformed = mob_ca @ rotation.T + translation
+            dist = float(np.linalg.norm(ref_ca - mob_ca_transformed))
+            per_residue_distances.append({
+                "ref_chain": ref_res["chain"],
+                "ref_resnum": ref_res["resnum"],
+                "ref_resname": ref_res["resname"],
+                "mob_chain": mob_res["chain"],
+                "mob_resnum": mob_res["resnum"],
+                "mob_resname": mob_res["resname"],
+                "ca_distance": round(dist, 3),
+            })
+
+    n_matched = len(matched_residue_info)
+    total_ref = len(ref_residues)
+    total_mob = len(mob_residues)
+    matched_fraction = n_matched / max(total_ref, total_mob) if max(total_ref, total_mob) > 0 else 0.0
+
+    # --- significant divergence flag ---
+    significant_divergence = global_rmsd > 2.0
+
+    # --- write aligned mobile structure ---
+    project = state.project()
+    target_dir = project.artifact_dir("structures", out)
+    stem = f"{ref_path.stem}_vs_{mob_path.stem}"
+
+    # Filter mobile atoms by chain if specified
+    atoms_to_write = [
+        a for a in mob_atoms
+        if chain_mobile is None or a["chain"] == chain_mobile
+    ]
+    aligned_path = target_dir / f"{stem}.superimposed.pdb"
+    _write_transformed_pdb(atoms_to_write, rotation, translation, aligned_path)
+
+    # --- build artifact record ---
+    artifact_record: dict[str, Any] = {
+        "schema": SUPERIMPOSE_ARTIFACT_SCHEMA,
+        "global_rmsd": round(global_rmsd, 4),
+        "matched_residues": n_matched,
+        "total_ref": total_ref,
+        "total_mobile": total_mob,
+        "matched_fraction": round(matched_fraction, 4),
+        "atom_mode": atom_mode,
+        "significant_divergence": significant_divergence,
+        "per_residue_distances": [
+            {
+                "ref_chain": d["ref_chain"],
+                "ref_resnum": d["ref_resnum"],
+                "ref_resname": d["ref_resname"],
+                "mob_chain": d["mob_chain"],
+                "mob_resnum": d["mob_resnum"],
+                "mob_resname": d["mob_resname"],
+                "ca_distance": d["ca_distance"],
+            }
+            for d in per_residue_distances
+        ],
+        "ref_file": ref_path.name,
+        "mobile_file": mob_path.name,
+        "aligned_file": aligned_path.name,
+        "transformation": {
+            "rotation": rotation.tolist(),
+            "translation": translation.tolist(),
+        },
+    }
+    if chain_ref is not None:
+        artifact_record["chain_ref"] = chain_ref
+    if chain_mobile is not None:
+        artifact_record["chain_mobile"] = chain_mobile
+
+    artifact_path = target_dir / f"{stem}.superposition.artifact.json"
+    artifact_path.write_text(
+        json.dumps(artifact_record, indent=2) + "\n", encoding="utf-8"
+    )
+
+    # --- provenance sidecar ---
+    params: dict[str, Any] = {
+        "ref": ref_path.name,
+        "mobile": mob_path.name,
+        "atom_mode": atom_mode,
+    }
+    if chain_ref is not None:
+        params["chain_ref"] = chain_ref
+    if chain_mobile is not None:
+        params["chain_mobile"] = chain_mobile
+
+    sidecar = provenance.Sidecar(
+        tool="structure",
+        subcommand="superimpose",
+        endpoint=None,
+        parameters=params,
+    )
+    sidecar.note("ref_sha256", provenance.sha256_file(ref_path))
+    sidecar.note("mobile_sha256", provenance.sha256_file(mob_path))
+    sidecar.note("global_rmsd", round(global_rmsd, 4))
+    sidecar.note("matched_residues", n_matched)
+    sidecar.note("total_ref", total_ref)
+    sidecar.note("total_mobile", total_mob)
+    sidecar.add_output(artifact_path)
+    sidecar.add_output(aligned_path)
+
+    # --- relay: low sequence identity ---
+    if matched_fraction < 0.5:
+        sidecar.warn(
+            f"Only {n_matched} of {max(total_ref, total_mob)} residues "
+            f"({matched_fraction:.0%}) could be matched between "
+            f"{ref_path.name} and {mob_path.name}. The RMSD describes "
+            "the matched subset, not the full structures.",
+            code="structure.low_sequence_identity",
+        )
+
+    if significant_divergence:
+        sidecar.warn(
+            f"Global RMSD of {global_rmsd:.2f} A exceeds 2.0 A, "
+            "indicating significant structural divergence between "
+            f"{ref_path.name} and {mob_path.name}.",
+        )
+
+    meta_path = sidecar.write(target_dir / f"{stem}.superposition.meta.json")
+
+    # --- output ---
+    emit.line(f"Superposition: {ref_path.name} vs {mob_path.name}")
+    emit.line(f"  Atom mode: {atom_mode}")
+    emit.line(f"  Matched residues: {n_matched} / ref={total_ref}, mobile={total_mob}")
+    emit.line(f"  Global RMSD: {global_rmsd:.4f} A")
+    if significant_divergence:
+        emit.line("  *** Significant divergence (RMSD > 2.0 A) ***")
+    if matched_fraction < 0.5:
+        emit.line(
+            f"  WARNING: low matched fraction ({matched_fraction:.0%})"
+        )
+
+    emit.data("schema", SUPERIMPOSE_ARTIFACT_SCHEMA)
+    emit.data("global_rmsd", round(global_rmsd, 4))
+    emit.data("matched_residues", n_matched)
+    emit.data("total_ref", total_ref)
+    emit.data("total_mobile", total_mob)
+    emit.data("significant_divergence", significant_divergence)
+    emit.data("mandatory_relays", sidecar.relays)
+    emit.path(artifact_path, role="superposition")
+    emit.path(aligned_path, role="aligned_mobile")
+    emit.path(meta_path, role="sidecar")
+    emit.flush()

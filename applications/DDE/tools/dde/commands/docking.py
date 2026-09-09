@@ -2084,3 +2084,301 @@ def contacts_matrix_cmd(
     emit.path(matrix_path, role="contacts-matrix")
     emit.path(meta_path, role="sidecar")
     emit.flush()
+
+
+# ---------------------------------------------------------------------------
+# validate-pose
+# ---------------------------------------------------------------------------
+
+VALIDATE_POSE_SCHEMA = "dde.docking-pose-validation.v1"
+
+
+def _parse_heavy_atoms_pdb(text: str) -> list[tuple[float, float, float]]:
+    """Extract heavy-atom coordinates from PDB-format text."""
+    coords: list[tuple[float, float, float]] = []
+    for line in text.splitlines():
+        if not line.startswith(("ATOM", "HETATM")):
+            continue
+        try:
+            x = float(line[30:38])
+            y = float(line[38:46])
+            z = float(line[46:54])
+        except (ValueError, IndexError):
+            continue
+        # Exclude hydrogens
+        atom_name = line[12:16].strip() if len(line) > 16 else ""
+        element = line[76:78].strip() if len(line) >= 78 else ""
+        if not element:
+            element = atom_name.lstrip("0123456789")[:1]
+        if element in ("H", "D"):
+            continue
+        coords.append((x, y, z))
+    return coords
+
+
+def _parse_heavy_atoms_sdf(text: str) -> list[tuple[float, float, float]]:
+    """Extract heavy-atom coordinates from an SDF/MOL file.
+
+    SDF V2000 format: after the header (3 lines) + counts line, each
+    atom block line has format:
+      x(10.4) y(10.4) z(10.4) symbol(3) ...
+    """
+    lines = text.splitlines()
+    if len(lines) < 4:
+        return []
+
+    # Counts line (line index 3) — first two fields are atom_count, bond_count
+    counts_line = lines[3]
+    try:
+        parts = counts_line.split()
+        n_atoms = int(parts[0])
+    except (ValueError, IndexError):
+        return []
+
+    coords: list[tuple[float, float, float]] = []
+    for i in range(4, min(4 + n_atoms, len(lines))):
+        line = lines[i]
+        try:
+            x = float(line[0:10])
+            y = float(line[10:20])
+            z = float(line[20:30])
+            symbol = line[31:34].strip()
+        except (ValueError, IndexError):
+            continue
+        if symbol in ("H", "D"):
+            continue
+        coords.append((x, y, z))
+    return coords
+
+
+def _parse_heavy_atoms_mol2(text: str) -> list[tuple[float, float, float]]:
+    """Extract heavy-atom coordinates from a MOL2 file.
+
+    MOL2 atom records appear in the @<TRIPOS>ATOM block.  Each line:
+      atom_id atom_name x y z atom_type [subst_id subst_name charge]
+    """
+    coords: list[tuple[float, float, float]] = []
+    in_atom_block = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("@<TRIPOS>ATOM"):
+            in_atom_block = True
+            continue
+        if stripped.startswith("@<TRIPOS>") and in_atom_block:
+            break
+        if not in_atom_block:
+            continue
+        parts = stripped.split()
+        if len(parts) < 6:
+            continue
+        try:
+            x = float(parts[2])
+            y = float(parts[3])
+            z = float(parts[4])
+        except ValueError:
+            continue
+        # atom_type is e.g. "C.3", "N.am", "H" — extract element
+        atom_type = parts[5]
+        element = atom_type.split(".")[0]
+        if element in ("H", "D"):
+            continue
+        coords.append((x, y, z))
+    return coords
+
+
+def _parse_ligand_coords(
+    path: Path,
+) -> list[tuple[float, float, float]]:
+    """Parse heavy-atom coordinates from a ligand file.
+
+    Supports PDB, SDF/MOL, MOL2, and PDBQT formats.
+    """
+    text = path.read_text(encoding="utf-8", errors="replace")
+    suffix = path.suffix.lower()
+
+    if suffix in (".sdf", ".mol"):
+        coords = _parse_heavy_atoms_sdf(text)
+    elif suffix == ".mol2":
+        coords = _parse_heavy_atoms_mol2(text)
+    else:
+        # PDB or PDBQT
+        coords = _parse_heavy_atoms_pdb(text)
+
+    if not coords:
+        raise ArtifactError(
+            f"no heavy-atom coordinates found in {path.name}",
+            detail=f"format detected from extension: {suffix}",
+            remedy="check that the file is a valid ligand coordinate file "
+            "(PDB, SDF, MOL2, or PDBQT) with heavy atoms",
+        )
+    return coords
+
+
+def _compute_ligand_rmsd(
+    coords_a: list[tuple[float, float, float]],
+    coords_b: list[tuple[float, float, float]],
+) -> float:
+    """Compute heavy-atom RMSD between two sets of coordinates.
+
+    Assumes 1:1 atom correspondence by order (same molecule, same atom
+    ordering).  This is standard for docking pose validation where the
+    docked pose and reference ligand have identical atom ordering.
+
+    Raises ArtifactError if atom counts differ.
+    """
+    import numpy as np
+
+    if len(coords_a) != len(coords_b):
+        raise ArtifactError(
+            f"atom count mismatch: docked pose has {len(coords_a)} heavy atoms, "
+            f"reference has {len(coords_b)}",
+            detail="pose validation requires identical atom ordering between "
+            "the docked pose and reference ligand",
+            remedy="ensure both files describe the same molecule with the "
+            "same atom order",
+        )
+
+    a = np.array(coords_a)
+    b = np.array(coords_b)
+    diff = a - b
+    rmsd = float(np.sqrt(np.mean(np.sum(diff * diff, axis=1))))
+    return rmsd
+
+
+@docking.command("validate-pose")
+@click.argument("docked_pose", type=click.Path())
+@click.argument("reference_ligand", type=click.Path())
+@click.option(
+    "--threshold",
+    default=2.0,
+    type=float,
+    show_default=True,
+    help="RMSD threshold in Angstroms for pass/fail.",
+)
+@click.option(
+    "--warn-only",
+    is_flag=True,
+    default=False,
+    help="Fire an advisory relay instead of blocking when RMSD exceeds threshold.",
+)
+@out_option
+@output_options
+@pass_state
+def validate_pose_cmd(
+    state: AppState,
+    docked_pose: str,
+    reference_ligand: str,
+    threshold: float,
+    warn_only: bool,
+    out: str | None,
+    as_json: bool,
+    quiet: bool,
+) -> None:
+    """Validate a docked pose against a reference ligand placement.
+
+    Computes heavy-atom RMSD between a docked pose and a reference
+    ligand coordinate file.  Reports pass/fail against the threshold
+    and emits appropriate relays.
+
+    Accepts PDB, SDF/MOL, MOL2, and PDBQT ligand formats.
+
+    \b
+    Outputs:
+      {stem}.pose-validation.artifact.json — validation record
+      {stem}.pose-validation.meta.json     — provenance sidecar
+    """
+    emit = Emitter(as_json=as_json, quiet=quiet)
+
+    # --- resolve inputs ---
+    pose_path = resolve_artifact(state, docked_pose, "docked pose")
+    ref_path = resolve_artifact(state, reference_ligand, "reference ligand")
+
+    # --- parse coordinates ---
+    pose_coords = _parse_ligand_coords(pose_path)
+    ref_coords = _parse_ligand_coords(ref_path)
+
+    # --- compute RMSD ---
+    rmsd = _compute_ligand_rmsd(pose_coords, ref_coords)
+    n_atoms = len(pose_coords)
+    passed = rmsd <= threshold
+
+    # --- output paths ---
+    project = state.project()
+    target_dir = project.artifact_dir(ARTIFACT_CLASS, out)
+    stem = f"{pose_path.stem}_vs_{ref_path.stem}"
+
+    # --- build artifact record ---
+    artifact_record: dict[str, Any] = {
+        "schema": VALIDATE_POSE_SCHEMA,
+        "rmsd": round(rmsd, 4),
+        "threshold": threshold,
+        "pass": passed,
+        "n_atoms": n_atoms,
+        "reference_file": ref_path.name,
+        "pose_file": pose_path.name,
+        "warn_only": warn_only,
+    }
+
+    artifact_path = target_dir / f"{stem}.pose-validation.artifact.json"
+    artifact_path.write_text(
+        json.dumps(artifact_record, indent=2) + "\n", encoding="utf-8"
+    )
+
+    # --- provenance sidecar ---
+    sidecar = provenance.Sidecar(
+        tool="docking",
+        subcommand="validate-pose",
+        endpoint=None,
+        parameters={
+            "docked_pose": pose_path.name,
+            "reference_ligand": ref_path.name,
+            "threshold": threshold,
+            "warn_only": warn_only,
+        },
+    )
+    sidecar.note("pose_sha256", provenance.sha256_file(pose_path))
+    sidecar.note("ref_sha256", provenance.sha256_file(ref_path))
+    sidecar.note("rmsd", round(rmsd, 4))
+    sidecar.note("pass", passed)
+    sidecar.note("n_atoms", n_atoms)
+    sidecar.add_output(artifact_path)
+
+    # --- relays ---
+    if not passed:
+        if warn_only:
+            sidecar.warn(
+                f"Pose-reproduction RMSD ({rmsd:.2f} A) exceeds threshold "
+                f"({threshold:.1f} A) for {pose_path.name} vs "
+                f"{ref_path.name}. Running with --warn-only; this does not "
+                "block but the docking protocol lacks validated pose control.",
+                code="docking.no_pose_control",
+            )
+        else:
+            sidecar.warn(
+                f"Docked pose {pose_path.name} deviates {rmsd:.2f} A from "
+                f"reference {ref_path.name} (threshold: {threshold:.1f} A). "
+                "The docking protocol did not reproduce the known binding mode.",
+                code="docking.pose_reproduction_failed",
+            )
+
+    meta_path = sidecar.write(target_dir / f"{stem}.pose-validation.meta.json")
+
+    # --- output ---
+    verdict = "PASS" if passed else "FAIL"
+    emit.line(f"Pose validation: {pose_path.name} vs {ref_path.name}")
+    emit.line(f"  RMSD: {rmsd:.4f} A ({n_atoms} heavy atoms)")
+    emit.line(f"  Threshold: {threshold:.1f} A")
+    emit.line(f"  Verdict: {verdict}")
+    if warn_only and not passed:
+        emit.line("  (--warn-only: advisory, not blocking)")
+
+    emit.data("schema", VALIDATE_POSE_SCHEMA)
+    emit.data("rmsd", round(rmsd, 4))
+    emit.data("threshold", threshold)
+    emit.data("pass", passed)
+    emit.data("n_atoms", n_atoms)
+    if sidecar.relays:
+        emit.data("mandatory_relays", sidecar.relays)
+    emit.path(artifact_path, role="pose-validation")
+    emit.path(meta_path, role="sidecar")
+    emit.flush()
