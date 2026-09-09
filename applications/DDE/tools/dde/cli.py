@@ -64,6 +64,7 @@ from .commands.trials import trials
 from .commands.triage import triage
 from .commands.pocket import pocket
 from .commands.screen import screen
+from .commands.structure import structure
 from .commands.structure_screening import structure_screen
 from .commands.run import run
 from .commands.selectivity import selectivity
@@ -382,6 +383,7 @@ cli.add_command(mmp)
 cli.add_command(mpo)
 cli.add_command(scp)
 cli.add_command(screen)
+cli.add_command(structure)
 cli.add_command(structure_screen)
 cli.add_command(spatialdb)
 cli.add_command(similar)
