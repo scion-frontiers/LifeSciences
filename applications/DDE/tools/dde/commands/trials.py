@@ -341,7 +341,16 @@ def analyze_cmd(
     as_json: bool,
     quiet: bool,
 ) -> None:
-    """Classify pipeline from stored trial search results. No network."""
+    """Classify pipeline from stored trial search results. No network.
+
+    The underlying search uses full-text matching against
+    ClinicalTrials.gov study records.  Short gene symbols (<=4
+    characters) may match many unrelated studies, producing inflated
+    hit counts and misleading verdicts.  When this is detected, the
+    output includes a 'confidence' field set to 'low_text_match_only'
+    and fires a mandatory relay.  Always verify trial
+    titles/interventions manually for short queries.
+    """
     emit = emitter(as_json, quiet)
     source_dir = state.project().artifact_dir(ARTIFACT_CLASS, from_dir)
     target_dir = state.project().artifact_dir(ARTIFACT_CLASS, out)
@@ -404,6 +413,13 @@ def analyze_cmd(
         f"{metrics['recruiting_count']} recruiting, "
         f"max phase {metrics['max_phase']})"
     )
+    if assessment.get("confidence") == "low_text_match_only":
+        emit.line(
+            f"⚠ LOW CONFIDENCE: text-match query on short symbol "
+            f"{query_term!r} — results likely include false positives. "
+            f"Verify trial titles/interventions manually before citing "
+            f"this verdict."
+        )
     top_sponsors = assessment.get("top_sponsors", [])
     if top_sponsors:
         emit.line(f"top sponsors: {', '.join(top_sponsors[:5])}")
@@ -483,6 +499,53 @@ def _analyze_trials(
     else:
         verdict = "no_pipeline"
 
+    # Text-match confidence safeguard.  ClinicalTrials.gov full-text search
+    # matches any mention of the query string — a short gene symbol like
+    # "ARTN" will match hundreds of unrelated studies.  When any of the
+    # low-specificity heuristics fire, downgrade confidence and fire a
+    # mandatory relay so downstream consumers cannot cite the verdict
+    # without acknowledging that the result set is text-matched.
+    _SHORT_QUERY_THRESHOLD = 4
+    _HIGH_HIT_THRESHOLD = 200
+    _HIGH_PHASE3_RATIO = 0.05
+
+    confidence_triggers: list[str] = []
+    n_total = len(studies)
+
+    if len(query_term) <= _SHORT_QUERY_THRESHOLD:
+        confidence_triggers.append(
+            f"query {query_term!r} is short ({len(query_term)} chars)"
+        )
+    if n_total > _HIGH_HIT_THRESHOLD:
+        confidence_triggers.append(
+            f"hit count ({n_total}) exceeds {_HIGH_HIT_THRESHOLD}"
+        )
+    if n_total > 0 and len(phase_3_plus) / n_total > _HIGH_PHASE3_RATIO:
+        confidence_triggers.append(
+            f"Phase 3+ ratio ({len(phase_3_plus)}/{n_total} = "
+            f"{len(phase_3_plus)/n_total:.1%}) exceeds "
+            f"{_HIGH_PHASE3_RATIO:.0%} threshold"
+        )
+
+    if confidence_triggers:
+        confidence = "low_text_match_only"
+        confidence_reason = (
+            f"Query {query_term!r} ({len(query_term)} chars) returned "
+            f"{n_total} studies — text matching of short gene symbols is "
+            f"unreliable. Triggers: {'; '.join(confidence_triggers)}. "
+            f"Manual review of trial titles/interventions is required."
+        )
+        add_relay(
+            "trials.text_match_not_mechanism",
+            f"Trial search for {query_term!r} used full-text matching, not "
+            f"mechanism-specific filtering. The {n_total} results may include "
+            f"incidental mentions. Any finding citing this verdict MUST note "
+            f"that results are text-matched, not mechanism-verified.",
+        )
+    else:
+        confidence = None
+        confidence_reason = None
+
     # Top sponsors and interventions.
     top_sponsors = [
         name for name, _ in sorted(
@@ -538,6 +601,9 @@ def _analyze_trials(
         "top_sponsors": top_sponsors,
         "top_interventions": top_interventions,
     }
+    if confidence:
+        assessment["confidence"] = confidence
+        assessment["confidence_reason"] = confidence_reason
 
     return active_studies, metrics, assessment
 

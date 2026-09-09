@@ -571,6 +571,13 @@ RELAY_CODES: dict[str, str] = {
         "Treat as a discovery resource for identifying disease-gene associations, "
         "not as a substitute for primary analysis of the underlying data."
     ),
+    "trials.text_match_not_mechanism": (
+        "Trial search for this query used full-text matching, not mechanism-specific "
+        "filtering. Results may include incidental mentions of the query string in "
+        "study descriptions, conditions, or unrelated contexts. Any finding citing "
+        "this verdict MUST note that results are text-matched, not mechanism-verified, "
+        "and that the pipeline classification may be inflated by false positives."
+    ),
     "trials.active_competitor_pipeline": (
         "Report that active Phase 3+ clinical trials exist for this target or "
         "query. Late-stage clinical development may affect freedom to operate or "
