@@ -130,18 +130,60 @@ Every report must include:
 
 By default, save reports to `findings/computational-chemistry/` in the project folder. By default, save raw outputs (docking scores, descriptor tables, virtual screening results) to appropriate `raw/` subdirectories.
 
-## Retrospective
+## Completion and Validation
 
-Before marking this task complete, write a retrospective to the path specified in your dispatch brief, or if none is specified, to `/scion-volumes/scratchpad/projects/<program>/retrospectives/<your-agent-name>-retro.md` covering:
-- What worked well
-- What did not work
-- What was confusing or underdocumented
-- Suggestions for improvement
+When your finding is complete and all deliverables are written:
 
-This is required — your agent will not be deleted until the retrospective exists.
+1. **Report submission** to the Research Operations Controller via `scion message`,
+   citing the work-order ID and revision.
+
+2. **Signal blocked** and wait for the controller's validation response:
+
+   ```bash
+   sciontool status blocked "Awaiting mechanical validation for WO-<id> rev <n>"
+   ```
+
+   Do not write your retrospective yet. Do not signal `task_completed`.
+
+3. **On the controller's response:**
+
+   - **APPROVED** — validation passed. Proceed to step 4.
+   - **CORRECTION REQUIRED** — the message lists mechanical defects (heading form,
+     broken path, missing relay address, version citation). Fix every cited defect
+     in your deliverables. Then message the controller:
+     `"Correction submitted for WO-<id> rev <n>"` and signal blocked again:
+
+     ```bash
+     sciontool status blocked "Awaiting re-validation for WO-<id> rev <n>"
+     ```
+
+     Wait for the next response. You may receive at most two correction rounds.
+   - **Cannot fix a cited defect** — if a defect is beyond your control (missing
+     upstream artifact, unrecognized relay code, tool failure you cannot reproduce),
+     message the controller: `"Cannot fix WO-<id> rev <n>: <reason>"`. Then proceed
+     to step 4.
+
+4. **Write your retrospective** to the path specified in your dispatch brief, or
+   if none is specified, to
+   `/scion-volumes/scratchpad/projects/<program>/retrospectives/<your-agent-name>-retro.md`
+   covering:
+   - What worked well
+   - What did not work
+   - What was confusing or underdocumented
+   - Suggestions for improvement
+   - If a correction cycle occurred: what was corrected and why the defect happened
+
+   This is required — your agent will not be deleted until the retrospective exists.
+
+5. **Signal completion:**
+
+   ```bash
+   sciontool status task_completed "WO-<id> rev <n> — finding submitted"
+   ```
 
 ## Communication
 
-- Report completion to the Research Operations Controller via `scion message`, citing the work-order ID and revision. It validates your deliverables; the Science Program Lead decides whether the science is accepted.
+- **Do not signal `task_completed` until step 5.** Signaling `task_completed` exits
+  the harness turn loop. Once exited, the controller cannot return defects to you.
 - If a finding reveals a cross-disciplinary liability (e.g., PAINS alert, aggregator behavior, poor synthetic accessibility), report it prominently in your Layer 1 finding under a dedicated **Liabilities** heading. Do not write to `program-state/` directly — Layer 2 is the science lead's domain. The science lead will incorporate accepted liabilities into program state.
 - Raise blockers immediately — do not wait for the completion message.
