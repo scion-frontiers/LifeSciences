@@ -1,6 +1,6 @@
 """`dde validate` — mechanical validation of submitted work-order deliverables.
 
-Runs 9 mechanical checks against a submitted work order's deliverables.
+Runs 10 mechanical checks against a submitted work order's deliverables.
 Each check inspects a specific property of the Layer 0 and Layer 1
 artifacts referenced by the work order and produces a pass/fail/skip
 result.  This is Phase 2 of issue #22 — control plane CLI.
@@ -136,9 +136,27 @@ def _is_sidecar(name: str) -> bool:
     return name.endswith(".meta.json") or name.endswith(".sc-meta.json")
 
 
-def _is_analysis(name: str) -> bool:
-    """Recognise analysis filenames: *.analysis.json and *.sc-analysis.json."""
-    return name.endswith(".analysis.json") or name.endswith(".sc-analysis.json")
+def _is_analysis(name: str, path: Path | None = None) -> bool:
+    """Recognise analysis records by filename suffix or content.
+
+    Fast path: filename suffix (``.analysis.json``, ``.sc-analysis.json``).
+    Fallback: when *path* is provided and the file has a ``.json``
+    extension, read the JSON and check for ``"record_type": "analysis"``
+    (written by ``write_analysis``).  This allows new analysis types
+    (e.g. ``.mmp-analysis.json``) to be recognised without a suffix
+    allowlist update.
+    """
+    if name.endswith(".analysis.json") or name.endswith(".sc-analysis.json"):
+        return True
+    # Content-based fallback: read JSON and check record_type.
+    if path is not None and name.endswith(".json"):
+        try:
+            data = json_mod.loads(path.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and data.get("record_type") == "analysis":
+                return True
+        except (OSError, ValueError):
+            pass
+    return False
 
 
 def _is_known_artifact_class(artifact_class: str) -> bool:
@@ -176,7 +194,7 @@ def _find_layer0_artifacts(
     for child in sorted(art_dir.iterdir()):
         if not child.is_file():
             continue
-        if _is_sidecar(child.name) or _is_analysis(child.name):
+        if _is_sidecar(child.name) or _is_analysis(child.name, child):
             continue
         # Reject symlinks that resolve outside the project root.
         if not child.resolve().is_relative_to(root_resolved):
@@ -711,6 +729,11 @@ def _check_provenance_valid(
                 continue
             artifacts_checked += 1
             if actual_sha not in sidecar_index:
+                # JSON files without provenance are handled by the
+                # unrecognized_record_type check (#130) — they should
+                # not be folded into provenance_valid.
+                if artifact_path.name.endswith(".json"):
+                    continue
                 issues.append({
                     "artifact": str(artifact_path.relative_to(project_root)),
                     "issue": "no provenance sidecar covers this artifact",
@@ -765,7 +788,7 @@ def _check_analysis_citations(
         if not art_dir.is_dir():
             continue
         for child in sorted(art_dir.iterdir()):
-            if not child.is_file() or not child.name.endswith(".analysis.json"):
+            if not child.is_file() or not _is_analysis(child.name, child):
                 continue
             # WO scoping: read the record early to check work_order_id.
             # Skip analysis files tagged with a different work order.
@@ -862,7 +885,7 @@ def _collect_relay_codes(
         for child in sorted(art_dir.iterdir()):
             if not child.is_file():
                 continue
-            if not (_is_sidecar(child.name) or _is_analysis(child.name)):
+            if not (_is_sidecar(child.name) or _is_analysis(child.name, child)):
                 continue
             try:
                 data = read_json(child, "sidecar")
@@ -1039,7 +1062,7 @@ def _check_findings_integrity(
     for child in sorted(findings_dir.rglob("*")):
         if not child.is_file() or child.is_symlink():
             continue
-        if _is_sidecar(child.name) or _is_analysis(child.name):
+        if _is_sidecar(child.name) or _is_analysis(child.name, child):
             misplaced.append(str(child.relative_to(project_root)))
 
     if misplaced:
@@ -1056,6 +1079,96 @@ def _check_findings_integrity(
         "status": "ok",
         "kind": "CONVENTION",
         "detail": "no misplaced sidecars found under findings/",
+    }
+
+
+def _check_unrecognized_json(
+    project_root: Path,
+    deliverables: dict[str, Any],
+    wo_id: str | None = None,
+) -> dict[str, Any]:
+    """Check 10 — flag JSON files that are neither analysis nor provenance-covered.
+
+    Scans each artifact-class directory for ``.json`` files that are not
+    sidecars, not analysis records (by suffix or content), and not covered
+    by any provenance sidecar.  These files are unrecognised — they may
+    indicate a toolchain bug (e.g. a new record type whose suffix was not
+    added to the allowlist).
+
+    Emits finding kind ``unrecognized_record_type`` so the result is
+    distinguishable from ``provenance_valid`` failures (#130, #84).
+    """
+    unrecognized: list[dict[str, str]] = []
+
+    layer_0_classes = deliverables.get("layer_0_classes", [])
+    if not isinstance(layer_0_classes, list) or not layer_0_classes:
+        return {
+            "name": "unrecognized_json",
+            "result": "skip",
+            "status": "skip",
+            "kind": None,
+            "detail": "no layer_0_classes declared",
+        }
+
+    for artifact_class in layer_0_classes:
+        normalized = normalize_artifact_class(artifact_class)
+        rel_dir = ARTIFACT_DIRS.get(normalized)
+        if rel_dir is None:
+            continue
+        art_dir = project_root / rel_dir
+        if not art_dir.is_dir():
+            continue
+
+        # Build sidecar index to check provenance coverage.
+        sidecar_index, _, other_wo_hashes = _build_sidecar_index(
+            art_dir, project_root, wo_id=wo_id,
+        )
+
+        root_resolved = project_root.resolve()
+        for child in sorted(art_dir.iterdir()):
+            if not child.is_file():
+                continue
+            if not child.name.endswith(".json"):
+                continue
+            # Skip recognised record types.
+            if _is_sidecar(child.name):
+                continue
+            if _is_analysis(child.name, child):
+                continue
+            # Reject symlinks outside project root.
+            if not child.resolve().is_relative_to(root_resolved):
+                continue
+            # Check whether a sidecar covers this file.
+            actual_sha = sha256_file(child)
+            if actual_sha in other_wo_hashes and actual_sha not in sidecar_index:
+                continue  # belongs to another WO
+            if actual_sha in sidecar_index:
+                continue  # covered by provenance — it is a known raw artifact
+            unrecognized.append({
+                "file": str(child.relative_to(project_root)),
+                "message": (
+                    f"File '{child.name}' is not a recognized analysis or "
+                    "raw artifact type. If it was produced by a DDE command, "
+                    "this may be a toolchain bug."
+                ),
+            })
+
+    detail: dict[str, Any] = {"files_checked": len(unrecognized)}
+    if unrecognized:
+        detail["unrecognized"] = unrecognized
+        return {
+            "name": "unrecognized_json",
+            "result": "fail",
+            "status": "fail",
+            "kind": "unrecognized_record_type",
+            "detail": detail,
+        }
+    return {
+        "name": "unrecognized_json",
+        "result": "pass",
+        "status": "ok",
+        "kind": "unrecognized_record_type",
+        "detail": "no unrecognized JSON files found",
     }
 
 
@@ -1579,7 +1692,7 @@ def _perform_validation(
     if schema_finding is not None:
         checks.append(schema_finding)
 
-    # Run all 9 checks.
+    # Run all 10 checks.
     checks.extend([
         _check_deliverables_exist(project_root, deliverables, wo_id=wo_id),
         _check_report_headings(project_root, deliverables, wo_id, revision),
@@ -1590,6 +1703,7 @@ def _perform_validation(
         _check_version_policy(project_root),
         _check_findings_integrity(project_root),
         _check_source_tags_resolve(project_root, deliverables),
+        _check_unrecognized_json(project_root, deliverables, wo_id=wo_id),
     ])
 
     # Determine overall result using the severity-model verdict.
@@ -1664,7 +1778,7 @@ def check_cmd(
     as_json: bool,
     quiet: bool,
 ) -> None:
-    """Run 9 mechanical validation checks against a submitted work order."""
+    """Run 10 mechanical validation checks against a submitted work order."""
     emit = emitter(as_json, quiet)
     project = state.project()
 

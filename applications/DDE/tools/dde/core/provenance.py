@@ -1087,6 +1087,7 @@ def write_analysis(
 
     tc = check_integrity()
     record: dict[str, Any] = {
+        "record_type": "analysis",
         "source": source,
         "cli_version": env.CLI_VERSION,
         "cli_integrity": tc.integrity,
