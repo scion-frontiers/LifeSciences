@@ -244,6 +244,15 @@ def trials() -> None:
     """Clinical trial pipeline search and analysis."""
 
 
+# Verb aliases — see docs/tool-design-guidance.md and issue #92.
+#
+#   fetch  = retrieve the record for a known identifier (gene, CID, …)
+#   search = query and get back a result set
+#
+# Both verbs are accepted as aliases for discoverability.  The primary
+# verb for this group is ``search`` (ClinicalTrials.gov returns a result
+# set for a text query); ``fetch`` is the alias.
+
 @trials.command("search")
 @click.argument("query")
 @click.option(
@@ -531,3 +540,7 @@ def _analyze_trials(
     }
 
     return active_studies, metrics, assessment
+
+
+# Register ``fetch`` as an alias for ``search`` (issue #92).
+trials.add_command(search_cmd, "fetch")

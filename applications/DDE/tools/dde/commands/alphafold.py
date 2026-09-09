@@ -122,6 +122,15 @@ def alphafold() -> None:
 # ---------------------------------------------------------------------------
 
 
+# Verb aliases — see docs/tool-design-guidance.md and issue #92.
+#
+#   fetch  = retrieve the record for a known identifier (gene, CID, …)
+#   search = query and get back a result set
+#
+# Both verbs are accepted as aliases for discoverability.  The primary
+# verb for this group is ``fetch`` (AFDB resolves one UniProt accession
+# to one structure); ``search`` is the alias.
+
 @alphafold.command()
 @click.argument("uniprot_id")
 @out_option
@@ -1085,3 +1094,7 @@ def analyze_prediction(
         emit.line(f"* {advisory}")
     emit.path(project.relative(analysis_path), "analysis")
     emit.flush()
+
+
+# Register ``search`` as an alias for ``fetch`` (issue #92).
+alphafold.add_command(fetch, "search")

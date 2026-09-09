@@ -208,6 +208,15 @@ def genetics() -> None:
     """Human population genetics evidence (gnomAD, free and unauthenticated)."""
 
 
+# Verb aliases — see docs/tool-design-guidance.md and issue #92.
+#
+#   fetch  = retrieve the record for a known identifier (gene, CID, …)
+#   search = query and get back a result set
+#
+# Both verbs are accepted as aliases for discoverability.  The primary
+# verb for this group is ``fetch`` (gnomAD resolves one symbol to one
+# gene); ``search`` is the alias.
+
 @genetics.command("fetch")
 @click.argument("symbol")
 @out_option
@@ -430,3 +439,7 @@ def analyze_cmd(
         emit.line(f"relay {record['code']}: {record['message']}")
     emit.path(analysis_path, role="analysis")
     emit.flush()
+
+
+# Register ``search`` as an alias for ``fetch`` (issue #92).
+genetics.add_command(fetch_cmd, "search")

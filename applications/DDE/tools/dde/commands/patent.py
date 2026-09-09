@@ -220,6 +220,15 @@ def patent() -> None:
     """Patent landscape search and FTO assessment."""
 
 
+# Verb aliases — see docs/tool-design-guidance.md and issue #92.
+#
+#   fetch  = retrieve the record for a known identifier (gene, CID, …)
+#   search = query and get back a result set
+#
+# Both verbs are accepted as aliases for discoverability.  The primary
+# verb for this group is ``search`` (Google Patents returns a result set
+# for a text query); ``fetch`` is the alias.
+
 @patent.command("search")
 @click.argument("query")
 @click.option(
@@ -499,3 +508,7 @@ def _analyze_patents(
     }
 
     return metrics, assessment
+
+
+# Register ``fetch`` as an alias for ``search`` (issue #92).
+patent.add_command(search_cmd, "fetch")

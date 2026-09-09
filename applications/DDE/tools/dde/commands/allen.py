@@ -269,6 +269,15 @@ def allen() -> None:
     """Allen Brain Map gene expression and donor data queries."""
 
 
+# Verb aliases — see docs/tool-design-guidance.md and issue #92.
+#
+#   fetch  = retrieve the record for a known identifier (gene, CID, …)
+#   search = query and get back a result set
+#
+# Both verbs are accepted as aliases for discoverability.  The primary
+# verb for this group is ``search`` (Allen returns datasets matching a
+# gene query); ``fetch`` is the alias.
+
 @allen.command("search")
 @click.argument("query")
 @click.option(
@@ -757,3 +766,7 @@ def analyze_donors_cmd(
         emit.line(f"relay {record['code']}: {record['message']}")
     emit.path(analysis_path, role="analysis")
     emit.flush()
+
+
+# Register ``fetch`` as an alias for ``search`` (issue #92).
+allen.add_command(search_cmd, "fetch")

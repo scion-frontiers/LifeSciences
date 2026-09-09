@@ -226,6 +226,15 @@ def dice() -> None:
     """DICE immune cell subtype expression (bulk RNA-seq, TPM)."""
 
 
+# Verb aliases — see docs/tool-design-guidance.md and issue #92.
+#
+#   fetch  = retrieve the record for a known identifier (gene, CID, …)
+#   search = query and get back a result set
+#
+# Both verbs are accepted as aliases for discoverability.  The primary
+# verb for this group is ``search`` (DICE returns expression across cell
+# types for a gene query); ``fetch`` is the alias.
+
 @dice.command("search")
 @click.argument("gene")
 @out_option
@@ -431,3 +440,7 @@ def analyze_cmd(
         emit.line(f"relay {record['code']}: {record['message']}")
     emit.path(analysis_path, role="analysis")
     emit.flush()
+
+
+# Register ``fetch`` as an alias for ``search`` (issue #92).
+dice.add_command(search_cmd, "fetch")
