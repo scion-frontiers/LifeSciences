@@ -44,6 +44,8 @@ from ..core.output import Emitter
 
 ARTIFACT_CLASS = "genomics"
 
+COVERAGE_THRESHOLD = 0.7
+
 
 # ---------------------------------------------------------------------------
 # Lazy dependency check
@@ -383,6 +385,189 @@ def compute_cmd(
 
 
 # ---------------------------------------------------------------------------
+# Local MSA alignment
+# ---------------------------------------------------------------------------
+
+
+def _find_aligner(preference: str | None) -> tuple[str, str]:
+    """Locate a sequence alignment binary on PATH.
+
+    Returns (binary_path, aligner_name).  Checks the preferred aligner
+    first, then falls back to the other.  Raises DependencyError if
+    neither is found.
+    """
+    order = ["muscle", "mafft"]
+    if preference:
+        pref = preference.lower()
+        if pref in order:
+            order.remove(pref)
+            order.insert(0, pref)
+
+    for name in order:
+        path = shutil.which(name)
+        if path:
+            return path, name
+
+    raise DependencyError(
+        "neither muscle nor mafft is on PATH",
+        detail="local multiple sequence alignment requires muscle or mafft",
+        remedy="install muscle with `tools/install.sh --binaries-only`, "
+        "or install mafft via your system package manager",
+    )
+
+
+def _run_alignment(
+    aligner_path: str,
+    aligner_name: str,
+    input_fasta: Path,
+    output_fasta: Path,
+) -> None:
+    """Run the aligner on the input FASTA and write aligned output."""
+    if aligner_name == "muscle":
+        cmd = [
+            aligner_path,
+            "-align", str(input_fasta),
+            "-output", str(output_fasta),
+        ]
+    else:  # mafft
+        cmd = [
+            aligner_path,
+            "--auto",
+            str(input_fasta),
+        ]
+
+    completed = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=3600,
+    )
+
+    if aligner_name == "mafft":
+        # mafft writes aligned output to stdout
+        if completed.returncode != 0:
+            raise ArtifactError(
+                f"mafft failed on {input_fasta.name}",
+                detail=(completed.stderr or completed.stdout or "no output").strip()[:500],
+                remedy="check that the input file is a valid FASTA",
+            )
+        output_fasta.write_text(completed.stdout, encoding="utf-8")
+    else:
+        if completed.returncode != 0:
+            raise ArtifactError(
+                f"muscle failed on {input_fasta.name}",
+                detail=(completed.stderr or completed.stdout or "no output").strip()[:500],
+                remedy="check that the input file is a valid FASTA",
+            )
+        if not output_fasta.is_file():
+            raise ArtifactError(
+                f"muscle produced no output for {input_fasta.name}",
+                detail="the output file was not written",
+                remedy="check muscle logs for errors",
+            )
+
+
+@conservation.command("align")
+@click.argument("fasta", type=click.Path())
+@click.option(
+    "--aligner",
+    type=click.Choice(["muscle", "mafft"], case_sensitive=False),
+    default=None,
+    help="Alignment tool to use. Auto-detects if not specified.",
+)
+@click.option(
+    "--name",
+    default=None,
+    help="Name for the output files. Defaults to the input filename stem.",
+)
+@out_option
+@output_options
+@pass_state
+def align_cmd(
+    state: AppState,
+    fasta: str,
+    aligner: str | None,
+    name: str | None,
+    out: str | None,
+    as_json: bool,
+    quiet: bool,
+) -> None:
+    """Align sequences from a FASTA file using muscle or mafft.
+
+    Runs a local multiple sequence aligner on the input FASTA and
+    produces an aligned FASTA suitable for conservation scoring with
+    ``conservation compute``.
+    """
+    emit = Emitter(as_json=as_json, quiet=quiet)
+    project = state.project()
+    target_dir = project.artifact_dir(ARTIFACT_CLASS, out)
+
+    # Validate input FASTA
+    fasta_path = Path(fasta)
+    if not fasta_path.is_absolute():
+        fasta_path = project.root / fasta
+    if not fasta_path.is_file():
+        raise ArtifactError(
+            f"FASTA file not found: {fasta_path}",
+            remedy="provide a path to a FASTA file with unaligned sequences",
+        )
+    if fasta_path.stat().st_size == 0:
+        raise ArtifactError(
+            f"FASTA file is empty: {fasta_path}",
+            remedy="provide a non-empty FASTA file",
+        )
+
+    query_name = name or fasta_path.stem
+
+    # Find aligner
+    aligner_path, aligner_name = _find_aligner(aligner)
+
+    # Count input sequences
+    n_input = _count_msa_sequences(fasta_path)
+
+    # Run alignment
+    aligned_path = target_dir / f"{query_name}.aligned.fasta"
+    _run_alignment(aligner_path, aligner_name, fasta_path, aligned_path)
+
+    # Count aligned sequences (should match input)
+    n_aligned = _count_msa_sequences(aligned_path)
+
+    # Provenance sidecar
+    fasta_sha256 = provenance.sha256_file(fasta_path)
+    sidecar = provenance.Sidecar(
+        tool="conservation",
+        subcommand="align",
+        endpoint=None,
+        parameters={
+            "input_fasta": fasta_path.name,
+            "query_name": query_name,
+            "aligner": aligner_name,
+        },
+    )
+    sidecar.note("input_sha256", fasta_sha256)
+    sidecar.note("input_path", str(fasta_path))
+    sidecar.note("n_input_sequences", n_input)
+    sidecar.note("n_aligned_sequences", n_aligned)
+    sidecar.note("aligner_binary", aligner_path)
+    sidecar.add_output(aligned_path)
+
+    meta_path = sidecar.write(
+        target_dir / f"{query_name}.aligned.meta.json"
+    )
+
+    emit.data("query_name", query_name)
+    emit.data("aligner", aligner_name)
+    emit.data("n_sequences", n_aligned)
+    emit.line(
+        f"{query_name}: {n_aligned} sequences aligned with {aligner_name}"
+    )
+    emit.path(project.relative(aligned_path), role="aligned_fasta")
+    emit.path(project.relative(meta_path), role="sidecar")
+    emit.flush()
+
+
+# ---------------------------------------------------------------------------
 # Phase 2 — analyze
 # ---------------------------------------------------------------------------
 
@@ -453,6 +638,32 @@ def analyze_cmd(
     fraction_variable = round(n_variable / n_positions, 3)
     mean_score = round(total_score / n_positions, 3)
 
+    # --- coverage computation ---
+    # Determine how many positions were actually scored vs total positions
+    # in the MSA.  total_positions comes from the conservation record's
+    # n_positions (which counts only scored residues from rate4site output),
+    # but the MSA may have more columns if some were gap-only and thus
+    # unscored.  We use the msa_coverage field on each residue when present.
+    total_positions = record.get("n_positions", n_positions)
+    # Residues in the record ARE the scored positions (rate4site only emits
+    # rows for positions it scored).  Unscored positions are those NOT in
+    # the record.  If the record has a broader total from the MSA reference
+    # sequence, use that.
+    canonical_length = record.get("canonical_length", total_positions)
+    if canonical_length < n_positions:
+        canonical_length = n_positions
+
+    scored_positions = n_positions
+    unscored_positions: list[int] = []
+
+    # Build set of scored position numbers
+    scored_set = {res["position"] for res in residues}
+    for pos in range(1, canonical_length + 1):
+        if pos not in scored_set:
+            unscored_positions.append(pos)
+
+    coverage = round(scored_positions / canonical_length, 3) if canonical_length > 0 else 1.0
+
     # --- most conserved region ---
     most_conserved_region = _find_most_conserved_region(residues)
 
@@ -492,6 +703,10 @@ def analyze_cmd(
         "fraction_conserved": fraction_conserved,
         "fraction_variable": fraction_variable,
         "mean_score": mean_score,
+        "coverage": coverage,
+        "scored_positions": scored_positions,
+        "total_positions": canonical_length,
+        "unscored_positions": unscored_positions,
     }
     if most_conserved_region is not None:
         metrics["most_conserved_region"] = most_conserved_region
@@ -518,11 +733,44 @@ def analyze_cmd(
             )
         )
 
+    # --- low-coverage relay ---
+    if coverage < COVERAGE_THRESHOLD:
+        gaps = len(unscored_positions)
+        relays.append(
+            provenance.relay(
+                "conservation.low_coverage",
+                f"Conservation analysis scored only {scored_positions}/"
+                f"{canonical_length} positions ({coverage:.1%}). "
+                f"{gaps} positions were unscored due to MSA gaps. "
+                "Findings citing conservation scores MUST note the "
+                "coverage limitation.",
+            )
+        )
+
+    # --- pocket-in-gap relay (stretch) ---
+    # Check if the conservation record notes pocket residues, and if any
+    # of those fall in the unscored set.
+    pocket_residues = record.get("pocket_residues") or []
+    if pocket_residues and unscored_positions:
+        unscored_set = set(unscored_positions)
+        pocket_in_gap = [p for p in pocket_residues if p in unscored_set]
+        if pocket_in_gap:
+            relays.append(
+                provenance.relay(
+                    "conservation.pocket_in_gap",
+                    f"Pocket residues {pocket_in_gap} fall in unscored MSA "
+                    "columns. Conservation assessment for these residues "
+                    "is unavailable.",
+                )
+            )
+
     # --- collect upstream relays from phase-1 sidecar ---
     # Always suppress our own code from the sidecar: if we decided not to
     # fire it (no conserved core), the sidecar must not re-introduce it.
     seen_codes: set[str] = {r["code"] for r in relays} | {
         "conservation.rate_is_not_function",
+        "conservation.low_coverage",
+        "conservation.pocket_in_gap",
     }
     meta_candidate = source_dir / f"{query_name}.conservation.meta.json"
     if meta_candidate.is_file():

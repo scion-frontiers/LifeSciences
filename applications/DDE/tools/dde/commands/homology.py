@@ -41,7 +41,9 @@ from ..core.output import Emitter
 
 TOOL = "homology-search"
 TOOL_FETCH = "homology-fetch"
+TOOL_ORTHOLOGS = "homology-orthologs"
 ARTIFACT_CLASS = "structures"
+ORTHOLOGS_ARTIFACT_CLASS = "genomics"
 
 UNIPROT_API = "https://rest.uniprot.org/uniprotkb"
 
@@ -432,6 +434,220 @@ def search(
 
     emit = Emitter(as_json=as_json, quiet=quiet)
     emit.data("hit_count", len(hits))
+    emit.path(project.relative(manifest_path), "manifest")
+    emit.path(project.relative(meta), "sidecar")
+    emit.flush()
+
+
+# ---------------------------------------------------------------------------
+# Ortholog / paralog search
+# ---------------------------------------------------------------------------
+
+
+def _resolve_gene_to_accession(gene: str) -> str:
+    """Resolve a gene symbol to a UniProt accession via UniProt search.
+
+    Searches for a reviewed (Swiss-Prot) entry matching the gene name
+    exactly. Returns the first accession found. Raises UsageError if
+    nothing matches.
+    """
+    url = (
+        f"{UNIPROT_API}/search?query=gene_exact:{gene}"
+        "+AND+reviewed:true&fields=accession&size=1&format=json"
+    )
+    data = http.get_json(url, qps=qps_for_host("rest.uniprot.org"))
+    results = data.get("results") or []
+    if not results:
+        raise UsageError(
+            f"no reviewed UniProt entry found for gene symbol {gene!r}",
+            remedy="pass a UniProt accession directly, or check the gene name",
+        )
+    return results[0]["primaryAccession"]
+
+
+def _search_orthologs(
+    gene: str,
+    max_orthologs: int,
+    organism_filter: str | None,
+) -> tuple[str, list[dict[str, Any]]]:
+    """Query UniProt for orthologs of a gene.
+
+    Returns (query_accession, list_of_ortholog_records).
+    """
+    query_parts = [f"gene_exact:{gene}"]
+    if organism_filter:
+        query_parts.append(f"organism_name:{organism_filter}")
+    query_str = "+AND+".join(query_parts)
+    url = (
+        f"{UNIPROT_API}/search?query={query_str}"
+        f"&fields=accession,gene_names,organism_name,sequence"
+        f"&size={max_orthologs}&format=json"
+    )
+    data = http.get_json(url, qps=qps_for_host("rest.uniprot.org"))
+    results = data.get("results") or []
+
+    orthologs: list[dict[str, Any]] = []
+    for entry in results:
+        acc = entry.get("primaryAccession", "")
+        genes = entry.get("genes") or []
+        gene_names_list: list[str] = []
+        for g in genes:
+            gn = (g.get("geneName") or {}).get("value")
+            if gn:
+                gene_names_list.append(gn)
+        organism = (entry.get("organism") or {}).get("scientificName", "")
+        seq_block = entry.get("sequence") or {}
+        sequence = seq_block.get("value", "")
+        length = seq_block.get("length", 0)
+
+        orthologs.append({
+            "accession": acc,
+            "gene_names": gene_names_list,
+            "organism": organism,
+            "sequence": sequence,
+            "length": length,
+        })
+
+    return gene, orthologs
+
+
+def _format_fasta(orthologs: list[dict[str, Any]]) -> str:
+    """Format ortholog records as FASTA text."""
+    lines: list[str] = []
+    for rec in orthologs:
+        acc = rec["accession"]
+        organism = rec.get("organism", "")
+        gene_names = rec.get("gene_names", [])
+        gene_str = gene_names[0] if gene_names else ""
+        header = f">{acc} {gene_str} OS={organism}"
+        lines.append(header)
+        seq = rec.get("sequence", "")
+        # Wrap sequence at 70 characters
+        for i in range(0, len(seq), 70):
+            lines.append(seq[i : i + 70])
+    return "\n".join(lines) + "\n" if lines else ""
+
+
+@homology.command()
+@click.argument("gene_or_uniprot_id")
+@click.option(
+    "--organism-filter",
+    default=None,
+    help="Filter orthologs by organism name (e.g. 'Mammalia').",
+)
+@click.option(
+    "--max-orthologs",
+    type=int,
+    default=20,
+    show_default=True,
+    help="Maximum number of orthologs to return.",
+)
+@out_option
+@output_options
+@pass_state
+def orthologs(
+    state: AppState,
+    gene_or_uniprot_id: str,
+    organism_filter: str | None,
+    max_orthologs: int,
+    out: str | None,
+    as_json: bool,
+    quiet: bool,
+) -> None:
+    """Search for orthologs of a gene or UniProt accession.
+
+    Accepts a UniProt accession (e.g. P04637) or gene symbol (e.g. TP53).
+    Queries UniProt for orthologous sequences across species and writes
+    the results in FASTA format ready for multiple sequence alignment.
+    """
+    raw_input = gene_or_uniprot_id.strip()
+
+    # Determine if this is a UniProt accession or a gene symbol
+    accession_candidate = raw_input.upper()
+    if _UNIPROT_RE.match(accession_candidate):
+        # It's a UniProt accession — fetch gene symbol for query
+        _seq, _len, gene_symbol = _fetch_uniprot(accession_candidate)
+        if not gene_symbol:
+            raise UsageError(
+                f"UniProt entry {accession_candidate} has no gene symbol; "
+                "cannot search for orthologs by gene",
+                remedy="provide a gene symbol directly instead",
+            )
+        query_gene = gene_symbol
+        query_accession = accession_candidate
+    else:
+        # Treat as a gene symbol — resolve to accession for provenance
+        query_gene = raw_input
+        query_accession = _resolve_gene_to_accession(query_gene)
+
+    # Search for orthologs
+    _gene, ortholog_list = _search_orthologs(
+        query_gene, max_orthologs, organism_filter
+    )
+
+    project = state.project()
+    target_dir = project.artifact_dir(ORTHOLOGS_ARTIFACT_CLASS, out)
+
+    # Build FASTA output
+    fasta_text = _format_fasta(ortholog_list)
+
+    stem = f"ORTHOLOGS-{query_accession}-{query_gene}"
+
+    # Write FASTA
+    fasta_path = target_dir / f"{stem}.fasta"
+    fasta_path.write_text(fasta_text, encoding="utf-8")
+
+    # Write JSON manifest
+    manifest = {
+        "query": {
+            "gene_symbol": query_gene,
+            "uniprot_accession": query_accession,
+            "organism_filter": organism_filter,
+            "max_orthologs": max_orthologs,
+        },
+        "orthologs": ortholog_list,
+        "ortholog_count": len(ortholog_list),
+        "search_timestamp": datetime.now(timezone.utc).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        ),
+    }
+
+    manifest_path = target_dir / f"{stem}.orthologs.json"
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+    )
+
+    # Write provenance sidecar
+    sidecar = provenance.Sidecar(
+        tool=TOOL_ORTHOLOGS,
+        subcommand="orthologs",
+        endpoint=UNIPROT_API,
+        parameters={
+            "gene_or_uniprot_id": raw_input,
+            "resolved_gene": query_gene,
+            "resolved_accession": query_accession,
+            "organism_filter": organism_filter,
+            "max_orthologs": max_orthologs,
+        },
+    )
+    sidecar.add_output(fasta_path)
+    sidecar.add_output(manifest_path)
+
+    meta_path = target_dir / f"{stem}.orthologs.meta.json"
+    meta = sidecar.write(meta_path)
+
+    emit = Emitter(as_json=as_json, quiet=quiet)
+    emit.data("ortholog_count", len(ortholog_list))
+    emit.data("gene_symbol", query_gene)
+    emit.data("uniprot_accession", query_accession)
+    emit.line(
+        f"{query_gene} ({query_accession}): {len(ortholog_list)} orthologs found"
+    )
+    for orth in ortholog_list[:5]:
+        emit.line(f"  {orth['accession']}  {orth['organism']}")
+    if len(ortholog_list) > 5:
+        emit.line(f"  … {len(ortholog_list) - 5} more")
+    emit.path(project.relative(fasta_path), "fasta")
     emit.path(project.relative(manifest_path), "manifest")
     emit.path(project.relative(meta), "sidecar")
     emit.flush()

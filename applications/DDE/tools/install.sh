@@ -428,6 +428,41 @@ install_rate4site() {
     log "rate4site installed at ${target}"
 }
 
+# --- muscle5 ---
+# Multiple sequence alignment engine used by conservation analysis for
+# local alignment of orthologous sequences.  Pre-built static binary
+# from upstream; Apache-2.0 licensed.
+MUSCLE_VERSION="5.3"
+MUSCLE_URL="https://github.com/rcedgar/muscle/releases/download/v${MUSCLE_VERSION}/muscle-linux-x86.v${MUSCLE_VERSION}"
+MUSCLE_SHA256="318abeb951d786a3e2532714cc81ad3b3d8f79a2b517dc31316eeb5b694db2bc"
+
+install_muscle() {
+    local target="${BIN_DIR}/muscle"
+    if [ -x "$target" ]; then
+        log "muscle already installed at ${target}"
+        return 0
+    fi
+    log "Downloading muscle ${MUSCLE_VERSION}"
+    if ! curl -fsSL -o "$target" "$MUSCLE_URL" 2>/dev/null; then
+        warn "Could not download muscle (network may be unavailable). Skipping."
+        rm -f "$target"
+        return 1
+    fi
+
+    local got
+    got="$(sha256sum "$target" | cut -d' ' -f1)"
+    if [ "$got" != "$MUSCLE_SHA256" ]; then
+        warn "muscle checksum mismatch; refusing to install."
+        warn "  expected ${MUSCLE_SHA256}"
+        warn "  got      ${got}"
+        rm -f "$target"
+        return 1
+    fi
+
+    chmod +x "$target"
+    log "muscle ${MUSCLE_VERSION} installed at ${target}"
+}
+
 # Map a tool name to the name of its SHA256 variable so the loop can
 # detect PLACEHOLDER binaries generically.  Tools without a SHA256
 # variable (vina downloads a fixed URL, rate4site pins a commit) return
@@ -442,7 +477,7 @@ _sha_var_for() {
 }
 
 BINARY_STATUS=""
-for tool in vina fpocket rate4site hypex elo prox; do
+for tool in vina fpocket rate4site muscle hypex elo prox; do
     sha_var="$(_sha_var_for "$tool")"
     if [ -n "$sha_var" ] && [ "${!sha_var}" = "PLACEHOLDER" ]; then
         BINARY_STATUS="${BINARY_STATUS} ${tool}=PLACEHOLDER"

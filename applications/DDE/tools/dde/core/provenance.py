@@ -521,6 +521,16 @@ RELAY_CODES: dict[str, str] = {
         "residue is not dispensable -- it may be under positive selection or "
         "lineage-specific constraint not captured by this alignment."
     ),
+    "conservation.low_coverage": (
+        "Conservation analysis did not score all positions. Findings citing "
+        "conservation scores MUST note the coverage limitation and must not "
+        "claim genome-wide or full-sequence conservation from a partial score."
+    ),
+    "conservation.pocket_in_gap": (
+        "Pocket residues fall in unscored MSA columns. Conservation assessment "
+        "for these residues is unavailable. Do not infer conservation or "
+        "variability for residues that could not be scored."
+    ),
     "dice.in_vitro_not_in_vivo": (
         "DICE expression data is derived from in-vitro stimulated or sorted "
         "immune cells. Expression levels may differ from in-vivo tissue "
