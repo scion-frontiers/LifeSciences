@@ -1,6 +1,6 @@
 """`dde validate` — mechanical validation of submitted work-order deliverables.
 
-Runs 8 mechanical checks against a submitted work order's deliverables.
+Runs 9 mechanical checks against a submitted work order's deliverables.
 Each check inspects a specific property of the Layer 0 and Layer 1
 artifacts referenced by the work order and produces a pass/fail/skip
 result.  This is Phase 2 of issue #22 — control plane CLI.
@@ -12,6 +12,7 @@ appends to ``events.ndjson``.
 
 from __future__ import annotations
 
+import json as json_mod  # avoid shadowing; used by source-tag check
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -91,6 +92,8 @@ def _check_deliverables_schema(
     has_layer_0 = bool(
         deliverables.get("layer_0_classes")
         or deliverables.get("layer_0")
+        or deliverables.get("required_classes")
+        or deliverables.get("authorized_classes")
     )
     has_layer_1 = bool(deliverables.get("layer_1"))
 
@@ -103,7 +106,7 @@ def _check_deliverables_schema(
             "kind": "COMPLETENESS",
             "detail": (
                 "deliverables dict contains neither layer_0/layer_0_classes "
-                "nor layer_1 — 5 of 8 checks cannot run and will be skipped. "
+                "nor layer_1 — 5 of 9 checks cannot run and will be skipped. "
                 f"Keys found: {known_keys}"
             ),
         }
@@ -114,9 +117,15 @@ def _confine_path(project_root: Path, path: Path) -> Path | None:
     """Resolve and confine a path to the project root.
 
     Returns the resolved path if it is within the project root,
-    or None if the path escapes.
+    or None if the path escapes or is invalid (embedded null byte,
+    symlink loop, etc.).
     """
-    resolved = (project_root / path).resolve()
+    try:
+        resolved = (project_root / path).resolve()
+    except (ValueError, RuntimeError):
+        # ValueError: embedded null byte in path string.
+        # RuntimeError: symlink loop detected during resolution.
+        return None
     if not resolved.is_relative_to(project_root.resolve()):
         return None
     return resolved
@@ -221,7 +230,7 @@ def _has_artifacts_from_consumed_wos(
 
 
 # ---------------------------------------------------------------------------
-# The 8 mechanical checks
+# The 9 mechanical checks
 # ---------------------------------------------------------------------------
 
 
@@ -232,13 +241,21 @@ def _check_deliverables_exist(
 ) -> dict[str, Any]:
     """Check 1 — verify all declared deliverable files exist.
 
+    Handles both ``required_classes`` and ``authorized_classes`` (#103):
+
+    - **required_classes** entries: missing → ``fail`` / ``COMPLETENESS``
+      (existing behavior).  Entries with ``not_applicable`` → ``skip``
+      with reason.
+    - **authorized_classes** entries: missing → no finding (pass
+      silently).  Present → provenance checked as before.
+
     When *wo_id* is provided, only artifacts attributed to that work
     order (or untagged, for backward compatibility with pre-#166 records)
-    count toward satisfying each ``layer_0_classes`` entry.  Artifacts
-    whose sidecar tags them to a different work order are excluded (#283).
+    count toward satisfying each class entry.
     """
     missing: list[str] = []
     confined_failures: list[str] = []
+    skipped: list[dict[str, str]] = []
 
     # Layer 1 paths
     layer_1 = deliverables.get("layer_1", [])
@@ -251,19 +268,31 @@ def _check_deliverables_exist(
             if not resolved.is_file():
                 missing.append(str(rel_path))
 
-    # Layer 0 classes
+    # --- Required classes (from required_classes or backward-compat layer_0_classes) ---
     consumes_map = _build_consumes_map(deliverables)
 
-    layer_0_classes = deliverables.get("layer_0_classes", [])
-    if isinstance(layer_0_classes, list):
-        for artifact_class in layer_0_classes:
+    required_classes = deliverables.get("required_classes", [])
+    # Fallback: if no required_classes, use layer_0_classes (backward compat).
+    if not required_classes:
+        required_classes = deliverables.get("layer_0_classes", [])
+
+    if isinstance(required_classes, list):
+        for entry in required_classes:
+            # Handle not_applicable entries.
+            if isinstance(entry, dict) and "not_applicable" in entry:
+                cls_name = entry.get("class") or entry.get("name") or str(entry)
+                reason = entry["not_applicable"]
+                skipped.append({"class": cls_name, "reason": reason})
+                continue
+
+            artifact_class = entry if isinstance(entry, str) else (
+                entry.get("class") or entry.get("name") or str(entry)
+            )
             artifacts = _find_layer0_artifacts(project_root, artifact_class)
             if not artifacts:
                 missing.append(f"layer_0_classes/{artifact_class} (no artifacts found)")
                 continue
-            # WO scoping: when wo_id is provided, at least one artifact
-            # must be attributed to this WO (or be untagged).  Mirrors
-            # the attribution logic in _check_provenance_valid (#166).
+            # WO scoping
             if wo_id is not None:
                 art_dir = artifacts[0].parent
                 sidecar_index, _, other_wo_hashes = _build_sidecar_index(
@@ -272,10 +301,8 @@ def _check_deliverables_exist(
                 has_own_artifact = False
                 for artifact_path in artifacts:
                     actual_sha = sha256_file(artifact_path)
-                    # Artifact belongs to another WO — skip it.
                     if actual_sha in other_wo_hashes and actual_sha not in sidecar_index:
                         continue
-                    # This artifact is ours (in our index) or untagged.
                     has_own_artifact = True
                     break
                 if not has_own_artifact:
@@ -294,11 +321,20 @@ def _check_deliverables_exist(
                         "(no artifacts attributed to this work order)"
                     )
 
+    # --- Authorized classes: presence is optional, absence is not a failure ---
+    # authorized_classes are NOT provenance-checked by the mechanical validator.
+    # They do not appear in layer_0_classes, so checks 4–6 skip them.
+
     detail: dict[str, Any] = {}
     if confined_failures:
         detail["path_confinement_failures"] = confined_failures
     if missing:
         detail["missing"] = missing
+    if skipped:
+        detail["not_applicable"] = skipped
+
+    # Determine layer_0_classes list for the detail dict (backward compat).
+    layer_0_classes = deliverables.get("layer_0_classes", [])
 
     if confined_failures or missing:
         return {
@@ -313,8 +349,11 @@ def _check_deliverables_exist(
         "result": "pass",
         "status": "ok",
         "kind": "COMPLETENESS",
-        "detail": {"layer_1_count": len(layer_1) if isinstance(layer_1, list) else 0,
-                    "layer_0_classes": layer_0_classes if isinstance(layer_0_classes, list) else []},
+        "detail": {
+            "layer_1_count": len(layer_1) if isinstance(layer_1, list) else 0,
+            "layer_0_classes": layer_0_classes if isinstance(layer_0_classes, list) else [],
+            **({} if not skipped else {"not_applicable": skipped}),
+        },
     }
 
 
@@ -324,7 +363,22 @@ def _check_report_headings(
     wo_id: str,
     revision: int,
 ) -> dict[str, Any]:
-    """Check 2 — verify Layer 1 findings contain the WO reference string."""
+    """Check 2 — verify Layer 1 findings contain the WO reference string
+    and the ``## Key Findings`` heading (or a plausible equivalent).
+
+    Two sub-checks:
+
+    1. **WO reference** — the string ``WO-<id>-r<rev>`` must appear in
+       each Layer 1 file.  Missing → ``fail`` / ``COMPLETENESS``.
+    2. **Key Findings heading** — ``## Key Findings`` must appear.
+       When absent, we look for any ``##``-level heading between
+       ``## Summary`` and ``## Implications`` (or end-of-file).
+       - Variant found → ``warn`` / ``CONVENTION``.
+       - Nothing found → ``fail`` / ``COMPLETENESS``.
+
+    The returned result reflects the *worst* status across both
+    sub-checks.
+    """
     reference = f"WO-{wo_id.removeprefix('WO-')}-r{revision}"
     missing_ref: list[str] = []
 
@@ -338,28 +392,90 @@ def _check_report_headings(
             "detail": "no layer_1 deliverables declared",
         }
 
+    # Heading-text variance tracking.
+    heading_variants: list[dict[str, str]] = []  # warn cases
+    missing_headings: list[str] = []  # fail cases
+
     for rel_path in layer_1:
         resolved = _confine_path(project_root, Path(rel_path))
         if resolved is None or not resolved.is_file():
             continue  # deliverables_exist already flags these
         content = resolved.read_text(encoding="utf-8", errors="replace")
+
+        # Sub-check 1: WO reference string.
         if reference not in content:
             missing_ref.append(str(rel_path))
 
+        # Sub-check 2: ## Key Findings heading.
+        if "## Key Findings" not in content:
+            # Look for a plausible equivalent: any ##-level heading
+            # between ## Summary and ## Implications.
+            lines = content.split("\n")
+            summary_pos: int | None = None
+            implications_pos: int | None = None
+            for idx, line in enumerate(lines):
+                stripped = line.strip()
+                if stripped.startswith("## Summary"):
+                    summary_pos = idx
+                elif stripped.startswith("## Implications"):
+                    implications_pos = idx
+
+            # Search region: after Summary, before Implications (or EOF).
+            search_start = (summary_pos + 1) if summary_pos is not None else 0
+            search_end = implications_pos if implications_pos is not None else len(lines)
+
+            variant_heading: str | None = None
+            for idx in range(search_start, search_end):
+                stripped = lines[idx].strip()
+                if stripped.startswith("## ") and not stripped.startswith("## Summary"):
+                    variant_heading = stripped
+                    break
+
+            if variant_heading is not None:
+                heading_variants.append({
+                    "file": str(rel_path),
+                    "found_heading": variant_heading,
+                })
+            else:
+                missing_headings.append(str(rel_path))
+
+    # Build detail dict.
+    detail: dict[str, Any] = {"reference": reference}
     if missing_ref:
+        detail["files_missing_reference"] = missing_ref
+    if heading_variants:
+        detail["heading_variants"] = heading_variants
+    if missing_headings:
+        detail["missing_headings"] = missing_headings
+
+    # Determine worst status across both sub-checks.
+    # Priority: fail > warn > ok.
+    has_fail = bool(missing_ref) or bool(missing_headings)
+    has_warn = bool(heading_variants)
+
+    if has_fail:
+        # Determine kind: missing_ref and missing_headings are COMPLETENESS.
         return {
             "name": "report_headings",
             "result": "fail",
             "status": "fail",
             "kind": "COMPLETENESS",
-            "detail": {"expected_reference": reference, "files_missing_reference": missing_ref},
+            "detail": detail,
+        }
+    if has_warn:
+        return {
+            "name": "report_headings",
+            "result": "pass",
+            "status": "warn",
+            "kind": "CONVENTION",
+            "detail": detail,
         }
     return {
         "name": "report_headings",
         "result": "pass",
         "status": "ok",
         "kind": "COMPLETENESS",
-        "detail": {"reference": reference},
+        "detail": detail,
     }
 
 
@@ -370,8 +486,16 @@ def _check_paths_resolve(
     project_root: Path,
     deliverables: dict[str, Any],
 ) -> dict[str, Any]:
-    """Check 3 — verify internal markdown links resolve within the project."""
-    broken: list[dict[str, str]] = []
+    """Check 3 — verify internal markdown links resolve within the project.
+
+    When a broken link would resolve from the project root, emit
+    ``warn`` / ``CONVENTION`` and suggest the corrected relative path.
+    Truly broken links (resolve nowhere) remain ``fail`` /
+    ``DATA_INTEGRITY``.
+    """
+    import os
+
+    broken: list[dict[str, Any]] = []
     confined_failures: list[dict[str, str]] = []
     links_checked = 0
 
@@ -407,7 +531,22 @@ def _check_paths_resolve(
                 confined_failures.append({"file": str(rel_path), "link": target})
                 continue
             if not link_resolved.exists():
-                broken.append({"file": str(rel_path), "link": target})
+                # Check whether the link would resolve from project root.
+                root_resolved = (project_root / target_no_fragment).resolve()
+                if root_resolved.exists() and root_resolved.is_relative_to(project_root.resolve()):
+                    correct_relative = os.path.relpath(root_resolved, resolved_file.parent)
+                    broken.append({
+                        "file": str(rel_path),
+                        "link": target,
+                        "would_resolve_from_root": True,
+                        "suggested_fix": correct_relative,
+                        "detail": (
+                            f"This link resolves from project root but not "
+                            f"from the file directory. Use {correct_relative!r} instead."
+                        ),
+                    })
+                else:
+                    broken.append({"file": str(rel_path), "link": target})
 
     detail: dict[str, Any] = {"links_checked": links_checked}
     if confined_failures:
@@ -416,7 +555,14 @@ def _check_paths_resolve(
         detail["broken_links"] = broken
 
     if confined_failures or broken:
-        return {"name": "paths_resolve", "result": "fail", "status": "fail", "kind": "DATA_INTEGRITY", "detail": detail}
+        truly_broken = [b for b in broken if not b.get("would_resolve_from_root")]
+        if confined_failures or truly_broken:
+            return {"name": "paths_resolve", "result": "fail", "status": "fail",
+                    "kind": "DATA_INTEGRITY", "detail": detail}
+        else:
+            # All broken links are root-resolvable → convention warning.
+            return {"name": "paths_resolve", "result": "pass", "status": "warn",
+                    "kind": "CONVENTION", "detail": detail}
     return {"name": "paths_resolve", "result": "pass", "status": "ok", "kind": "DATA_INTEGRITY", "detail": detail}
 
 
@@ -645,34 +791,26 @@ def _check_analysis_citations(
     return {"name": "analysis_citations", "result": "pass", "status": "ok", "kind": "DATA_INTEGRITY", "detail": detail}
 
 
-def _check_relay_coverage(
+def _collect_relay_codes(
     project_root: Path,
     deliverables: dict[str, Any],
     wo_id: str | None = None,
-) -> dict[str, Any]:
-    """Check 6 — verify mandatory relay codes are addressed in findings.
+) -> set[str]:
+    """Collect mandatory relay codes from sidecar and analysis files.
 
-    This is a substring check — mechanical, with known limitations.
-    Whether the finding actually acted on a relay is a judgment call
-    belonging to the scientific reviewer.
+    Scans all ``.meta.json`` and ``.analysis.json`` files in each
+    artifact-class directory declared in *deliverables* and returns
+    the set of relay code strings found in ``mandatory_relays[].code``.
 
-    When *wo_id* is provided, only relay codes from records tagged with
-    that work order (or untagged records) are checked (#166).
+    When *wo_id* is provided, records tagged with a different work
+    order are skipped (#166).
     """
     layer_0_classes = deliverables.get("layer_0_classes", [])
-    layer_1 = deliverables.get("layer_1", [])
-
-    if not isinstance(layer_0_classes, list) or not layer_0_classes:
-        return {
-            "name": "relay_coverage",
-            "result": "skip",
-            "status": "skip",
-            "kind": None,
-            "detail": "no layer_0_classes declared",
-        }
-
-    # Collect all mandatory relay codes from .meta.json and .analysis.json
     relay_codes: set[str] = set()
+
+    if not isinstance(layer_0_classes, list):
+        return relay_codes
+
     for artifact_class in layer_0_classes:
         normalized = normalize_artifact_class(artifact_class)
         rel_dir = ARTIFACT_DIRS.get(normalized)
@@ -702,6 +840,45 @@ def _check_relay_coverage(
                     if isinstance(r, dict) and "code" in r:
                         relay_codes.add(r["code"])
 
+    return relay_codes
+
+
+# Regex for the standard relay label format: **Relay: `<code>`**
+_RELAY_LABEL_RE = re.compile(r"\*\*Relay:\s*`([^`]+)`\*\*")
+
+
+def _check_relay_coverage(
+    project_root: Path,
+    deliverables: dict[str, Any],
+    wo_id: str | None = None,
+) -> dict[str, Any]:
+    """Check 6 — verify mandatory relay codes are addressed in findings.
+
+    Two-tier check:
+
+    1. **Presence** — the relay code string must appear somewhere in
+       the findings text.  Missing → ``fail`` / ``COMPLETENESS``.
+    2. **Label format** — when present, the code should appear in the
+       standard ``**Relay: \\`<code>\\`**`` format.  Present without the
+       label → ``warn`` / ``FORMAT`` sub-finding.
+
+    When *wo_id* is provided, only relay codes from records tagged with
+    that work order (or untagged records) are checked (#166).
+    """
+    layer_0_classes = deliverables.get("layer_0_classes", [])
+    layer_1 = deliverables.get("layer_1", [])
+
+    if not isinstance(layer_0_classes, list) or not layer_0_classes:
+        return {
+            "name": "relay_coverage",
+            "result": "skip",
+            "status": "skip",
+            "kind": None,
+            "detail": "no layer_0_classes declared",
+        }
+
+    relay_codes = _collect_relay_codes(project_root, deliverables, wo_id)
+
     if not relay_codes:
         return {
             "name": "relay_coverage",
@@ -720,12 +897,27 @@ def _check_relay_coverage(
             if resolved is not None and resolved.is_file():
                 findings_text += resolved.read_text(encoding="utf-8", errors="replace")
 
+    # Collect codes found in standard label format.
+    labeled_codes: set[str] = set()
+    for m in _RELAY_LABEL_RE.finditer(findings_text):
+        labeled_codes.add(m.group(1))
+
     # Check each code against findings text
     addressed: set[str] = set()
     unaddressed: list[str] = []
+    sub_findings: list[dict[str, Any]] = []
+
     for code in sorted(relay_codes):
         if code in findings_text:
             addressed.add(code)
+            # Label-format sub-check.
+            if code not in labeled_codes:
+                sub_findings.append({
+                    "code": code,
+                    "status": "warn",
+                    "kind": "FORMAT",
+                    "detail": "relay code found in text but not in standard label format",
+                })
         else:
             unaddressed.append(code)
 
@@ -737,8 +929,19 @@ def _check_relay_coverage(
     }
 
     if unaddressed:
-        return {"name": "relay_coverage", "result": "fail", "status": "fail", "kind": "COMPLETENESS", "detail": detail}
-    return {"name": "relay_coverage", "result": "pass", "status": "ok", "kind": "COMPLETENESS", "detail": detail}
+        result = {"name": "relay_coverage", "result": "fail", "status": "fail",
+                  "kind": "COMPLETENESS", "detail": detail}
+    elif sub_findings:
+        result = {"name": "relay_coverage", "result": "pass", "status": "warn",
+                  "kind": "FORMAT", "detail": detail}
+    else:
+        result = {"name": "relay_coverage", "result": "pass", "status": "ok",
+                  "kind": "COMPLETENESS", "detail": detail}
+
+    if sub_findings:
+        result["sub_findings"] = sub_findings
+
+    return result
 
 
 def _check_version_policy(
@@ -817,6 +1020,447 @@ def _check_findings_integrity(
 
 
 # ---------------------------------------------------------------------------
+# Source-tag resolution helpers
+# ---------------------------------------------------------------------------
+
+# Regex for scalar source tags: {source: <path> [<locator>]}
+_SOURCE_TAG_RE = re.compile(r"\{source:\s+(\S+)(?:\s+(.*?))?\}")
+# Regex for table source tags: {source-table: <path> [<locator>]}
+_SOURCE_TABLE_TAG_RE = re.compile(r"\{source-table:\s+(\S+)(?:\s+(.*?))?\}")
+
+# Number immediately before a {source: token.
+# Captures: optional negative sign, integer or decimal, optional scientific
+# notation, optional trailing % sign.  We look backward from the {source:
+# position so the match is on the content *before* the tag.
+_CLAIMED_VALUE_RE = re.compile(
+    r"(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\s*%?\s*$"
+)
+
+# Code fences: triple backtick blocks and inline backtick spans.
+_CODE_FENCE_RE = re.compile(r"```.*?```", re.DOTALL)
+_INLINE_CODE_RE = re.compile(r"`[^`]+`")
+
+# Identifier-like tokens: letter immediately adjacent to digits (Q99650,
+# CID12345, PDB:1ABC, rs123456) — used to reject non-numerical claims.
+_IDENTIFIER_LIKE_RE = re.compile(r"[A-Za-z]\d+|\d+[A-Za-z]")
+
+
+def _strip_code_spans(text: str) -> str:
+    """Replace code fences and inline code with whitespace to skip tags inside them."""
+    text = _CODE_FENCE_RE.sub(lambda m: " " * len(m.group(0)), text)
+    text = _INLINE_CODE_RE.sub(lambda m: " " * len(m.group(0)), text)
+    return text
+
+
+def _values_match(claimed: float, actual: float) -> bool:
+    """Check whether *claimed* matches *actual* within ±1% tolerance."""
+    if claimed == actual:
+        return True
+    if abs(actual) < 1e-10:
+        return abs(claimed - actual) < 1e-10
+    return abs(claimed - actual) / abs(actual) <= 0.01
+
+
+def _extract_claimed_value(text_before_tag: str) -> float | None:
+    """Extract the numerical value immediately preceding a {source: tag.
+
+    Returns ``None`` when no numerical claim is found (e.g. the tag
+    provides file-level provenance for a non-numerical reference).
+    """
+    # Grab the last whitespace-separated tokens (up to ~60 chars is plenty).
+    snippet = text_before_tag[-60:].rstrip()
+    if not snippet:
+        return None
+
+    # Check for identifier-like tokens at the very end of the snippet.
+    # Split by whitespace; look at the last token.
+    last_token = snippet.split()[-1] if snippet.split() else ""
+    # Strip trailing punctuation that is not part of a number (commas, colons,
+    # parentheses, etc.) but keep %, -, ., e/E, +.
+    cleaned = last_token.rstrip(",;:)")
+
+    # Reject identifier-like tokens: letters adjacent to digits.
+    if _IDENTIFIER_LIKE_RE.search(cleaned):
+        return None
+
+    m = _CLAIMED_VALUE_RE.search(snippet)
+    if m is None:
+        return None
+    try:
+        return float(m.group(1))
+    except (ValueError, OverflowError):
+        return None
+
+
+def _check_source_tags_resolve(
+    project_root: Path,
+    deliverables: dict[str, Any],
+) -> dict[str, Any]:
+    """Check 9 — verify {source:} and {source-table:} tags resolve and match.
+
+    Parses source tags from all Layer 1 files, resolves each tag's path
+    and locator against the project root, and — for scalar tags with a
+    claimed numerical value — compares the claimed value against the
+    resolved actual value within ±1% tolerance.
+    """
+    try:
+        from jsonpath_ng import parse as jsonpath_parse  # deferred import
+    except ImportError:
+        return {
+            "name": "source_tags_resolve",
+            "result": "skip",
+            "status": "skip",
+            "kind": None,
+            "detail": "jsonpath-ng is not installed — cannot evaluate source tags",
+        }
+
+    layer_1 = deliverables.get("layer_1", [])
+    if not isinstance(layer_1, list) or not layer_1:
+        return {
+            "name": "source_tags_resolve",
+            "result": "skip",
+            "status": "skip",
+            "kind": None,
+            "detail": "no layer_1 deliverables declared",
+        }
+
+    sub_findings: list[dict[str, Any]] = []
+
+    for rel_path in layer_1:
+        resolved_file = _confine_path(project_root, Path(rel_path))
+        if resolved_file is None or not resolved_file.is_file():
+            continue  # deliverables_exist already flags these
+
+        raw_content = resolved_file.read_text(encoding="utf-8", errors="replace")
+        content = _strip_code_spans(raw_content)
+
+        # --- Parse scalar source tags ---
+        for m in _SOURCE_TAG_RE.finditer(content):
+            tag_path_str = m.group(1)
+            locator = (m.group(2) or "").strip() or None
+            tag_start = m.start()
+            tag_text = m.group(0)
+
+            # Line number of this tag in the original file.
+            line_no = raw_content[:tag_start].count("\n") + 1
+
+            # Extract the claimed value from text before the tag.
+            text_before = content[:tag_start]
+            claimed_value = _extract_claimed_value(text_before)
+
+            sf = _evaluate_scalar_tag(
+                project_root=project_root,
+                tag_path_str=tag_path_str,
+                locator=locator,
+                claimed_value=claimed_value,
+                tag_text=tag_text,
+                finding_file=str(rel_path),
+                line_no=line_no,
+                jsonpath_parse=jsonpath_parse,
+            )
+            sub_findings.append(sf)
+
+        # --- Parse source-table tags ---
+        for m in _SOURCE_TABLE_TAG_RE.finditer(content):
+            tag_path_str = m.group(1)
+            locator = (m.group(2) or "").strip() or None
+            tag_start = m.start()
+            tag_text = m.group(0)
+            line_no = raw_content[:tag_start].count("\n") + 1
+
+            sf = _evaluate_table_tag(
+                project_root=project_root,
+                tag_path_str=tag_path_str,
+                locator=locator,
+                tag_text=tag_text,
+                finding_file=str(rel_path),
+                line_no=line_no,
+                jsonpath_parse=jsonpath_parse,
+            )
+            sub_findings.append(sf)
+
+    # --- Aggregate ---
+    if not sub_findings:
+        return {
+            "name": "source_tags_resolve",
+            "result": "pass",
+            "status": "ok",
+            "kind": "DATA_INTEGRITY",
+            "detail": "no source tags found",
+            "sub_findings": [],
+        }
+
+    has_fail = any(sf["status"] == "fail" for sf in sub_findings)
+    has_warn = any(sf["status"] == "warn" for sf in sub_findings)
+
+    if has_fail:
+        return {
+            "name": "source_tags_resolve",
+            "result": "fail",
+            "status": "fail",
+            "kind": "DATA_INTEGRITY",
+            "detail": {
+                "tags_checked": len(sub_findings),
+                "tags_failed": sum(1 for sf in sub_findings if sf["status"] == "fail"),
+                "tags_warned": sum(1 for sf in sub_findings if sf["status"] == "warn"),
+            },
+            "sub_findings": sub_findings,
+        }
+    if has_warn:
+        return {
+            "name": "source_tags_resolve",
+            "result": "pass",
+            "status": "warn",
+            "kind": "FORMAT",
+            "detail": {
+                "tags_checked": len(sub_findings),
+                "tags_warned": sum(1 for sf in sub_findings if sf["status"] == "warn"),
+            },
+            "sub_findings": sub_findings,
+        }
+    return {
+        "name": "source_tags_resolve",
+        "result": "pass",
+        "status": "ok",
+        "kind": "DATA_INTEGRITY",
+        "detail": {"tags_checked": len(sub_findings)},
+        "sub_findings": sub_findings,
+    }
+
+
+def _evaluate_scalar_tag(
+    *,
+    project_root: Path,
+    tag_path_str: str,
+    locator: str | None,
+    claimed_value: float | None,
+    tag_text: str,
+    finding_file: str,
+    line_no: int,
+    jsonpath_parse: Any,
+) -> dict[str, Any]:
+    """Evaluate a single scalar {source: ...} tag and return a sub-finding."""
+    base = {"tag": tag_text, "file": finding_file, "line": line_no}
+
+    # Step 3: resolve path.
+    resolved = _confine_path(project_root, Path(tag_path_str))
+    if resolved is None:
+        return {**base, "status": "fail", "kind": "DATA_INTEGRITY",
+                "detail": f"path escapes project root: {tag_path_str}"}
+    if not resolved.is_file():
+        return {**base, "status": "fail", "kind": "DATA_INTEGRITY",
+                "detail": f"path does not resolve: {tag_path_str}"}
+
+    # Step 4: evaluate locator.
+    if locator is None:
+        # No locator.
+        if claimed_value is not None:
+            return {**base, "status": "warn", "kind": "FORMAT",
+                    "detail": "missing locator — cannot verify value mechanically"}
+        # Non-numerical reference — file-level provenance is sufficient.
+        return {**base, "status": "ok", "kind": "DATA_INTEGRITY",
+                "detail": "file-level provenance (no locator, non-numerical)"}
+
+    # Locator present — determine type and evaluate.
+    if locator.startswith("$"):
+        return _evaluate_jsonpath_locator(
+            resolved=resolved,
+            locator=locator,
+            claimed_value=claimed_value,
+            base=base,
+            is_table=False,
+            jsonpath_parse=jsonpath_parse,
+        )
+
+    # Line-number locator: path has :N suffix — but in the source-tag convention
+    # the locator is a separate token, so check if it looks like a line number.
+    line_match = re.match(r"^:?(\d+)$", locator)
+    if line_match:
+        return _evaluate_line_locator(
+            resolved=resolved,
+            line_num=int(line_match.group(1)),
+            claimed_value=claimed_value,
+            base=base,
+        )
+
+    # Unrecognised locator format — treat as ok (might be a future extension).
+    return {**base, "status": "ok", "kind": "DATA_INTEGRITY",
+            "detail": f"locator format not recognised: {locator}"}
+
+
+def _evaluate_table_tag(
+    *,
+    project_root: Path,
+    tag_path_str: str,
+    locator: str | None,
+    tag_text: str,
+    finding_file: str,
+    line_no: int,
+    jsonpath_parse: Any,
+) -> dict[str, Any]:
+    """Evaluate a single {source-table: ...} tag and return a sub-finding."""
+    base = {"tag": tag_text, "file": finding_file, "line": line_no}
+
+    resolved = _confine_path(project_root, Path(tag_path_str))
+    if resolved is None:
+        return {**base, "status": "fail", "kind": "DATA_INTEGRITY",
+                "detail": f"path escapes project root: {tag_path_str}"}
+    if not resolved.is_file():
+        return {**base, "status": "fail", "kind": "DATA_INTEGRITY",
+                "detail": f"path does not resolve: {tag_path_str}"}
+
+    if locator is None:
+        # Table tag without locator — file-level provenance.
+        return {**base, "status": "ok", "kind": "DATA_INTEGRITY",
+                "detail": "file-level provenance (table tag, no locator)"}
+
+    if locator.startswith("$"):
+        return _evaluate_jsonpath_locator(
+            resolved=resolved,
+            locator=locator,
+            claimed_value=None,
+            base=base,
+            is_table=True,
+            jsonpath_parse=jsonpath_parse,
+        )
+
+    return {**base, "status": "ok", "kind": "DATA_INTEGRITY",
+            "detail": f"locator format not recognised: {locator}"}
+
+
+def _evaluate_jsonpath_locator(
+    *,
+    resolved: Path,
+    locator: str,
+    claimed_value: float | None,
+    base: dict[str, Any],
+    is_table: bool,
+    jsonpath_parse: Any,
+) -> dict[str, Any]:
+    """Evaluate a JSONPath locator against a JSON file."""
+    _MAX_JSON_READ_BYTES = 50 * 1024 * 1024  # 50 MB
+    try:
+        file_size = resolved.stat().st_size
+    except OSError:
+        file_size = 0
+    if file_size > _MAX_JSON_READ_BYTES:
+        return {**base, "status": "warn", "kind": "FORMAT",
+                "detail": f"JSON file too large to evaluate ({file_size} bytes)"}
+    try:
+        data = json_mod.loads(resolved.read_text(encoding="utf-8", errors="replace"))
+    except (json_mod.JSONDecodeError, OSError) as exc:
+        return {**base, "status": "fail", "kind": "DATA_INTEGRITY",
+                "detail": f"cannot parse JSON: {exc}"}
+
+    try:
+        expr = jsonpath_parse(locator)
+    except Exception as exc:
+        return {**base, "status": "fail", "kind": "DATA_INTEGRITY",
+                "detail": f"invalid JSONPath expression: {exc}"}
+
+    matches = expr.find(data)
+    if not matches:
+        return {**base, "status": "fail", "kind": "DATA_INTEGRITY",
+                "detail": f"locator does not resolve: {locator}"}
+
+    actual = matches[0].value
+
+    # For table tags: resolution is enough; non-scalar is expected.
+    if is_table:
+        return {**base, "status": "ok", "kind": "DATA_INTEGRITY",
+                "detail": "table tag locator resolves"}
+
+    # For scalar tags: non-scalar resolution is a format warning.
+    if isinstance(actual, (dict, list)):
+        return {**base, "status": "warn", "kind": "FORMAT",
+                "detail": "locator resolves to non-scalar"}
+
+    # If no claimed value was extracted, we can only confirm resolution.
+    if claimed_value is None:
+        return {**base, "status": "ok", "kind": "DATA_INTEGRITY",
+                "detail": "locator resolves (no numerical claim to compare)"}
+
+    # Compare values.
+    if isinstance(actual, (int, float)):
+        if _values_match(claimed_value, actual):
+            return {**base, "status": "ok", "kind": "DATA_INTEGRITY",
+                    "claimed_value": str(claimed_value),
+                    "actual_value": str(actual),
+                    "detail": "values match within tolerance"}
+        return {**base, "status": "fail", "kind": "DATA_INTEGRITY",
+                "claimed_value": str(claimed_value),
+                "actual_value": str(actual),
+                "detail": f"value mismatch: claimed {claimed_value}, actual {actual}"}
+
+    # Actual is a string — attempt exact match with claimed value string.
+    claimed_str = str(claimed_value)
+    # Also try integer representation if the float is integral.
+    if claimed_value == int(claimed_value):
+        claimed_str_int = str(int(claimed_value))
+        if str(actual) == claimed_str or str(actual) == claimed_str_int:
+            return {**base, "status": "ok", "kind": "DATA_INTEGRITY",
+                    "claimed_value": claimed_str,
+                    "actual_value": str(actual),
+                    "detail": "string values match"}
+    elif str(actual) == claimed_str:
+        return {**base, "status": "ok", "kind": "DATA_INTEGRITY",
+                "claimed_value": claimed_str,
+                "actual_value": str(actual),
+                "detail": "string values match"}
+
+    return {**base, "status": "fail", "kind": "DATA_INTEGRITY",
+            "claimed_value": claimed_str,
+            "actual_value": str(actual),
+            "detail": f"value mismatch: claimed {claimed_value}, actual {actual!r}"}
+
+
+def _evaluate_line_locator(
+    *,
+    resolved: Path,
+    line_num: int,
+    claimed_value: float | None,
+    base: dict[str, Any],
+) -> dict[str, Any]:
+    """Evaluate a line-number locator against a text file."""
+    try:
+        lines = resolved.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError as exc:
+        return {**base, "status": "fail", "kind": "DATA_INTEGRITY",
+                "detail": f"cannot read file: {exc}"}
+
+    if line_num < 1 or line_num > len(lines):
+        return {**base, "status": "fail", "kind": "DATA_INTEGRITY",
+                "detail": f"line {line_num} does not exist (file has {len(lines)} lines)"}
+
+    if claimed_value is None:
+        return {**base, "status": "ok", "kind": "DATA_INTEGRITY",
+                "detail": f"line {line_num} exists (no numerical claim to compare)"}
+
+    # Best-effort: scan for a number on that line.
+    line_text = lines[line_num - 1]
+    num_match = re.search(r"(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)", line_text)
+    if num_match is None:
+        return {**base, "status": "warn", "kind": "FORMAT",
+                "detail": f"line {line_num} exists but no number found to compare"}
+
+    try:
+        actual = float(num_match.group(1))
+    except (ValueError, OverflowError):
+        return {**base, "status": "warn", "kind": "FORMAT",
+                "detail": f"line {line_num} exists but number could not be parsed"}
+
+    if _values_match(claimed_value, actual):
+        return {**base, "status": "ok", "kind": "DATA_INTEGRITY",
+                "claimed_value": str(claimed_value),
+                "actual_value": str(actual),
+                "detail": "values match within tolerance"}
+    return {**base, "status": "fail", "kind": "DATA_INTEGRITY",
+            "claimed_value": str(claimed_value),
+            "actual_value": str(actual),
+            "detail": f"value mismatch: claimed {claimed_value}, actual {actual}"}
+
+
+# ---------------------------------------------------------------------------
 # Click group
 # ---------------------------------------------------------------------------
 
@@ -836,10 +1480,10 @@ def _perform_validation(
     wo_id: str,
     revision_num: int | None = None,
 ) -> tuple[dict[str, Any], Path, str, list[dict[str, Any]], list[str], str, str]:
-    """Execute the full 8-check mechanical validation on a submitted WO.
+    """Execute the full 9-check mechanical validation on a submitted WO.
 
     Resolves the work-order record, enforces ``submitted`` state,
-    runs all 8 mechanical checks, writes the validation record,
+    runs all 9 mechanical checks, writes the validation record,
     performs the state transition, and appends the event log entry.
 
     This is the shared core behind ``validate check`` and
@@ -895,7 +1539,7 @@ def _perform_validation(
     if schema_finding is not None:
         checks.append(schema_finding)
 
-    # Run all 8 checks.
+    # Run all 9 checks.
     checks.extend([
         _check_deliverables_exist(project_root, deliverables, wo_id=wo_id),
         _check_report_headings(project_root, deliverables, wo_id, revision),
@@ -905,6 +1549,7 @@ def _perform_validation(
         _check_relay_coverage(project_root, deliverables, wo_id=wo_id),
         _check_version_policy(project_root),
         _check_findings_integrity(project_root),
+        _check_source_tags_resolve(project_root, deliverables),
     ])
 
     # Determine overall result using the severity-model verdict.
@@ -979,7 +1624,7 @@ def check_cmd(
     as_json: bool,
     quiet: bool,
 ) -> None:
-    """Run 8 mechanical validation checks against a submitted work order."""
+    """Run 9 mechanical validation checks against a submitted work order."""
     emit = emitter(as_json, quiet)
     project = state.project()
 
