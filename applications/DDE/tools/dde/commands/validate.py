@@ -172,6 +172,55 @@ def _find_layer0_artifacts(
 
 
 # ---------------------------------------------------------------------------
+# Cross-WO consumption helpers (#87)
+# ---------------------------------------------------------------------------
+
+
+def _build_consumes_map(
+    deliverables: dict[str, Any],
+) -> dict[str, set[str]]:
+    """Parse the ``consumes`` block into ``{normalized_class: {wo_id, …}}``.
+
+    Returns an empty dict when ``consumes`` is absent or not a list.
+    Malformed entries (wrong type, missing keys) are silently skipped —
+    commit-time validation (Phase 3) is responsible for rejecting them.
+    """
+    consumes = deliverables.get("consumes", [])
+    result: dict[str, set[str]] = {}
+    if isinstance(consumes, list):
+        for entry in consumes:
+            if isinstance(entry, dict):
+                cls = normalize_artifact_class(entry.get("artifact_class", ""))
+                wo = entry.get("from_work_order", "")
+                if cls and wo:
+                    result.setdefault(cls, set()).add(wo)
+    return result
+
+
+def _has_artifacts_from_consumed_wos(
+    art_dir: Path,
+    project_root: Path,
+    artifacts: list[Path],
+    consumed_wo_ids: set[str],
+) -> bool:
+    """Check if any artifact in *art_dir* is attributed to a consumed WO.
+
+    Calls ``_build_sidecar_index`` once per consumed WO (the set is
+    expected to be small — typically 1).  Returns ``True`` as soon as a
+    match is found.
+    """
+    for consumed_wo_id in consumed_wo_ids:
+        consumed_index, _, _ = _build_sidecar_index(
+            art_dir, project_root, wo_id=consumed_wo_id,
+        )
+        for artifact_path in artifacts:
+            actual_sha = sha256_file(artifact_path)
+            if actual_sha in consumed_index:
+                return True
+    return False
+
+
+# ---------------------------------------------------------------------------
 # The 8 mechanical checks
 # ---------------------------------------------------------------------------
 
@@ -203,6 +252,8 @@ def _check_deliverables_exist(
                 missing.append(str(rel_path))
 
     # Layer 0 classes
+    consumes_map = _build_consumes_map(deliverables)
+
     layer_0_classes = deliverables.get("layer_0_classes", [])
     if isinstance(layer_0_classes, list):
         for artifact_class in layer_0_classes:
@@ -228,6 +279,16 @@ def _check_deliverables_exist(
                     has_own_artifact = True
                     break
                 if not has_own_artifact:
+                    # Check consumes before failing (#87): if this class
+                    # is declared in the WO's consumes block, artifacts
+                    # from the consumed WO satisfy the deliverables check.
+                    consumed_wo_ids = consumes_map.get(
+                        normalize_artifact_class(artifact_class), set()
+                    )
+                    if consumed_wo_ids and _has_artifacts_from_consumed_wos(
+                        art_dir, project_root, artifacts, consumed_wo_ids,
+                    ):
+                        continue  # satisfied by consumption
                     missing.append(
                         f"layer_0_classes/{artifact_class} "
                         "(no artifacts attributed to this work order)"

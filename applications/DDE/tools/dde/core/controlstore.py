@@ -160,6 +160,10 @@ def normalize_deliverables(deliverables: dict[str, Any]) -> dict[str, Any]:
             _flatten_entry(e, "path") for e in normalized["layer_1"]
         ]
 
+    # Pass through `consumes` without modification (#87).  The field is
+    # new and optional — don't strip it, don't transform it.
+    # (Validation of its structure is deferred to the command layer.)
+
     return normalized
 
 
