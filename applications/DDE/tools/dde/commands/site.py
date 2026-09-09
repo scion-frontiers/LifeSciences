@@ -770,7 +770,7 @@ def _render_site(
         autoescape=select_autoescape(["html"]),
     )
     from markupsafe import Markup
-    _md = mistune.create_markdown(escape=True, plugins=['table', 'strikethrough'])
+    _md = mistune.create_markdown(escape=True, plugins=['table', 'strikethrough', 'math'])
     env.filters["markdown"] = lambda text: Markup(_md(_dedent_tables(text)))
 
     # Copy viewers into output
@@ -778,6 +778,11 @@ def _render_site(
     if viewers_src.is_dir():
         viewers_dst = output_dir / "viewers"
         shutil.copytree(str(viewers_src), str(viewers_dst))
+
+    # Copy KaTeX assets for math rendering
+    katex_src = template_dir / "katex"
+    if katex_src.is_dir():
+        shutil.copytree(str(katex_src), str(output_dir / "katex"))
 
     # Helper for nav_sections kwargs shared across all pages
     def _nav(active: str | None = None) -> list[dict[str, Any]]:
