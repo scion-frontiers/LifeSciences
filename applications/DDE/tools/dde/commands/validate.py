@@ -104,7 +104,7 @@ def _check_deliverables_schema(
             "kind": "COMPLETENESS",
             "detail": (
                 "deliverables dict contains neither layer_0/layer_0_classes "
-                "nor layer_1 — 5 of 8 checks cannot run and will be skipped. "
+                "nor layer_1 — 5 of 9 checks cannot run and will be skipped. "
                 f"Keys found: {known_keys}"
             ),
         }
@@ -115,9 +115,15 @@ def _confine_path(project_root: Path, path: Path) -> Path | None:
     """Resolve and confine a path to the project root.
 
     Returns the resolved path if it is within the project root,
-    or None if the path escapes.
+    or None if the path escapes or is invalid (embedded null byte,
+    symlink loop, etc.).
     """
-    resolved = (project_root / path).resolve()
+    try:
+        resolved = (project_root / path).resolve()
+    except (ValueError, RuntimeError):
+        # ValueError: embedded null byte in path string.
+        # RuntimeError: symlink loop detected during resolution.
+        return None
     if not resolved.is_relative_to(project_root.resolve()):
         return None
     return resolved
@@ -222,7 +228,7 @@ def _has_artifacts_from_consumed_wos(
 
 
 # ---------------------------------------------------------------------------
-# The 8 mechanical checks
+# The 9 mechanical checks
 # ---------------------------------------------------------------------------
 
 
@@ -901,7 +907,16 @@ def _check_source_tags_resolve(
     claimed numerical value — compares the claimed value against the
     resolved actual value within ±1% tolerance.
     """
-    from jsonpath_ng import parse as jsonpath_parse  # deferred import
+    try:
+        from jsonpath_ng import parse as jsonpath_parse  # deferred import
+    except ImportError:
+        return {
+            "name": "source_tags_resolve",
+            "result": "skip",
+            "status": "skip",
+            "kind": None,
+            "detail": "jsonpath-ng is not installed — cannot evaluate source tags",
+        }
 
     layer_1 = deliverables.get("layer_1", [])
     if not isinstance(layer_1, list) or not layer_1:
@@ -1127,6 +1142,14 @@ def _evaluate_jsonpath_locator(
     jsonpath_parse: Any,
 ) -> dict[str, Any]:
     """Evaluate a JSONPath locator against a JSON file."""
+    _MAX_JSON_READ_BYTES = 50 * 1024 * 1024  # 50 MB
+    try:
+        file_size = resolved.stat().st_size
+    except OSError:
+        file_size = 0
+    if file_size > _MAX_JSON_READ_BYTES:
+        return {**base, "status": "warn", "kind": "FORMAT",
+                "detail": f"JSON file too large to evaluate ({file_size} bytes)"}
     try:
         data = json_mod.loads(resolved.read_text(encoding="utf-8", errors="replace"))
     except (json_mod.JSONDecodeError, OSError) as exc:

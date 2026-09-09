@@ -428,6 +428,60 @@ def test_mixed_ok_and_fail() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Line-locator tests (R-1 from Phase 2 review)
+# ---------------------------------------------------------------------------
+
+def test_line_locator_match() -> None:
+    """Line-number locator pointing to a line with a matching value → ok."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        data_file = root / "raw" / "data.csv"
+        _write(data_file, "header\n42.5\nfooter\n")
+        finding = root / "findings" / "report.md"
+        _write(finding, "Value is 42.5 {source: raw/data.csv :2}\n")
+        deliverables = _make_deliverables(["findings/report.md"])
+        result = _check_source_tags_resolve(root, deliverables)
+        assert result["status"] == "ok", f"expected ok, got {result}"
+        sf = result["sub_findings"][0]
+        assert sf["status"] == "ok"
+        assert sf["kind"] == "DATA_INTEGRITY"
+        assert "match" in sf["detail"]
+
+
+def test_line_locator_out_of_range() -> None:
+    """Line-number locator exceeding file length → fail/DATA_INTEGRITY."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        data_file = root / "raw" / "data.csv"
+        _write(data_file, "line1\nline2\nline3\n")
+        finding = root / "findings" / "report.md"
+        _write(finding, "Value is 99 {source: raw/data.csv :999}\n")
+        deliverables = _make_deliverables(["findings/report.md"])
+        result = _check_source_tags_resolve(root, deliverables)
+        assert result["result"] == "fail", f"expected fail, got {result}"
+        sf = result["sub_findings"][0]
+        assert sf["status"] == "fail"
+        assert sf["kind"] == "DATA_INTEGRITY"
+        assert "does not exist" in sf["detail"]
+
+
+def test_line_locator_no_number() -> None:
+    """Line-number locator pointing to a line with no number → warn/FORMAT."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        data_file = root / "raw" / "data.csv"
+        _write(data_file, "header\njust text here\nfooter\n")
+        finding = root / "findings" / "report.md"
+        _write(finding, "Value is 5 {source: raw/data.csv :2}\n")
+        deliverables = _make_deliverables(["findings/report.md"])
+        result = _check_source_tags_resolve(root, deliverables)
+        sf = result["sub_findings"][0]
+        assert sf["status"] == "warn"
+        assert sf["kind"] == "FORMAT"
+        assert "no number found" in sf["detail"]
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
@@ -457,6 +511,9 @@ def main() -> None:
         ("test_source_table_unresolvable_path", test_source_table_unresolvable_path),
         ("test_mixed_ok_and_warn", test_mixed_ok_and_warn),
         ("test_mixed_ok_and_fail", test_mixed_ok_and_fail),
+        ("test_line_locator_match", test_line_locator_match),
+        ("test_line_locator_out_of_range", test_line_locator_out_of_range),
+        ("test_line_locator_no_number", test_line_locator_no_number),
     ]
     passed = 0
     failed = 0
