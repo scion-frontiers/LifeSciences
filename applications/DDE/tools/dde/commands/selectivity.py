@@ -529,8 +529,24 @@ def analyze(
         "targets": per_target,
     }
 
+    # Derive record type from schema for consistent filename pattern
+    record_type = provenance.record_type_from_schema(record.get("schema", ""))
+    stem = path.name.replace(".selectivity.json", "")
+    new_analysis_name = f"{stem}.{record_type}.analysis.json"
+
+    # Backward compatibility: warn if an old-format analysis file exists
+    old_analysis_name = path.name.replace(".selectivity.json", ".analysis.json")
+    if old_analysis_name != new_analysis_name:
+        old_candidate = path.parent / old_analysis_name
+        if old_candidate.exists():
+            from ..core.output import warn
+            warn(
+                f"old-format analysis exists: {old_analysis_name}; "
+                f"new analysis uses: {new_analysis_name}"
+            )
+
     analysis_path = beside_or_out(
-        state, path, path.name.replace(".selectivity.json", ".analysis.json"), out
+        state, path, new_analysis_name, out
     )
     provenance.write_analysis(
         analysis_path,

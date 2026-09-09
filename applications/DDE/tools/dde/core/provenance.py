@@ -58,12 +58,19 @@ _VOLATILE_ANALYSIS_FIELDS = ("timestamp", "written_by")
 #: argument has to be threaded through every call site, and the call
 #: sites are what the guard exists to constrain.
 _overwrite_allowed = False
+_overwrite_cross_wo_allowed = False
 
 
 def allow_overwrite(allowed: bool) -> None:
     """Permit this invocation to replace a differing analysis record."""
     global _overwrite_allowed
     _overwrite_allowed = allowed
+
+
+def allow_overwrite_cross_wo(allowed: bool) -> None:
+    """Permit this invocation to overwrite an analysis from a different work order."""
+    global _overwrite_cross_wo_allowed
+    _overwrite_cross_wo_allowed = allowed
 
 
 def _writer() -> str | None:
@@ -759,6 +766,12 @@ RELAY_CODES: dict[str, str] = {
         "excluded entirely. Absence from the ranking is not elimination "
         "by it."
     ),
+    "provenance.cross_wo_overwrite": (
+        "State that this analysis record was overwritten from a different "
+        "work order. The prior work order's evidence chain is broken at "
+        "this record. Name both work orders and do not cite this record "
+        "as evidence belonging to the original work order."
+    ),
 }
 
 
@@ -770,6 +783,83 @@ def relay(code: str, message: str) -> dict[str, str]:
             "so skills and reviewers can enumerate it"
         )
     return {"code": code, "message": message}
+
+
+def record_type_from_schema(schema: str) -> str:
+    """Extract the record type from a DDE schema tag.
+
+    Schema format: ``dde.{record_type}.v{version}``
+
+    Examples::
+
+        dde.tox-genotox-assessment.v1 → tox-genotox-assessment
+        dde.pk-nca.v1 → pk-nca
+        dde.tox-margins.v1 → tox-margins
+
+    Falls back to the full schema string if the format is unrecognised.
+    """
+    parts = schema.split(".")
+    if len(parts) >= 3 and parts[0] == "dde" and parts[-1].startswith("v"):
+        return ".".join(parts[1:-1])
+    return schema
+
+
+def record_type_from_filename(filename: str) -> str | None:
+    """Extract the record type from a DDE artifact filename.
+
+    Filename format: ``{stem}.{record_type}.json``
+
+    Returns the record type, or None if the format is unrecognised.
+    """
+    # Strip .json suffix, then the last remaining dotted segment is the record type
+    if not filename.endswith(".json"):
+        return None
+    base = filename[:-5]  # strip .json
+    parts = base.rsplit(".", 1)
+    if len(parts) == 2:
+        return parts[1]
+    return None
+
+
+def _check_cross_wo_overwrite(path: Path) -> dict[str, str] | None:
+    """Check cross-work-order overwrite protection.
+
+    Returns a relay dict if cross-WO overwrite is proceeding (allowed),
+    None if no cross-WO issue exists, or raises Refusal if cross-WO
+    overwrite is not explicitly allowed.
+    """
+    if not _overwrite_allowed or not path.exists():
+        return None
+
+    try:
+        existing = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(existing, dict):
+            return None
+        existing_wo = existing.get("work_order_id")
+    except (OSError, ValueError):
+        return None
+
+    current_wo = _work_order()
+    if not existing_wo or not current_wo or existing_wo == current_wo:
+        return None
+
+    if not _overwrite_cross_wo_allowed:
+        raise Refusal(
+            f"{path.name} is attributed to work order {existing_wo} "
+            f"(current: {current_wo}). "
+            "Use --overwrite-cross-wo to confirm overwriting another "
+            "work order's evidence.",
+            remedy="Pass --overwrite-cross-wo to explicitly allow overwriting "
+            "another work order's analysis, or use --out to write to a "
+            "different location.",
+        )
+
+    return relay(
+        "provenance.cross_wo_overwrite",
+        f"Analysis record {path.name} was overwritten from work order "
+        f"{existing_wo} to {current_wo}. The prior work order's evidence "
+        "chain is broken.",
+    )
 
 
 def sha256_file(path: Path) -> str:
@@ -938,6 +1028,14 @@ def write_analysis(
         record["source_sha256"] = source_digest
 
     path = Path(path)
+
+    # Cross-WO protection: refuse overwrite across work orders unless
+    # --overwrite-cross-wo is explicitly passed.  When allowed, fire a
+    # relay so the evidence chain records the break.
+    cross_wo_relay = _check_cross_wo_overwrite(path)
+    if cross_wo_relay:
+        record.setdefault("mandatory_relays", []).append(cross_wo_relay)
+
     if _may_write(path, record, suppress_warnings=suppress_warnings):
         path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     return path

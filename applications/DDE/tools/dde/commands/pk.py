@@ -1547,6 +1547,21 @@ def analyze_cmd(
     analysis_type, file_suffix, meta_suffix = _SCHEMA_MAP[schema]
     stem = source.name.replace(file_suffix, "")
 
+    # --- Derive record type from schema for unique output filename ---
+    record_type = provenance.record_type_from_schema(schema)
+    new_analysis_name = f"{stem}.{record_type}.analysis.json"
+
+    # Backward compatibility: warn if an old-format analysis file exists
+    old_analysis_name = f"{stem}.pk.analysis.json"
+    if old_analysis_name != new_analysis_name:
+        old_candidate = (source.parent / old_analysis_name)
+        if old_candidate.exists():
+            from ..core.output import warn
+            warn(
+                f"old-format analysis exists: {old_analysis_name}; "
+                f"new analysis uses: {new_analysis_name}"
+            )
+
     # --- Load thresholds ---
     thresholds = load_thresholds(state, "pk-parameters")
 
@@ -1584,7 +1599,7 @@ def analyze_cmd(
 
     # --- Write analysis ---
     analysis_path = beside_or_out(
-        state, source, f"{stem}.pk.analysis.json", out
+        state, source, new_analysis_name, out
     )
 
     provenance.write_analysis(

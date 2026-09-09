@@ -77,6 +77,13 @@ OVERWRITE_OPTION = click.Option(
     "Without it, a conflicting write is refused (exit 9).",
 )
 
+OVERWRITE_CROSS_WO_OPTION = click.Option(
+    ["--overwrite-cross-wo"],
+    is_flag=True,
+    help="Allow overwriting an analysis attributed to a different work order. "
+    "Without it, cross-work-order overwrite is refused even with --overwrite.",
+)
+
 
 def enforce_phase_two(group: click.Group) -> None:
     """Apply the phase-2 contract to every `analyze` command in the tree.
@@ -115,11 +122,16 @@ def enforce_phase_two(group: click.Group) -> None:
 
         if not any(p.name == "overwrite" for p in command.params):
             command.params.append(OVERWRITE_OPTION)
+        if not any(p.name == "overwrite_cross_wo" for p in command.params):
+            command.params.append(OVERWRITE_CROSS_WO_OPTION)
 
         def guarded(*args: Any, _original=original, _group=group.name, _name=name, **kwargs: Any):
             # Injected by this wrapper, so consumed by it: the wrapped
             # callback never declared the parameter.
             provenance.allow_overwrite(bool(kwargs.pop("overwrite", False)))
+            provenance.allow_overwrite_cross_wo(
+                bool(kwargs.pop("overwrite_cross_wo", False))
+            )
             http.forbid_network(
                 f"`{_group} {_name}` is phase 2: it reads what phase 1 wrote "
                 "and never queries an endpoint"
