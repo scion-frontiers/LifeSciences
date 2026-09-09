@@ -53,6 +53,17 @@ from ..core.structures import detect_structure_format
 
 ARTIFACT_CLASS = "docking"
 
+#: Standard amino acid three-letter codes recognised by Meeko/ProDy.
+#: Used by ``_strip_non_protein`` to filter input structures.
+_STANDARD_AMINO_ACIDS: frozenset[str] = frozenset({
+    "ALA", "ARG", "ASN", "ASP", "CYS",
+    "GLN", "GLU", "GLY", "HIS", "ILE",
+    "LEU", "LYS", "MET", "PHE", "PRO",
+    "SER", "THR", "TRP", "TYR", "VAL",
+    # Common variants that ProDy / Meeko treat as protein
+    "MSE",  # selenomethionine
+})
+
 
 # ---------------------------------------------------------------------------
 # Lazy dependency checks
@@ -233,6 +244,127 @@ def _compute_grid_box(
     return center, size
 
 
+def _strip_non_protein(
+    structure_path: Path,
+    output_path: Path,
+) -> dict[str, Any]:
+    """Remove non-protein chains and heteroatoms from a structure file.
+
+    Supports both PDB and mmCIF formats.  Keeps only ``ATOM`` records
+    whose residue name is a standard amino acid (see
+    ``_STANDARD_AMINO_ACIDS``).  For PDB files, ``TER`` and ``END``
+    records are preserved.  For mmCIF files, header lines, loop
+    definitions, and protein ``ATOM`` records are preserved.
+
+    Returns a dict with provenance information::
+
+        {
+            "protein_only": True,
+            "removed_chains": ["B"],
+            "removed_residue_types": ["LIG", "HOH"],
+            "removed_atom_count": 42,
+        }
+    """
+    text = structure_path.read_text(encoding="utf-8", errors="replace")
+    fmt = structure_path.suffix.lower()
+
+    kept_lines: list[str] = []
+    removed_chains: set[str] = set()
+    removed_residue_types: set[str] = set()
+    removed_atom_count = 0
+
+    if fmt in (".cif", ".mmcif"):
+        # mmCIF: keep everything except non-protein _atom_site rows.
+        # Identify the column indices for group_PDB, label_comp_id,
+        # and label_asym_id from the _atom_site loop header.
+        lines = text.splitlines(keepends=True)
+        columns: list[str] = []
+        in_atom_site = False
+        data_start = 0
+
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped.startswith("_atom_site."):
+                in_atom_site = True
+                columns.append(stripped.split(".")[1])
+            elif in_atom_site:
+                data_start = i
+                break
+
+        col_comp = columns.index("label_comp_id") if "label_comp_id" in columns else None
+        col_chain = columns.index("label_asym_id") if "label_asym_id" in columns else None
+        col_group = columns.index("group_PDB") if "group_PDB" in columns else None
+
+        # Copy lines up to the data block unchanged
+        kept_lines.extend(lines[:data_start])
+
+        for line in lines[data_start:]:
+            if not line.startswith(("ATOM", "HETATM")):
+                kept_lines.append(line)
+                continue
+
+            fields = line.split()
+            is_protein = True
+
+            if col_comp is not None:
+                try:
+                    res_name = fields[col_comp]
+                except IndexError:
+                    res_name = ""
+                if res_name not in _STANDARD_AMINO_ACIDS:
+                    is_protein = False
+
+            if col_group is not None:
+                try:
+                    group = fields[col_group]
+                except IndexError:
+                    group = ""
+                if group == "HETATM":
+                    is_protein = False
+
+            if is_protein:
+                kept_lines.append(line)
+            else:
+                removed_atom_count += 1
+                if col_chain is not None:
+                    try:
+                        removed_chains.add(fields[col_chain])
+                    except IndexError:
+                        pass
+                if col_comp is not None:
+                    try:
+                        removed_residue_types.add(fields[col_comp])
+                    except IndexError:
+                        pass
+    else:
+        # PDB format: fixed-column layout.
+        for line in text.splitlines(keepends=True):
+            if not line.startswith(("ATOM  ", "HETATM")):
+                kept_lines.append(line)
+                continue
+
+            res_name = line[17:20].strip()
+            chain = line[21:22].strip()
+
+            if line.startswith("HETATM") or res_name not in _STANDARD_AMINO_ACIDS:
+                removed_atom_count += 1
+                if chain:
+                    removed_chains.add(chain)
+                if res_name:
+                    removed_residue_types.add(res_name)
+            else:
+                kept_lines.append(line)
+
+    output_path.write_text("".join(kept_lines), encoding="utf-8")
+
+    return {
+        "protein_only": True,
+        "removed_chains": sorted(removed_chains),
+        "removed_residue_types": sorted(removed_residue_types),
+        "removed_atom_count": removed_atom_count,
+    }
+
+
 def _convert_receptor_to_pdbqt(structure_path: Path, output_path: Path) -> None:
     """Convert a receptor structure to PDBQT format using mk_prepare_receptor.py.
 
@@ -254,11 +386,26 @@ def _convert_receptor_to_pdbqt(structure_path: Path, output_path: Path) -> None:
     )
 
     if completed.returncode != 0:
+        raw_detail = (completed.stderr or completed.stdout or "no output").strip()[:500]
+        # Detect non-protein residue failures and suggest --protein-only.
+        _non_protein_hints = (
+            "unknown residue", "unrecognized residue", "non-standard residue",
+            "UNK", "UNL",
+        )
+        if any(hint.lower() in raw_detail.lower() for hint in _non_protein_hints):
+            remedy = (
+                "structure contains non-protein chains; pass --protein-only "
+                "to strip them before preparation"
+            )
+        else:
+            remedy = (
+                "check that the file is a valid PDB or mmCIF structure "
+                "with protein atoms"
+            )
         raise ArtifactError(
             f"mk_prepare_receptor.py failed for {structure_path.name}",
-            detail=(completed.stderr or completed.stdout or "no output").strip()[:500],
-            remedy="check that the file is a valid PDB or mmCIF structure "
-            "with protein atoms",
+            detail=raw_detail,
+            remedy=remedy,
         )
 
     if not output_path.is_file() or output_path.stat().st_size == 0:
@@ -607,6 +754,13 @@ def docking() -> None:
     help="Which pocket from the record to use for grid box derivation "
     "(by fpocket rank; default: rank 1, the top-scoring pocket).",
 )
+@click.option(
+    "--protein-only/--keep-all",
+    default=False,
+    show_default=True,
+    help="Strip non-protein chains and heteroatoms before receptor preparation. "
+    "Records removed chains in the sidecar. Recommended for AF3 complex outputs.",
+)
 @out_option
 @output_options
 @pass_state
@@ -615,6 +769,7 @@ def prepare_cmd(
     structure: str,
     pocket_record: str,
     pocket_rank: int,
+    protein_only: bool,
     out: str | None,
     as_json: bool,
     quiet: bool,
@@ -693,9 +848,23 @@ def prepare_cmd(
     padding = 10.0
     center, size = _compute_grid_box(pocket_atm_path, padding)
 
+    # --- optionally strip non-protein content ---
+    strip_info: dict[str, Any] | None = None
+    effective_structure = structure_path
+    _strip_tmpdir: str | None = None
+    if protein_only:
+        _strip_tmpdir = tempfile.mkdtemp(prefix="dde-strip-")
+        stripped_path = Path(_strip_tmpdir) / structure_path.name
+        strip_info = _strip_non_protein(structure_path, stripped_path)
+        effective_structure = stripped_path
+
     # --- convert receptor to PDBQT via mk_prepare_receptor.py ---
     receptor_path = target_dir / f"{stem}.receptor.pdbqt"
-    _convert_receptor_to_pdbqt(structure_path, receptor_path)
+    try:
+        _convert_receptor_to_pdbqt(effective_structure, receptor_path)
+    finally:
+        if _strip_tmpdir:
+            shutil.rmtree(_strip_tmpdir, ignore_errors=True)
 
     gridbox = {
         "center": center,
@@ -712,21 +881,30 @@ def prepare_cmd(
     # --- provenance sidecar ---
     # DISTINCT filename from what `run` will use ({stem}.docking.meta.json)
     # to avoid the compound.py round-1 sidecar collision bug.
+    prepare_params: dict[str, Any] = {
+        "structure": structure_path.name,
+        "pocket_record": pocket_record_path.name,
+        "pocket_rank": pocket_rank,
+    }
+    if protein_only:
+        prepare_params["protein_only"] = True
     sidecar = provenance.Sidecar(
         tool="docking",
         subcommand="prepare",
         endpoint=None,
-        parameters={
-            "structure": structure_path.name,
-            "pocket_record": pocket_record_path.name,
-            "pocket_rank": pocket_rank,
-        },
+        parameters=prepare_params,
     )
     sidecar.note("structure_sha256", provenance.sha256_file(structure_path))
     sidecar.note("pocket_record_path", str(pocket_record_path))
     sidecar.note("pocket_rank", pocket_rank)
     sidecar.note("pocket_druggability_score", pocket_entry.get("druggability_score"))
     sidecar.note("grid_box", gridbox)
+
+    if strip_info is not None:
+        sidecar.note("protein_only", strip_info["protein_only"])
+        sidecar.note("removed_chains", strip_info["removed_chains"])
+        sidecar.note("removed_residue_types", strip_info["removed_residue_types"])
+        sidecar.note("removed_atom_count", strip_info["removed_atom_count"])
 
     meeko_ver = _meeko_version()
     if meeko_ver:
