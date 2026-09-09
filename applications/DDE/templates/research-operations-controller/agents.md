@@ -320,7 +320,9 @@ brief into a message. Every brief includes:
 - the context snapshot
 - exact deliverable paths
 - acceptance criteria and alert policy
-- who to contact, and instructions to terminate on completion
+- who to contact, and instructions to signal `blocked` after submission and await
+  the controller's validation response before writing the retrospective or
+  signaling `task_completed`
 
 Front-load the constraints. A brief whose critical limits are in the last paragraph
 will have them missed.
@@ -499,12 +501,71 @@ sciontool status blocked "Waiting for <run-name>-validator to complete"
 
 The validator returns **PASS** or **FAIL** with a validation record.
 
-- **PASS**: the finding is mechanically sound. Forward it to the science lead for
-  scientific review and acceptance.
-- **FAIL**: the validator lists every failure. Return the finding to the specialist
-  for correction, citing the specific failures. Do not forward a failed finding to
-  the science lead. A validation failure is a contract violation, not a scientific
-  disagreement — the specialist must fix it before the work can be considered.
+**PASS:**
+
+1. Message the specialist: `"APPROVED WO-<id> rev <n>: mechanical validation
+   passed. Write your retrospective and signal task_completed."` The specialist
+   is in `blocked` state awaiting this message.
+2. Forward the finding to the science lead for scientific review and acceptance.
+
+**FAIL — classify the defects before acting:**
+
+Classify every failure from the validator's checklist:
+
+| Validator check | Defect class |
+|---|---|
+| 1. Deliverables exist | Mechanical |
+| 2. Required headings | Mechanical |
+| 3. Path resolution | Mechanical |
+| 4. Provenance sidecars (checksum) | Data-integrity |
+| 5. Analysis records (source/threshold) | Data-integrity |
+| 6. Relay codes addressed | Mechanical |
+| 7. Tool/environment versions | Mechanical |
+| 8. Layer boundary | Data-integrity |
+| Source tag — file missing | Data-integrity |
+| Source tag — value mismatch | Data-integrity |
+| Source tag — malformed format | Mechanical |
+
+**If ANY data-integrity defect is present** (regardless of co-occurring mechanical
+defects):
+
+1. Message the specialist: `"APPROVED WO-<id> rev <n>: validation found
+   data-integrity issues that cannot be corrected in-place. Write your
+   retrospective and signal task_completed."`
+2. Do **not** forward the finding to the science lead.
+3. Record the data-integrity failure in the run record.
+4. Log a `validation_failed` event to `events.ndjson` with the defect list and
+   `defect_class: "data_integrity"`.
+5. Escalate to the science lead: `"WO-<id> rev <n> failed mechanical validation
+   with data-integrity defects: [list]. The finding was not forwarded. A new
+   revision may be required."`
+
+**If ALL defects are mechanical** (and the correction cycle count < 2):
+
+1. Message the specialist: `"CORRECTION REQUIRED WO-<id> rev <n>:` followed by
+   a numbered list of every mechanical defect from the validator's report.
+   End with: `"Fix these defects and re-submit."`
+2. Log a `correction_returned` event to `events.ndjson`:
+   ```json
+   {"event_type":"correction_returned","work_order_id":"<id>",
+    "revision":<n>,"run_id":"<run>","correction_cycle":<1|2>,
+    "defects":[...]}
+   ```
+3. Signal blocked and wait for the specialist's correction message.
+4. When the specialist re-submits: dispatch a **new** finding-validator for
+   re-validation. Follow the same PASS/FAIL protocol from the top.
+5. When the specialist messages "cannot fix": log a `correction_escalated`
+   event and classify the underlying cause per §7.
+
+**If ALL defects are mechanical but correction cycles exhausted** (count >= 2):
+
+1. Message the specialist: `"APPROVED WO-<id> rev <n>: two correction cycles
+   exhausted. Write your retrospective and signal task_completed."`
+2. Do **not** forward the finding to the science lead.
+3. Log a `correction_exhausted` event to `events.ndjson`.
+4. Escalate to the science lead: `"WO-<id> rev <n> failed mechanical validation
+   after 2 correction cycles. Remaining defects: [list]. A new revision or
+   approach may be required."`
 
 ### What the validator checks
 
@@ -606,8 +667,11 @@ user request):
   needed to diagnose a bad one.
 - **Pre-delete checklist.** Before deleting any specialist agent, verify:
   1. Deliverables have been validated (content, not just filenames)
-  2. Retrospective exists at `/scion-volumes/scratchpad/projects/<program>/retrospectives/<agent-name>-retro.md`
-  Do not delete an agent until both are confirmed.
+  2. The specialist has received the controller's validation response (APPROVED or
+     data-integrity escalation or correction-cycles-exhausted)
+  3. The specialist has signaled `task_completed` (not merely `blocked`)
+  4. Retrospective exists at the expected path
+  Do not delete an agent until all four are confirmed.
 
 ---
 

@@ -222,6 +222,9 @@ proposed -> committed -> queued -> in_progress -> submitted
                                                   |-> validation_failed
                                                   `-> mechanically_validated
 
+submitted -> validation_failed (mechanical) -> submitted  [correction, max 2]
+submitted -> validation_failed (data_integrity) -> [escalate to science lead]
+
 mechanically_validated -> scientifically_accepted
                        |-> under_scientific_review -> scientifically_accepted
                        |                            |-> revision_requested
@@ -231,6 +234,12 @@ mechanically_validated -> scientifically_accepted
 
 queued or in_progress -> blocked | cancelled
 ```
+
+The `submitted` state is entered when the specialist messages the controller with
+a completion notification. While in `submitted`, the specialist agent is alive in
+`blocked` state, awaiting mechanical validation. A mechanical validation failure on
+a mechanical-only defect may loop back to `submitted` (via in-place correction by
+the specialist) up to 2 times without creating a new work-order revision.
 
 `scientifically_accepted` is the only state that licenses incorporation into Layer
 2. A mechanically valid finding can still be scientifically weak or wrong.
@@ -252,6 +261,11 @@ queued -> starting -> running -> succeeded | failed | blocked | cancelled
 mean the artifact contract passed or the science was accepted. Resuming a blocked
 task or retrying a failed run creates a new run record under the same work-order
 revision. Changing the scientific task requires a new committed revision.
+
+A mechanical correction within a run is an operational annotation, not a new run.
+The run record may carry a `correction_count` field; individual correction events
+(`correction_returned`, `correction_validated`, `correction_escalated`,
+`correction_exhausted`) are appended to `events.ndjson` with the run ID.
 
 ### 5.3 Normal flow
 
@@ -305,6 +319,17 @@ Before scientific review, the controller verifies:
 - no tool-written byte appears under `findings/`
 
 Mechanical validation produces a validation record, not a scientific verdict.
+
+When validation fails, the controller classifies each defect as **mechanical**
+(deliverable existence, heading form, path resolution, relay codes, tool versions,
+source tag format) or **data-integrity** (provenance checksum mismatch, missing
+analysis source, source tag value mismatch, layer boundary violation). If all
+defects are mechanical, the controller returns them to the still-alive specialist
+for in-place correction (up to 2 correction cycles). If any data-integrity defect
+is present, the controller escalates to the science lead for a new revision
+decision. Correction cycles are recorded as `correction_returned` and
+`correction_validated` events in `events.ndjson`; they do not create new work-order
+revisions or new run records.
 
 ### 6.2 Scientific acceptance
 
