@@ -1199,8 +1199,133 @@ def genotox_cmd(
 
 
 # ---------------------------------------------------------------------------
-# tox margins
+# tox margins — dose context and same-study detection (#137)
 # ---------------------------------------------------------------------------
+
+VALID_DOSE_CONTEXTS = {
+    "animal_limit_dose",
+    "animal_therapeutic",
+    "human_projected",
+    "human_observed",
+}
+
+
+def _detect_same_study(
+    tox_doc: dict[str, Any],
+    pk_doc: dict[str, Any],
+    tox_path: Path,
+    pk_path: Path,
+) -> str | None:
+    """Detect when NOAEL and PK exposures derive from the same study.
+
+    Returns a human-readable reason string if same-study is detected,
+    or ``None`` if the two artifacts appear to come from different studies.
+
+    Detection criteria (any one is sufficient):
+      1. Same ``study_id`` field in both artifacts.
+      2. Same source file (tox and PK path names share a study stem).
+      3. Same species + route + dose combination.
+    """
+    tox_study_id = tox_doc.get("study_id", "")
+    pk_study_id = pk_doc.get("study_id", "")
+
+    # Criterion 1: matching study_id
+    if tox_study_id and pk_study_id and tox_study_id == pk_study_id:
+        return f"study_id={tox_study_id!r}"
+
+    # Criterion 2: matching file stem (same source file)
+    if tox_path.stem and pk_path.stem and tox_path.stem == pk_path.stem:
+        return f"file={tox_path.name!r}"
+
+    # Criterion 3: same species + route + dose
+    tox_species = tox_doc.get("species", "").lower()
+    pk_species = pk_doc.get("species", "").lower()
+    tox_route = tox_doc.get("route", "").lower()
+    pk_route = pk_doc.get("route", "").lower()
+    tox_noael = tox_doc.get("noael_mg_kg")
+    pk_dose = pk_doc.get("dose_mg_kg")
+    if pk_dose is None:
+        # PK NCA artifacts store dose at top level via study;
+        # fall back to parameters if present
+        pk_params = pk_doc.get("parameters", {})
+        pk_dose = pk_params.get("dose_mg_kg")
+
+    if (
+        tox_species
+        and pk_species
+        and tox_species == pk_species
+        and tox_route
+        and pk_route
+        and tox_route == pk_route
+        and tox_noael is not None
+        and pk_dose is not None
+        and float(tox_noael) == float(pk_dose)
+    ):
+        return (
+            f"species={tox_species}, route={tox_route}, "
+            f"dose={tox_noael} mg/kg"
+        )
+
+    return None
+
+
+def _compute_ti_values(
+    noael_exposure: dict[str, Any],
+    pk_cmax: float | None,
+    pk_cmax_units: str | None,
+    pk_auc: float | None,
+    pk_auc_units: str | None,
+    margin_notes: list[str],
+) -> dict[str, float]:
+    """Compute TI values from NOAEL exposure vs PK exposure.
+
+    Returns a dict of computed TI values (may be empty).
+    Appends diagnostic messages to *margin_notes* for unit mismatches.
+    """
+    ti_values: dict[str, float] = {}
+
+    # Cmax-based TI
+    noael_cmax = noael_exposure.get("cmax")
+    noael_cmax_units = noael_exposure.get("cmax_units")
+    if noael_cmax is not None and pk_cmax is not None:
+        if noael_cmax_units != pk_cmax_units:
+            margin_notes.append(
+                f"Cmax-based TI not computed: unit mismatch between "
+                f"tox NOAEL Cmax ({noael_cmax_units}) and "
+                f"PK Cmax ({pk_cmax_units})"
+            )
+        elif pk_cmax <= 0:
+            raise SchemaError(
+                f"PK Cmax must be positive, got {pk_cmax}",
+                remedy="ensure the PK NCA artifact was produced by `dde pk nca`",
+            )
+        else:
+            ti_values["ti_cmax"] = round(noael_cmax / pk_cmax, 4)
+
+    # AUC-based TI
+    noael_auc = noael_exposure.get("auc")
+    noael_auc_units = noael_exposure.get("auc_units")
+    if noael_auc is not None and pk_auc is not None:
+        if (
+            noael_auc_units is None
+            or pk_auc_units is None
+            or _normalize_auc_units(noael_auc_units)
+            != _normalize_auc_units(pk_auc_units)
+        ):
+            margin_notes.append(
+                f"AUC-based TI not computed: unit mismatch between "
+                f"tox NOAEL AUC ({noael_auc_units}) and "
+                f"PK AUC ({pk_auc_units})"
+            )
+        elif pk_auc <= 0:
+            raise SchemaError(
+                f"PK AUC must be positive, got {pk_auc}",
+                remedy="ensure the PK NCA artifact was produced by `dde pk nca`",
+            )
+        else:
+            ti_values["ti_auc"] = round(noael_auc / pk_auc, 4)
+
+    return ti_values
 
 
 @tox.command("margins")
@@ -1213,6 +1338,28 @@ def genotox_cmd(
     default=None,
     help="Safety-pharm artifact for hERG margin calculation.",
 )
+@click.option(
+    "--clinical-pk",
+    "clinical_pk_file",
+    type=click.Path(exists=True),
+    default=None,
+    help=(
+        "PK NCA artifact representing projected clinical (human) exposure. "
+        "When provided, computes both an animal self-comparison margin and "
+        "a clinical therapeutic index; ICH M3(R2) thresholds apply only to "
+        "the clinical TI."
+    ),
+)
+@click.option(
+    "--dose-context",
+    "dose_context",
+    type=click.Choice(sorted(VALID_DOSE_CONTEXTS)),
+    default=None,
+    help=(
+        "Label what the primary PK input represents. Overridden by a "
+        "dose_context field in the PK artifact when present."
+    ),
+)
 @out_option
 @output_options
 @pass_state
@@ -1221,6 +1368,8 @@ def margins_cmd(
     tox_file: str,
     pk_file: str,
     herg_file: str | None,
+    clinical_pk_file: str | None,
+    dose_context: str | None,
     out: str | None,
     as_json: bool,
     quiet: bool,
@@ -1231,6 +1380,19 @@ def margins_cmd(
     a ``.pk-nca.json`` artifact (from ``pk nca``), computes safety margins
     (therapeutic index from NOAEL exposure vs PK exposure), and records
     cross-artifact provenance.
+
+    When ``--clinical-pk`` is provided, computes two margins:
+
+    \b
+      animal_margin   NOAEL_exp / animal_PK_exp (self-comparison)
+      clinical_ti     NOAEL_exp / clinical_PK_exp (therapeutic index)
+
+    ICH M3(R2) pass/fail thresholds apply only to ``clinical_ti``.
+
+    When both NOAEL and PK exposures come from the same study and no
+    ``--clinical-pk`` is provided, the verdict is ``indeterminate``
+    rather than ``flagged``, because the comparison is meaningless
+    without a clinical reference exposure.
 
     When ``--herg`` is provided with a safety-pharm artifact, also computes
     the hERG safety margin (IC50 / therapeutic Cmax).
@@ -1295,63 +1457,117 @@ def margins_cmd(
     pk_auc = pk_auc_0_inf if pk_auc_0_inf is not None else pk_auc_0_t
     pk_auc_label = "auc_0_inf" if pk_auc_0_inf is not None else "auc_0_t"
 
-    # --- 3/4. Compute TI margins ---
+    # --- 2b. Resolve dose context (Item 4 → Item 1 cascade) ---
+    # Priority: PK artifact field > CLI option > None
+    resolved_dose_context = pk_doc.get("dose_context") or dose_context
+
+    # --- 2c. Read clinical PK artifact (optional, Item 1) ---
+    clinical_pk_doc: dict[str, Any] | None = None
+    clinical_pk_path: Path | None = None
+    if clinical_pk_file is not None:
+        clinical_pk_path = resolve_artifact(
+            state, clinical_pk_file, "clinical PK NCA artifact"
+        )
+        clinical_pk_doc = provenance.read_json(
+            clinical_pk_path, "clinical PK NCA artifact"
+        )
+        if not isinstance(clinical_pk_doc, dict):
+            raise SchemaError(
+                "clinical PK NCA artifact must be a JSON object"
+            )
+        if clinical_pk_doc.get("schema") != "dde.pk-nca.v1":
+            raise Refusal(
+                "unsupported or missing schema tag on clinical PK file",
+                detail=(
+                    f"expected 'dde.pk-nca.v1', "
+                    f"got {clinical_pk_doc.get('schema')!r}"
+                ),
+                remedy="use a file produced by `dde pk nca`",
+            )
+
+    # --- 3. Same-study detection (Item 2) ---
+    same_study_reason = _detect_same_study(
+        tox_doc, pk_doc, tox_path, pk_path
+    )
+    is_indeterminate = False
+    indeterminate_reason: str | None = None
+
+    if same_study_reason and clinical_pk_doc is None:
+        # Same study detected and no clinical reference provided
+        is_indeterminate = True
+        indeterminate_reason = (
+            f"Both NOAEL and PK exposures appear to derive from the same "
+            f"study ({same_study_reason}). A therapeutic index requires "
+            f"comparison to projected clinical exposure. Provide "
+            f"--clinical-pk with human projected exposure."
+        )
+    elif (
+        resolved_dose_context is None
+        and same_study_reason
+        and clinical_pk_doc is None
+    ):
+        # Redundant with the above but explicit for clarity
+        is_indeterminate = True
+
+    # --- 4. Compute TI margins ---
     margins: dict[str, float] | None = None
     margin_note: str | None = None
-
     margin_notes: list[str] = []
 
-    if noael_exposure is not None:
-        ti_values: dict[str, float] = {}
+    # Animal margin (NOAEL_exp / animal_PK_exp)
+    animal_margin: dict[str, float] | None = None
+    # Clinical TI (NOAEL_exp / clinical_PK_exp)
+    clinical_ti: dict[str, float] | None = None
 
-        # Cmax-based TI
-        noael_cmax = noael_exposure.get("cmax")
-        noael_cmax_units = noael_exposure.get("cmax_units")
-        if noael_cmax is not None and pk_cmax is not None:
-            if noael_cmax_units != pk_cmax_units:
-                margin_notes.append(
-                    f"Cmax-based TI not computed: unit mismatch between "
-                    f"tox NOAEL Cmax ({noael_cmax_units}) and "
-                    f"PK Cmax ({pk_cmax_units})"
-                )
-            elif pk_cmax <= 0:
-                raise SchemaError(
-                    f"PK Cmax must be positive, got {pk_cmax}",
-                    remedy="ensure the PK NCA artifact was produced by `dde pk nca`",
-                )
-            else:
-                ti_values["ti_cmax"] = round(noael_cmax / pk_cmax, 4)
+    if noael_exposure is not None and not is_indeterminate:
+        ti_values = _compute_ti_values(
+            noael_exposure,
+            pk_cmax, pk_cmax_units,
+            pk_auc, pk_auc_units,
+            margin_notes,
+        )
 
-        # AUC-based TI
-        noael_auc = noael_exposure.get("auc")
-        noael_auc_units = noael_exposure.get("auc_units")
-        if noael_auc is not None and pk_auc is not None:
-            if (
-                noael_auc_units is None
-                or pk_auc_units is None
-                or _normalize_auc_units(noael_auc_units)
-                != _normalize_auc_units(pk_auc_units)
-            ):
-                margin_notes.append(
-                    f"AUC-based TI not computed: unit mismatch between "
-                    f"tox NOAEL AUC ({noael_auc_units}) and "
-                    f"PK AUC ({pk_auc_units})"
-                )
-            elif pk_auc <= 0:
-                raise SchemaError(
-                    f"PK AUC must be positive, got {pk_auc}",
-                    remedy="ensure the PK NCA artifact was produced by `dde pk nca`",
-                )
-            else:
-                ti_values["ti_auc"] = round(noael_auc / pk_auc, 4)
+        if clinical_pk_doc is not None:
+            # Dual-margin mode: animal_margin + clinical_ti
+            animal_margin = ti_values if ti_values else None
 
-        margins = ti_values if ti_values else None
-        if margins is None:
+            # Compute clinical TI from clinical PK
+            clin_params = clinical_pk_doc.get("parameters", {})
+            clin_cmax = clin_params.get("cmax")
+            clin_cmax_units = clin_params.get("cmax_units")
+            clin_auc_0_inf = clin_params.get("auc_0_inf")
+            clin_auc_0_t = clin_params.get("auc_0_t")
+            clin_auc_units = clin_params.get("auc_units")
+            clin_auc = (
+                clin_auc_0_inf
+                if clin_auc_0_inf is not None
+                else clin_auc_0_t
+            )
+
+            clinical_margin_notes: list[str] = []
+            clinical_ti = _compute_ti_values(
+                noael_exposure,
+                clin_cmax, clin_cmax_units,
+                clin_auc, clin_auc_units,
+                clinical_margin_notes,
+            ) or None
+            if clinical_margin_notes:
+                margin_notes.extend(
+                    f"clinical: {n}" for n in clinical_margin_notes
+                )
+
+            # For backward compat, margins contains clinical_ti values
+            margins = clinical_ti
+        else:
+            # Single-margin mode (original behaviour)
+            margins = ti_values if ti_values else None
+
+        if margins is None and not is_indeterminate:
             margin_note = (
                 "NOAEL exposure (TK data) is present but neither Cmax nor "
                 "AUC could be matched with PK parameters for TI calculation"
             )
-    else:
+    elif noael_exposure is None and not is_indeterminate:
         margin_note = (
             "NOAEL exposure (TK data) not provided; dose-based NOAEL "
             "recorded but therapeutic index cannot be computed without "
@@ -1368,6 +1584,8 @@ def margins_cmd(
     if pk_auc is not None:
         pk_source[pk_auc_label] = pk_auc
         pk_source["auc_units"] = pk_auc_units
+    if resolved_dose_context is not None:
+        pk_source["dose_context"] = resolved_dose_context
 
     # --- Build output artifact ---
     record: dict[str, Any] = {
@@ -1377,20 +1595,46 @@ def margins_cmd(
         "noael_mg_kg": noael_mg_kg,
         "noael_exposure": noael_exposure,
         "pk_source": pk_source,
-        "margins": margins,
     }
-    if margins is not None:
-        record["margin_calculation_method"] = "linear_exposure"
-        record["assumptions"] = [
-            "TI assumes the supplied PK file (--pk-file) represents exposure "
-            "at the intended therapeutic/efficacious dose. This cannot be "
-            "verified from the PK artifact alone, since dde.pk-nca.v1 "
-            "does not tag dose context."
-        ]
-    if margin_note is not None:
-        record["margin_note"] = margin_note
+
+    if is_indeterminate:
+        record["verdict"] = "indeterminate"
+        record["verdict_reason"] = indeterminate_reason
+        record["margins"] = None
+        if same_study_reason:
+            record["same_study_detected"] = same_study_reason
+    else:
+        record["margins"] = margins
+        if animal_margin is not None:
+            record["animal_margin"] = animal_margin
+        if clinical_ti is not None:
+            record["clinical_ti"] = clinical_ti
+        if margins is not None:
+            record["margin_calculation_method"] = "linear_exposure"
+            assumptions = []
+            if clinical_pk_doc is not None:
+                assumptions.append(
+                    "ICH M3(R2) pass/fail thresholds are applied only to "
+                    "clinical_ti (NOAEL_exp / clinical_PK_exp), never to "
+                    "animal_margin."
+                )
+            else:
+                assumptions.append(
+                    "TI assumes the supplied PK file (--pk-file) represents "
+                    "exposure at the intended therapeutic/efficacious dose. "
+                    "This cannot be verified from the PK artifact alone, "
+                    "since dde.pk-nca.v1 does not tag dose context."
+                )
+            record["assumptions"] = assumptions
+        if margin_note is not None:
+            record["margin_note"] = margin_note
+        if same_study_reason:
+            record["same_study_detected"] = same_study_reason
+
     if margin_notes:
         record["margin_notes"] = margin_notes
+    if resolved_dose_context is not None:
+        record["dose_context"] = resolved_dose_context
 
     # --- 5. hERG margin (optional) ---
     if herg_file is not None:
@@ -1476,6 +1720,10 @@ def margins_cmd(
     }
     if herg_file is not None:
         sidecar_params["herg_file"] = herg_path.name
+    if clinical_pk_file is not None:
+        sidecar_params["clinical_pk_file"] = clinical_pk_path.name
+    if dose_context is not None:
+        sidecar_params["dose_context"] = dose_context
     sidecar = provenance.Sidecar(
         tool=ARTIFACT_CLASS,
         subcommand="margins",
@@ -1484,6 +1732,12 @@ def margins_cmd(
     )
     sidecar.note("pk_source_file", pk_path.name)
     sidecar.note("pk_source_sha256", provenance.sha256_file(pk_path))
+    if clinical_pk_path is not None:
+        sidecar.note("clinical_pk_file", clinical_pk_path.name)
+        sidecar.note(
+            "clinical_pk_sha256",
+            provenance.sha256_file(clinical_pk_path),
+        )
     if herg_file is not None:
         sidecar.note("herg_source_file", herg_path.name)
         sidecar.note("herg_source_sha256", provenance.sha256_file(herg_path))
@@ -1496,9 +1750,20 @@ def margins_cmd(
             "not tag dose context, so this cannot be verified from the "
             "artifact alone",
         )
+    if same_study_reason:
+        sidecar.note("same_study_detected", same_study_reason)
+    if is_indeterminate:
+        sidecar.warn(
+            f"Therapeutic index could not be computed: "
+            f"{indeterminate_reason}. Do not interpret the absence of a "
+            f"safety flag as a clean result.",
+            code="tox.margin_indeterminate",
+        )
     sidecar.note("noael_study_id", study_id)
     sidecar.note("noael_species", species)
     sidecar.note("noael_duration_days", duration_days)
+    if resolved_dose_context is not None:
+        sidecar.note("dose_context", resolved_dose_context)
     if margin_notes:
         sidecar.note("margin_notes", margin_notes)
 
@@ -1529,11 +1794,34 @@ def margins_cmd(
     emit.path(meta_path, role="sidecar")
     emit.line(f"margins: {study_id} ({species})")
     emit.line(f"NOAEL: {noael_mg_kg} mg/kg")
-    if margins is not None:
-        if "ti_cmax" in margins:
-            emit.line(f"TI (Cmax): {margins['ti_cmax']:.1f}")
-        if "ti_auc" in margins:
-            emit.line(f"TI (AUC): {margins['ti_auc']:.1f}")
+    if is_indeterminate:
+        emit.line(f"verdict: indeterminate")
+        emit.line(f"reason: {indeterminate_reason}")
+    elif margins is not None:
+        if clinical_ti is not None:
+            # Dual-margin mode
+            if animal_margin:
+                if "ti_cmax" in animal_margin:
+                    emit.line(
+                        f"animal margin (Cmax): {animal_margin['ti_cmax']:.1f}"
+                    )
+                if "ti_auc" in animal_margin:
+                    emit.line(
+                        f"animal margin (AUC): {animal_margin['ti_auc']:.1f}"
+                    )
+            if "ti_cmax" in clinical_ti:
+                emit.line(
+                    f"clinical TI (Cmax): {clinical_ti['ti_cmax']:.1f}"
+                )
+            if "ti_auc" in clinical_ti:
+                emit.line(
+                    f"clinical TI (AUC): {clinical_ti['ti_auc']:.1f}"
+                )
+        else:
+            if "ti_cmax" in margins:
+                emit.line(f"TI (Cmax): {margins['ti_cmax']:.1f}")
+            if "ti_auc" in margins:
+                emit.line(f"TI (AUC): {margins['ti_auc']:.1f}")
     else:
         emit.line("TI: not computed (no NOAEL exposure data)")
     if "herg" in record:
@@ -1573,7 +1861,34 @@ def _analyze_margins(
     metrics: dict[str, Any],
     assessment: dict[str, Any],
 ) -> None:
-    """Build margins analysis: TI and hERG margin vs thresholds."""
+    """Build margins analysis: TI and hERG margin vs thresholds.
+
+    Handles three margin shapes:
+
+    1. **Indeterminate** — same-study detection fired and no clinical PK
+       was provided.  The verdict is ``indeterminate`` and no threshold
+       is applied.
+    2. **Dual-margin** — ``clinical_ti`` present.  ICH M3(R2) thresholds
+       apply only to ``clinical_ti``; ``animal_margin`` is recorded but
+       not graded.
+    3. **Single-margin** (legacy) — ``margins`` contains the TI values
+       and thresholds apply directly.
+    """
+    # --- Item 3: indeterminate verdict ---
+    if doc.get("verdict") == "indeterminate":
+        reason = doc.get(
+            "verdict_reason",
+            "Therapeutic index could not be computed — inputs insufficient",
+        )
+        metrics["same_study_detected"] = doc.get("same_study_detected")
+        assessment["ti"] = {
+            "status": "indeterminate",
+            "message": reason,
+        }
+        assessment["verdict"] = "indeterminate"
+        assessment["verdict_reason"] = reason
+        return
+
     margins = doc.get("margins")
     ti_minimum = thresholds.get("ti_minimum")
 
@@ -1591,16 +1906,38 @@ def _analyze_margins(
         assessment["verdict"] = "incomplete"
         return
 
-    # --- TI assessment ---
-    ti_cmax = margins.get("ti_cmax")
-    ti_auc = margins.get("ti_auc")
+    # --- Dual-margin mode (Item 1): record animal_margin, grade clinical_ti ---
+    animal_margin = doc.get("animal_margin")
+    clinical_ti = doc.get("clinical_ti")
 
+    if animal_margin is not None:
+        # Record animal margin as informational — no threshold applied
+        for key in ("ti_cmax", "ti_auc"):
+            val = animal_margin.get(key)
+            if val is not None:
+                metrics[f"animal_{key}"] = val
+        assessment["animal_margin"] = {
+            "status": "informational",
+            "message": (
+                "Animal self-comparison margin recorded; ICH M3(R2) "
+                "thresholds are not applied to same-species comparisons."
+            ),
+        }
+
+    # Determine which TI values to grade against thresholds
+    graded_ti = clinical_ti if clinical_ti is not None else margins
+
+    # --- TI assessment ---
+    ti_cmax = graded_ti.get("ti_cmax")
+    ti_auc = graded_ti.get("ti_auc")
+
+    ti_label = "clinical_ti" if clinical_ti is not None else "ti"
     ti_status = "acceptable"
 
     if ti_cmax is not None:
-        metrics["ti_cmax"] = ti_cmax
+        metrics[f"{ti_label}_cmax"] = ti_cmax
         if ti_cmax < ti_minimum:
-            assessment["ti_cmax"] = {
+            assessment[f"{ti_label}_cmax"] = {
                 "status": "flagged",
                 "message": (
                     f"TI (Cmax) {ti_cmax:.1f} is below the "
@@ -1609,7 +1946,7 @@ def _analyze_margins(
             }
             ti_status = "flagged"
         else:
-            assessment["ti_cmax"] = {
+            assessment[f"{ti_label}_cmax"] = {
                 "status": "acceptable",
                 "message": (
                     f"TI (Cmax) {ti_cmax:.1f} meets the "
@@ -1618,9 +1955,9 @@ def _analyze_margins(
             }
 
     if ti_auc is not None:
-        metrics["ti_auc"] = ti_auc
+        metrics[f"{ti_label}_auc"] = ti_auc
         if ti_auc < ti_minimum:
-            assessment["ti_auc"] = {
+            assessment[f"{ti_label}_auc"] = {
                 "status": "flagged",
                 "message": (
                     f"TI (AUC) {ti_auc:.1f} is below the "
@@ -1629,7 +1966,7 @@ def _analyze_margins(
             }
             ti_status = "flagged"
         else:
-            assessment["ti_auc"] = {
+            assessment[f"{ti_label}_auc"] = {
                 "status": "acceptable",
                 "message": (
                     f"TI (AUC) {ti_auc:.1f} meets the "

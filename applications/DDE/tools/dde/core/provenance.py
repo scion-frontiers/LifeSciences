@@ -437,6 +437,11 @@ RELAY_CODES: dict[str, str] = {
         "mixed. Do not report the verdict as a clean negative — name "
         "the positive assay and the basis for the overall assessment."
     ),
+    "tox.margin_indeterminate": (
+        "Therapeutic index could not be computed because the inputs were "
+        "insufficient to distinguish clinical from preclinical exposure. "
+        "Do not interpret the absence of a safety flag as a clean result."
+    ),
     "bioactivity.externally_sourced": (
         "State that these bioactivity values are literature-derived and retrieved "
         "from a public database. They are reported values from published assays, "
