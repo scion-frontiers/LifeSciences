@@ -795,6 +795,12 @@ RELAY_CODES: dict[str, str] = {
         "this record. Name both work orders and do not cite this record "
         "as evidence belonging to the original work order."
     ),
+    "dossier.relays_forwarded": (
+        "Upstream relays from Layer 0 artifacts have been forwarded into "
+        "the CTD export. Review the relays section for caveats that affect "
+        "regulatory interpretation. Each forwarded relay retains its "
+        "original code and source artifact reference."
+    ),
 }
 
 
