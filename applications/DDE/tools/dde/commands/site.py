@@ -966,6 +966,82 @@ def site() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Prerequisite check — all WOs must be accepted before site build
+# ---------------------------------------------------------------------------
+
+
+def _check_all_accepted(project_root: Path, emit: Any) -> None:
+    """Verify every work order is in ``scientifically_accepted`` state.
+
+    Lists all work orders (latest revision per ID), checks each state,
+    and raises ``ArtifactError`` with a status table if any are not yet
+    accepted.  Called by ``build_cmd`` before starting the build.
+    """
+    all_records = controlstore.list_records(project_root, "work-order")
+    if not all_records:
+        return  # No WOs at all — the existing "no accepted WOs" guard handles this.
+
+    # Deduplicate to latest revision per ID.
+    by_id: dict[str, dict[str, Any]] = {}
+    for r in all_records:
+        wo_id = r.get("id", "")
+        existing = by_id.get(wo_id)
+        if existing is None or r.get("revision", 0) > existing.get("revision", 0):
+            by_id[wo_id] = r
+    latest = sorted(by_id.values(), key=lambda r: r.get("id", ""))
+
+    not_accepted: list[dict[str, Any]] = []
+    for wo in latest:
+        if wo.get("state") != "scientifically_accepted":
+            not_accepted.append(wo)
+
+    if not not_accepted:
+        return  # All accepted — proceed with build.
+
+    # Build status table.
+    lines = ["Work order status:"]
+    for wo in latest:
+        wo_id = wo.get("id", "?")
+        wo_state = wo.get("state", "?")
+        if wo_state == "scientifically_accepted":
+            mark = "✓"
+            note = ""
+        else:
+            mark = "✗"
+            if wo_state == "submitted":
+                note = " (needs acceptance)"
+            elif wo_state in ("draft", "proposed"):
+                note = " (needs submission + acceptance)"
+            elif wo_state == "committed":
+                note = " (needs acceptance)"
+            elif wo_state == "validation_failed":
+                note = " (needs override or fix)"
+            elif wo_state == "mechanically_validated":
+                note = " (needs scientific acceptance)"
+            else:
+                note = f" (state: {wo_state})"
+        lines.append(f"  {wo_id:<10} {wo_state:<26} {mark}{note}")
+
+    lines.append("")
+    lines.append(
+        f"{len(not_accepted)} work order(s) not yet accepted. "
+        f"Run `dde workorder accept` on each,\n"
+        f"or use `dde workorder accept-all` to validate and accept "
+        f"all passing WOs."
+    )
+
+    raise ArtifactError(
+        f"site build blocked: {len(not_accepted)} work order(s) not in "
+        f"scientifically_accepted state",
+        detail="\n".join(lines),
+        remedy=(
+            "run `dde workorder accept` on each work order, "
+            "or use `dde workorder accept-all` to batch-accept"
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
 # build
 # ---------------------------------------------------------------------------
 
@@ -998,9 +1074,18 @@ def build_cmd(
     as_json: bool,
     quiet: bool,
 ) -> None:
-    """Build a static site from accepted work-order deliverables."""
+    """Build a static site from accepted work-order deliverables.
+
+    All work orders must be in ``scientifically_accepted`` state before
+    the build can proceed.  Run ``dde workorder accept`` on each, or
+    use ``dde workorder accept-all`` to validate and accept all passing
+    WOs in one pass.
+    """
     emit = emitter(as_json, quiet)
     project = state.project()
+
+    # 0. Prerequisite check — all WOs must be scientifically_accepted.
+    _check_all_accepted(project.root, emit)
 
     # 1. Collect accepted work orders
     work_orders = _collect_accepted_work_orders(project.root)

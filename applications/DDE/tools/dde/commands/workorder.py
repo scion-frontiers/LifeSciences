@@ -1314,3 +1314,251 @@ def accept_cmd(
         emit.path(val_path, role="validation_record")
 
     emit.flush()
+
+
+# ---------------------------------------------------------------------------
+# accept-all
+# ---------------------------------------------------------------------------
+
+
+def _list_latest_work_orders(project_root: Path) -> list[dict[str, Any]]:
+    """Return the latest revision of every work order, sorted by id."""
+    records = controlstore.list_records(project_root, "work-order")
+    by_id: dict[str, dict[str, Any]] = {}
+    for r in records:
+        wo_id = r.get("id", "")
+        existing = by_id.get(wo_id)
+        if existing is None or r.get("revision", 0) > existing.get("revision", 0):
+            by_id[wo_id] = r
+    return sorted(by_id.values(), key=lambda r: r.get("id", ""))
+
+
+def _try_accept_single(
+    project_root: Path,
+    record: dict[str, Any],
+) -> dict[str, Any]:
+    """Attempt to walk a single work order through to scientifically_accepted.
+
+    Returns a result dict with keys: id, revision, outcome, detail, checks.
+    Does NOT raise on failure — returns status for batch reporting.
+    """
+    wo_id = record["id"]
+    revision = record["revision"]
+    current_state = record["state"]
+
+    # Already accepted — nothing to do.
+    if current_state == "scientifically_accepted":
+        return {
+            "id": wo_id,
+            "revision": revision,
+            "outcome": "already_accepted",
+            "detail": "already scientifically_accepted",
+            "checks": [],
+        }
+
+    # States that can't be auto-walked.
+    if current_state == "proposed":
+        return {
+            "id": wo_id,
+            "revision": revision,
+            "outcome": "skip",
+            "detail": "needs commit first",
+            "checks": [],
+        }
+
+    if current_state == "validation_failed":
+        return {
+            "id": wo_id,
+            "revision": revision,
+            "outcome": "skip",
+            "detail": "needs override or fix first",
+            "checks": [],
+        }
+
+    if current_state not in _MECHANICAL_CHAIN and current_state != "mechanically_validated":
+        return {
+            "id": wo_id,
+            "revision": revision,
+            "outcome": "skip",
+            "detail": f"cannot accept from state {current_state!r}",
+            "checks": [],
+        }
+
+    # Walk through mechanical intermediate transitions if needed.
+    ran_checks: list[dict[str, Any]] = []
+
+    if current_state in _MECHANICAL_CHAIN:
+        start_idx = _MECHANICAL_CHAIN.index(current_state)
+        for i in range(start_idx, len(_MECHANICAL_CHAIN) - 1):
+            from_state = _MECHANICAL_CHAIN[i]
+            to_state = _MECHANICAL_CHAIN[i + 1]
+            validate_transition("workorder", from_state, to_state)
+            record["state"] = to_state
+            identifier = f"{wo_id}-r{revision}"
+            controlstore.write_record(
+                project_root, "work-order", identifier, record,
+            )
+            _log_transition(project_root, wo_id, revision, from_state, to_state)
+
+        # Now at 'submitted' — run mechanical validation.
+        from .validate import _perform_validation
+
+        try:
+            wo_record, val_path, overall_result, checks, checks_failed, val_from, val_to = (
+                _perform_validation(project_root, wo_id)
+            )
+        except Exception as exc:
+            return {
+                "id": wo_id,
+                "revision": revision,
+                "outcome": "fail",
+                "detail": str(exc),
+                "checks": [],
+            }
+
+        ran_checks = checks
+
+        if overall_result not in ("pass", "pass_with_warnings"):
+            # Build failure detail from checks.
+            fail_details: list[str] = []
+            for c in checks:
+                if c["result"] == "fail":
+                    fail_details.append(c["name"])
+            return {
+                "id": wo_id,
+                "revision": revision,
+                "outcome": "fail",
+                "detail": fail_details,
+                "checks": checks,
+            }
+
+        record = wo_record  # Updated by _perform_validation.
+
+    # At mechanically_validated — transition to scientifically_accepted.
+    validate_transition("workorder", "mechanically_validated", "scientifically_accepted")
+    record["state"] = "scientifically_accepted"
+    identifier = f"{wo_id}-r{revision}"
+    controlstore.write_record(project_root, "work-order", identifier, record)
+    _log_transition(
+        project_root, wo_id, revision,
+        "mechanically_validated", "scientifically_accepted",
+    )
+
+    has_warnings = any(
+        c.get("result") == "warning" for c in ran_checks
+    )
+    outcome = "pass_with_warnings" if has_warnings else "pass"
+
+    return {
+        "id": wo_id,
+        "revision": revision,
+        "outcome": outcome,
+        "detail": "accepted",
+        "checks": ran_checks,
+    }
+
+
+@workorder.command("accept-all")
+@output_options
+@pass_state
+def accept_all_cmd(
+    state: AppState,
+    as_json: bool,
+    quiet: bool,
+) -> None:
+    """Validate and accept all eligible work orders in one pass.
+
+    Lists all work orders, runs mechanical validation on each eligible
+    one, and transitions all PASSING work orders to
+    ``scientifically_accepted``.
+
+    \b
+    Behaviour:
+      • Auto-steps each WO through the mechanical chain
+        (committed → queued → in_progress → submitted), runs the full
+        8-check mechanical validation, and on pass transitions to
+        scientifically_accepted.
+      • Reports a consolidated table showing each WO's outcome.
+      • Work orders that FAIL validation are left in validation_failed
+        and reported — they are NOT auto-overridden.
+
+    \b
+    Does NOT:
+      • Auto-override any failures — use ``dde workorder override``
+        for individual WOs that need it.
+      • Skip or weaken any mechanical validation checks.
+    """
+    emit = emitter(as_json, quiet)
+    project = state.project()
+
+    all_wos = _list_latest_work_orders(project.root)
+    if not all_wos:
+        emit.line("No work orders found.")
+        emit.flush()
+        return
+
+    results: list[dict[str, Any]] = []
+    for wo in all_wos:
+        result = _try_accept_single(project.root, wo)
+        results.append(result)
+
+    # Build consolidated output.
+    accepted_count = sum(
+        1 for r in results if r["outcome"] in ("pass", "pass_with_warnings", "already_accepted")
+    )
+    failed_count = sum(1 for r in results if r["outcome"] == "fail")
+    skipped_count = sum(1 for r in results if r["outcome"] == "skip")
+
+    if as_json:
+        emit.data("results", results)
+        emit.data("accepted", accepted_count)
+        emit.data("failed", failed_count)
+        emit.data("skipped", skipped_count)
+        emit.flush()
+        return
+
+    emit.line("Work order validation:")
+    for r in results:
+        wo_id = r["id"]
+        outcome = r["outcome"]
+
+        if outcome == "pass":
+            emit.line(f"  {wo_id:<10} PASS      → accepted")
+        elif outcome == "pass_with_warnings":
+            # Count warnings.
+            warn_count = sum(
+                1 for c in r.get("checks", []) if c.get("result") == "warning"
+            )
+            emit.line(
+                f"  {wo_id:<10} PASS (w)  → accepted "
+                f"({warn_count} warning{'s' if warn_count != 1 else ''})"
+            )
+        elif outcome == "already_accepted":
+            emit.line(f"  {wo_id:<10} PASS      → already accepted")
+        elif outcome == "fail":
+            detail = r.get("detail", [])
+            if isinstance(detail, list) and detail:
+                first_line = f"  {wo_id:<10} FAIL      → {detail[0]}"
+                emit.line(first_line)
+                for reason in detail[1:]:
+                    emit.line(f"  {'':10}             {reason}")
+            else:
+                emit.line(f"  {wo_id:<10} FAIL      → {detail}")
+        elif outcome == "skip":
+            emit.line(f"  {wo_id:<10} SKIP      → {r.get('detail', '?')}")
+
+    emit.line("")
+    emit.line(
+        f"Accepted: {accepted_count}  "
+        f"Failed: {failed_count}  "
+        f"Skipped: {skipped_count}"
+    )
+
+    if failed_count > 0:
+        emit.line("")
+        emit.line(
+            "Failed work orders need manual attention. "
+            "Use `dde workorder override` for eligible checks."
+        )
+
+    emit.flush()
