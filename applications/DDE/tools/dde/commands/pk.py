@@ -54,6 +54,7 @@ from ..common import (
 )
 from ..core import provenance
 from ..core.errors import ArtifactError, Refusal, SchemaError
+from ..core.schema_registry import suggest_match, validate_enum
 from ..core.output import Emitter
 
 ARTIFACT_CLASS = "pk"
@@ -91,34 +92,45 @@ def _validate_study(doc: dict[str, Any]) -> None:
         )
 
     # Required scalar fields
-    for field in ("species", "route", "dose_mg_kg", "time_units", "concentration_units"):
+    _PK_STUDY_REQUIRED = (
+        "species", "route", "dose_mg_kg", "time_units", "concentration_units",
+    )
+    for field in _PK_STUDY_REQUIRED:
         if field not in doc or doc[field] is None:
             raise SchemaError(
                 f"required field {field!r} is missing or null",
+                detail=f"all required fields for dde.pk-study.v1: "
+                       f"{['schema', 'study_id'] + list(_PK_STUDY_REQUIRED)}",
                 remedy=f"add {field!r} to the input JSON",
             )
 
-    # Unit validation
+    # Unit validation — with fuzzy matching suggestions
     time_units = doc["time_units"]
     if time_units not in VALID_TIME_UNITS:
+        hint = suggest_match(time_units, VALID_TIME_UNITS)
+        suggestion = f" Did you mean {hint!r}?" if hint else ""
         raise Refusal(
-            f"unrecognised time_units: {time_units!r}",
+            f"unrecognised time_units: {time_units!r}.{suggestion}",
             detail=f"accepted values: {sorted(VALID_TIME_UNITS)}",
             remedy="use one of: h, min, s",
         )
 
     conc_units = doc["concentration_units"]
     if conc_units not in VALID_CONC_UNITS:
+        hint = suggest_match(conc_units, VALID_CONC_UNITS)
+        suggestion = f" Did you mean {hint!r}?" if hint else ""
         raise Refusal(
-            f"unrecognised concentration_units: {conc_units!r}",
+            f"unrecognised concentration_units: {conc_units!r}.{suggestion}",
             detail=f"accepted values: {sorted(VALID_CONC_UNITS)}",
             remedy="use one of: ng/mL, ug/mL, mg/mL, uM, nM",
         )
 
     route = doc["route"]
     if route not in VALID_ROUTES:
+        hint = suggest_match(route, VALID_ROUTES)
+        suggestion = f" Did you mean {hint!r}?" if hint else ""
         raise Refusal(
-            f"unrecognised route: {route!r}",
+            f"unrecognised route: {route!r}.{suggestion}",
             detail=f"accepted values: {sorted(VALID_ROUTES)}",
             remedy=f"use one of: {', '.join(sorted(VALID_ROUTES))}",
         )
@@ -1295,9 +1307,12 @@ def _validate_ddi_input(doc: dict[str, Any]) -> None:
 
         vtype = entry["value_type"]
         if vtype not in ("ic50", "ki"):
+            hint = suggest_match(str(vtype), ("ic50", "ki"))
+            suggestion = f" Did you mean {hint!r}?" if hint else ""
             raise SchemaError(
                 f"cyp_inhibition[{i}].value_type must be 'ic50' or 'ki', "
-                f"got {vtype!r}",
+                f"got {vtype!r}.{suggestion}",
+                detail="accepted values: ['ic50', 'ki']",
             )
 
         entry_units = entry["units"]

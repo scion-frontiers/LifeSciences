@@ -59,6 +59,7 @@ from .commands.pubmed_bq import pubmed_bq
 from .commands.scp import scp
 from .commands.spatialdb import spatialdb
 from .commands.pk import pk
+from .commands.schema import schema
 from .commands.tox import tox
 from .commands.differentiation import differentiation
 from .commands.patent import patent
@@ -402,6 +403,7 @@ cli.add_command(screen)
 cli.add_command(structure)
 cli.add_command(structure_screen)
 cli.add_command(spatialdb)
+cli.add_command(schema)
 cli.add_command(similar)
 cli.add_command(tox)
 cli.add_command(differentiation)

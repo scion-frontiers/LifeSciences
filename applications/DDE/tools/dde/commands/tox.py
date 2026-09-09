@@ -37,6 +37,7 @@ from ..common import (
 )
 from ..core import provenance
 from ..core.errors import ArtifactError, Refusal, SchemaError
+from ..core.schema_registry import suggest_match
 from ..core.output import Emitter
 
 ARTIFACT_CLASS = "tox"
@@ -147,8 +148,10 @@ def _validate_repeat_dose(doc: dict[str, Any]) -> None:
             remedy="add 'route' to the input JSON",
         )
     if route not in VALID_ROUTES:
+        hint = suggest_match(route, VALID_ROUTES)
+        suggestion = f" Did you mean {hint!r}?" if hint else ""
         raise Refusal(
-            f"unrecognised route: {route!r}",
+            f"unrecognised route: {route!r}.{suggestion}",
             detail=f"accepted values: {sorted(VALID_ROUTES)}",
             remedy=f"use one of: {', '.join(sorted(VALID_ROUTES))}",
         )
@@ -316,8 +319,10 @@ def _validate_repeat_dose(doc: dict[str, Any]) -> None:
                 f"'glp_status' must be a string, got {type(glp).__name__}",
             )
         if glp not in VALID_GLP_STATUS:
+            hint = suggest_match(glp, VALID_GLP_STATUS)
+            suggestion = f" Did you mean {hint!r}?" if hint else ""
             raise Refusal(
-                f"unrecognised glp_status: {glp!r}",
+                f"unrecognised glp_status: {glp!r}.{suggestion}",
                 detail=f"accepted values: {sorted(VALID_GLP_STATUS)}",
                 remedy=f"use one of: {', '.join(sorted(VALID_GLP_STATUS))}",
             )
@@ -375,8 +380,10 @@ def _validate_finding(dg_idx: int, f_idx: int, finding: Any) -> None:
                 f"dose_groups[{dg_idx}].findings[{f_idx}].organ_system must be a string",
             )
         if organ not in VALID_ORGAN_SYSTEMS:
+            hint = suggest_match(organ, VALID_ORGAN_SYSTEMS)
+            suggestion = f" Did you mean {hint!r}?" if hint else ""
             raise Refusal(
-                f"unrecognised organ_system in dose_groups[{dg_idx}].findings[{f_idx}]: {organ!r}",
+                f"unrecognised organ_system in dose_groups[{dg_idx}].findings[{f_idx}]: {organ!r}.{suggestion}",
                 detail=f"accepted values: {sorted(VALID_ORGAN_SYSTEMS)}",
                 remedy=f"use one of: {', '.join(sorted(VALID_ORGAN_SYSTEMS))}",
             )
@@ -389,8 +396,10 @@ def _validate_finding(dg_idx: int, f_idx: int, finding: Any) -> None:
                 f"dose_groups[{dg_idx}].findings[{f_idx}].severity must be a string",
             )
         if severity not in VALID_SEVERITIES:
+            hint = suggest_match(severity, VALID_SEVERITIES)
+            suggestion = f" Did you mean {hint!r}?" if hint else ""
             raise Refusal(
-                f"unrecognised severity in dose_groups[{dg_idx}].findings[{f_idx}]: {severity!r}",
+                f"unrecognised severity in dose_groups[{dg_idx}].findings[{f_idx}]: {severity!r}.{suggestion}",
                 detail=f"accepted values: {sorted(VALID_SEVERITIES)}",
                 remedy=f"use one of: {', '.join(sorted(VALID_SEVERITIES))}",
             )
@@ -446,8 +455,10 @@ def _validate_noael_exposure(exposure: Any) -> None:
             )
         valid_auc_unit_set = VALID_CONC_UNITS | VALID_AUC_UNITS
         if auc_units not in valid_auc_unit_set:
+            hint = suggest_match(auc_units, valid_auc_unit_set)
+            suggestion = f" Did you mean {hint!r}?" if hint else ""
             raise Refusal(
-                f"unrecognised noael_exposure.auc_units: {auc_units!r}",
+                f"unrecognised noael_exposure.auc_units: {auc_units!r}.{suggestion}",
                 detail=f"accepted values: {sorted(valid_auc_unit_set)}",
                 remedy=f"use one of: {', '.join(sorted(valid_auc_unit_set))}",
             )
@@ -469,8 +480,10 @@ def _validate_noael_exposure(exposure: Any) -> None:
                 remedy="add 'cmax_units' to the noael_exposure object",
             )
         if cmax_units not in VALID_CONC_UNITS:
+            hint = suggest_match(cmax_units, VALID_CONC_UNITS)
+            suggestion = f" Did you mean {hint!r}?" if hint else ""
             raise Refusal(
-                f"unrecognised noael_exposure.cmax_units: {cmax_units!r}",
+                f"unrecognised noael_exposure.cmax_units: {cmax_units!r}.{suggestion}",
                 detail=f"accepted values: {sorted(VALID_CONC_UNITS)}",
                 remedy=f"use one of: {', '.join(sorted(VALID_CONC_UNITS))}",
             )
@@ -592,8 +605,10 @@ def _validate_safety_pharm(doc: dict[str, Any]) -> None:
             remedy="add 'herg_ic50_units' to the input JSON",
         )
     if herg_units not in VALID_CONC_UNITS:
+        hint = suggest_match(herg_units, VALID_CONC_UNITS)
+        suggestion = f" Did you mean {hint!r}?" if hint else ""
         raise Refusal(
-            f"unrecognised herg_ic50_units: {herg_units!r}",
+            f"unrecognised herg_ic50_units: {herg_units!r}.{suggestion}",
             detail=f"accepted values: {sorted(VALID_CONC_UNITS)}",
             remedy=f"use one of: {', '.join(sorted(VALID_CONC_UNITS))}",
         )
@@ -638,8 +653,10 @@ def _validate_assay(idx: int, assay: Any) -> None:
             remedy="add 'type' to each assay object",
         )
     if atype not in VALID_GENOTOX_ASSAY_TYPES:
+        hint = suggest_match(atype, VALID_GENOTOX_ASSAY_TYPES)
+        suggestion = f" Did you mean {hint!r}?" if hint else ""
         raise Refusal(
-            f"unrecognised assay type in assays[{idx}]: {atype!r}",
+            f"unrecognised assay type in assays[{idx}]: {atype!r}.{suggestion}",
             detail=f"accepted values: {sorted(VALID_GENOTOX_ASSAY_TYPES)}",
             remedy=f"use one of: {', '.join(sorted(VALID_GENOTOX_ASSAY_TYPES))}",
         )
@@ -652,8 +669,10 @@ def _validate_assay(idx: int, assay: Any) -> None:
             remedy="add 'result' to each assay object",
         )
     if result not in VALID_GENOTOX_RESULTS:
+        hint = suggest_match(result, VALID_GENOTOX_RESULTS)
+        suggestion = f" Did you mean {hint!r}?" if hint else ""
         raise Refusal(
-            f"unrecognised assay result in assays[{idx}]: {result!r}",
+            f"unrecognised assay result in assays[{idx}]: {result!r}.{suggestion}",
             detail=f"accepted values: {sorted(VALID_GENOTOX_RESULTS)}",
             remedy=f"use one of: {', '.join(sorted(VALID_GENOTOX_RESULTS))}",
         )
@@ -666,8 +685,10 @@ def _validate_assay(idx: int, assay: Any) -> None:
             remedy="add 'metabolic_activation' to each assay object",
         )
     if ma not in _VALID_METABOLIC_ACTIVATION:
+        hint = suggest_match(ma, _VALID_METABOLIC_ACTIVATION)
+        suggestion = f" Did you mean {hint!r}?" if hint else ""
         raise Refusal(
-            f"unrecognised metabolic_activation in assays[{idx}]: {ma!r}",
+            f"unrecognised metabolic_activation in assays[{idx}]: {ma!r}.{suggestion}",
             detail=f"accepted values: {sorted(_VALID_METABOLIC_ACTIVATION)}",
             remedy=f"use one of: {', '.join(sorted(_VALID_METABOLIC_ACTIVATION))}",
         )
