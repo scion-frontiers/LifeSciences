@@ -1,14 +1,13 @@
-"""Tests for capability fallback relay and capability state stamping (#153).
+"""Tests for capability state stamping and adopted-set strategy correctness (#153).
 
 Covers:
-  1. Strategy fallback auto-fires hypothesis.strategy_fallback relay at
-     analyze time when hypex is unavailable (the tool detects this
-     internally — no agent flag)
-  2. Assessment records strategy_requested vs strategy_used on fallback
+  1. Adopted-set analyze does NOT fire hypothesis.strategy_fallback relay
+     ("adopted" IS the strategy — not a fallback from a missing tournament)
+  2. Adopted-set assessment does NOT contain strategy_requested/strategy_used
   3. Capability snapshot captures current state from get_capability_snapshot()
   4. Capability snapshot is stamped into analysis records
   5. Capability snapshot is stamped into sidecars (adopt)
-  6. Adopt sidecar records strategy_requested/strategy_used/fallback_reason
+  6. Adopt sidecar does NOT contain strategy fallback fields
   7. Doctor --json output includes capability_snapshot
   8. hypothesis.strategy_fallback is registered in RELAY_CODES
   9. select_strategy returns None fallback_info for available strategies
@@ -84,16 +83,17 @@ def _adopt_hypothesis_set(project: Path, slug: str = "test-hyps") -> Path:
 
 
 # ---------------------------------------------------------------------------
-# 1. Auto-detect strategy fallback fires relay at analyze time
+# 1. Adopted-set analyze does NOT fire strategy_fallback relay
 # ---------------------------------------------------------------------------
 
 
-def test_strategy_fallback_fires_relay() -> None:
-    """When hypex is unavailable, analyze auto-fires the fallback relay.
+def test_adopted_set_analyze_no_strategy_fallback_relay() -> None:
+    """Adopted-set analyze must NOT fire the strategy_fallback relay.
 
-    The tool determines capability state internally — no agent flag.
-    hypex binaries are not present in the test environment, so the
-    fallback relay must fire automatically.
+    "adopted" IS the strategy — it is a deliberate choice made by
+    sponsor judgment, not a fallback from a tournament that was never
+    being run.  The absence of hypex binaries is irrelevant to a set
+    that entered the project through attestation.
     """
     from click.testing import CliRunner
     from dde.cli import cli
@@ -123,20 +123,26 @@ def test_strategy_fallback_fires_relay() -> None:
         relay_codes = [
             r["code"] for r in analysis.get("mandatory_relays", [])
         ]
-        assert "hypothesis.strategy_fallback" in relay_codes, (
-            f"hypothesis.strategy_fallback should auto-fire when hypex is "
-            f"unavailable; got codes: {relay_codes}"
+        assert "hypothesis.strategy_fallback" not in relay_codes, (
+            f"hypothesis.strategy_fallback must NOT fire for adopted sets; "
+            f"got codes: {relay_codes}"
         )
-    print("  PASS: strategy fallback auto-fires relay")
+    print("  PASS: adopted-set analyze does NOT fire strategy_fallback relay")
 
 
 # ---------------------------------------------------------------------------
-# 2. Assessment records strategy_requested vs strategy_used
+# 2. Adopted-set assessment does NOT contain fallback fields
 # ---------------------------------------------------------------------------
 
 
-def test_assessment_records_strategy_fallback() -> None:
-    """Analysis assessment records strategy_requested and strategy_used."""
+def test_adopted_set_no_fallback_fields_in_assessment() -> None:
+    """Adopted-set analysis must NOT contain strategy_requested/strategy_used.
+
+    An adopted-set analysis records strategy: "adopted" and nothing
+    else strategy-related.  The fields strategy_requested,
+    strategy_used, and strategy_fallback only apply to tournament
+    workflows.
+    """
     from click.testing import CliRunner
     from dde.cli import cli
 
@@ -162,23 +168,22 @@ def test_assessment_records_strategy_fallback() -> None:
         analysis = json.loads(analysis_path.read_text(encoding="utf-8"))
         assessment = analysis.get("assessment", {})
 
-        assert assessment.get("strategy_requested") == "hypex", (
-            f"strategy_requested should be 'hypex'; "
-            f"got: {assessment.get('strategy_requested')}"
+        assert assessment.get("strategy") == "adopted", (
+            f"strategy should be 'adopted'; got: {assessment.get('strategy')!r}"
         )
-        # The actual strategy should be a fallback (not hypex since
-        # hypex binaries are not present in test env)
-        assert assessment.get("strategy_used") != "hypex", (
-            f"strategy_used should NOT be 'hypex' when binaries are absent; "
-            f"got: {assessment.get('strategy_used')}"
+        assert "strategy_requested" not in assessment, (
+            f"strategy_requested must NOT be in adopted-set assessment; "
+            f"got: {assessment.get('strategy_requested')!r}"
         )
-        assert assessment.get("strategy_used") is not None, (
-            "strategy_used should be set"
+        assert "strategy_used" not in assessment, (
+            f"strategy_used must NOT be in adopted-set assessment; "
+            f"got: {assessment.get('strategy_used')!r}"
         )
-        assert assessment.get("strategy_fallback") is True, (
-            "strategy_fallback should be True"
+        assert "strategy_fallback" not in assessment, (
+            f"strategy_fallback must NOT be in adopted-set assessment; "
+            f"got: {assessment.get('strategy_fallback')!r}"
         )
-    print("  PASS: assessment records strategy_requested vs strategy_used")
+    print("  PASS: adopted-set assessment has no fallback fields")
 
 
 # ---------------------------------------------------------------------------
@@ -306,15 +311,17 @@ def test_capability_snapshot_in_sidecar() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 6. Adopt sidecar records strategy fallback info
+# 6. Adopt sidecar does NOT record strategy fallback info
 # ---------------------------------------------------------------------------
 
 
-def test_adopt_sidecar_records_fallback() -> None:
-    """Adopt sidecar records strategy_requested/strategy_used/fallback_reason.
+def test_adopt_sidecar_no_fallback_fields() -> None:
+    """Adopt sidecar must NOT contain strategy fallback fields.
 
-    The tool auto-detects that hypex is unavailable and records the
-    fallback without any agent flag.
+    Adoption is the strategy — there is nothing to fall back from.
+    The sidecar should NOT contain strategy_requested, strategy_used,
+    fallback_reason, or the hypothesis.strategy_fallback relay.
+    capability_state is still recorded (informational).
     """
     from click.testing import CliRunner
     from dde.cli import cli
@@ -342,27 +349,33 @@ def test_adopt_sidecar_records_fallback() -> None:
         meta_path = project / "raw" / "hypotheses" / "test-hyps.charter.meta.json"
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
 
-        # hypex binaries not present → fallback recorded
-        assert meta.get("strategy_requested") == "hypex", (
-            f"strategy_requested should be 'hypex'; got {meta.get('strategy_requested')}"
+        # Adoption is deliberate — no fallback fields
+        assert "strategy_requested" not in meta, (
+            f"strategy_requested must NOT be in adopt sidecar; "
+            f"got: {meta.get('strategy_requested')!r}"
         )
-        assert meta.get("strategy_used") is not None, (
-            "strategy_used should be set"
+        assert "strategy_used" not in meta, (
+            f"strategy_used must NOT be in adopt sidecar; "
+            f"got: {meta.get('strategy_used')!r}"
         )
-        assert meta.get("strategy_used") != "hypex", (
-            "strategy_used should NOT be 'hypex' when binaries absent"
-        )
-        assert meta.get("fallback_reason") is not None, (
-            "fallback_reason should be set"
+        assert "fallback_reason" not in meta, (
+            f"fallback_reason must NOT be in adopt sidecar; "
+            f"got: {meta.get('fallback_reason')!r}"
         )
 
-        # The strategy_fallback relay should be in mandatory_relays
+        # The strategy_fallback relay must NOT be in mandatory_relays
         relay_codes = [r["code"] for r in meta.get("mandatory_relays", [])]
-        assert "hypothesis.strategy_fallback" in relay_codes, (
-            f"hypothesis.strategy_fallback should be in sidecar relays; "
-            f"got: {relay_codes}"
+        assert "hypothesis.strategy_fallback" not in relay_codes, (
+            f"hypothesis.strategy_fallback must NOT be in adopt sidecar "
+            f"relays; got: {relay_codes}"
         )
-    print("  PASS: adopt sidecar records fallback info")
+
+        # But capability_state IS still present (informational)
+        assert "capability_state" in meta, (
+            f"capability_state should still be in adopt sidecar; "
+            f"keys: {list(meta.keys())}"
+        )
+    print("  PASS: adopt sidecar has no fallback fields")
 
 
 # ---------------------------------------------------------------------------
@@ -517,12 +530,12 @@ def test_old_sidecar_without_capability_state_treated_as_unknown() -> None:
 
 def main() -> None:
     tests = [
-        ("test_strategy_fallback_fires_relay", test_strategy_fallback_fires_relay),
-        ("test_assessment_records_strategy_fallback", test_assessment_records_strategy_fallback),
+        ("test_adopted_set_analyze_no_strategy_fallback_relay", test_adopted_set_analyze_no_strategy_fallback_relay),
+        ("test_adopted_set_no_fallback_fields_in_assessment", test_adopted_set_no_fallback_fields_in_assessment),
         ("test_capability_snapshot_captures_state", test_capability_snapshot_captures_state),
         ("test_capability_snapshot_in_analysis", test_capability_snapshot_in_analysis),
         ("test_capability_snapshot_in_sidecar", test_capability_snapshot_in_sidecar),
-        ("test_adopt_sidecar_records_fallback", test_adopt_sidecar_records_fallback),
+        ("test_adopt_sidecar_no_fallback_fields", test_adopt_sidecar_no_fallback_fields),
         ("test_doctor_json_includes_capability_snapshot", test_doctor_json_includes_capability_snapshot),
         ("test_strategy_fallback_registered", test_strategy_fallback_registered),
         ("test_select_strategy_no_fallback_when_available", test_select_strategy_no_fallback_when_available),

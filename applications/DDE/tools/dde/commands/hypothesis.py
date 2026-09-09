@@ -369,23 +369,12 @@ def adopt(
     from .doctor import get_capability_snapshot
     sidecar.set_capability_state(get_capability_snapshot())
 
-    # -- Auto-detect strategy fallback --
-    # The tool checks the capability state internally and fires the relay
-    # if the strongest strategy is unavailable (#153).
-    _best, _fb = select_strategy("hypex")
-    if _fb:
-        sidecar.note("strategy_requested", _fb["strategy_requested"])
-        sidecar.note("strategy_used", _fb["strategy_used"])
-        sidecar.note("fallback_reason", _fb["fallback_reason"])
-        caps_lost = ", ".join(_fb["capabilities_lost"]) or "none enumerated"
-        sidecar.warn(
-            f"Strategy '{_fb['strategy_requested']}' was unavailable "
-            f"({_fb['fallback_reason']}). Fell back to "
-            f"'{_fb['strategy_used']}'. Any decision citing this "
-            f"assessment was made with degraded methodology. The missing "
-            f"method would have provided: {caps_lost}.",
-            code="hypothesis.strategy_fallback",
-        )
+    # -- Strategy note --
+    # Adoption is a deliberate strategy chosen by sponsor judgment; it
+    # is NOT a fallback from a tournament that was never being run.
+    # select_strategy() is NOT called here — hypex availability has no
+    # bearing on a set that entered the project through attestation.
+    # capability_state is still recorded above (informational).
 
     # -- Fire the mandatory relay: adopted_not_generated --
     # This fires on EVERY adoption — it is the one scoped exception to
@@ -481,30 +470,17 @@ def analyze(
         "origin": record.get("origin", "unknown"),
     }
 
-    # -- Auto-detect strategy fallback --
-    # The tool determines the best available strategy by checking the
-    # capability state internally (not from agent input — #153).  If the
-    # strongest strategy (hypex) is unavailable, the adopted strategy is
-    # necessarily a fallback and the relay fires automatically.
-    best_strategy, fallback_info = select_strategy("hypex")
-    if fallback_info:
-        assessment["strategy_requested"] = fallback_info["strategy_requested"]
-        assessment["strategy_used"] = fallback_info["strategy_used"]
-        assessment["strategy_fallback"] = True
+    # -- Strategy note --
+    # "adopted" IS the strategy — it is a deliberate choice made by
+    # sponsor judgment, not a fallback from a tournament that was never
+    # being run.  select_strategy() is NOT called here: hypex binary
+    # availability has no bearing on a set that entered the project
+    # through attestation.  capability_state is still stamped below
+    # (informational — recording what tools are available is useful,
+    # but the analysis must not infer regret from it).
 
-    # -- Relay: strategy_fallback --
+    # -- Relays --
     relays: list[dict[str, str]] = []
-
-    if fallback_info:
-        caps_lost = ", ".join(fallback_info["capabilities_lost"]) or "none enumerated"
-        relays.append(provenance.relay(
-            "hypothesis.strategy_fallback",
-            f"Strategy '{fallback_info['strategy_requested']}' was unavailable "
-            f"({fallback_info['fallback_reason']}). Fell back to "
-            f"'{fallback_info['strategy_used']}'. Any decision citing this "
-            f"assessment was made with degraded methodology. The missing "
-            f"method would have provided: {caps_lost}.",
-        ))
 
     relays.append(provenance.relay(
         "hypothesis.unranked_set",
