@@ -256,7 +256,8 @@ Python's `http.server` is always available in Scion environments:
 # Try ports in order until one binds successfully
 for port in 8000 8001 8002 8003; do
   python3 -m http.server "$port" --directory _site/ &
-  if kill -0 $! 2>/dev/null; then break; fi
+  sleep 1
+  if kill -0 $! 2>/dev/null; then echo "Serving on port $port"; break; fi
 done
 ```
 
@@ -265,15 +266,15 @@ done
 Use `sciontool expose` to register the local port with the Hub. The Hub creates a proxied URL that routes external requests to the agent's local server:
 
 ```bash
-sciontool expose 8000 --label "site preview"
+sciontool expose "$port" --label "site preview"
 ```
 
-Output:
+Output (port number reflects whichever port was bound by the probe loop above):
 
 ```
-Port 8000 exposed.
-URL: http://<hub>/api/v1/agents/<agent-id>/ports/8000/proxy/
-Base path: /api/v1/agents/<agent-id>/ports/8000/proxy/
+Port $port exposed.
+URL: http://<hub>/api/v1/agents/<agent-id>/ports/$port/proxy/
+Base path: /api/v1/agents/<agent-id>/ports/$port/proxy/
 ```
 
 Share the returned URL with stakeholders. Use `sciontool expose --list` to see all currently exposed ports and their URLs.
