@@ -960,9 +960,82 @@ class Sidecar:
         return path
 
 
+def _get_project_root() -> Path | None:
+    """Try to discover the project root. Returns None if unavailable."""
+    try:
+        from .context import resolve_project
+        return resolve_project().root.resolve()
+    except Exception:
+        return None
+
+
+def _normalize_source(source: str | Path) -> str:
+    """Normalize a source reference to a project-relative path string.
+
+    Handles four cases:
+
+    1. **Absolute path** — made relative to the project root.
+    2. **Bare filename** (no directory component, has a file extension) —
+       searched for in ``ARTIFACT_DIRS``; the first hit is stored as
+       its project-relative path.
+    3. **Relative path with directory components** — validated against the
+       project root for containment and returned as-is.
+    4. **Non-path string** (accession, endpoint, query) — returned
+       unchanged.
+
+    Raises :class:`ArtifactError` if the resolved path escapes the
+    project root.
+    """
+    source_str = str(source)
+    is_path_obj = isinstance(source, Path)
+
+    project_root = _get_project_root()
+    if project_root is None:
+        return source_str
+
+    source_path = Path(source_str)
+
+    # Case 1: absolute path → make relative to project root.
+    if source_path.is_absolute():
+        resolved = source_path.resolve()
+        if not resolved.is_relative_to(project_root):
+            raise ArtifactError(
+                f"source path escapes project root: {source}",
+                detail=f"resolved to {resolved}, project root is {project_root}",
+            )
+        return str(resolved.relative_to(project_root))
+
+    # Case 2: bare filename (no directory component).
+    if "/" not in source_str and "\\" not in source_str:
+        # Only search when source looks like a filename (has an extension)
+        # or was explicitly passed as a Path object.
+        if "." in source_str or is_path_obj:
+            from .context import ARTIFACT_DIRS
+
+            for rel_dir in sorted(set(ARTIFACT_DIRS.values())):
+                candidate = project_root / rel_dir / source_str
+                if candidate.is_file():
+                    return str(Path(rel_dir) / source_str)
+        # Not found in artifact dirs or not a filename — return as-is.
+        return source_str
+
+    # Case 3: relative path with directory components — verify containment.
+    try:
+        resolved = (project_root / source_path).resolve()
+    except (ValueError, RuntimeError):
+        return source_str
+    if not resolved.is_relative_to(project_root):
+        raise ArtifactError(
+            f"source path escapes project root: {source}",
+            detail=f"resolved to {resolved}, project root is {project_root}",
+        )
+
+    return source_str
+
+
 def write_analysis(
     path: Path,
-    source: str,
+    source: str | Path,
     threshold_set: str,
     thresholds_applied: dict[str, Any],
     metrics: dict[str, Any],
@@ -975,6 +1048,17 @@ def write_analysis(
     suppress_warnings: bool = False,
 ) -> Path:
     """Write a phase-2 `.analysis.json` record.
+
+    ``source`` accepts a :class:`~pathlib.Path` or ``str``.  It is
+    normalised to a project-relative string before storage:
+
+    * absolute paths are made relative to the project root;
+    * bare filenames are searched for in standard artifact directories;
+    * paths that escape the project root raise :class:`ArtifactError`.
+
+    This makes every call site correct by construction — callers can
+    pass a ``Path`` object directly and the record will always contain a
+    project-relative string like ``"raw/tox/compound.selectivity.json"``.
 
     `mandatory_relays` is promoted to a top-level field rather than being
     buried in `assessment`, because it is what a reviewer checks against
@@ -992,6 +1076,15 @@ def write_analysis(
     that is precisely the case where somebody's citation is about to stop
     matching the file it cites.
     """
+    # Compute digest from the original source value (which may be an
+    # absolute path or Path object) before normalising to a relative
+    # string, so the digest resolves against the filesystem as the
+    # caller saw it.
+    source_digest = _source_digest(str(source))
+
+    # Normalise source to a project-relative string.
+    source = _normalize_source(source)
+
     tc = check_integrity()
     record: dict[str, Any] = {
         "source": source,
@@ -1026,12 +1119,6 @@ def write_analysis(
     record["written_by"] = _writer() or "unattributed"
     record["work_order_id"] = _work_order()
 
-    # The digest of the artifact this verdict was computed from. Makes a
-    # reviewer's citation exact rather than approximate: two records that
-    # name the same source path but different source digests analysed
-    # different bytes, and that is the fact worth having at the moment
-    # two conclusions disagree.
-    source_digest = _source_digest(source)
     if source_digest:
         record["source_sha256"] = source_digest
 

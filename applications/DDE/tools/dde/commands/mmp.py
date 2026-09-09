@@ -728,7 +728,7 @@ def analyze_cmd(
     )
     provenance.write_analysis(
         analysis_path,
-        source=source.name,
+        source=source,
         threshold_set=thresholds.tag,
         thresholds_applied=thresholds.applied(),
         threshold_sources=thresholds.sources(),

@@ -779,7 +779,7 @@ def analyze(
     )
     provenance.write_analysis(
         analysis_path,
-        source=path.name,
+        source=path,
         threshold_set=combined_tag,
         thresholds_applied={
             **activity_thresholds.applied(),

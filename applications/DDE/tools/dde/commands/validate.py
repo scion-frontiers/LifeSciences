@@ -816,7 +816,12 @@ def _check_analysis_citations(
                 elif not source_path.is_file():
                     issues.append({
                         "file": str(child.relative_to(project_root)),
-                        "issue": f"source reference does not resolve: {source}",
+                        "issue": (
+                            f"Analysis cites source {source!r} which resolved "
+                            f"to '{source_path}' — file not found. Expected "
+                            "project-relative path like "
+                            f"'raw/<class>/{Path(source).name}'."
+                        ),
                     })
 
     detail: dict[str, Any] = {"analyses_checked": analyses_checked}
