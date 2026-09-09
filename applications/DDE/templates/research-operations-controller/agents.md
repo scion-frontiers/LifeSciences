@@ -524,7 +524,7 @@ Classify every failure from the validator's checklist:
 | 8. Layer boundary | Data-integrity |
 | Source tag — file missing | Data-integrity |
 | Source tag — value mismatch | Data-integrity |
-| Source tag — malformed format | Mechanical |
+| Source tag — malformed tag | Mechanical |
 
 **If ANY data-integrity defect is present** (regardless of co-occurring mechanical
 defects):
@@ -553,7 +553,13 @@ defects):
    ```
 3. Signal blocked and wait for the specialist's correction message.
 4. When the specialist re-submits: dispatch a **new** finding-validator for
-   re-validation. Follow the same PASS/FAIL protocol from the top.
+   re-validation. Log a `correction_validated` event to `events.ndjson`:
+   ```json
+   {"event_type":"correction_validated","work_order_id":"<id>",
+    "revision":<n>,"run_id":"<run>","correction_cycle":<1|2>,
+    "validation_result":"PASS|FAIL"}
+   ```
+   Then follow the same PASS/FAIL protocol from the top.
 5. When the specialist messages "cannot fix": log a `correction_escalated`
    event and classify the underlying cause per §7.
 
