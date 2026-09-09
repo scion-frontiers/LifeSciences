@@ -321,9 +321,9 @@ def _check_deliverables_exist(
                         "(no artifacts attributed to this work order)"
                     )
 
-    # --- Authorized classes: missing is OK, present is checked for provenance later ---
-    # No action needed here for authorized_classes — they are checked
-    # in provenance/analysis checks (4–5) via layer_0_classes.
+    # --- Authorized classes: presence is optional, absence is not a failure ---
+    # authorized_classes are NOT provenance-checked by the mechanical validator.
+    # They do not appear in layer_0_classes, so checks 4–6 skip them.
 
     detail: dict[str, Any] = {}
     if confined_failures:
