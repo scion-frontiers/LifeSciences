@@ -99,6 +99,8 @@ def _check_deliverables_schema(
         return {
             "name": "deliverables_schema",
             "result": "fail",
+            "status": "fail",
+            "kind": "COMPLETENESS",
             "detail": (
                 "deliverables dict contains neither layer_0/layer_0_classes "
                 "nor layer_1 — 5 of 8 checks cannot run and will be skipped. "

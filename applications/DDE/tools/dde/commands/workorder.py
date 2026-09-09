@@ -1270,7 +1270,7 @@ def accept_cmd(
         emit.line(f"  {c['name']:<25} {status}")
     emit.line("")
 
-    if overall_result == "pass":
+    if overall_result in ("pass", "pass_with_warnings"):
         emit.data("id", id)
         emit.data("revision", revision)
         emit.data("from_state", current_state)
