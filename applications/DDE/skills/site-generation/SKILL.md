@@ -62,6 +62,29 @@ The CLI renders content — it does not generate it. The agent must prepare and 
 - The sidebar groups findings by discipline automatically.
 - The CLI renders markdown to HTML.
 
+### Math in Markdown
+
+The build supports LaTeX math rendering via the mistune math plugin and vendored KaTeX.
+
+**Supported delimiters:**
+- Inline math: `$...$` or `\(...\)`
+- Display math: `$$...$$` or `\[...\]`
+
+**Usage:**
+- Standard LaTeX math commands work: `\text{}`, `\times`, `\approx`, subscripts, superscripts, Greek letters, fractions.
+- Example: `$K_i \approx 5.6\ \text{nM}$` renders as formatted math.
+- Use inline math for values in running text (potency, IC₅₀). Use display blocks for complex equations.
+
+**Avoid:**
+- Do not use HTML entities or Unicode workarounds for math that LaTeX handles natively.
+- Do not wrap math in code fences or backtick spans — those prevent rendering.
+- Do not mix delimiter styles within the same expression.
+
+**Build interaction:**
+- The mistune math plugin tokenises math spans during markdown-to-HTML conversion.
+- KaTeX auto-render processes the output HTML client-side.
+- KaTeX CSS, JS, and fonts are vendored alongside the site (same mechanism as viewers), so relocatable archives and offline copies render math without network access.
+
 ## Page Types
 
 The build produces the following page types:
