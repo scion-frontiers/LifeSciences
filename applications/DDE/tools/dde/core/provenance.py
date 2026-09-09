@@ -170,6 +170,11 @@ RELAY_CODES: dict[str, str] = {
         "place — if that is why it is being read, the answer is that the "
         "question is untooled, not that the pocket is 0.94."
     ),
+    "fpocket.ligand_present_in_input": (
+        "Pocket analysis was run on a structure containing non-protein chains. "
+        "Drug scores may be inflated relative to apo-structure scoring. Compare "
+        "with protein-only analysis for accurate druggability assessment."
+    ),
     "coscientist.partial_export": (
         "Confine conclusions to the ideas present in the export. Do not "
         "treat absence from it as evidence against an idea."

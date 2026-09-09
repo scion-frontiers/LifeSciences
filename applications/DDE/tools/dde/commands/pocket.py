@@ -58,6 +58,21 @@ TOOL = "fpocket"
 ARTIFACT_CLASS = "structures"
 THRESHOLD_SET = "pocket"
 
+#: Standard amino acid three-letter codes. Non-protein residues are
+#: anything outside this set, after excluding crystallographic waters.
+_STANDARD_AMINO_ACIDS: frozenset[str] = frozenset({
+    "ALA", "ARG", "ASN", "ASP", "CYS",
+    "GLN", "GLU", "GLY", "HIS", "ILE",
+    "LEU", "LYS", "MET", "PHE", "PRO",
+    "SER", "THR", "TRP", "TYR", "VAL",
+    "MSE",  # selenomethionine
+})
+
+#: Water residues — excluded from non-protein chain detection because
+#: every crystal structure has them and they do not affect pocket scoring
+#: in a practically relevant way.
+_WATER_RESIDUES: frozenset[str] = frozenset({"HOH", "WAT", "DOD", "H2O"})
+
 #: Descriptor lines in fpocket's info.txt, mapped to the field names we
 #: store. Keys are matched on the text before the colon, whitespace
 #: normalised. Anything unrecognised is kept verbatim under its own
@@ -261,6 +276,81 @@ def _parse_residues(atm_file: Path) -> list[dict[str, Any]]:
     return _parse_residues_pdb(text)
 
 
+def _detect_non_protein_chains(structure_path: Path) -> tuple[bool, list[str]]:
+    """Detect whether a structure contains non-protein chains.
+
+    Returns ``(has_non_protein, non_protein_chain_ids)`` where
+    ``has_non_protein`` is True if at least one chain contains
+    residues that are not standard amino acids (after excluding
+    crystallographic waters).
+
+    A chain is considered non-protein if it contains *no* standard
+    amino acid residues — i.e., it is entirely composed of ligands,
+    nucleic acids, ions, or other non-protein entities.
+    """
+    text = structure_path.read_text(encoding="utf-8", errors="replace")[:500_000]
+    fmt = detect_structure_format(structure_path)
+
+    # Collect residue names per chain.
+    chain_residues: dict[str, set[str]] = {}
+
+    if fmt == "cif":
+        lines = text.splitlines()
+        columns: list[str] = []
+        data_start = 0
+        in_atom_site = False
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped.startswith("_atom_site."):
+                in_atom_site = True
+                columns.append(stripped.split(".")[1])
+            elif in_atom_site:
+                data_start = i
+                break
+
+        col_comp = columns.index("label_comp_id") if "label_comp_id" in columns else None
+        col_chain = None
+        for name in ("auth_asym_id", "label_asym_id"):
+            if name in columns:
+                col_chain = columns.index(name)
+                break
+
+        if col_comp is not None and col_chain is not None:
+            for line in lines[data_start:]:
+                if not line.startswith(("ATOM", "HETATM")):
+                    continue
+                fields = line.split()
+                try:
+                    resname = fields[col_comp]
+                    chain = fields[col_chain]
+                except IndexError:
+                    continue
+                chain_residues.setdefault(chain, set()).add(resname)
+    else:
+        # PDB format — fixed-column layout.
+        for line in text.splitlines():
+            if not line.startswith(("ATOM  ", "HETATM")):
+                continue
+            resname = line[17:20].strip()
+            chain = line[21:22].strip() or "_"
+            if resname:
+                chain_residues.setdefault(chain, set()).add(resname)
+
+    # A chain is non-protein if none of its residues are standard
+    # amino acids, after excluding waters.
+    non_protein_chains: list[str] = []
+    for chain, residues in sorted(chain_residues.items()):
+        non_water = residues - _WATER_RESIDUES
+        if not non_water:
+            # Chain contains only water — not interesting.
+            continue
+        if not (non_water & _STANDARD_AMINO_ACIDS):
+            # No standard amino acids present → non-protein chain.
+            non_protein_chains.append(chain)
+
+    return bool(non_protein_chains), non_protein_chains
+
+
 @pocket.command()
 @click.argument("structure", type=click.Path())
 @out_option
@@ -287,6 +377,9 @@ def run(state: AppState, structure: str, out: str | None, as_json: bool, quiet: 
     stem = source.stem
 
     experimental, evidence = _is_experimental(source)
+
+    # --- detect non-protein chains before fpocket invocation ---
+    has_non_protein, non_protein_chains = _detect_non_protein_chains(source)
 
     sidecar = provenance.Sidecar(
         tool=TOOL,
@@ -360,7 +453,7 @@ def run(state: AppState, structure: str, out: str | None, as_json: bool, quiet: 
             shutil.rmtree(tree)
         shutil.copytree(produced, tree)
 
-    record = {
+    record: dict[str, Any] = {
         "tool": TOOL,
         "structure": source.name,
         "structure_sha256": provenance.sha256_file(source),
@@ -370,6 +463,16 @@ def run(state: AppState, structure: str, out: str | None, as_json: bool, quiet: 
         "pockets": pockets,
         "fpocket_output_dir": tree.name,
     }
+
+    # --- non-protein chain context ---
+    if has_non_protein:
+        record["input_contains_non_protein_chains"] = True
+        record["non_protein_chains"] = non_protein_chains
+        record["note"] = (
+            "Pocket scores computed with non-protein atoms present. "
+            "Scores may differ from protein-only analysis."
+        )
+
     record_path = target_dir / f"{stem}.pockets.json"
     record_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
 
@@ -378,6 +481,17 @@ def run(state: AppState, structure: str, out: str | None, as_json: bool, quiet: 
     # The fpocket tree is a directory, and add_output hashes files. Its
     # name is recorded instead of a digest invented for it.
     sidecar.note("fpocket_output_dir", tree.name)
+
+    if has_non_protein:
+        sidecar.note("non_protein_chains", non_protein_chains)
+        chains_str = ", ".join(non_protein_chains)
+        sidecar.warn(
+            f"Pocket analysis was run on a structure containing non-protein "
+            f"chains ({chains_str}). Drug scores may be inflated relative to "
+            "apo-structure scoring. Compare with protein-only analysis for "
+            "accurate druggability assessment.",
+            code="fpocket.ligand_present_in_input",
+        )
 
     sidecar.warn(
         "Pocket volume is a Monte Carlo estimate seeded from the clock; fpocket "

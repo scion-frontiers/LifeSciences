@@ -682,6 +682,170 @@ _BUSY_RE = re.compile(r"already working on a prediction", re.IGNORECASE)
 
 _ALLOWED_CHAIN_KEYS = {"protein", "rna", "dna", "ligand"}
 
+# ---------------------------------------------------------------------------
+# AF3 input templates (Item 2)
+# ---------------------------------------------------------------------------
+
+_AF3_TEMPLATES: dict[str, dict] = {
+    "default": {
+        "dialect": "alphafold3",
+        "version": 1,
+        "name": "my_prediction",
+        "modelSeeds": [42],
+        "sequences": [
+            {"protein": {"id": "A", "sequence": "REPLACE_WITH_SEQUENCE"}},
+            {"ligand": {"id": "B", "smiles": "REPLACE_WITH_SMILES"}},
+        ],
+    },
+    "complex": {
+        "dialect": "alphafold3",
+        "version": 1,
+        "name": "my_complex",
+        "modelSeeds": [42],
+        "sequences": [
+            {"protein": {"id": "A", "sequence": "REPLACE_WITH_SEQUENCE_A"}},
+            {"protein": {"id": "B", "sequence": "REPLACE_WITH_SEQUENCE_B"}},
+        ],
+    },
+    "ligand": {
+        "dialect": "alphafold3",
+        "version": 1,
+        "name": "my_docking",
+        "modelSeeds": [42],
+        "sequences": [
+            {"protein": {"id": "A", "sequence": "REPLACE_WITH_SEQUENCE"}},
+            {"ligand": {"id": "B", "smiles": "REPLACE_WITH_SMILES"}},
+        ],
+    },
+}
+
+
+def _af3_template(template_type: str) -> dict:
+    """Return an AF3 input JSON template by type.
+
+    Accepted types: 'default', 'complex' (protein-protein),
+    'ligand' (protein-ligand). Raises UsageError for unknown types.
+    """
+    template = _AF3_TEMPLATES.get(template_type)
+    if template is None:
+        raise UsageError(
+            f"unknown template type {template_type!r}",
+            detail=f"valid types: {', '.join(sorted(_AF3_TEMPLATES))}",
+            remedy="use --template, --template complex, or --template ligand",
+        )
+    # Return a deep copy so callers cannot mutate the canonical templates.
+    return json.loads(json.dumps(template))
+
+
+# ---------------------------------------------------------------------------
+# Per-residue pLDDT computation (Item 1 — SAFETY-RELEVANT)
+# ---------------------------------------------------------------------------
+#
+# AF3 produces per-atom pLDDT values stored in the B-factor column of
+# the CIF file.  Indexing these values as per-residue requires grouping
+# atoms by chain and residue number and computing the arithmetic mean.
+# The indexing scheme is documented in the output so no downstream
+# consumer can mistake per-atom values for per-residue values.
+
+
+def _parse_cif_plddt(
+    cif_text: str,
+) -> tuple[dict[str, dict[str, float]], dict[str, float]]:
+    """Parse per-atom B-factors from a CIF file, return per-residue mean pLDDT.
+
+    AF3 stores pLDDT in the ``B_iso_or_equiv`` column.  Atoms are
+    grouped by ``(auth_asym_id, auth_seq_id)`` — the user-facing chain
+    and residue number.
+
+    Returns:
+        ``(per_residue_plddt, chain_mean_plddt)``
+
+        ``per_residue_plddt`` maps chain → {residue_number → mean pLDDT}::
+
+            {"A": {"1": 92.3, "2": 88.1}, "B": {"1": 45.2}}
+
+        ``chain_mean_plddt`` maps chain → mean pLDDT over all residues.
+    """
+    lines = cif_text.splitlines()
+    columns: list[str] = []
+    data_start = 0
+    in_atom_site = False
+
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("_atom_site."):
+            in_atom_site = True
+            columns.append(stripped.split(".")[1])
+        elif in_atom_site:
+            data_start = i
+            break
+
+    if not columns:
+        raise SchemaError(
+            "CIF file contains no _atom_site header block",
+            detail="cannot extract per-atom pLDDT without atom site columns",
+        )
+
+    def _col(name: str, fallback: str | None = None) -> int | None:
+        if name in columns:
+            return columns.index(name)
+        if fallback and fallback in columns:
+            return columns.index(fallback)
+        return None
+
+    col_chain = _col("auth_asym_id", "label_asym_id")
+    col_resnum = _col("auth_seq_id", "label_seq_id")
+    col_bfactor = _col("B_iso_or_equiv")
+
+    if col_chain is None or col_resnum is None or col_bfactor is None:
+        missing = []
+        if col_chain is None:
+            missing.append("chain (auth_asym_id)")
+        if col_resnum is None:
+            missing.append("residue number (auth_seq_id)")
+        if col_bfactor is None:
+            missing.append("B-factor (B_iso_or_equiv)")
+        raise SchemaError(
+            f"CIF file missing required columns: {', '.join(missing)}",
+            detail=f"available columns: {', '.join(columns)}",
+        )
+
+    # Accumulate per-atom pLDDT values grouped by (chain, resnum).
+    atom_values: dict[tuple[str, str], list[float]] = {}
+
+    for line in lines[data_start:]:
+        if not line.startswith(("ATOM", "HETATM")):
+            continue
+        fields = line.split()
+        try:
+            chain = fields[col_chain]
+            resnum = fields[col_resnum]
+            bfactor = float(fields[col_bfactor])
+        except (ValueError, IndexError):
+            continue
+        atom_values.setdefault((chain, resnum), []).append(bfactor)
+
+    if not atom_values:
+        raise SchemaError(
+            "no atom records found in CIF file",
+            detail="the CIF file appears to contain no ATOM/HETATM records",
+        )
+
+    # Compute per-residue means.
+    per_residue: dict[str, dict[str, float]] = {}
+    chain_accum: dict[str, list[float]] = {}
+
+    for (chain, resnum), values in sorted(atom_values.items()):
+        mean_val = round(sum(values) / len(values), 2)
+        per_residue.setdefault(chain, {})[resnum] = mean_val
+        chain_accum.setdefault(chain, []).append(mean_val)
+
+    chain_means: dict[str, float] = {}
+    for chain, residue_means in sorted(chain_accum.items()):
+        chain_means[chain] = round(sum(residue_means) / len(residue_means), 2)
+
+    return per_residue, chain_means
+
 
 def _response_bytes(response: Any) -> bytes:
     """The response body, whatever transport object carried it.
@@ -756,9 +920,19 @@ def _validate_af3_input(payload: dict) -> None:
 @click.option(
     "--input",
     "input_file",
-    required=True,
+    required=False,
+    default=None,
     help="AF3 input JSON (the config object, or an instances-wrapped one). "
     "Relative paths resolve against the project root.",
+)
+@click.option(
+    "--template",
+    "template_type",
+    default=None,
+    is_flag=False,
+    flag_value="default",
+    help="Print an AF3 input JSON template to stdout and exit. "
+    "Values: default, complex (protein-protein), ligand (protein-ligand).",
 )
 @click.option("--deadline", type=float, default=1800.0, help="Total time cap, seconds.")
 @click.option(
@@ -776,7 +950,8 @@ def _validate_af3_input(payload: dict) -> None:
 @pass_state
 def predict(
     state: AppState,
-    input_file: str,
+    input_file: str | None,
+    template_type: str | None,
     deadline: float,
     cold_start_wait: float,
     busy_wait: float,
@@ -794,7 +969,21 @@ def predict(
     Cross-container concurrency is NOT solved here — see the lease broker
     note in tool-design-guidance.md §8. Parallel specialists in separate
     containers can still collide.
+
+    With ``--template``, prints a valid AF3 input JSON template to stdout
+    and exits without running a prediction.
     """
+    if template_type is not None:
+        click.echo(json.dumps(_af3_template(template_type), indent=2))
+        return
+
+    if input_file is None:
+        raise UsageError(
+            "--input is required when not using --template",
+            remedy="pass --input <path> to supply the AF3 input JSON, or "
+            "--template to print a template",
+        )
+
     try:
         from google.cloud import aiplatform
     except ImportError:
@@ -1093,6 +1282,67 @@ def analyze_prediction(
     for advisory in advisories[:4]:
         emit.line(f"* {advisory}")
     emit.path(project.relative(analysis_path), "analysis")
+    emit.flush()
+
+
+@alphafold.command("analyze-plddt")
+@click.argument("cif_path")
+@out_option
+@output_options
+@pass_state
+def analyze_plddt(
+    state: AppState, cif_path: str, out: str | None, as_json: bool, quiet: bool
+) -> None:
+    """Compute per-residue pLDDT means from an AF3 prediction CIF file.
+
+    SAFETY-RELEVANT: AF3 produces per-atom pLDDT values in the B-factor
+    column of the CIF output. Indexing these directly as per-residue
+    values yields plausible but wrong numbers (silent corruption).
+    This command groups atoms by chain and residue number and computes
+    the arithmetic mean, documenting the indexing scheme.
+
+    CIF_PATH is the ``.cif`` file from ``predict``.
+    """
+    project = state.project()
+    path = resolve_artifact(state, cif_path, "AF3 CIF structure")
+
+    cif_text = path.read_text(encoding="utf-8", errors="replace")
+    per_residue, chain_means = _parse_cif_plddt(cif_text)
+
+    stem = path.stem
+    # Strip common AF3 naming suffixes to derive a clean stem.
+    for suffix in (".cif",):
+        if stem.endswith(suffix):
+            stem = stem[: -len(suffix)]
+
+    result = {
+        "source": path.name,
+        "per_residue_plddt": per_residue,
+        "chain_mean_plddt": chain_means,
+        "indexing": "per_residue_mean_of_per_atom_values",
+        "note": (
+            "Values are arithmetic means of per-atom pLDDT (B-factor) "
+            "values grouped by (chain, residue_number). Do NOT index "
+            "a flat per-atom array as per-residue — the number of atoms "
+            "per residue varies, and the resulting values are wrong."
+        ),
+    }
+
+    target_dir = project.artifact_dir(ARTIFACT_CLASS, out)
+    analysis_path = target_dir / f"{stem}.plddt_analysis.json"
+    analysis_path.write_text(
+        json.dumps(result, indent=2) + "\n", encoding="utf-8"
+    )
+
+    emit = Emitter(as_json=as_json, quiet=quiet)
+    emit.data("per_residue_plddt", per_residue)
+    emit.data("chain_mean_plddt", chain_means)
+    emit.data("indexing", result["indexing"])
+    emit.line(f"{path.name}: {len(per_residue)} chain(s)")
+    for chain, mean in chain_means.items():
+        n_res = len(per_residue.get(chain, {}))
+        emit.line(f"  chain {chain}: {n_res} residues, mean pLDDT {mean:.1f}")
+    emit.path(project.relative(analysis_path), "plddt_analysis")
     emit.flush()
 
 

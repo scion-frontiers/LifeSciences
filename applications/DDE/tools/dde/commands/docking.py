@@ -604,6 +604,35 @@ def _split_flexible_receptor(
     flex_output.write_text("".join(flex_lines), encoding="utf-8")
 
 
+def _grid_size_warning(size: list[float], exhaustiveness: int) -> str | None:
+    """Return a warning string if the docking search space is large.
+
+    Thresholds chosen from pilot experience (AD Target Discovery):
+    - volume > 50,000 A^3 at any exhaustiveness
+    - volume > 30,000 A^3 when exhaustiveness > 8
+
+    Runtime estimate calibrated from the pilot: a 43.9 x 40.8 x 41.5 A
+    grid at exhaustiveness=16 took ~15-20 min on one Vina core.
+    """
+    volume = size[0] * size[1] * size[2]
+    large = volume > 50_000 or (exhaustiveness > 8 and volume > 30_000)
+    if not large:
+        return None
+
+    # Calibration reference from the pilot run.
+    ref_vol = 43.9 * 40.8 * 41.5  # ~74,427 A^3
+    ref_exhaust = 16
+    ref_time = 17.5  # midpoint of 15-20 min
+    estimated_mins = ref_time * (volume / ref_vol) * (exhaustiveness / ref_exhaust)
+
+    return (
+        f"Warning: large search space ({size[0]:.1f} x {size[1]:.1f} x "
+        f"{size[2]:.1f} A, exhaustiveness={exhaustiveness}).\n"
+        f"Estimated runtime: ~{estimated_mins:.0f} min. Consider "
+        f"--background or reducing exhaustiveness."
+    )
+
+
 def _parse_vina_poses(pdbqt_text: str) -> list[dict[str, Any]]:
     """Parse REMARK VINA RESULT lines from Vina output PDBQT.
 
@@ -1018,6 +1047,11 @@ def run_cmd(
     gridbox_doc = provenance.read_json(gridbox_path, "gridbox")
     center = gridbox_doc["center"]
     size = gridbox_doc["size"]
+
+    # --- grid size warning (to stderr so JSON output is not corrupted) ---
+    grid_warning = _grid_size_warning(size, exhaustiveness)
+    if grid_warning:
+        click.echo(grid_warning, err=True)
 
     vina_ver = _vina_version(vina_path)
 
