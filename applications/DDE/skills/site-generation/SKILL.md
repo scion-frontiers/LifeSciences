@@ -250,8 +250,14 @@ After building, an agent can serve the site locally and expose it through the Sc
 
 Python's `http.server` is always available in Scion environments:
 
+> **Reserved port:** Port 8080 is reserved by the Scion Hub in all Scion environments. Agents must NOT bind port 8080 for any purpose. If the chosen port is already in use, try the next candidate (e.g. 8001, 8002) rather than failing.
+
 ```bash
-python3 -m http.server 8080 --directory _site/ &
+# Try ports in order until one binds successfully
+for port in 8000 8001 8002 8003; do
+  python3 -m http.server "$port" --directory _site/ &
+  if kill -0 $! 2>/dev/null; then break; fi
+done
 ```
 
 ### 2. Expose via Scion
@@ -259,15 +265,15 @@ python3 -m http.server 8080 --directory _site/ &
 Use `sciontool expose` to register the local port with the Hub. The Hub creates a proxied URL that routes external requests to the agent's local server:
 
 ```bash
-sciontool expose 8080 --label "site preview"
+sciontool expose 8000 --label "site preview"
 ```
 
 Output:
 
 ```
-Port 8080 exposed.
-URL: http://<hub>/api/v1/agents/<agent-id>/ports/8080/proxy/
-Base path: /api/v1/agents/<agent-id>/ports/8080/proxy/
+Port 8000 exposed.
+URL: http://<hub>/api/v1/agents/<agent-id>/ports/8000/proxy/
+Base path: /api/v1/agents/<agent-id>/ports/8000/proxy/
 ```
 
 Share the returned URL with stakeholders. Use `sciontool expose --list` to see all currently exposed ports and their URLs.
