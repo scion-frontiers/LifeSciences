@@ -40,6 +40,9 @@ zstandard>=0.22
 google-cloud-aiplatform>=1.60
 google-cloud-bigquery>=3.0    # pubmed-bq: PubMed via BigQuery
 
+# --- JSONPath ---
+jsonpath-ng>=1.6                  # source-tag resolution (#100)
+
 # --- AlphaGenome pip backend ---
 # The only path that offers ISM. Needs ALPHAGENOME_API_KEY at run time;
 # left commented out because that key is not yet provisioned and
