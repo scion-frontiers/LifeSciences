@@ -94,6 +94,7 @@ def _check_deliverables_schema(
         or deliverables.get("layer_0")
         or deliverables.get("required_classes")
         or deliverables.get("authorized_classes")
+        or deliverables.get("layer_0_classes_optional")
     )
     has_layer_1 = bool(deliverables.get("layer_1"))
 
@@ -272,6 +273,14 @@ def _check_deliverables_exist(
     - **authorized_classes** entries: missing → no finding (pass
       silently).  Present → provenance checked as before.
 
+    Also supports consumed upstream classes (#132) and optional classes:
+
+    - **consumed classes** (via ``consumes`` block): when a required
+      class is not produced by this WO but is available from a consumed
+      upstream WO → ``pass`` with cross-WO citation recorded.
+    - **layer_0_classes_optional** entries: present → recorded as
+      present, absent → recorded as absent (INFO, not a failure).
+
     When *wo_id* is provided, only artifacts attributed to that work
     order (or untagged, for backward compatibility with pre-#166 records)
     count toward satisfying each class entry.
@@ -280,6 +289,9 @@ def _check_deliverables_exist(
     confined_failures: list[str] = []
     skipped: list[dict[str, str]] = []
     unknown_classes: list[dict[str, str]] = []
+    consumed_satisfied: list[dict[str, Any]] = []  # classes satisfied via consumes (#132)
+    cross_wo_citations: list[dict[str, Any]] = []  # cross-WO citation records (#132)
+    optional_info: list[dict[str, Any]] = []  # optional class status (#132)
 
     # Layer 1 paths
     layer_1 = deliverables.get("layer_1", [])
@@ -351,6 +363,15 @@ def _check_deliverables_exist(
                     if consumed_wo_ids and _has_artifacts_from_consumed_wos(
                         art_dir, project_root, artifacts, consumed_wo_ids,
                     ):
+                        # Record the cross-WO satisfaction (#132).
+                        consumed_satisfied.append({
+                            "class": artifact_class,
+                            "satisfied_by": sorted(consumed_wo_ids),
+                        })
+                        cross_wo_citations.append({
+                            "class": artifact_class,
+                            "from_work_orders": sorted(consumed_wo_ids),
+                        })
                         continue  # satisfied by consumption
                     missing.append(
                         f"layer_0_classes/{artifact_class} "
@@ -361,6 +382,70 @@ def _check_deliverables_exist(
     # authorized_classes are NOT provenance-checked by the mechanical validator.
     # They do not appear in layer_0_classes, so checks 4–6 skip them.
 
+    # --- Optional classes (layer_0_classes_optional, #132) ---
+    # Classes listed here are checked but do not fail validation if absent.
+    optional_classes = deliverables.get("layer_0_classes_optional", [])
+    if isinstance(optional_classes, list):
+        for entry in optional_classes:
+            artifact_class = entry if isinstance(entry, str) else (
+                entry.get("class") or entry.get("name") or str(entry)
+            )
+            if not _is_known_artifact_class(artifact_class):
+                optional_info.append({
+                    "class": artifact_class,
+                    "status": "unknown",
+                    "message": (
+                        f"Artifact class {artifact_class!r} is not registered "
+                        "in ARTIFACT_DIRS."
+                    ),
+                })
+                continue
+            opt_artifacts = _find_layer0_artifacts(project_root, artifact_class)
+            if not opt_artifacts:
+                optional_info.append({
+                    "class": artifact_class,
+                    "status": "absent",
+                })
+                continue
+            if wo_id is not None:
+                opt_art_dir = opt_artifacts[0].parent
+                opt_sidecar_index, _, opt_other_wo_hashes = _build_sidecar_index(
+                    opt_art_dir, project_root, wo_id=wo_id,
+                )
+                has_own = any(
+                    sha256_file(a) not in opt_other_wo_hashes
+                    or sha256_file(a) in opt_sidecar_index
+                    for a in opt_artifacts
+                )
+                if has_own:
+                    optional_info.append({
+                        "class": artifact_class,
+                        "status": "present",
+                    })
+                else:
+                    # Check if optional class is satisfied via consumes.
+                    opt_consumed_wo_ids = consumes_map.get(
+                        normalize_artifact_class(artifact_class), set()
+                    )
+                    if opt_consumed_wo_ids and _has_artifacts_from_consumed_wos(
+                        opt_art_dir, project_root, opt_artifacts, opt_consumed_wo_ids,
+                    ):
+                        optional_info.append({
+                            "class": artifact_class,
+                            "status": "present_via_consumes",
+                            "satisfied_by": sorted(opt_consumed_wo_ids),
+                        })
+                    else:
+                        optional_info.append({
+                            "class": artifact_class,
+                            "status": "absent",
+                        })
+            else:
+                optional_info.append({
+                    "class": artifact_class,
+                    "status": "present",
+                })
+
     detail: dict[str, Any] = {}
     if confined_failures:
         detail["path_confinement_failures"] = confined_failures
@@ -370,6 +455,12 @@ def _check_deliverables_exist(
         detail["not_applicable"] = skipped
     if unknown_classes:
         detail["unknown_artifact_classes"] = unknown_classes
+    if consumed_satisfied:
+        detail["consumed_satisfied"] = consumed_satisfied
+    if cross_wo_citations:
+        detail["cross_wo_citations"] = cross_wo_citations
+    if optional_info:
+        detail["layer_0_classes_optional"] = optional_info
 
     # Determine layer_0_classes list for the detail dict (backward compat).
     layer_0_classes = deliverables.get("layer_0_classes", [])
@@ -393,16 +484,24 @@ def _check_deliverables_exist(
             "kind": "COMPLETENESS",
             "detail": detail,
         }
+    pass_detail: dict[str, Any] = {
+        "layer_1_count": len(layer_1) if isinstance(layer_1, list) else 0,
+        "layer_0_classes": layer_0_classes if isinstance(layer_0_classes, list) else [],
+    }
+    if skipped:
+        pass_detail["not_applicable"] = skipped
+    if consumed_satisfied:
+        pass_detail["consumed_satisfied"] = consumed_satisfied
+    if cross_wo_citations:
+        pass_detail["cross_wo_citations"] = cross_wo_citations
+    if optional_info:
+        pass_detail["layer_0_classes_optional"] = optional_info
     return {
         "name": "deliverables_exist",
         "result": "pass",
         "status": "ok",
         "kind": "COMPLETENESS",
-        "detail": {
-            "layer_1_count": len(layer_1) if isinstance(layer_1, list) else 0,
-            "layer_0_classes": layer_0_classes if isinstance(layer_0_classes, list) else [],
-            **({} if not skipped else {"not_applicable": skipped}),
-        },
+        "detail": pass_detail,
     }
 
 

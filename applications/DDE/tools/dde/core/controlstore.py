@@ -210,6 +210,14 @@ def normalize_deliverables(deliverables: dict[str, Any]) -> dict[str, Any]:
     # new and optional — don't strip it, don't transform it.
     # (Validation of its structure is deferred to the command layer.)
 
+    # Normalize `layer_0_classes_optional` entries (#132).
+    # Classes listed here are checked for existence but do not fail
+    # validation if absent.
+    if "layer_0_classes_optional" in normalized and isinstance(normalized["layer_0_classes_optional"], list):
+        normalized["layer_0_classes_optional"] = [
+            _flatten_entry(e, "class") for e in normalized["layer_0_classes_optional"]
+        ]
+
     return normalized
 
 
