@@ -230,6 +230,45 @@ These checks are cheap — minutes of authoring diligence — and prevent the mo
 expensive class of work order failure: a specialist that completes a full cohort
 only to have its deliverables rejected because the inputs were never available.
 
+### Capability state in decision records
+
+Every decision recorded in `decision-log.md` must carry the capability state at
+decision time. Before recording a decision:
+
+1. Run `dde doctor --json` (or `dde doctor` if the JSON format is not yet
+   available) to check current capability state.
+2. If any capability relevant to the decision method is unavailable or degraded,
+   record it in the decision entry's `capability_state` field.
+3. Name the fallback method used and what the full method would have provided.
+
+**Example:** If `hypex` is unavailable and Stage 0 target selection falls back to
+`charter` (lead-authored concepts), DEC-002 must carry:
+
+```
+capability_state:
+  - capability: hypothesis-exploration (hypex)
+    status: unavailable
+    fallback: charter (lead-authored)
+    impact: No pairwise tournament ranking, no Elo separation, no proximity
+            clustering for merge recommendations. Target selection based on
+            lead judgment rather than comparative analysis.
+```
+
+This applies to **every decision type**: charter decisions, build triage decisions,
+gate decisions, acceptance decisions, pivot decisions. The capability state travels
+with the decision, not with a separate preamble or disclosure.
+
+**Why this matters:** A decision made under degraded capability is not wrong — it is
+made with the method that was available. But a reader of that decision, or of a gate
+document that depends on it, must be able to see the degradation without finding a
+separate prose disclosure in an earlier entry. Mandatory relays already enforce this
+for findings; `capability_state` enforces it for decisions.
+
+If `dde doctor --json` is not yet available, record capability state manually by
+running `dde doctor`, reading its output, and transcribing the relevant unavailable
+capabilities into the decision entry. The structured field is preferred when
+available; the manual fallback ensures the information is captured regardless.
+
 ### Writing a decision question
 
 The question is the part most often written badly. Test it:
@@ -308,9 +347,23 @@ terminating at the attestation. Quote the attestation verbatim in any finding. T
 
 #### Hypex
 
-Pending Track B. When available, `dde hypex analyze` will produce an assessment with
-its own scoring basis. Handle analogously to the co-scientist branch, substituting
-the hypex-specific analysis output.
+When available, `dde hypex analyze` produces an assessment with its own scoring
+basis — match ledger, Elo rankings, proximity clustering, and merge recommendations.
+Handle analogously to the co-scientist branch, substituting the hypex-specific
+analysis output.
+
+If the hypothesis-exploration capability is unavailable (check `dde doctor`), the
+program falls back to a different strategy (typically `charter`). When this happens:
+- The `hypothesis.strategy_fallback` relay fires automatically (if using
+  `dde hypothesis adopt`).
+- Record the fallback in the decision record's `capability_state` field (see
+  "Capability state in decision records" in section 4).
+- Name what the tournament stack would have provided and what the fallback method
+  cannot: pairwise comparison, Elo separation, proximity clustering for merge
+  recommendations.
+- Do not record the fallback only in the charter preamble. The decision record that
+  the fallback actually affected (typically DEC-002, the target selection) must
+  carry it.
 
 ### Parallel mechanism-direction screening
 
@@ -879,6 +932,19 @@ justification exercise.
 3. Evaluate the configured gate criteria and the unresolved liabilities.
 4. Record the decision: advance, loop, pivot, pause, or terminate.
 5. **Only then** compile the Layer 3 gate document from the frozen, accepted snapshot.
+6. **Include capability state in the gate document.** Review every decision record
+   that feeds this gate. If any decision was made under degraded capability
+   (non-empty `capability_state` field), include a **Capability Degradations**
+   section in the gate document listing:
+   - Which decision was affected (DEC-NNN)
+   - What capability was unavailable
+   - What fallback was used
+   - What the full method would have provided
+
+   This section is displayed the same way findings display mandatory relays: it is
+   a structured, required part of the gate document, not an optional prose caveat.
+   A gate document that silently omits a capability degradation from its input
+   decisions is incomplete.
 
 Gate documents never become the routing surface. After a gate, routing continues from
 updated Layer 2 state and the decision record — not from the gate document.
@@ -1157,6 +1223,11 @@ not binding.
     concept is not worth two tool invocations, terminate it — do not park
     it and leave it uncharacterized (section 5a, "Backup characterization
     obligations").
+20. **Record capability state with every decision.**
+    If a capability was unavailable when a decision was made, the decision record
+    must carry the degradation in its `capability_state` field — not as prose in a
+    separate entry. A gate whose inputs include decisions made under degraded
+    capability must display the degradation in the gate document (section 9, step 6).
 
 ---
 
