@@ -505,6 +505,78 @@ def _check_deliverables_exist(
     }
 
 
+def _wo_reference_found(
+    content: str,
+    wo_num: str,
+    revision: int,
+) -> tuple[str, str | None]:
+    """Detect whether *content* identifies the work order unambiguously.
+
+    *wo_num* is the bare WO number (e.g. ``"004"``), *revision* the
+    integer revision.
+
+    Returns ``(match_kind, found_text)`` where *match_kind* is one of:
+
+    - ``"exact"`` — the canonical ``WO-<num>-r<rev>`` form is present.
+    - ``"accepted"`` — a recognised alternative form is present
+      (e.g. split metadata fields, ``WO-004 r1``, ``WO-004 (rev 1)``,
+      ``WO-004, Revision 1``).  Triggers a warning, not a failure.
+    - ``"none"`` — no WO identifier detected.  Triggers a failure.
+
+    *found_text* is the literal text matched for the ``accepted`` case
+    (``None`` for ``exact`` and ``none``).
+    """
+    canonical = f"WO-{wo_num}-r{revision}"
+    if canonical in content:
+        return ("exact", None)
+
+    # --- Accepted alternative forms (case-insensitive where noted) ---
+
+    # 1. Split metadata fields:
+    #    Work Order: WO-<num>  +  Revision: <rev>
+    wo_field_re = re.compile(
+        rf"Work\s+Order\s*:\s*WO-{re.escape(wo_num)}", re.IGNORECASE,
+    )
+    rev_field_re = re.compile(
+        rf"(?:Revision|Rev)\s*:\s*{revision}", re.IGNORECASE,
+    )
+    wo_match = wo_field_re.search(content)
+    rev_match = rev_field_re.search(content)
+    if wo_match and rev_match:
+        return (
+            "accepted",
+            f"{wo_match.group(0)} + {rev_match.group(0)}",
+        )
+
+    # 2. Inline forms: WO-<num> r<rev>
+    inline_re = re.compile(
+        rf"WO-{re.escape(wo_num)}\s+r{revision}\b", re.IGNORECASE,
+    )
+    m = inline_re.search(content)
+    if m:
+        return ("accepted", m.group(0))
+
+    # 3. Parenthesised: WO-<num> (rev <rev>)
+    paren_re = re.compile(
+        rf"WO-{re.escape(wo_num)}\s*\(\s*rev\s+{revision}\s*\)",
+        re.IGNORECASE,
+    )
+    m = paren_re.search(content)
+    if m:
+        return ("accepted", m.group(0))
+
+    # 4. Comma-separated: WO-<num>, Revision <rev>
+    comma_re = re.compile(
+        rf"WO-{re.escape(wo_num)}\s*,\s*(?:Revision|Rev)\s+{revision}\b",
+        re.IGNORECASE,
+    )
+    m = comma_re.search(content)
+    if m:
+        return ("accepted", m.group(0))
+
+    return ("none", None)
+
+
 def _check_report_headings(
     project_root: Path,
     deliverables: dict[str, Any],
@@ -516,8 +588,13 @@ def _check_report_headings(
 
     Two sub-checks:
 
-    1. **WO reference** — the string ``WO-<id>-r<rev>`` must appear in
-       each Layer 1 file.  Missing → ``fail`` / ``COMPLETENESS``.
+    1. **WO reference** — the work order must be identified in each
+       Layer 1 file.  The canonical form is ``WO-<id>-r<rev>``, but
+       split metadata (``Work Order: WO-004`` + ``Revision: 1``) and
+       other unambiguous forms are accepted with a warning.
+       - Canonical form → ``ok``.
+       - Accepted alternative form → ``warn`` / ``CONVENTION``.
+       - No identifier found → ``fail`` / ``COMPLETENESS``.
     2. **Key Findings heading** — ``## Key Findings`` must appear.
        When absent, we look for any ``##``-level heading between
        ``## Summary`` and ``## Implications`` (or end-of-file).
@@ -527,8 +604,10 @@ def _check_report_headings(
     The returned result reflects the *worst* status across both
     sub-checks.
     """
-    reference = f"WO-{wo_id.removeprefix('WO-')}-r{revision}"
+    wo_num = wo_id.removeprefix("WO-")
+    reference = f"WO-{wo_num}-r{revision}"
     missing_ref: list[str] = []
+    nonstandard_ref: list[dict[str, str]] = []  # accepted but non-canonical
 
     layer_1 = deliverables.get("layer_1", [])
     if not isinstance(layer_1, list) or not layer_1:
@@ -551,8 +630,17 @@ def _check_report_headings(
         content = resolved.read_text(encoding="utf-8", errors="replace")
 
         # Sub-check 1: WO reference string.
-        if reference not in content:
+        match_kind, found_text = _wo_reference_found(
+            content, wo_num, revision,
+        )
+        if match_kind == "none":
             missing_ref.append(str(rel_path))
+        elif match_kind == "accepted":
+            nonstandard_ref.append({
+                "file": str(rel_path),
+                "found": found_text or "(alternative form)",
+                "expected": reference,
+            })
 
         # Sub-check 2: ## Key Findings heading.
         if "## Key Findings" not in content:
@@ -589,8 +677,22 @@ def _check_report_headings(
 
     # Build detail dict.
     detail: dict[str, Any] = {"reference": reference}
+    accepted_forms = (
+        f"'{reference}', "
+        f"'Work Order: WO-{wo_num}' + 'Revision: {revision}', "
+        f"'WO-{wo_num} r{revision}'"
+    )
     if missing_ref:
         detail["files_missing_reference"] = missing_ref
+        detail["accepted_forms"] = accepted_forms
+        detail["error_message"] = (
+            f"Report does not identify work order {reference}.\n"
+            f"Accepted forms: {accepted_forms}\n"
+            f"Found: {', '.join(missing_ref) if missing_ref else 'no work order identifier detected'}"
+        )
+    if nonstandard_ref:
+        detail["nonstandard_reference"] = nonstandard_ref
+        detail["accepted_forms"] = accepted_forms
     if heading_variants:
         detail["heading_variants"] = heading_variants
     if missing_headings:
@@ -599,7 +701,7 @@ def _check_report_headings(
     # Determine worst status across both sub-checks.
     # Priority: fail > warn > ok.
     has_fail = bool(missing_ref) or bool(missing_headings)
-    has_warn = bool(heading_variants)
+    has_warn = bool(heading_variants) or bool(nonstandard_ref)
 
     if has_fail:
         # Determine kind: missing_ref and missing_headings are COMPLETENESS.
