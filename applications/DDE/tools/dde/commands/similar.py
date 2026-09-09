@@ -43,7 +43,13 @@ from ..common import (
     pass_state,
 )
 from ..core import http, provenance
-from ..core.errors import ArtifactError, DependencyError, Refusal
+from ..core.errors import (
+    ArtifactError,
+    DependencyError,
+    EndpointError,
+    EndpointUnavailable,
+    Refusal,
+)
 from ..core.qps import qps_for_host
 
 TOOL = "similar"
@@ -173,7 +179,11 @@ def _pubchem_similarity(
         f"{PUBCHEM_API}/compound/similarity/smiles/{encoded}/JSON"
         f"?Threshold={threshold_int}&MaxRecords={max_results}"
     )
-    resp = http.get_json(url, qps=qps_for_host("pubchem.ncbi.nlm.nih.gov"))
+    resp = http.get_json(
+        url,
+        qps=qps_for_host("pubchem.ncbi.nlm.nih.gov"),
+        tolerate_status=(202,),
+    )
 
     listkey = (resp.get("Waiting") or {}).get("ListKey")
     if not listkey:
@@ -220,7 +230,11 @@ def _pubchem_substructure(
         f"{PUBCHEM_API}/compound/substructure/smiles/{encoded}/JSON"
         f"?MaxRecords={max_results}"
     )
-    resp = http.get_json(url, qps=qps_for_host("pubchem.ncbi.nlm.nih.gov"))
+    resp = http.get_json(
+        url,
+        qps=qps_for_host("pubchem.ncbi.nlm.nih.gov"),
+        tolerate_status=(202,),
+    )
 
     listkey = (resp.get("Waiting") or {}).get("ListKey")
     if not listkey:
@@ -396,8 +410,22 @@ def _build_artifact(
     threshold: float | None,
     max_results: int,
     hits: list[dict[str, Any]],
+    *,
+    search_status: str = "completed",
+    failure_reason: str | None = None,
+    backend_results: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Build the structured dde.similar.v1 artifact."""
+    """Build the structured dde.similar.v1 artifact.
+
+    ``search_status`` is one of:
+      - ``"completed"`` — all requested backends succeeded.
+      - ``"partial"`` — some backends succeeded, some failed.
+      - ``"failed"`` — all backends failed.
+
+    When ``search_status`` is ``"failed"``, the artifact carries
+    ``failure_reason`` and zero hits, and must NOT be interpreted as
+    a clean novelty result.
+    """
     closest = None
     if hits:
         # Find hit with highest Tanimoto (if any have it).
@@ -422,15 +450,22 @@ def _build_artifact(
     if threshold is not None:
         query["threshold"] = threshold
 
-    return {
+    artifact: dict[str, Any] = {
         "schema": SCHEMA,
         "query": query,
+        "search_status": search_status,
+        "result_count": len(hits),
         "summary": {
             "n_hits": len(hits),
             "closest_match": closest,
         },
         "hits": hits,
     }
+    if failure_reason is not None:
+        artifact["failure_reason"] = failure_reason
+    if backend_results is not None:
+        artifact["backend_results"] = backend_results
+    return artifact
 
 
 # ---------------------------------------------------------------------------
@@ -446,10 +481,54 @@ def _classify_results(
     """Classify a stored similarity/substructure result.
 
     Returns ``(verdict, relays)`` where *verdict* is one of
-    ``"exact-match"``, ``"known-compound-found"``, or ``"novel"``.
+    ``"exact-match"``, ``"known-compound-found"``, ``"novel"``, or
+    ``"indeterminate"``.
+
+    A failed search (``search_status == "failed"``) always produces
+    ``"indeterminate"`` — a search that did not execute must NEVER be
+    indistinguishable from a clean novelty result (#84).
     """
+    search_status = artifact.get("search_status", "completed")
     hits = artifact.get("hits", [])
 
+    # Guarded relay emission.
+    relays: list[dict[str, str]] = []
+
+    # ── Failed search → indeterminate ────────────────────────────────
+    if search_status == "failed":
+        failure_reason = artifact.get("failure_reason", "unknown")
+        relays.append(
+            provenance.relay(
+                "similar.all_backends_failed",
+                f"All similarity search backends failed ({failure_reason}). "
+                "Novelty assessment is incomplete.",
+            )
+        )
+        # UNCONDITIONAL: always fires.
+        relays.append(
+            provenance.relay(
+                "similar.database_coverage_limited",
+                "Search covered PubChem (~116M compounds) and/or ChEMBL "
+                "(~2.4M bioactive molecules); compounds with no similar hits "
+                "may have close analogs in proprietary collections, patent "
+                "literature, or databases not queried",
+            )
+        )
+        return "indeterminate", relays
+
+    # ── Partial search → fire search_incomplete relay ────────────────
+    if search_status == "partial":
+        failure_reason = artifact.get("failure_reason", "one or more backends failed")
+        relays.append(
+            provenance.relay(
+                "similar.search_incomplete",
+                f"Similarity search did not complete ({failure_reason}). "
+                "Do not interpret the absence of similar compounds as "
+                "confirmed novelty.",
+            )
+        )
+
+    # ── Normal classification on available hits ──────────────────────
     # Find the highest Tanimoto score across all hits.
     max_tanimoto = 0.0
     has_any_hit = len(hits) > 0
@@ -464,9 +543,6 @@ def _classify_results(
         verdict = "known-compound-found"
     else:
         verdict = "novel"
-
-    # Guarded relay emission.
-    relays: list[dict[str, str]] = []
 
     # GUARDED: fires ONLY when at least one hit is returned.
     if has_any_hit:
@@ -549,22 +625,71 @@ def search_cmd(
 
     all_hits: list[dict[str, Any]] = []
     endpoints_used: list[str] = []
+    backend_results: list[dict[str, Any]] = []
+    backends_attempted = 0
+    backends_failed = 0
+    failure_reasons: list[str] = []
 
     if source in ("pubchem", "both"):
-        pubchem_hits = _pubchem_similarity(canonical, threshold, max_results)
-        all_hits.extend(pubchem_hits)
-        endpoints_used.append(f"{PUBCHEM_API}/compound/similarity")
+        backends_attempted += 1
+        try:
+            pubchem_hits = _pubchem_similarity(canonical, threshold, max_results)
+            all_hits.extend(pubchem_hits)
+            endpoints_used.append(f"{PUBCHEM_API}/compound/similarity")
+            backend_results.append({
+                "backend": "pubchem",
+                "status": "completed",
+                "hit_count": len(pubchem_hits),
+            })
+        except (EndpointError, EndpointUnavailable, ArtifactError) as exc:
+            backends_failed += 1
+            reason = f"pubchem: {exc.message}"
+            failure_reasons.append(reason)
+            backend_results.append({
+                "backend": "pubchem",
+                "status": "failed",
+                "failure_reason": str(exc.message),
+            })
 
     if source in ("chembl", "both"):
-        chembl_hits = _chembl_similarity(canonical, threshold, max_results)
-        all_hits.extend(chembl_hits)
-        endpoints_used.append(f"{CHEMBL_API}/similarity")
+        backends_attempted += 1
+        try:
+            chembl_hits = _chembl_similarity(canonical, threshold, max_results)
+            all_hits.extend(chembl_hits)
+            endpoints_used.append(f"{CHEMBL_API}/similarity")
+            backend_results.append({
+                "backend": "chembl",
+                "status": "completed",
+                "hit_count": len(chembl_hits),
+            })
+        except (EndpointError, EndpointUnavailable, ArtifactError) as exc:
+            backends_failed += 1
+            reason = f"chembl: {exc.message}"
+            failure_reasons.append(reason)
+            backend_results.append({
+                "backend": "chembl",
+                "status": "failed",
+                "failure_reason": str(exc.message),
+            })
+
+    # Determine search status.
+    if backends_failed == 0:
+        search_status = "completed"
+    elif backends_failed < backends_attempted:
+        search_status = "partial"
+    else:
+        search_status = "failed"
+
+    failure_reason = "; ".join(failure_reasons) if failure_reasons else None
 
     # Merge, deduplicate, sort, cap.
     merged = _merge_hits(all_hits, max_results)
 
     artifact = _build_artifact(
         canonical, "similarity", source, threshold, max_results, merged,
+        search_status=search_status,
+        failure_reason=failure_reason,
+        backend_results=backend_results,
     )
 
     artifact_path = target_dir / f"{slug}.similar-{source}.json"
@@ -657,22 +782,71 @@ def substructure_cmd(
 
     all_hits: list[dict[str, Any]] = []
     endpoints_used: list[str] = []
+    backend_results: list[dict[str, Any]] = []
+    backends_attempted = 0
+    backends_failed = 0
+    failure_reasons: list[str] = []
 
     if source in ("pubchem", "both"):
-        pubchem_hits = _pubchem_substructure(canonical, max_results)
-        all_hits.extend(pubchem_hits)
-        endpoints_used.append(f"{PUBCHEM_API}/compound/substructure")
+        backends_attempted += 1
+        try:
+            pubchem_hits = _pubchem_substructure(canonical, max_results)
+            all_hits.extend(pubchem_hits)
+            endpoints_used.append(f"{PUBCHEM_API}/compound/substructure")
+            backend_results.append({
+                "backend": "pubchem",
+                "status": "completed",
+                "hit_count": len(pubchem_hits),
+            })
+        except (EndpointError, EndpointUnavailable, ArtifactError) as exc:
+            backends_failed += 1
+            reason = f"pubchem: {exc.message}"
+            failure_reasons.append(reason)
+            backend_results.append({
+                "backend": "pubchem",
+                "status": "failed",
+                "failure_reason": str(exc.message),
+            })
 
     if source in ("chembl", "both"):
-        chembl_hits = _chembl_substructure(canonical, max_results)
-        all_hits.extend(chembl_hits)
-        endpoints_used.append(f"{CHEMBL_API}/substructure")
+        backends_attempted += 1
+        try:
+            chembl_hits = _chembl_substructure(canonical, max_results)
+            all_hits.extend(chembl_hits)
+            endpoints_used.append(f"{CHEMBL_API}/substructure")
+            backend_results.append({
+                "backend": "chembl",
+                "status": "completed",
+                "hit_count": len(chembl_hits),
+            })
+        except (EndpointError, EndpointUnavailable, ArtifactError) as exc:
+            backends_failed += 1
+            reason = f"chembl: {exc.message}"
+            failure_reasons.append(reason)
+            backend_results.append({
+                "backend": "chembl",
+                "status": "failed",
+                "failure_reason": str(exc.message),
+            })
+
+    # Determine search status.
+    if backends_failed == 0:
+        search_status = "completed"
+    elif backends_failed < backends_attempted:
+        search_status = "partial"
+    else:
+        search_status = "failed"
+
+    failure_reason = "; ".join(failure_reasons) if failure_reasons else None
 
     # Merge, deduplicate, cap.
     merged = _merge_hits(all_hits, max_results)
 
     artifact = _build_artifact(
         canonical, "substructure", source, None, max_results, merged,
+        search_status=search_status,
+        failure_reason=failure_reason,
+        backend_results=backend_results,
     )
 
     artifact_path = target_dir / f"{slug}.substruct-{source}.json"
@@ -789,14 +963,18 @@ def analyze_cmd(
         if t is not None and t > max_tanimoto:
             max_tanimoto = t
 
-    assessment = {
+    search_status = artifact.get("search_status", "completed")
+    assessment: dict[str, Any] = {
         "outcome": verdict,
         "smiles": canonical,
+        "search_status": search_status,
         "n_hits": len(hits),
         "max_tanimoto": max_tanimoto,
         "search_type": artifact.get("query", {}).get("search_type"),
         "source": artifact.get("query", {}).get("source"),
     }
+    if artifact.get("failure_reason"):
+        assessment["failure_reason"] = artifact["failure_reason"]
 
     metrics = {
         "n_hits": len(hits),

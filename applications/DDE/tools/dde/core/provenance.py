@@ -605,6 +605,15 @@ RELAY_CODES: dict[str, str] = {
         "expressed in a dataset requires downloading and analysing the "
         "expression data (GEO2R, supplementary files, or SRA raw data)."
     ),
+    "similar.search_incomplete": (
+        "Similarity search did not complete for one or more backends. Do not "
+        "interpret the absence of similar compounds as confirmed novelty when "
+        "the search is incomplete."
+    ),
+    "similar.all_backends_failed": (
+        "All similarity search backends failed. Novelty assessment is incomplete "
+        "and the result must not be treated as a clean novelty finding."
+    ),
     "similar.database_coverage_limited": (
         "PubChem contains ~116M compounds and ChEMBL ~2.4M bioactive molecules. A "
         "compound with no similar hits may have close analogs in proprietary "
