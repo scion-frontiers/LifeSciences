@@ -50,6 +50,7 @@ ARTIFACT_DIRS: dict[str, str] = {
     "mmp": "raw/mmp",
     "mpo": "raw/mpo",
     "pipeline": "raw/pipeline",
+    "pathway": "raw/genomics",
     "pk": "raw/pk",
     "pocket": "raw/pocket",
     "regulatory": "raw/regulatory",

@@ -6,11 +6,17 @@ external APIs).  The sidecar is machine-generated with
 ``type: "registration"`` so it is clearly distinguishable from
 production sidecars written by DDE tools.
 
+Provides ``dde artifact classes`` for discovering every registered
+artifact class, its target directory, and which command group produces
+it.  Added as the systemic discoverability fix for issue #131.
+
 This is NOT a science tool and does NOT modify the registered file.
 """
 
 from __future__ import annotations
 
+import importlib
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -25,6 +31,7 @@ from ..common import (
     output_options,
     pass_state,
 )
+from ..core.context import ARTIFACT_DIRS
 from ..core.errors import ArtifactError, Refusal
 from ..core.provenance import Sidecar
 
@@ -114,3 +121,84 @@ def register_cmd(
         emit.path(sidecar_path, role="sidecar")
 
     emit.flush()
+
+
+# ---------------------------------------------------------------------------
+# classes
+# ---------------------------------------------------------------------------
+
+
+def _build_class_producer_map() -> dict[str, list[str]]:
+    """Map each artifact class to the command module(s) that declare it.
+
+    Scans all ``*.py`` files in ``dde/commands/`` for
+    ``ARTIFACT_CLASS = "..."`` declarations.  Returns
+    ``{artifact_class: [module_name, ...]}``.
+    """
+    import ast
+
+    commands_dir = Path(__file__).parent
+    result: dict[str, list[str]] = {}
+    for py_file in sorted(commands_dir.glob("*.py")):
+        if py_file.name.startswith("_"):
+            continue
+        try:
+            tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Assign)
+                and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name)
+                and node.targets[0].id == "ARTIFACT_CLASS"
+                and isinstance(node.value, ast.Constant)
+                and isinstance(node.value.value, str)
+            ):
+                cls = node.value.value
+                result.setdefault(cls, []).append(py_file.stem)
+    return result
+
+
+@artifact.command("classes")
+@click.option("--json", "as_json", is_flag=True, help="Emit machine-readable JSON array.")
+@click.option("--quiet", is_flag=True, help="Print class names only, one per line.")
+def classes_cmd(as_json: bool, quiet: bool) -> None:
+    """List every registered artifact class, its directory, and producer(s).
+
+    Gives agents and specialists a way to discover the valid artifact
+    classes without reading source.  Added for issue #131.
+    """
+    producer_map = _build_class_producer_map()
+
+    rows: list[dict[str, Any]] = []
+    for cls in sorted(ARTIFACT_DIRS):
+        rows.append({
+            "class": cls,
+            "directory": ARTIFACT_DIRS[cls],
+            "producers": sorted(producer_map.get(cls, [])),
+        })
+
+    if as_json:
+        click.echo(json.dumps(rows, indent=2))
+        return
+
+    if quiet:
+        for row in rows:
+            click.echo(row["class"])
+        return
+
+    # Human-readable table.
+    cls_w = max(len(r["class"]) for r in rows)
+    dir_w = max(len(r["directory"]) for r in rows)
+    hdr_cls = "CLASS".ljust(cls_w)
+    hdr_dir = "DIRECTORY".ljust(dir_w)
+    click.echo(f"  {hdr_cls}  {hdr_dir}  PRODUCERS")
+    click.echo(f"  {'─' * cls_w}  {'─' * dir_w}  {'─' * 30}")
+    for row in rows:
+        c = row["class"].ljust(cls_w)
+        d = row["directory"].ljust(dir_w)
+        p = ", ".join(row["producers"]) if row["producers"] else "-"
+        click.echo(f"  {c}  {d}  {p}")
+    click.echo()
+    click.echo(f"  {len(rows)} artifact class(es) registered.")

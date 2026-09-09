@@ -141,6 +141,11 @@ def _is_analysis(name: str) -> bool:
     return name.endswith(".analysis.json") or name.endswith(".sc-analysis.json")
 
 
+def _is_known_artifact_class(artifact_class: str) -> bool:
+    """Return True if *artifact_class* (after normalization) is registered."""
+    return normalize_artifact_class(artifact_class) in ARTIFACT_DIRS
+
+
 def _find_layer0_artifacts(
     project_root: Path,
     artifact_class: str,
@@ -149,7 +154,7 @@ def _find_layer0_artifacts(
 
     Normalizes ``dde.*`` prefix before lookup.  Returns an empty list
     when the directory does not exist *or* the class is unknown (callers
-    distinguish via ``ARTIFACT_DIRS.get``).
+    distinguish via ``_is_known_artifact_class``).
 
     Excludes sidecar and analysis files — those are metadata about
     artifacts, not artifacts themselves.
@@ -256,6 +261,7 @@ def _check_deliverables_exist(
     missing: list[str] = []
     confined_failures: list[str] = []
     skipped: list[dict[str, str]] = []
+    unknown_classes: list[dict[str, str]] = []
 
     # Layer 1 paths
     layer_1 = deliverables.get("layer_1", [])
@@ -288,6 +294,18 @@ def _check_deliverables_exist(
             artifact_class = entry if isinstance(entry, str) else (
                 entry.get("class") or entry.get("name") or str(entry)
             )
+            # Distinguish unknown class (toolchain bug) from empty results
+            # (real scientific finding).  Issue #131 / #83 / #85.
+            if not _is_known_artifact_class(artifact_class):
+                unknown_classes.append({
+                    "class": artifact_class,
+                    "message": (
+                        f"Artifact class {artifact_class!r} is not registered "
+                        "in ARTIFACT_DIRS. This is a toolchain bug, not missing "
+                        "science. File an issue."
+                    ),
+                })
+                continue
             artifacts = _find_layer0_artifacts(project_root, artifact_class)
             if not artifacts:
                 missing.append(f"layer_0_classes/{artifact_class} (no artifacts found)")
@@ -332,10 +350,23 @@ def _check_deliverables_exist(
         detail["missing"] = missing
     if skipped:
         detail["not_applicable"] = skipped
+    if unknown_classes:
+        detail["unknown_artifact_classes"] = unknown_classes
 
     # Determine layer_0_classes list for the detail dict (backward compat).
     layer_0_classes = deliverables.get("layer_0_classes", [])
 
+    # Unknown artifact classes are toolchain bugs — return a distinct
+    # finding so they are never confused with "no artifacts found"
+    # (which is a real scientific result).  Issue #131 / #83 / #85.
+    if unknown_classes:
+        return {
+            "name": "deliverables_exist",
+            "result": "fail",
+            "status": "fail",
+            "kind": "unknown_artifact_class",
+            "detail": detail,
+        }
     if confined_failures or missing:
         return {
             "name": "deliverables_exist",
@@ -723,7 +754,11 @@ def _check_analysis_citations(
         if rel_dir is None:
             issues.append({
                 "file": f"(artifact class {artifact_class!r})",
-                "issue": f"unknown artifact class: {artifact_class!r}",
+                "issue": (
+                    f"Artifact class {artifact_class!r} is not registered "
+                    "in ARTIFACT_DIRS. This is a toolchain bug, not missing "
+                    "science. File an issue."
+                ),
             })
             continue
         art_dir = project_root / rel_dir
