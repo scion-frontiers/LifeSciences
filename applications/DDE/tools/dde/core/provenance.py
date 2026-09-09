@@ -41,17 +41,48 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-#: Fields that differ between two runs that agree. Excluded from the
-#: overwrite comparison so an idempotent re-run stays frictionless: what
-#: matters is whether the *verdict* would change, not whether the clock
-#: moved.
+#: Provenance fields — excluded from the overwrite comparison so an
+#: idempotent re-run stays frictionless.  What matters is whether the
+#: *verdict* would change, not whether the clock moved, the commit
+#: advanced, or the interpreter was upgraded.
+#:
+#: Principle: fields that record *what tool environment produced this*
+#: never cause a comparison mismatch.  Only fields that represent
+#: scientific content (source data, thresholds, metrics, assessment)
+#: trigger exit 9.
 #:
 #: `written_by` is here too, and that is only safe because of what
 #: `_may_write` now does with the answer: an agreeing record is kept,
 #: not rewritten, so a field excluded from the comparison can no longer
 #: be lost by a write that the comparison called harmless. The exclusion
 #: and the keep are one mechanism; either alone is a defect.
-_VOLATILE_ANALYSIS_FIELDS = ("timestamp", "written_by")
+_VOLATILE_ANALYSIS_FIELDS = (
+    "timestamp",
+    "written_by",
+    # cli_integrity is derived from `git describe --dirty --always`.
+    # Without tags it is a bare commit SHA that changes on every commit
+    # to DDE — a provenance stamp, not scientific content.
+    "cli_integrity",
+    # cli_modified / cli_modified_note record whether the toolchain had
+    # uncommitted changes.  Conditional: absent when clean, present when
+    # dirty.  Provenance, not science.
+    "cli_modified",
+    "cli_modified_note",
+    # env_version records the Python / venv environment.  An upgrade
+    # between runs is not a change in the analysis.
+    "env_version",
+    # capability_state records which optional backends were available.
+    # A snapshot of deployment state, not of the verdict.
+    "capability_state",
+)
+
+#: Fields that ``_comparable()`` normalises before comparison.  These
+#: may differ in notation between old and new records without
+#: representing a substantive change.  The guard test in
+#: ``test_comparable_field_coverage.py`` enforces that every analysis
+#: field is classified as volatile, normalised, or passthrough; adding
+#: a field to ``write_analysis()`` without classifying it will fail CI.
+_NORMALIZED_ANALYSIS_FIELDS = ("source", "record_type")
 
 #: Set by the phase-2 wrapper when `--overwrite` was passed. A latch
 #: rather than an argument for the same reason as the network ban: an
@@ -1239,7 +1270,32 @@ def _source_digest(source: str) -> str | None:
 
 
 def _comparable(record: dict[str, Any]) -> dict[str, Any]:
-    return {k: v for k, v in record.items() if k not in _VOLATILE_ANALYSIS_FIELDS}
+    """Prepare an analysis record for equality comparison.
+
+    Strips volatile fields and normalises fields whose notation may
+    differ between old and new records without a substantive change:
+
+    * **source** — bare filenames written before #129 are resolved to
+      project-relative paths via ``_normalize_source()``, matching the
+      form that ``write_analysis()`` now stores.
+    * **record_type** — records written before #130 lack this field.
+      Absence is treated as ``"analysis"`` so that old and new records
+      compare equal when the science is unchanged.
+    """
+    out = {k: v for k, v in record.items() if k not in _VOLATILE_ANALYSIS_FIELDS}
+
+    # Normalise source notation so bare filenames and project-relative
+    # paths for the same file compare equal.  _normalize_source() is
+    # idempotent: already-relative paths pass through unchanged.
+    if "source" in out:
+        out["source"] = _normalize_source(out["source"])
+
+    # Old records written before #130 lack record_type.  New records
+    # always carry record_type='analysis'.  Default the absent field so
+    # the two sides agree when the science is unchanged.
+    out.setdefault("record_type", "analysis")
+
+    return out
 
 
 def _may_write(path: Path, record: dict[str, Any], *, suppress_warnings: bool = False) -> bool:
