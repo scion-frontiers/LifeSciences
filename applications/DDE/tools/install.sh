@@ -285,26 +285,23 @@ install_hypex() {
         log "hypex already installed at ${target}"
         return 0
     fi
-    if [ "$HYPEX_SHA256" = "PLACEHOLDER" ]; then
-        warn "hypex SHA-256 not yet pinned; skipping verification."
-        warn "Replace PLACEHOLDER with real hash before production use."
+    if [ "$HYPEX_SHA256" = "PLACEHOLDER" ] || [[ "$HYPEX_URL" == PLACEHOLDER://* ]]; then
+        log "Binary hypex has no upstream release. Skipping."
+        return 0
     fi
     log "Downloading hypex ${HYPEX_VERSION}"
     if curl -fsSL -o "$target" "$HYPEX_URL" 2>/dev/null; then
         chmod +x "$target"
-        if [ "$HYPEX_SHA256" != "PLACEHOLDER" ]; then
-            local got
-            got="$(sha256sum "$target" | cut -d' ' -f1)"
-            if [ "$got" != "$HYPEX_SHA256" ]; then
-                warn "hypex checksum mismatch; refusing to install."
-                rm -f "$target"
-                return 1
-            fi
+        local got
+        got="$(sha256sum "$target" | cut -d' ' -f1)"
+        if [ "$got" != "$HYPEX_SHA256" ]; then
+            warn "hypex checksum mismatch; refusing to install."
+            rm -f "$target"
+            return 1
         fi
         log "hypex installed at ${target}"
     else
-        warn "Could not download hypex (network may be unavailable or release"
-        warn "not yet published). Skipping."
+        warn "Could not download hypex (network may be unavailable). Skipping."
         rm -f "$target"
         return 1
     fi
@@ -323,26 +320,23 @@ install_elo() {
         log "elo already installed at ${target}"
         return 0
     fi
-    if [ "$HYPEX_ELO_SHA256" = "PLACEHOLDER" ]; then
-        warn "elo SHA-256 not yet pinned; skipping verification."
-        warn "Replace PLACEHOLDER with real hash before production use."
+    if [ "$HYPEX_ELO_SHA256" = "PLACEHOLDER" ] || [[ "$HYPEX_ELO_URL" == PLACEHOLDER://* ]]; then
+        log "Binary elo has no upstream release. Skipping."
+        return 0
     fi
     log "Downloading elo ${HYPEX_ELO_VERSION}"
     if curl -fsSL -o "$target" "$HYPEX_ELO_URL" 2>/dev/null; then
         chmod +x "$target"
-        if [ "$HYPEX_ELO_SHA256" != "PLACEHOLDER" ]; then
-            local got
-            got="$(sha256sum "$target" | cut -d' ' -f1)"
-            if [ "$got" != "$HYPEX_ELO_SHA256" ]; then
-                warn "elo checksum mismatch; refusing to install."
-                rm -f "$target"
-                return 1
-            fi
+        local got
+        got="$(sha256sum "$target" | cut -d' ' -f1)"
+        if [ "$got" != "$HYPEX_ELO_SHA256" ]; then
+            warn "elo checksum mismatch; refusing to install."
+            rm -f "$target"
+            return 1
         fi
         log "elo installed at ${target}"
     else
-        warn "Could not download elo (network may be unavailable or release"
-        warn "not yet published). Skipping."
+        warn "Could not download elo (network may be unavailable). Skipping."
         rm -f "$target"
         return 1
     fi
@@ -362,26 +356,23 @@ install_prox() {
         log "prox already installed at ${target}"
         return 0
     fi
-    if [ "$HYPEX_PROX_SHA256" = "PLACEHOLDER" ]; then
-        warn "prox SHA-256 not yet pinned; skipping verification."
-        warn "Replace PLACEHOLDER with real hash before production use."
+    if [ "$HYPEX_PROX_SHA256" = "PLACEHOLDER" ] || [[ "$HYPEX_PROX_URL" == PLACEHOLDER://* ]]; then
+        log "Binary prox has no upstream release. Skipping."
+        return 0
     fi
     log "Downloading prox ${HYPEX_PROX_VERSION}"
     if curl -fsSL -o "$target" "$HYPEX_PROX_URL" 2>/dev/null; then
         chmod +x "$target"
-        if [ "$HYPEX_PROX_SHA256" != "PLACEHOLDER" ]; then
-            local got
-            got="$(sha256sum "$target" | cut -d' ' -f1)"
-            if [ "$got" != "$HYPEX_PROX_SHA256" ]; then
-                warn "prox checksum mismatch; refusing to install."
-                rm -f "$target"
-                return 1
-            fi
+        local got
+        got="$(sha256sum "$target" | cut -d' ' -f1)"
+        if [ "$got" != "$HYPEX_PROX_SHA256" ]; then
+            warn "prox checksum mismatch; refusing to install."
+            rm -f "$target"
+            return 1
         fi
         log "prox installed at ${target}"
     else
-        warn "Could not download prox (network may be unavailable or release"
-        warn "not yet published). Skipping."
+        warn "Could not download prox (network may be unavailable). Skipping."
         rm -f "$target"
         return 1
     fi
@@ -480,6 +471,7 @@ BINARY_STATUS=""
 for tool in vina fpocket rate4site muscle hypex elo prox; do
     sha_var="$(_sha_var_for "$tool")"
     if [ -n "$sha_var" ] && [ "${!sha_var}" = "PLACEHOLDER" ]; then
+        log "Binary ${tool} has no upstream release. Skipping."
         BINARY_STATUS="${BINARY_STATUS} ${tool}=PLACEHOLDER"
     elif "install_${tool}"; then
         BINARY_STATUS="${BINARY_STATUS} ${tool}=ok"
@@ -683,8 +675,8 @@ fi
 # this as a completed provisioning, and `dde doctor` names the
 # missing binary directly.
 if [[ "$BINARY_STATUS" == *PLACEHOLDER* ]]; then
-    warn "Some declared binaries have PLACEHOLDER hashes (unreleased): check above warnings."
-    warn "These do not block bootstrap. Update hashes when releases are published."
+    log "Some declared binaries have no upstream release (PLACEHOLDER). This is expected."
+    log "Update URLs and hashes in this script when releases are published."
 fi
 
 if [[ "$BINARY_STATUS" == *MISSING* ]]; then

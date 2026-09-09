@@ -28,6 +28,7 @@ from ..core.thresholds import UNRESOLVED, declared_sets
 from ..core.toolchain import check_integrity
 
 OK = "ok"
+INFO = "info"
 WARN = "warn"
 FAIL = "fail"
 
@@ -489,39 +490,58 @@ def _check_packages(report: Report) -> None:
 #: ENV_VERSION: the hash tells you *which* fpocket produced a result,
 #: this tells the agent whether there is one at all before it plans work
 #: around a tool that is not there.
+#:
+#: Each entry is ``(purpose, remedy, released)``. ``released=False``
+#: means the binary's URL or hash is PLACEHOLDER in install.sh — there
+#: is no upstream release to download. Both the binary check and the
+#: capability snapshot derive from this declaration so they cannot
+#: disagree about whether a binary exists yet.
 _PROVISIONED_BINARIES = {
     "fpocket": (
         "pocket detection — `dde pocket run` cannot answer tractability",
         "re-provision with `tools/install.sh --binaries-only`",
+        True,
     ),
     "vina": (
         "docking — structural-biologist and computational-chemist skills",
         "re-provision with `tools/install.sh --binaries-only`",
+        True,
     ),
     "hypex": (
         "hypothesis-explorer datastore lifecycle — tournament management "
         "(init-run, add-hypothesis, add-match, validate)",
-        "re-provision with `tools/install.sh --binaries-only`",
+        "not yet published upstream; no local action available. "
+        "Use sponsor, charter or co-scientist hypothesis strategies "
+        "in the interim",
+        False,
     ),
     "elo": (
         "ELO rating engine — pairwise rankings and per-epoch standings "
         "for hypothesis tournaments",
-        "re-provision with `tools/install.sh --binaries-only`",
+        "not yet published upstream; no local action available. "
+        "Use sponsor, charter or co-scientist hypothesis strategies "
+        "in the interim",
+        False,
     ),
     "prox": (
         "proximity / similarity — hypothesis clustering for tournament "
         "pairing and merge recommendations",
-        "re-provision with `tools/install.sh --binaries-only`",
+        "not yet published upstream; no local action available. "
+        "Use sponsor, charter or co-scientist hypothesis strategies "
+        "in the interim",
+        False,
     ),
     "mk_prepare_receptor.py": (
         "receptor PDBQT preparation for docking (installed by meeko)",
         "install meeko and gemmi into the tools environment "
         "(pip install meeko>=0.5 gemmi>=0.7)",
+        True,
     ),
     "mk_prepare_ligand.py": (
         "ligand PDBQT preparation for docking (installed by meeko)",
         "install meeko and gemmi into the tools environment "
         "(pip install meeko>=0.5 gemmi>=0.7)",
+        True,
     ),
 }
 
@@ -614,7 +634,15 @@ def _check_binaries(report: Report) -> None:
                 kind=CAPABILITY,
             )
 
-    for binary, (purpose, remedy) in _PROVISIONED_BINARIES.items():
+    for binary, (purpose, remedy, released) in _PROVISIONED_BINARIES.items():
+        if not released:
+            report.add(
+                f"binary {binary}",
+                INFO,
+                f"not yet released upstream — {purpose}",
+                remedy,
+            )
+            continue
         path = shutil.which(binary)
         if path is None:
             candidate = env.tools_home() / "bin" / binary
@@ -1117,17 +1145,40 @@ def _check_hypothesis_strategies(report: Report) -> None:
         "available (dde coscientist ingest — requires an export file)",
     )
 
-    # hypex requires tools volume + templates + lease (Track B).  Not yet
-    # available — pending Track B implementation.
-    report.add(
-        "hypothesis strategy: hypex",
-        WARN,
-        "not yet available — requires hypex tools, templates and a lease "
-        "(Track B, pending)",
-        "hypex integration is in development; use sponsor, charter or "
-        "co-scientist strategies in the interim",
-        kind=CAPABILITY,
-    )
+    # hypex requires tools volume + templates + lease (Track B).
+    # Derive status from _PROVISIONED_BINARIES so that the binary check
+    # and the capability check cannot disagree about whether it exists.
+    _hypex_purpose, _hypex_remedy, hypex_released = _PROVISIONED_BINARIES["hypex"]
+    if not hypex_released:
+        report.add(
+            "hypothesis strategy: hypex",
+            INFO,
+            "not yet available — hypex binary has no upstream release "
+            "(Track B, pending)",
+            "hypex integration is in development; use sponsor, charter or "
+            "co-scientist strategies in the interim",
+        )
+    else:
+        # Released but may not be installed — check PATH.
+        hypex_path = shutil.which("hypex")
+        if hypex_path is None:
+            candidate = env.tools_home() / "bin" / "hypex"
+            hypex_path = str(candidate) if candidate.is_file() else None
+        if hypex_path:
+            report.add(
+                "hypothesis strategy: hypex",
+                OK,
+                "available (dde hypex — requires templates and a lease)",
+            )
+        else:
+            report.add(
+                "hypothesis strategy: hypex",
+                WARN,
+                "hypex binary released but not installed — "
+                "tournament management unavailable",
+                _hypex_remedy,
+                kind=CAPABILITY,
+            )
 
 
 def _check_phase_two_contract(report: Report) -> None:
@@ -1238,7 +1289,10 @@ def get_capability_snapshot() -> dict[str, str]:
     snapshot: dict[str, str] = {}
 
     # --- Provisioned binaries ---
-    for binary in _PROVISIONED_BINARIES:
+    for binary, (_purpose, _remedy, released) in _PROVISIONED_BINARIES.items():
+        if not released:
+            snapshot[binary] = "unreleased"
+            continue
         path = shutil.which(binary)
         if path is None:
             candidate = env.tools_home() / "bin" / binary
@@ -1447,7 +1501,7 @@ def doctor(state: AppState, as_json: bool, strict: bool) -> None:
             )
         )
     else:
-        symbol = {OK: "ok  ", WARN: "WARN", FAIL: "FAIL"}
+        symbol = {OK: "ok  ", INFO: "info", WARN: "WARN", FAIL: "FAIL"}
         click.echo(f"dde {env.CLI_VERSION}  env {env.env_version()}")
         click.echo("")
         for check in report.checks:
