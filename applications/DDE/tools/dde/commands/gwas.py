@@ -878,7 +878,24 @@ def search_disease_cmd(
     "score_threshold",
     type=float,
     default=None,
-    help="Override the minimum score/significance threshold.",
+    help=(
+        "Override the minimum significance threshold. For Open Targets "
+        "this is a composite score (0–1, higher = stronger association) "
+        "that blends genetic_association, literature, expression, and "
+        "other data types — it is NOT a p-value. For GWAS Catalog it is "
+        "a p-value (lower = more significant). Default: 0.1 for Open "
+        "Targets, 5e-8 for GWAS Catalog."
+    ),
+)
+@click.option(
+    "--disease-filter",
+    "disease_filter",
+    type=str,
+    default=None,
+    help=(
+        "Case-insensitive substring filter. Report whether DISEASE "
+        "appears in the associations list and at what score."
+    ),
 )
 @from_option
 @out_option
@@ -889,6 +906,7 @@ def analyze_cmd(
     gene: str,
     source: str,
     score_threshold: float | None,
+    disease_filter: str | None,
     from_dir: str | None,
     out: str | None,
     as_json: bool,
@@ -933,7 +951,7 @@ def analyze_cmd(
         significant, metrics, assessment = _analyze_clinvar(
             gene, associations, add_relay,
         )
-        thresholds_applied = {
+        thresholds_applied: dict[str, Any] = {
             "significant_classifications": sorted(_PATHOGENIC_CLASSIFICATIONS),
         }
     else:
@@ -943,6 +961,23 @@ def analyze_cmd(
         thresholds_applied = {
             "significance_cutoff": metrics["threshold"],
         }
+
+    # --disease-filter: case-insensitive substring match.
+    if disease_filter is not None:
+        _filter = disease_filter.lower()
+        matches = [
+            a for a in associations
+            if _filter in (a.get("disease_name") or "").lower()
+        ]
+        assessment["disease_filter_match"] = bool(matches)
+        assessment["disease_filter_details"] = [
+            {
+                "disease_name": m.get("disease_name", ""),
+                "score": m.get("score"),
+            }
+            for m in matches
+        ]
+        assessment["disease_filter_query"] = disease_filter
 
     analysis_path = provenance.write_analysis(
         target_dir / f"{slug}.gwas-{source}.analysis.json",
@@ -989,6 +1024,36 @@ def analyze_cmd(
         top_diseases = assessment.get("top_diseases", [])
         if top_diseases:
             emit.line(f"top diseases: {', '.join(top_diseases[:5])}")
+        # Show composite score decomposition for Open Targets
+        if source == "opentargets":
+            for detail in assessment.get("score_details", [])[:5]:
+                dt = detail.get("datatype_scores", {})
+                parts = ", ".join(
+                    f"{k}={v:.2f}" for k, v in sorted(dt.items())
+                )
+                emit.line(
+                    f"  {detail['disease_name']}: "
+                    f"Overall score: {detail['overall_score']:.2f} "
+                    f"(composite: {parts})"
+                )
+
+    # --disease-filter results
+    if disease_filter is not None:
+        match = assessment.get("disease_filter_match", False)
+        details = assessment.get("disease_filter_details", [])
+        if match:
+            emit.line(
+                f"Disease filter '{disease_filter}': MATCH "
+                f"({len(details)} association(s))"
+            )
+            for d in details[:5]:
+                emit.line(
+                    f"  {d['disease_name']}: score={d['score']}"
+                )
+        else:
+            emit.line(
+                f"Disease filter '{disease_filter}': NO MATCH"
+            )
 
     for record in relays:
         emit.line(f"relay {record['code']}: {record['message']}")
@@ -1004,6 +1069,11 @@ def _analyze_gwas(
     add_relay: Any,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
     """Analyze GWAS associations (Open Targets or GWAS Catalog).
+
+    For Open Targets, extracts the ``genetic_association`` component
+    from ``datatype_scores`` and reports it separately so callers can
+    distinguish pure genetic evidence from the composite score that
+    blends literature, expression, and other data types.
 
     Returns (significant_associations, metrics, assessment).
     """
@@ -1041,19 +1111,58 @@ def _analyze_gwas(
             "of causation or therapeutic mechanism",
         )
 
-    metrics = {
+    metrics: dict[str, Any] = {
         "total_associations": len(associations),
         "significant_associations": len(significant),
         "threshold": cutoff,
         "source": source,
         "top_diseases": top_diseases,
     }
-    assessment = {
+    assessment: dict[str, Any] = {
         "verdict": verdict,
         "gene": gene.upper(),
         "n_significant": len(significant),
         "top_diseases": top_diseases,
     }
+
+    # --- Open Targets: extract genetic_association component ---
+    if source == "opentargets":
+        for assoc in associations:
+            dt_scores = assoc.get("datatype_scores") or {}
+            ga_score = dt_scores.get("genetic_association")
+            if ga_score is not None:
+                assoc["genetic_association_score"] = ga_score
+
+        # Per-association score decomposition in the assessment
+        score_details: list[dict[str, Any]] = []
+        composite_passes_genetic_fails = False
+        for assoc in significant:
+            overall = assoc.get("score", 0.0)
+            dt_scores = assoc.get("datatype_scores") or {}
+            ga = dt_scores.get("genetic_association", 0.0)
+            detail: dict[str, Any] = {
+                "disease_name": assoc.get("disease_name", ""),
+                "overall_score": overall,
+                "genetic_association_score": ga,
+                "datatype_scores": dt_scores,
+            }
+            score_details.append(detail)
+            if overall >= cutoff and ga < cutoff:
+                composite_passes_genetic_fails = True
+
+        assessment["score_details"] = score_details
+
+        # Fire relay when composite passes but genetic doesn't.
+        if composite_passes_genetic_fails:
+            add_relay(
+                "opentargets.composite_not_genetic",
+                f"{gene.upper()} passes the composite score threshold "
+                f"({cutoff}) for one or more diseases but fails on "
+                f"genetic_association alone; the composite score is "
+                "boosted by literature, expression, or other non-genetic "
+                "data types",
+            )
+
     return significant, metrics, assessment
 
 

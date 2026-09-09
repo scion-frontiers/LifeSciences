@@ -190,6 +190,44 @@ def _parse_articles(xml_bytes: bytes) -> list[dict[str, Any]]:
     return results
 
 
+def _per_term_hit_counts(query: str) -> list[dict[str, Any]]:
+    """Run count-only esearch for each individual term in *query*.
+
+    Returns a list of ``{"term": ..., "count": int}`` dicts, one per
+    whitespace-delimited token.  Each request uses ``rettype=count`` so
+    no article data is fetched — only the total count field.  This lets
+    the caller see which term(s) collapsed the combined result set.
+    """
+    # Split on whitespace; skip PubMed Boolean operators.
+    tokens = [
+        t for t in query.split()
+        if t.upper() not in ("AND", "OR", "NOT")
+    ]
+    if not tokens:
+        return []
+
+    qps = qps_for_host("eutils.ncbi.nlm.nih.gov")
+    results: list[dict[str, Any]] = []
+    for token in tokens:
+        count_url = (
+            f"{EUTILS_BASE}/esearch.fcgi?db=pubmed"
+            f"&term={quote_plus(token)}"
+            f"&rettype=count"
+            f"&retmode=json"
+            + api_key_suffix()
+        )
+        try:
+            data = http.get_json(count_url, qps=qps, timeout=30.0)
+            count = int(
+                (data.get("esearchresult") or {}).get("count", 0)
+            )
+        except Exception:
+            count = -1  # failed to retrieve
+        results.append({"term": token, "count": count})
+
+    return results
+
+
 # ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
@@ -286,6 +324,9 @@ def search_cmd(
     articles: list[dict[str, Any]] = []
     efetch_path = target_dir / f"{slug}.efetch.xml"
 
+    # Per-term diagnostics when zero results (populated below).
+    per_term_counts: list[dict[str, Any]] | None = None
+
     if pmids:
         pmid_list = ",".join(pmids)
         efetch_url = (
@@ -303,9 +344,12 @@ def search_cmd(
         efetch_path.write_text(
             '<?xml version="1.0" ?>\n<PubmedArticleSet/>\n', encoding="utf-8"
         )
+        # Zero results: run per-term diagnostics to help identify
+        # whether the query was overconstrained vs genuinely empty.
+        per_term_counts = _per_term_hit_counts(query)
 
     # Step 3: Build structured output artifact
-    artifact = {
+    artifact: dict[str, Any] = {
         "schema": "dde.pubmed-search.v1",
         "query": {
             "terms": query,
@@ -316,6 +360,19 @@ def search_cmd(
         },
         "results": articles,
     }
+    # Attach per-term diagnostics when the search returned nothing.
+    if per_term_counts is not None:
+        artifact["per_term_counts"] = per_term_counts
+        # Distinguish genuinely empty from overconstrained: if any
+        # individual term has hits, the combination was overconstrained.
+        any_term_has_hits = any(
+            t["count"] > 0 for t in per_term_counts
+        )
+        artifact["zero_result_reason"] = (
+            "no_results_query_may_be_overconstrained"
+            if any_term_has_hits
+            else "no_results"
+        )
 
     artifact_path = target_dir / f"{slug}.pubmed-search.json"
     artifact_path.write_text(
@@ -359,6 +416,18 @@ def search_cmd(
             emit.line(f"  PMID {a['pmid']}: {(a.get('title') or '(no title)')[:70]}")
         if len(articles) > 5:
             emit.line(f"  ... {len(articles) - 5} more in the artifact")
+    if per_term_counts is not None:
+        emit.line(f"Zero results for {query!r}.")
+        emit.line("Per-term hit counts:")
+        for entry in per_term_counts:
+            count_str = f"{entry['count']:,}" if entry["count"] >= 0 else "error"
+            emit.line(f"  {entry['term']:<30s} → {count_str}")
+        reason = artifact.get("zero_result_reason", "no_results")
+        if reason == "no_results_query_may_be_overconstrained":
+            emit.line(
+                "Individual terms have hits but the combination does not — "
+                "the query may be overconstrained."
+            )
     emit.flush()
 
 

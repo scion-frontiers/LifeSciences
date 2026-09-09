@@ -445,6 +445,16 @@ RELAY_CODES: dict[str, str] = {
         "it does not mean the gene product causes the disease or that modulating "
         "it will treat the disease."
     ),
+    "opentargets.composite_not_genetic": (
+        "The Open Targets overall association score is a composite that blends "
+        "genetic_association, literature, expression, and other data types. A "
+        "target that passes the composite threshold but fails on "
+        "genetic_association alone is supported by non-genetic evidence "
+        "(text-mining, expression correlation, etc.), not by GWAS or other "
+        "genetic studies. Do not describe this as a genetic association — "
+        "describe it as a composite association and name the dominant "
+        "contributing data types."
+    ),
     "clinvar.classification_is_curated": (
         "Do not describe ClinVar classifications as statistical associations or "
         "correlations. A ClinVar 'Pathogenic' call is a curated clinical "
