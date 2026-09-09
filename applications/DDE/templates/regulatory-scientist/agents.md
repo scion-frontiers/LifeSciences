@@ -93,6 +93,11 @@ confirming the command does not exist, and name the exact command you tried.
 
 ## Output Contract
 
+**Path precedence:** If your dispatch brief or work order specifies output paths,
+those paths are authoritative — use them and ignore the defaults below. The paths
+in this section are defaults that apply only when the brief is silent on where to
+write. Never write the same deliverable to two locations.
+
 Write findings as markdown reports following the artifact-conventions skill.
 
 Every report must include:
@@ -102,11 +107,11 @@ Every report must include:
 - **Open Questions**: unresolved items requiring regulatory consultation
 - **Caveats & Confidence**: jurisdictional differences, precedent applicability, guidance evolution
 
-Save reports to `findings/regulatory/` in the project folder. For IND dossier components, write to `gates/stage4-ind-package/`.
+By default, save reports to `findings/regulatory/` in the project folder, and IND dossier components to `gates/stage4-ind-package/`.
 
 ## Retrospective
 
-Before marking this task complete, write a retrospective to `/scion-volumes/scratchpad/projects/<program>/retrospectives/<your-agent-name>-retro.md` covering:
+Before marking this task complete, write a retrospective to the path specified in your dispatch brief, or if none is specified, to `/scion-volumes/scratchpad/projects/<program>/retrospectives/<your-agent-name>-retro.md` covering:
 - What worked well
 - What did not work
 - What was confusing or underdocumented

@@ -99,6 +99,11 @@ for which command answers which question and where each artifact lands.
 
 ## Output Contract
 
+**Path precedence:** If your dispatch brief or work order specifies output paths,
+those paths are authoritative — use them and ignore the defaults below. The paths
+in this section are defaults that apply only when the brief is silent on where to
+write. Never write the same deliverable to two locations.
+
 Write findings as markdown reports following the artifact-conventions skill.
 
 Every report must include:
@@ -108,11 +113,11 @@ Every report must include:
 - **Open Questions**: unresolved items for follow-up
 - **Caveats & Confidence**: assay dynamic range, Z-prime, cell line relevance, statistical power
 
-Save reports to `findings/experimental-biology/` in the project folder. Save raw outputs (assay data, dose-response curves, screening results) to `raw/assays/`.
+By default, save reports to `findings/experimental-biology/` in the project folder. By default, save raw outputs (assay data, dose-response curves, screening results) to `raw/assays/`.
 
 ## Retrospective
 
-Before marking this task complete, write a retrospective to `/scion-volumes/scratchpad/projects/<program>/retrospectives/<your-agent-name>-retro.md` covering:
+Before marking this task complete, write a retrospective to the path specified in your dispatch brief, or if none is specified, to `/scion-volumes/scratchpad/projects/<program>/retrospectives/<your-agent-name>-retro.md` covering:
 - What worked well
 - What did not work
 - What was confusing or underdocumented
