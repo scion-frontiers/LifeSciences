@@ -654,6 +654,17 @@ RELAY_CODES: dict[str, str] = {
         "State that references were recovered by pattern match. A reference "
         "the extractor missed is not in the manifest and was not checked."
     ),
+    "surface.sasa_is_static_snapshot": (
+        "SASA describes the accessible surface of this single conformation. "
+        "Protein dynamics, conformational changes, and binding-partner "
+        "occlusion are not represented. A buried region in one conformation "
+        "may be exposed in another."
+    ),
+    "surface.rsa_reference_values": (
+        "Relative solvent accessibility uses Tien et al. 2013 theoretical "
+        "maximum SASA reference values. Name the reference used alongside "
+        "any exposure classification."
+    ),
     "preprint.no_results": (
         "The preprint search returned no results. Consider broadening the "
         "query or checking alternative sources."

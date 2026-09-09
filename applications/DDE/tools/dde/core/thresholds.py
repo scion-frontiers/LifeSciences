@@ -1039,6 +1039,24 @@ _declare(
 )
 
 _declare(
+    "surface",
+    "1.0",
+    provenance=(
+        "RSA exposure thresholds: Tien et al., PLoS ONE 2013;8:e80635 "
+        "(theoretical maxASA values); Rost & Sander, Proteins 1994;20:216-226 "
+        "(0.25 RSA burial/exposure boundary). pLDDT disorder proxy: "
+        "Jumper et al., Nature 2021;596:583-589 (pLDDT < 50)."
+    ),
+    values={
+        "rsa_exposed": 0.25,
+        "rsa_highly_exposed": 0.50,
+        "plddt_disorder": 50.0,
+        "min_exposed_patch_residues": 5,
+        "glycosylation_proximity_angstrom": 10.0,
+    },
+)
+
+_declare(
     "conservation-scores",
     "1.0",
     provenance=(

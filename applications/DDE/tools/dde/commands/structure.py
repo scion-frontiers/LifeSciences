@@ -14,6 +14,13 @@
                        TM3, TM6, and TM7 — the helices that form the
                        orthosteric binding cleft in Class A GPCRs.  TM
                        boundaries are fetched from UniProt (primary).
+
+``surface``            Compute per-residue solvent-accessible surface area
+                       (SASA) and relative solvent accessibility (RSA) from
+                       a PDB or mmCIF structure using the Shrake-Rupley
+                       algorithm.  Optionally integrates glycosylation sites
+                       from UniProt and per-residue pLDDT as a disorder
+                       proxy for AlphaFold structures.
 """
 
 from __future__ import annotations
@@ -23,16 +30,20 @@ import re
 from pathlib import Path
 from typing import Any
 
+import math
+
 import click
+import numpy as np
 
 from ..common import AppState, out_option, output_options, pass_state, resolve_artifact
-from ..core import http, provenance
+from ..core import http, provenance, thresholds as thresholds_mod
 from ..core.errors import ArtifactError, SchemaError, UsageError
 from ..core.output import Emitter
 from ..core.qps import qps_for_host
 from ..core.structures import detect_structure_format
 
 ARTIFACT_SCHEMA = "dde.structure-interface.v1"
+SURFACE_ARTIFACT_SCHEMA = "dde.structure-surface.v1"
 
 # -- topology annotation constants ------------------------------------------
 
@@ -65,10 +76,13 @@ _BUNDLE_VOID_MIN_VOLUME = 1500.0
 def _parse_atoms_pdb(text: str) -> list[dict[str, Any]]:
     """Extract heavy-atom records from PDB-format text.
 
-    Returns a list of dicts with keys: chain, resnum, resname, x, y, z.
-    Hydrogen atoms (element H/D in columns 76-78, or atom name starting
-    with H/digit-H) are excluded — interface contacts are defined on
-    heavy atoms only.
+    Returns a list of dicts with keys: chain, resnum, resname, x, y, z,
+    element, bfactor.  Hydrogen atoms (element H/D in columns 76-78, or
+    atom name starting with H/digit-H) are excluded — interface contacts
+    are defined on heavy atoms only.
+
+    The B-factor (columns 60-66) is extracted because AlphaFold structures
+    store per-residue pLDDT in this field, giving a disorder proxy for free.
     """
     atoms: list[dict[str, Any]] = []
     for line in text.splitlines():
@@ -86,6 +100,12 @@ def _parse_atoms_pdb(text: str) -> list[dict[str, Any]]:
         except (ValueError, IndexError):
             continue
 
+        # B-factor: columns 60-66 (optional, defaults to 0.0).
+        try:
+            bfactor = float(line[60:66])
+        except (ValueError, IndexError):
+            bfactor = 0.0
+
         # Skip hydrogen atoms
         # Element symbol is at columns 76-78 in standard PDB; fall back
         # to first non-digit character of the atom name.
@@ -102,6 +122,8 @@ def _parse_atoms_pdb(text: str) -> list[dict[str, Any]]:
             "x": x,
             "y": y,
             "z": z,
+            "element": element,
+            "bfactor": bfactor,
         })
     return atoms
 
@@ -113,6 +135,9 @@ def _parse_atoms_cif(text: str) -> list[dict[str, Any]]:
     ``auth_seq_id`` (residue number), ``label_comp_id`` (residue name),
     and ``Cartn_x/y/z`` (coordinates).  Falls back to ``label_asym_id``
     and ``label_seq_id`` when auth variants are absent.
+
+    Also extracts ``B_iso_or_equiv`` (B-factor) when available — for
+    AlphaFold structures this is per-residue pLDDT.
 
     Hydrogen atoms are excluded via the ``type_symbol`` column when
     available, or by atom-name heuristic otherwise.
@@ -148,6 +173,9 @@ def _parse_atoms_cif(text: str) -> list[dict[str, Any]]:
     col_z = columns.index("Cartn_z") if "Cartn_z" in columns else None
     col_element = columns.index("type_symbol") if "type_symbol" in columns else None
     col_atom_name = _col("auth_atom_id", "label_atom_id")
+    col_bfactor = (
+        columns.index("B_iso_or_equiv") if "B_iso_or_equiv" in columns else None
+    )
 
     required = (col_chain, col_resnum, col_resname, col_x, col_y, col_z)
     if any(c is None for c in required):
@@ -168,7 +196,17 @@ def _parse_atoms_cif(text: str) -> list[dict[str, Any]]:
         except (ValueError, IndexError):
             continue
 
-        # Skip hydrogen atoms
+        # B-factor (optional, defaults to 0.0).
+        bfactor = 0.0
+        if col_bfactor is not None:
+            try:
+                bfactor = float(fields[col_bfactor])
+            except (ValueError, IndexError):
+                pass
+
+        # Element symbol — extracted for both hydrogen filtering and
+        # vdW radius lookup in SASA computation.
+        element = ""
         if col_element is not None:
             try:
                 element = fields[col_element]
@@ -179,8 +217,8 @@ def _parse_atoms_cif(text: str) -> list[dict[str, Any]]:
         elif col_atom_name is not None:
             try:
                 atom_name = fields[col_atom_name]
-                el = atom_name.lstrip("0123456789")[:1]
-                if el in ("H", "D"):
+                element = atom_name.lstrip("0123456789")[:1]
+                if element in ("H", "D"):
                     continue
             except IndexError:
                 pass
@@ -192,6 +230,8 @@ def _parse_atoms_cif(text: str) -> list[dict[str, Any]]:
             "x": x,
             "y": y,
             "z": z,
+            "element": element,
+            "bfactor": bfactor,
         })
     return atoms
 
@@ -418,6 +458,250 @@ def parse_topo_domains(features: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "description": desc,
         })
     return domains
+
+
+# ---------------------------------------------------------------------------
+# Glycosylation site extraction
+# ---------------------------------------------------------------------------
+
+
+def _parse_glycosylation_sites(
+    features: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Extract glycosylation site annotations from UniProt features.
+
+    Follows the ``parse_tm_regions()`` pattern: filters for features of
+    type ``"Glycosylation"`` and extracts position plus description
+    (which encodes N-linked vs O-linked etc.).
+    """
+    sites: list[dict[str, Any]] = []
+    for feat in features:
+        if feat.get("type") != "Glycosylation":
+            continue
+        loc = feat.get("location") or {}
+        start_obj = loc.get("start") or {}
+        end_obj = loc.get("end") or {}
+        start = start_obj.get("value")
+        end = end_obj.get("value")
+        if start is None:
+            continue
+        try:
+            start = int(start)
+            end = int(end) if end is not None else start
+        except (ValueError, TypeError):
+            continue
+        desc = feat.get("description") or ""
+        # Extract glycosylation type from description (e.g. "N-linked (GlcNAc...)")
+        glyco_type = "unknown"
+        desc_lower = desc.lower()
+        if "n-linked" in desc_lower:
+            glyco_type = "N-linked"
+        elif "o-linked" in desc_lower:
+            glyco_type = "O-linked"
+        elif "c-linked" in desc_lower:
+            glyco_type = "C-linked"
+        elif "s-linked" in desc_lower:
+            glyco_type = "S-linked"
+        sites.append({
+            "position": start,
+            "end": end,
+            "type": glyco_type,
+            "description": desc,
+        })
+    return sites
+
+
+# ---------------------------------------------------------------------------
+# SASA computation (Shrake-Rupley algorithm)
+# ---------------------------------------------------------------------------
+
+# Atomic van der Waals radii (Angstroms).
+# Shrake & Rupley 1973 / CHARMM22 consensus values for heavy atoms
+# found in standard amino acids.
+_VDW_RADII: dict[str, float] = {
+    "C": 1.70,
+    "N": 1.55,
+    "O": 1.52,
+    "S": 1.80,
+    "SE": 1.90,
+    "P": 1.80,
+}
+_VDW_DEFAULT = 1.70
+
+# Maximum accessible surface area per residue type (Angstrom^2).
+# Tien et al., PLoS ONE 2013;8:e80635 — theoretical maxASA from
+# Gly-X-Gly tripeptides.
+MAX_ASA_TIEN: dict[str, float] = {
+    "ALA": 129.0, "ARG": 274.0, "ASN": 195.0, "ASP": 193.0,
+    "CYS": 167.0, "GLN": 225.0, "GLU": 223.0, "GLY": 104.0,
+    "HIS": 224.0, "ILE": 197.0, "LEU": 201.0, "LYS": 236.0,
+    "MET": 224.0, "PHE": 240.0, "PRO": 159.0, "SER": 155.0,
+    "THR": 172.0, "TRP": 285.0, "TYR": 263.0, "VAL": 174.0,
+}
+
+
+def _generate_sphere_points(n: int) -> np.ndarray:
+    """Generate *n* approximately uniformly distributed points on a unit sphere.
+
+    Uses the golden-section spiral method, which provides near-uniform
+    coverage without the overhead of a random seed.  Returns an (n, 3)
+    array of unit vectors.
+    """
+    indices = np.arange(n, dtype=np.float64)
+    phi = math.pi * (3.0 - math.sqrt(5.0))  # golden angle
+    y = 1.0 - (2.0 * indices / (n - 1)) if n > 1 else np.zeros(1)
+    radius_at_y = np.sqrt(1.0 - y * y)
+    theta = phi * indices
+    x = np.cos(theta) * radius_at_y
+    z = np.sin(theta) * radius_at_y
+    return np.column_stack([x, y, z])
+
+
+def _compute_sasa(
+    atoms: list[dict[str, Any]],
+    probe_radius: float = 1.4,
+    n_points: int = 100,
+) -> list[float]:
+    """Compute per-atom SASA using the Shrake-Rupley algorithm.
+
+    Uses grid-based spatial hashing for neighbor lookup and numpy for
+    vectorized distance computations.
+
+    Returns a list of SASA values (Angstrom^2), one per input atom.
+    """
+    n_atoms = len(atoms)
+    if n_atoms == 0:
+        return []
+
+    # Build coordinate array and radius array.
+    coords = np.array(
+        [[a["x"], a["y"], a["z"]] for a in atoms], dtype=np.float64
+    )
+    radii = np.array(
+        [_VDW_RADII.get(a.get("element", "").upper(), _VDW_DEFAULT) for a in atoms],
+        dtype=np.float64,
+    )
+    expanded = radii + probe_radius
+
+    # Generate test points on the unit sphere.
+    sphere_pts = _generate_sphere_points(n_points)
+
+    # Grid-based spatial hashing — cell size must be >= max possible
+    # interaction distance between two atoms.
+    max_radius = float(expanded.max())
+    cell_size = 2.0 * max_radius
+    if cell_size < 1e-6:
+        cell_size = 6.8  # fallback
+
+    # Build grid: map each atom to a cell.
+    grid: dict[tuple[int, int, int], list[int]] = {}
+    for i in range(n_atoms):
+        cx = int(math.floor(coords[i, 0] / cell_size))
+        cy = int(math.floor(coords[i, 1] / cell_size))
+        cz = int(math.floor(coords[i, 2] / cell_size))
+        grid.setdefault((cx, cy, cz), []).append(i)
+
+    sasa = np.zeros(n_atoms, dtype=np.float64)
+
+    for i in range(n_atoms):
+        ri = expanded[i]
+        ci = coords[i]
+
+        # Find neighbor atoms via grid lookup (26 neighbors + own cell).
+        cx = int(math.floor(ci[0] / cell_size))
+        cy = int(math.floor(ci[1] / cell_size))
+        cz = int(math.floor(ci[2] / cell_size))
+
+        neighbors = []
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                for dz in (-1, 0, 1):
+                    cell = (cx + dx, cy + dy, cz + dz)
+                    if cell in grid:
+                        for j in grid[cell]:
+                            if j != i:
+                                neighbors.append(j)
+
+        # Generate test points for this atom.
+        test_points = ci + sphere_pts * ri  # (n_points, 3)
+
+        if not neighbors:
+            # No neighbors — all points exposed.
+            sasa[i] = 4.0 * math.pi * ri * ri
+            continue
+
+        # Vectorized occlusion check.
+        neighbor_idx = np.array(neighbors)
+        neighbor_coords = coords[neighbor_idx]  # (n_neighbors, 3)
+        neighbor_radii = expanded[neighbor_idx]  # (n_neighbors,)
+
+        # Distance from each test point to each neighbor center.
+        # test_points: (n_points, 3), neighbor_coords: (n_neighbors, 3)
+        diff = test_points[:, np.newaxis, :] - neighbor_coords[np.newaxis, :, :]
+        dist_sq = np.sum(diff * diff, axis=2)  # (n_points, n_neighbors)
+
+        # A point is occluded if it falls inside any neighbor's expanded sphere.
+        radii_sq = neighbor_radii * neighbor_radii  # (n_neighbors,)
+        occluded = np.any(dist_sq < radii_sq[np.newaxis, :], axis=1)  # (n_points,)
+
+        n_exposed = int(np.sum(~occluded))
+        sasa[i] = (n_exposed / n_points) * 4.0 * math.pi * ri * ri
+
+    return sasa.tolist()
+
+
+def _compute_rsa(
+    atoms: list[dict[str, Any]],
+    per_atom_sasa: list[float],
+) -> list[dict[str, Any]]:
+    """Compute per-residue RSA from per-atom SASA values.
+
+    Groups atoms by (chain, resnum), sums SASA per residue, and divides
+    by the Tien et al. 2013 theoretical maximum ASA for that residue type.
+    RSA is clamped to [0, 1].
+
+    Returns a list of per-residue dicts sorted by (chain, resnum).
+    """
+    # Group SASA and B-factor by residue.
+    residue_data: dict[tuple[str, int], dict[str, Any]] = {}
+    for i, atom in enumerate(atoms):
+        key = (atom["chain"], atom["resnum"])
+        if key not in residue_data:
+            residue_data[key] = {
+                "chain": atom["chain"],
+                "resnum": atom["resnum"],
+                "resname": atom["resname"],
+                "sasa": 0.0,
+                "bfactors": [],
+            }
+        residue_data[key]["sasa"] += per_atom_sasa[i]
+        residue_data[key]["bfactors"].append(atom.get("bfactor", 0.0))
+
+    # Compute RSA and mean pLDDT per residue.
+    result: list[dict[str, Any]] = []
+    for key in sorted(residue_data):
+        rd = residue_data[key]
+        resname = rd["resname"]
+        sasa = rd["sasa"]
+        max_asa = MAX_ASA_TIEN.get(resname)
+        if max_asa is not None and max_asa > 0:
+            rsa = min(1.0, max(0.0, sasa / max_asa))
+        else:
+            # Non-standard residue — report SASA but no RSA.
+            rsa = None
+
+        bfactors = rd["bfactors"]
+        mean_bfactor = sum(bfactors) / len(bfactors) if bfactors else 0.0
+
+        result.append({
+            "chain": rd["chain"],
+            "resnum": rd["resnum"],
+            "resname": resname,
+            "sasa": round(sasa, 1),
+            "rsa": round(rsa, 3) if rsa is not None else None,
+            "plddt": round(mean_bfactor, 1),
+        })
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -882,5 +1166,357 @@ def annotate_topology(
         emit.line(f"relay {relay_rec['code']}: {relay_rec['message']}")
 
     emit.path(artifact_path, role="topology_annotation")
+    emit.path(meta_path, role="sidecar")
+    emit.flush()
+
+
+# ---------------------------------------------------------------------------
+# surface command
+# ---------------------------------------------------------------------------
+
+
+def _parse_near_residues(near: str) -> list[tuple[str, int]]:
+    """Parse a ``--near`` residue specification like ``A:42,A:43,B:10``.
+
+    Returns a list of ``(chain, resnum)`` tuples.
+    """
+    result: list[tuple[str, int]] = []
+    for token in near.split(","):
+        token = token.strip()
+        if ":" in token:
+            parts = token.split(":", 1)
+            try:
+                result.append((parts[0], int(parts[1])))
+            except ValueError:
+                continue
+        else:
+            # Bare residue number — assume chain "_".
+            try:
+                result.append(("_", int(token)))
+            except ValueError:
+                continue
+    return result
+
+
+def _format_residue_ranges(resnums: list[int]) -> str:
+    """Format a sorted list of residue numbers into compact ranges.
+
+    E.g., [1, 2, 3, 7, 8, 15] → "1-3, 7-8, 15"
+    """
+    if not resnums:
+        return ""
+    resnums = sorted(set(resnums))
+    ranges: list[str] = []
+    start = resnums[0]
+    end = start
+    for n in resnums[1:]:
+        if n == end + 1:
+            end = n
+        else:
+            ranges.append(f"{start}-{end}" if end > start else str(start))
+            start = end = n
+    ranges.append(f"{start}-{end}" if end > start else str(start))
+    return ", ".join(ranges)
+
+
+@structure.command("surface")
+@click.argument("structure_file", type=click.Path())
+@click.option(
+    "--gene",
+    default=None,
+    help="Gene symbol or UniProt accession — fetches glycosylation sites.",
+)
+@click.option(
+    "--near",
+    default=None,
+    help="Residue specification (e.g. A:42,A:43) for patch-level analysis.",
+)
+@out_option
+@output_options
+@pass_state
+def surface_cmd(
+    state: AppState,
+    structure_file: str,
+    gene: str | None,
+    near: str | None,
+    out: str | None,
+    as_json: bool,
+    quiet: bool,
+) -> None:
+    """Compute per-residue solvent-accessible surface area (SASA) and RSA.
+
+    Reads a PDB or mmCIF structure and applies the Shrake-Rupley algorithm
+    to compute per-atom SASA, then aggregates to per-residue SASA and
+    relative solvent accessibility (RSA).  RSA is normalised against
+    Tien et al. 2013 theoretical maxASA values.
+
+    When ``--gene`` is provided, glycosylation sites are fetched from
+    UniProt and reported alongside the surface analysis.
+
+    The B-factor column is extracted as a pLDDT proxy for AlphaFold
+    structures — residues with pLDDT < 50 are flagged as likely disordered.
+
+    \b
+    Outputs:
+      {stem}.surface.artifact.json — surface accessibility record
+      {stem}.surface.meta.json     — provenance sidecar
+    """
+    emit = Emitter(as_json=as_json, quiet=quiet)
+
+    source = resolve_artifact(state, structure_file, "structure")
+    fmt = detect_structure_format(source)
+    text = source.read_text(encoding="utf-8", errors="replace")
+
+    # Parse atoms.
+    if fmt == "cif":
+        atoms = _parse_atoms_cif(text)
+    else:
+        atoms = _parse_atoms_pdb(text)
+
+    if not atoms:
+        raise ArtifactError(
+            f"no atom coordinates found in {source.name}",
+            detail="the structure file appears empty or unparseable",
+            remedy="check that the file is a valid PDB or mmCIF structure "
+            "with ATOM/HETATM records",
+        )
+
+    # Load thresholds.
+    ts = thresholds_mod.load("surface", state.project().root)
+    rsa_exposed_t = ts.get("rsa_exposed")
+    rsa_highly_exposed_t = ts.get("rsa_highly_exposed")
+    plddt_disorder_t = ts.get("plddt_disorder")
+
+    # Compute SASA.
+    probe_radius = 1.4
+    n_points = 100
+    per_atom_sasa = _compute_sasa(atoms, probe_radius=probe_radius, n_points=n_points)
+
+    # Compute per-residue RSA.
+    per_residue = _compute_rsa(atoms, per_atom_sasa)
+
+    # Classify residues.
+    for res in per_residue:
+        rsa = res.get("rsa")
+        if rsa is not None:
+            if rsa > rsa_highly_exposed_t:
+                res["classification"] = "highly_exposed"
+            elif rsa > rsa_exposed_t:
+                res["classification"] = "exposed"
+            else:
+                res["classification"] = "buried"
+        else:
+            res["classification"] = "unknown"
+
+    # Summary statistics.
+    total_sasa = sum(r["sasa"] for r in per_residue)
+    rsa_values = [r["rsa"] for r in per_residue if r["rsa"] is not None]
+    n_residues = len(rsa_values)
+    n_exposed = sum(1 for v in rsa_values if v > rsa_exposed_t)
+    n_highly_exposed = sum(1 for v in rsa_values if v > rsa_highly_exposed_t)
+    mean_rsa = sum(rsa_values) / n_residues if n_residues > 0 else 0.0
+
+    # Per-chain profiles.
+    chain_data: dict[str, list[float]] = {}
+    for res in per_residue:
+        if res["rsa"] is not None:
+            chain_data.setdefault(res["chain"], []).append(res["rsa"])
+    chain_profiles: dict[str, dict[str, Any]] = {}
+    for chain_id in sorted(chain_data):
+        vals = chain_data[chain_id]
+        chain_mean_rsa = sum(vals) / len(vals) if vals else 0.0
+        chain_n_exposed = sum(1 for v in vals if v > rsa_exposed_t)
+        chain_profiles[chain_id] = {
+            "mean_rsa": round(chain_mean_rsa, 2),
+            "fraction_exposed": round(chain_n_exposed / len(vals), 2) if vals else 0.0,
+        }
+
+    # Disorder residues (pLDDT < threshold).
+    disorder_residues = [
+        {"chain": r["chain"], "resnum": r["resnum"], "plddt": r["plddt"]}
+        for r in per_residue
+        if r["plddt"] < plddt_disorder_t and r["plddt"] > 0
+    ]
+
+    # Glycosylation sites (if --gene provided).
+    glycosylation_sites: list[dict[str, Any]] = []
+    gene_label = None
+    if gene is not None:
+        accession, gene_from_search = resolve_accession(gene)
+        gene_label = gene_from_search or gene
+        url = f"{UNIPROT_API}/{accession}.json"
+        data = http.get_json(url, qps=qps_for_host("rest.uniprot.org"), timeout=30.0)
+        features = data.get("features") or []
+        glycosylation_sites = _parse_glycosylation_sites(features)
+
+    # --near patch analysis.
+    patch_analysis: dict[str, Any] | None = None
+    if near is not None:
+        near_residues = _parse_near_residues(near)
+        if near_residues:
+            patch = [
+                r for r in per_residue
+                if (r["chain"], r["resnum"]) in near_residues
+            ]
+            if patch:
+                patch_rsa = [r["rsa"] for r in patch if r["rsa"] is not None]
+                patch_n_exposed = sum(
+                    1 for v in patch_rsa if v > rsa_exposed_t
+                )
+                patch_n_highly = sum(
+                    1 for v in patch_rsa if v > rsa_highly_exposed_t
+                )
+                patch_mean_rsa = (
+                    sum(patch_rsa) / len(patch_rsa) if patch_rsa else 0.0
+                )
+
+                # Check glycosylation sites in patch.
+                patch_glyco = []
+                for gs in glycosylation_sites:
+                    if any(
+                        r["resnum"] == gs["position"] for r in patch
+                    ):
+                        patch_glyco.append(gs)
+
+                patch_classification = "buried"
+                if patch_mean_rsa > rsa_highly_exposed_t:
+                    patch_classification = "highly_exposed"
+                elif patch_mean_rsa > rsa_exposed_t:
+                    patch_classification = "exposed"
+
+                patch_analysis = {
+                    "query": near,
+                    "n_residues": len(patch),
+                    "n_with_rsa": len(patch_rsa),
+                    "mean_rsa": round(patch_mean_rsa, 2),
+                    "classification": patch_classification,
+                    "n_exposed": patch_n_exposed,
+                    "n_highly_exposed": patch_n_highly,
+                    "glycosylation_sites_in_patch": patch_glyco,
+                    "residues": patch,
+                }
+
+    # Build artifact.
+    project = state.project()
+    target_dir = project.artifact_dir("structures", out)
+    stem = source.stem
+
+    summary = {
+        "total_sasa": round(total_sasa, 1),
+        "fraction_exposed": round(n_exposed / n_residues, 2) if n_residues else 0.0,
+        "fraction_highly_exposed": (
+            round(n_highly_exposed / n_residues, 2) if n_residues else 0.0
+        ),
+        "mean_rsa": round(mean_rsa, 2),
+        "chain_profiles": chain_profiles,
+    }
+
+    artifact_record: dict[str, Any] = {
+        "schema": SURFACE_ARTIFACT_SCHEMA,
+        "structure": source.name,
+        "probe_radius": probe_radius,
+        "n_points": n_points,
+        "rsa_reference": "Tien_2013",
+        "per_residue": per_residue,
+        "summary": summary,
+        "glycosylation_sites": glycosylation_sites,
+        "disorder_residues": disorder_residues,
+    }
+    if patch_analysis is not None:
+        artifact_record["patch_analysis"] = patch_analysis
+
+    artifact_path = target_dir / f"{stem}.surface.artifact.json"
+    artifact_path.write_text(
+        json.dumps(artifact_record, indent=2) + "\n", encoding="utf-8"
+    )
+
+    # Provenance sidecar.
+    params: dict[str, Any] = {
+        "structure": source.name,
+        "probe_radius": probe_radius,
+        "n_points": n_points,
+    }
+    if gene is not None:
+        params["gene"] = gene
+    if near is not None:
+        params["near"] = near
+
+    sidecar = provenance.Sidecar(
+        tool="structure",
+        subcommand="surface",
+        endpoint=f"{UNIPROT_API}/{gene}.json" if gene else None,
+        parameters=params,
+    )
+    sidecar.note("structure_sha256", provenance.sha256_file(source))
+    sidecar.note("n_residues", len(per_residue))
+    sidecar.note("total_sasa", round(total_sasa, 1))
+    sidecar.note("threshold_set", ts.tag)
+    sidecar.add_output(artifact_path)
+
+    # Mandatory relays — always fired.
+    sidecar.warn(
+        provenance.RELAY_CODES["surface.sasa_is_static_snapshot"],
+        code="surface.sasa_is_static_snapshot",
+    )
+    sidecar.warn(
+        provenance.RELAY_CODES["surface.rsa_reference_values"],
+        code="surface.rsa_reference_values",
+    )
+
+    meta_path = sidecar.write(target_dir / f"{stem}.surface.meta.json")
+
+    # Human-readable output.
+    emit.line(f"Surface accessibility analysis: {source.name}")
+    emit.line(f"  Total SASA: {total_sasa:,.0f} A^2")
+    emit.line(
+        f"  Exposed residues: {n_exposed}/{n_residues} "
+        f"({n_exposed * 100 // n_residues if n_residues else 0}%), "
+        f"highly exposed: {n_highly_exposed}/{n_residues} "
+        f"({n_highly_exposed * 100 // n_residues if n_residues else 0}%)"
+    )
+    emit.line(f"  Mean RSA: {mean_rsa:.2f}")
+
+    for chain_id, profile in chain_profiles.items():
+        emit.line(
+            f"  Chain {chain_id}: mean RSA {profile['mean_rsa']}, "
+            f"{int(profile['fraction_exposed'] * 100)}% exposed"
+        )
+
+    if disorder_residues:
+        disorder_resnums = [r["resnum"] for r in disorder_residues]
+        emit.line(
+            f"  Disordered regions (pLDDT < {plddt_disorder_t:.0f}): "
+            f"residues {_format_residue_ranges(disorder_resnums)}"
+        )
+
+    if glycosylation_sites:
+        glyco_strs = []
+        for gs in glycosylation_sites:
+            glyco_strs.append(f"N{gs['position']} ({gs['type']})")
+        emit.line(f"  Glycosylation sites: {', '.join(glyco_strs)}")
+
+    if patch_analysis is not None:
+        pa = patch_analysis
+        emit.line(f"  Queried patch ({pa['query']}):")
+        emit.line(f"    Mean RSA: {pa['mean_rsa']} ({pa['classification']})")
+        emit.line(
+            f"    {pa['n_exposed']}/{pa['n_residues']} residues exposed, "
+            f"{pa['n_highly_exposed']} highly exposed"
+        )
+        if pa["glycosylation_sites_in_patch"]:
+            for gs in pa["glycosylation_sites_in_patch"]:
+                emit.line(
+                    f"    Glycosylation site N{gs['position']} is within the patch"
+                )
+        min_patch = ts.get("min_exposed_patch_residues")
+        if pa["n_exposed"] >= min_patch:
+            emit.line("    -> Candidate antibody-accessible surface")
+
+    emit.data("schema", SURFACE_ARTIFACT_SCHEMA)
+    emit.data("total_sasa", round(total_sasa, 1))
+    emit.data("n_residues", n_residues)
+    emit.data("n_exposed", n_exposed)
+    emit.data("mean_rsa", round(mean_rsa, 2))
+    emit.path(artifact_path, role="surface")
     emit.path(meta_path, role="sidecar")
     emit.flush()
