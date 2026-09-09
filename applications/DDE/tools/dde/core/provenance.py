@@ -34,6 +34,7 @@ from typing import Any
 
 from . import env, output
 from .errors import ArtifactError, Refusal
+from .toolchain import check_integrity
 
 
 def _utc_now() -> str:
@@ -810,11 +811,13 @@ class Sidecar:
         self.extra[key] = value
 
     def to_dict(self) -> dict[str, Any]:
+        tc = check_integrity()
         record = {
             "tool": self.tool,
             "subcommand": self.subcommand,
             "work_order_id": _work_order(),
             "cli_version": env.CLI_VERSION,
+            "cli_integrity": tc.integrity,
             "env_version": env.env_version(),
             "interpreter": env.interpreter_tag(),
             "endpoint": self.endpoint,
@@ -825,6 +828,12 @@ class Sidecar:
             "warnings": self.warnings,
             "mandatory_relays": self.relays,
         }
+        if tc.modified:
+            record["cli_modified"] = True
+            record["cli_modified_note"] = (
+                "DDE source has uncommitted modifications. Artifacts may not "
+                "be reproducible under the declared cli_version."
+            )
         record.update(self.extra)
         return record
 
@@ -867,9 +876,11 @@ def write_analysis(
     that is precisely the case where somebody's citation is about to stop
     matching the file it cites.
     """
+    tc = check_integrity()
     record: dict[str, Any] = {
         "source": source,
         "cli_version": env.CLI_VERSION,
+        "cli_integrity": tc.integrity,
         "env_version": env.env_version(),
         "timestamp": _utc_now(),
         "threshold_set": threshold_set,
@@ -877,6 +888,12 @@ def write_analysis(
         "metrics": metrics,
         "assessment": assessment,
     }
+    if tc.modified:
+        record["cli_modified"] = True
+        record["cli_modified_note"] = (
+            "DDE source has uncommitted modifications. Artifacts may not "
+            "be reproducible under the declared cli_version."
+        )
     if mandatory_relays:
         record["mandatory_relays"] = mandatory_relays
     if threshold_sources:

@@ -25,6 +25,7 @@ from ..core import env, envstamp
 from ..core.context import resolve_project
 from ..core.errors import DDEError
 from ..core.thresholds import UNRESOLVED, declared_sets
+from ..core.toolchain import check_integrity
 
 OK = "ok"
 WARN = "warn"
@@ -89,6 +90,51 @@ def _check_python(report: Report) -> None:
         f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro} "
         f"({env.interpreter_tag()})",
     )
+
+
+def _check_toolchain_integrity(report: Report) -> None:
+    """Is the CLI running from unmodified source?
+
+    Issue #127: specialists patched installed DDE source mid-run.
+    Sidecars generated afterward claimed unmodified cli_version.
+    This check makes the condition visible at doctor time.
+    """
+    tc = check_integrity()
+
+    if tc.integrity == "installed":
+        report.add(
+            "toolchain integrity",
+            OK,
+            "running from installed package, source integrity not verifiable",
+        )
+        return
+
+    if tc.integrity == "unknown":
+        report.add(
+            "toolchain integrity",
+            WARN,
+            "could not determine source state (git not available or failed)",
+            "install git or run from a git checkout to enable integrity checking",
+            kind=HOUSEKEEPING,
+        )
+        return
+
+    if tc.modified:
+        file_list = ", ".join(tc.modified_files[:10]) if tc.modified_files else "(unknown)"
+        suffix = f" … and {len(tc.modified_files) - 10} more" if len(tc.modified_files) > 10 else ""
+        report.add(
+            "toolchain integrity",
+            WARN,
+            f"DDE source has uncommitted modifications ({tc.integrity}): "
+            f"{file_list}{suffix}",
+            "artifacts produced now will carry cli_modified: true in their "
+            "sidecar. Commit or stash the changes, or set DDE_NO_DIRTY_WARNING=1 "
+            "if this is intentional development",
+            kind=HOUSEKEEPING,
+        )
+        return
+
+    report.add("toolchain integrity", OK, f"clean ({tc.integrity})")
 
 
 def _check_environment(report: Report) -> None:
@@ -1272,6 +1318,7 @@ def doctor(state: AppState, as_json: bool, strict: bool) -> None:
     """
     report = Report()
     _check_python(report)
+    _check_toolchain_integrity(report)
     _check_environment(report)
     _check_env_drift(report)
     _check_env_source(report)

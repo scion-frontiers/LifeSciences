@@ -7,6 +7,8 @@ are grouped by tool; each tool's phases are separate invocations.
 from __future__ import annotations
 
 import json
+import os
+import sys
 
 import click
 
@@ -76,6 +78,7 @@ from .common import AppState, DDEGroup, enforce_phase_two
 from .core.context import init_project
 from .core import provenance
 from .core.env import CLI_VERSION
+from .core.toolchain import check_integrity
 
 
 @click.group(cls=DDEGroup, context_settings={"help_option_names": ["-h", "--help"]})
@@ -95,6 +98,19 @@ def cli(ctx: click.Context, project_override: str | None) -> None:
     working directory.
     """
     ctx.obj = AppState(project_override=project_override)
+
+    # One-time dirty-source warning (#127). Suppressible for legitimate
+    # development via DDE_NO_DIRTY_WARNING=1.
+    if not os.environ.get("DDE_NO_DIRTY_WARNING"):
+        tc = check_integrity()
+        if tc.modified:
+            n = len(tc.modified_files)
+            file_word = "file" if n == 1 else "files"
+            print(
+                f"Warning: DDE source has uncommitted modifications"
+                f" ({n} {file_word}). Run 'dde doctor' for details.",
+                file=sys.stderr,
+            )
 
 
 @cli.command()
