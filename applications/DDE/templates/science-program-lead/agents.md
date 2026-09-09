@@ -452,7 +452,12 @@ Stage 0 is bounded. It stops at the earliest of:
 **Budget exhaustion is incomplete, not scientific failure.** When Stage 0 stops
 due to budget exhaustion:
 - Concepts with incomplete evidence are recorded with action `investigate` (more
-  evidence needed) or `park` (set aside for later), never `terminate`.
+  evidence needed) or `park` (set aside as backup — see "Backup characterization
+  obligations" below), never `terminate`.
+- A `park` decision carries obligations: escalation conditions in the `conditions`
+  field and authorized characterization work in `authorized_next_work`. A park
+  with neither is valid only when reactivation is not expected — document why in
+  the rationale.
 - The `terminate` action is reserved for actual negative scientific findings or
   program-constraint rejections — never for "ran out of budget."
 - The decision record's rationale states the budget-exhausted condition and what
@@ -497,7 +502,8 @@ references the policy; a scientific refutation references the evidence.
 Stage 0 records:
 - The **shortlist** of concepts that proceed to Stage 1
 - **Alternatives considered** and their disposition (accepted, parked, terminated,
-  withdrawn)
+  withdrawn), including for parked concepts: escalation conditions and authorized
+  characterization work (see "Backup characterization obligations")
 - **Evidence** — assessment records (AR-NNN) from each workstream
 - **Unresolved liabilities** — entered in `liability-tracker.md`
 - **Review** — the lead's reviewed decision, including any pre-mortem review
@@ -507,6 +513,78 @@ Stage 0 records:
 A lone sponsor hypothesis is not automatically cleared or rejected — it goes
 through the same three-workstream evaluation as any other concept, even when it
 is the only one available.
+
+### Backup characterization obligations
+
+When Stage 0 parks a concept as a backup (disposition `park` with intent to
+preserve as an alternative), the parking decision carries two additional
+obligations beyond recording:
+
+**1. Escalation conditions.** The decision record's `conditions` field records
+structured reactivation triggers using the prefix convention:
+
+    reactivation_trigger:<condition_type>:<entity_ref>:<threshold>
+
+Defined condition types:
+
+| Type | Meaning | Example |
+|---|---|---|
+| `liability_escalation` | A named liability reaches a severity | `reactivation_trigger:liability_escalation:L-008:Critical` |
+| `primary_gate_failure` | The committed target fails a gate | `reactivation_trigger:primary_gate_failure:Stage1` |
+| `primary_pivot` | The committed target undergoes a major pivot | `reactivation_trigger:primary_pivot:any` |
+
+A park decision with no `conditions` entries is valid only when the concept is
+parked with no expectation of reactivation — in which case `terminate` is
+usually the honest disposition. Record the reason for omitting conditions in
+the decision rationale.
+
+**2. Authorized characterization.** The decision record's
+`authorized_next_work` field lists the specific checks pre-authorized for
+the backup:
+
+- `structure-screen` — structural assessment via `dde structure-screen run`
+- `safety-expression-constraint` — safety screen via expression and genetic
+  constraint workstreams
+
+These checks produce **assessment records (AR-NNN)**, not findings. They do
+not enter the acceptance pipeline and cannot enter Layer 2. Their purpose is
+to give the lead decision-useful evidence for comparison at the next gate.
+
+**Scope bound:** At most **two** parked concepts receive backup
+characterization per program. The lead selects which backups to characterize
+at the Stage 0 decision, based on decision-relevance. If no backup is
+decision-relevant, none receive characterization.
+
+**Depth bound:** Backup characterization runs the named tool invocations at
+Stage 0 depth. It does not include docking, binding-mode analysis, functional
+validation, or any Cohort C work. If a backup needs deeper characterization,
+the honest action is reactivation (`parked` → `active`), not scope expansion
+of backup work.
+
+**Scheduling:** The controller dispatches authorized backup checks after the
+Stage 0 decision, in parallel with the committed target's Stage 1 work, at
+`resource_class: background`. Backup checks yield to committed-target work
+orders on resource contention. They should complete before the Stage 1 gate
+decision; if they do not, the lead notes the gap in the gate evidence
+snapshot.
+
+**Prerequisites:** Backup characterization is subject to the same sequencing
+rules as committed-target work. Specifically:
+- Rule 12 (mechanism-direction before structure/safety) applies. If the
+  backup concept has an unresolved mechanism-direction question from Stage 0,
+  structural/safety checks do not proceed until it is resolved or the risk is
+  explicitly acknowledged.
+- Rule 16 (competitive landscape/FTO before structural work) applies. Stage 0
+  competitive landscape evidence for the backup must exist before structural
+  checks run. Since competitive landscape is a Stage 0 workstream, this
+  evidence should already exist.
+
+**"Parked with no data" is an anti-pattern.** A parked concept that reaches a
+gate with no evidence beyond its Stage 0 snapshot — no backup characterization
+and no reactivation conditions — is a concept that was dropped without being
+terminated. If a concept is not worth the cost of two tool invocations, the
+honest disposition is `terminate` (with rationale) or `investigate` (with a
+specified question), not `park`.
 
 ### Relationship to Stage 1
 
@@ -679,6 +757,23 @@ is yours:
 - Log every non-trivial routing and gate decision with its rationale and the evidence
   it rests on. Your successor after a context compaction — or after a restart — has
   only this.
+
+### Parked concept condition evaluation
+
+When updating `liability-tracker.md`, check whether any severity change
+satisfies a `reactivation_trigger:liability_escalation` condition on a parked
+concept's decision record. Record the evaluation result in `decision-log.md`:
+
+- **Condition met:** Record a reactivation decision (see §5a), transition the
+  concept to `active`, commit Stage 1 work orders, and log the trigger,
+  evidence state, and justification in `decision-log.md`.
+- **Condition not met:** Record "Reactivation trigger for [concept] evaluated:
+  [liability] remains at [severity]. No reactivation."
+
+The same check applies at cohort batch review and at gate decisions: evaluate
+all outstanding `reactivation_trigger` conditions on parked concepts and
+record the result. A reactivation trigger that is never evaluated is the
+same failure as a liability that is never revisited.
 
 ### Mechanism-direction liabilities
 
@@ -881,6 +976,21 @@ If the target is not structurally tractable or has prohibitive safety liabilitie
 
 Requires human approval per charter before commissioning.
 
+**Backup characterization — parallel track** (assessment records, not findings):
+
+Parked backup concepts with `authorized_next_work` in their park decision record
+receive lightweight characterization in parallel with the committed target's
+Cohort B work. This is not a cohort — it produces assessment records (AR-NNN),
+not findings, and does not enter the acceptance pipeline. The evidence informs
+the gate comparison, not Layer 2.
+
+At the Stage 1 gate decision, the lead's evidence snapshot includes backup
+assessment records under "Alternatives considered." If a backup's
+characterization reveals it is more tractable or safer than expected, that
+informs the gate decision — it does not automatically trigger reactivation.
+Reactivation is a separate decision (see §5a, "Backup characterization
+obligations").
+
 This sequence is ordered by cost and discriminating power. Mechanism-direction and
 competitive landscape checks (Cohort A) kill targets definitively for the cost of a few
 work orders and tool queries. Structural work (Cohort B) is informative but rarely
@@ -1037,6 +1147,13 @@ not binding.
     the inputs available at the current stage. Named compounds must carry a CID
     or SMILES, or be marked as undisclosed. Cited PMIDs must actually disclose
     the structural data they are referenced for (section 4).
+19. **Characterize parked backups before the gate that would compare them.**
+    A concept parked as a backup receives at least structural and safety
+    assessment records before the next gate where it could be an alternative.
+    At most two parked concepts receive this treatment per program. If a
+    concept is not worth two tool invocations, terminate it — do not park
+    it and leave it uncharacterized (section 5a, "Backup characterization
+    obligations").
 
 ---
 
