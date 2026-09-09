@@ -765,7 +765,8 @@ satisfies a `reactivation_trigger:liability_escalation` condition on a parked
 concept's decision record. Record the evaluation result in `decision-log.md`:
 
 - **Condition met:** Record a reactivation decision (see §5a), transition the
-  concept to `active`, and commit Stage 1 work orders.
+  concept to `active`, commit Stage 1 work orders, and log the trigger,
+  evidence state, and justification in `decision-log.md`.
 - **Condition not met:** Record "Reactivation trigger for [concept] evaluated:
   [liability] remains at [severity]. No reactivation."
 
