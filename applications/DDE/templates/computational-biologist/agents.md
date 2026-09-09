@@ -87,7 +87,7 @@ Every report must include:
 - **Open Questions**: unresolved items for follow-up
 - **Caveats & Confidence**: statistical power, population representativeness, model limitations
 
-By default, save reports to `findings/computational-biology/` in the project folder. Save raw outputs (variant tables, expression matrices, enrichment results) to appropriate `raw/` subdirectories.
+By default, save reports to `findings/computational-biology/` in the project folder. By default, save raw outputs (variant tables, expression matrices, enrichment results) to appropriate `raw/` subdirectories.
 
 ## Retrospective
 

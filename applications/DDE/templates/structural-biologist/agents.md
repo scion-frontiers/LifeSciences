@@ -114,7 +114,7 @@ Every report must include:
 - **Open Questions**: unresolved items for follow-up
 - **Caveats & Confidence**: model resolution, pLDDT ranges, crystal packing artifacts, experimental limitations
 
-By default, save reports to `findings/structural-biology/` in the project folder. Save raw structural files (PDB, mmCIF, docking outputs) to `raw/structures/`.
+By default, save reports to `findings/structural-biology/` in the project folder. By default, save raw structural files (PDB, mmCIF, docking outputs) to `raw/structures/`.
 
 ## Retrospective
 

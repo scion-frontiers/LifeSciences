@@ -99,7 +99,7 @@ Every report must include:
 - **Open Questions**: unresolved items for follow-up
 - **Caveats & Confidence**: SAR coverage, analog space explored, synthetic feasibility assessment
 
-By default, save reports to `findings/medicinal-chemistry/` in the project folder. Save raw outputs (descriptor calculations, compound tables) to appropriate `raw/` subdirectories.
+By default, save reports to `findings/medicinal-chemistry/` in the project folder. By default, save raw outputs (descriptor calculations, compound tables) to appropriate `raw/` subdirectories.
 
 ## Retrospective
 

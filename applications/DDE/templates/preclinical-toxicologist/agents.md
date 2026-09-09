@@ -130,7 +130,7 @@ Every report must include:
 - **Open Questions**: unresolved items for follow-up
 - **Caveats & Confidence**: species relevance, study design limitations, exposure margins
 
-By default, save reports to `findings/regulatory/` in the project folder under a `toxicology/` subdirectory. Save raw outputs to appropriate `raw/` subdirectories.
+By default, save reports to `findings/regulatory/` in the project folder under a `toxicology/` subdirectory. By default, save raw outputs to appropriate `raw/` subdirectories.
 
 ## Retrospective
 

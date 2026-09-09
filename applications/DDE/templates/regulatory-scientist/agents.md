@@ -107,7 +107,7 @@ Every report must include:
 - **Open Questions**: unresolved items requiring regulatory consultation
 - **Caveats & Confidence**: jurisdictional differences, precedent applicability, guidance evolution
 
-By default, save reports to `findings/regulatory/` in the project folder. For IND dossier components, write to `gates/stage4-ind-package/`.
+By default, save reports to `findings/regulatory/` in the project folder, and IND dossier components to `gates/stage4-ind-package/`.
 
 ## Retrospective
 

@@ -113,7 +113,7 @@ Every report must include:
 - **Open Questions**: unresolved items for follow-up
 - **Caveats & Confidence**: assay dynamic range, Z-prime, cell line relevance, statistical power
 
-By default, save reports to `findings/experimental-biology/` in the project folder. Save raw outputs (assay data, dose-response curves, screening results) to `raw/assays/`.
+By default, save reports to `findings/experimental-biology/` in the project folder. By default, save raw outputs (assay data, dose-response curves, screening results) to `raw/assays/`.
 
 ## Retrospective
 

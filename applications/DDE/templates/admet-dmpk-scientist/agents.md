@@ -130,7 +130,7 @@ Every report must include:
 - **Open Questions**: unresolved items for follow-up
 - **Caveats & Confidence**: in vitro-in vivo correlation assumptions, model validation, species differences
 
-By default, save reports to `findings/admet-dmpk/` in the project folder. Save raw outputs (ADMET profiles, PK parameters, PBPK model outputs) to appropriate `raw/` subdirectories.
+By default, save reports to `findings/admet-dmpk/` in the project folder. By default, save raw outputs (ADMET profiles, PK parameters, PBPK model outputs) to appropriate `raw/` subdirectories.
 
 ## Retrospective
 

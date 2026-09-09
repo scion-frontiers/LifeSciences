@@ -128,7 +128,7 @@ Every report must include:
 - **Open Questions**: unresolved items for follow-up
 - **Caveats & Confidence**: scoring function limitations, domain of applicability, model validation metrics
 
-By default, save reports to `findings/computational-chemistry/` in the project folder. Save raw outputs (docking scores, descriptor tables, virtual screening results) to appropriate `raw/` subdirectories.
+By default, save reports to `findings/computational-chemistry/` in the project folder. By default, save raw outputs (docking scores, descriptor tables, virtual screening results) to appropriate `raw/` subdirectories.
 
 ## Retrospective
 
