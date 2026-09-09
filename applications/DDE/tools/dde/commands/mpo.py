@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -30,10 +31,77 @@ from ..core.output import Emitter, warn
 
 ARTIFACT_CLASS = "mpo"
 
+# Threshold for warning about small min-max ranges.  When a metric's
+# observed range is less than this fraction of the maximum absolute value,
+# we warn that min-max normalization may exaggerate small differences.
+_SMALL_RANGE_FRACTION = 0.10
+
+# Below this cohort size we suggest --scoring absolute.
+_SMALL_COHORT_N = 5
+
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _slugify(text: str) -> str:
+    """Normalize text to a safe slug: lowercase, alphanumeric + hyphens."""
+    slug = re.sub(r"[^a-z0-9]+", "-", text.lower())
+    return slug.strip("-") or "unknown"
+
+
+def _flatten_list_of_dicts(
+    key: str,
+    records: list[dict[str, Any]],
+    *,
+    identity_field: str | None = None,
+    value_field: str | None = None,
+) -> dict[str, float]:
+    """Project a list of dicts into flat keyed numeric values.
+
+    For each dict in *records*, picks an identity string and a numeric
+    value, producing ``{key}.{slug(identity)}: value``.
+
+    *identity_field* / *value_field* override automatic detection; when
+    ``None`` the first string field and first numeric field are used.
+    """
+    flat: dict[str, float] = {}
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+
+        # Resolve identity: configurable or first string field.
+        ident: str | None = None
+        if identity_field and identity_field in record:
+            raw = record[identity_field]
+            if isinstance(raw, str):
+                ident = raw
+        if ident is None:
+            for v in record.values():
+                if isinstance(v, str):
+                    ident = v
+                    break
+        if ident is None:
+            continue  # cannot identify this record
+
+        # Resolve value: configurable or first numeric field.
+        num: float | None = None
+        if value_field and value_field in record:
+            raw = record[value_field]
+            if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+                num = float(raw)
+        if num is None:
+            for v in record.values():
+                if isinstance(v, (int, float)) and not isinstance(v, bool):
+                    num = float(v)
+                    break
+        if num is None:
+            continue  # no numeric value
+
+        flat_key = f"{key}.{_slugify(ident)}"
+        flat[flat_key] = num
+    return flat
 
 
 def _extract_metrics(doc: dict[str, Any]) -> dict[str, Any]:
@@ -42,6 +110,10 @@ def _extract_metrics(doc: dict[str, Any]) -> dict[str, Any]:
     Looks in ``metrics``, ``assessment``, ``endpoints``, and
     ``molecular_descriptors`` dicts, flattening one level of nesting.
     Numeric leaf values are kept; everything else is skipped.
+
+    Lists of dicts (e.g. selectivity ratios) are projected into flat
+    keys using the first string field as identity and the first numeric
+    field as value.
     """
     flat: dict[str, Any] = {}
 
@@ -58,6 +130,18 @@ def _extract_metrics(doc: dict[str, Any]) -> dict[str, Any]:
                         err=True,
                     )
                 flat[key] = value
+            elif isinstance(value, list):
+                # List of dicts: flatten using identity/value projection.
+                if value and isinstance(value[0], dict):
+                    projected = _flatten_list_of_dicts(key, value)
+                    for pk, pv in projected.items():
+                        if pk in flat and flat[pk] != pv:
+                            click.echo(
+                                f"warning: metric {pk!r} appears at multiple paths; "
+                                f"using value from {top_key}.{key}",
+                                err=True,
+                            )
+                        flat[pk] = pv
             elif isinstance(value, dict):
                 # One level of nesting: e.g. endpoints.metabolic_stability
                 for sub_key, sub_val in value.items():
@@ -70,6 +154,20 @@ def _extract_metrics(doc: dict[str, Any]) -> dict[str, Any]:
                                 err=True,
                             )
                         flat[flat_key] = sub_val
+                    elif isinstance(sub_val, list):
+                        # Nested list of dicts under a dict key.
+                        if sub_val and isinstance(sub_val[0], dict):
+                            projected = _flatten_list_of_dicts(
+                                f"{key}.{sub_key}", sub_val,
+                            )
+                            for pk, pv in projected.items():
+                                if pk in flat and flat[pk] != pv:
+                                    click.echo(
+                                        f"warning: metric {pk!r} appears at multiple paths; "
+                                        f"using value from {top_key}.{key}.{sub_key}",
+                                        err=True,
+                                    )
+                                flat[pk] = pv
                     elif isinstance(sub_val, dict):
                         # Two levels: e.g. endpoints.metabolic_stability.contributing_descriptors
                         for deep_key, deep_val in sub_val.items():
@@ -146,19 +244,24 @@ def _load_weights(weights_path: Path | None) -> dict[str, dict[str, Any]] | None
 def _normalize_scores(
     compound_values: dict[str, float],
     direction: str,
-) -> dict[str, float]:
+) -> tuple[dict[str, float], dict[str, float]]:
     """Min-max normalize values to 0-1, respecting direction.
 
     For "minimize", lower raw values get higher normalized scores.
     For "maximize", higher raw values get higher normalized scores.
+
+    Returns (normalized_dict, range_info) where range_info has
+    ``min``, ``max``, ``range`` keys.
     """
     if not compound_values:
-        return {}
+        return {}, {}
 
     values = list(compound_values.values())
     lo = min(values)
     hi = max(values)
     span = hi - lo
+
+    range_info: dict[str, float] = {"min": lo, "max": hi, "range": span}
 
     normalized: dict[str, float] = {}
     for compound, raw in compound_values.items():
@@ -172,7 +275,67 @@ def _normalize_scores(
             # Higher is better
             normalized[compound] = round((raw - lo) / span, 6)
 
+    return normalized, range_info
+
+
+def _normalize_absolute(
+    compound_values: dict[str, float],
+    direction: str,
+    low: float,
+    high: float,
+) -> dict[str, float]:
+    """Absolute desirability normalization to 0-1.
+
+    Score = linear interpolation clamped to [0, 1]:
+      (value - low) / (high - low)
+
+    For "minimize", the scale is inverted: values at or below *low* score
+    1.0 and values at or above *high* score 0.0.
+    """
+    if not compound_values:
+        return {}
+
+    span = high - low
+    if span == 0:
+        return {cid: 0.5 for cid in compound_values}
+
+    normalized: dict[str, float] = {}
+    for compound, raw in compound_values.items():
+        score = (raw - low) / span
+        score = max(0.0, min(1.0, score))
+        if direction == "minimize":
+            score = 1.0 - score
+        normalized[compound] = round(score, 6)
+
     return normalized
+
+
+def _parse_bounds(bounds_list: tuple[str, ...]) -> dict[str, tuple[float, float]]:
+    """Parse ``--bounds METRIC:LOW:HIGH`` arguments into a dict."""
+    result: dict[str, tuple[float, float]] = {}
+    for spec in bounds_list:
+        parts = spec.split(":")
+        if len(parts) != 3:
+            raise UsageError(
+                f"invalid --bounds format: {spec!r}",
+                detail="expected METRIC:LOW:HIGH (e.g. pIC50:6.0:8.0)",
+            )
+        metric = parts[0]
+        try:
+            low = float(parts[1])
+            high = float(parts[2])
+        except ValueError:
+            raise UsageError(
+                f"--bounds values must be numeric: {spec!r}",
+                detail="LOW and HIGH must be valid floating-point numbers",
+            )
+        if low >= high:
+            raise UsageError(
+                f"--bounds LOW must be less than HIGH: {spec!r}",
+                detail=f"got LOW={low}, HIGH={high}",
+            )
+        result[metric] = (low, high)
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -195,6 +358,22 @@ def mpo() -> None:
     help="JSON file defining parameter weights and optional thresholds. "
     "If omitted, all parameters found across inputs are weighted equally.",
 )
+@click.option(
+    "--scoring",
+    "scoring_mode",
+    default="minmax",
+    type=click.Choice(["minmax", "absolute"]),
+    help="Normalization method: 'minmax' (default, cohort-relative) or "
+    "'absolute' (desirability bounds, cohort-independent).",
+)
+@click.option(
+    "--bounds",
+    "bounds_specs",
+    multiple=True,
+    help="Absolute desirability bounds per metric: METRIC:LOW:HIGH. "
+    "Required for each metric when --scoring=absolute. "
+    "E.g. --bounds pIC50:6.0:8.0 --bounds SA_score:1.0:5.0",
+)
 @out_option
 @output_options
 @pass_state
@@ -202,6 +381,8 @@ def score_cmd(
     state: AppState,
     analyses: tuple[str, ...],
     weights_file: str | None,
+    scoring_mode: str,
+    bounds_specs: tuple[str, ...],
     out: str | None,
     as_json: bool,
     quiet: bool,
@@ -215,6 +396,14 @@ def score_cmd(
     Without ``--weights``, all parameters found across the input
     analyses are weighted equally -- useful for quick comparisons.
 
+    Supports two normalization modes:
+
+    \b
+      minmax    (default) Min-max normalization. Scores are relative to
+                the cohort and NOT comparable across runs.
+      absolute  Desirability-function normalization with explicit bounds.
+                Each candidate's score is independent of cohort composition.
+
     Outputs under ``raw/mpo/``:
 
     \b
@@ -223,6 +412,17 @@ def score_cmd(
     """
     emit = Emitter(as_json=as_json, quiet=quiet)
     target_dir = state.project().artifact_dir(ARTIFACT_CLASS, out)
+
+    # --- parse absolute bounds ---
+    abs_bounds: dict[str, tuple[float, float]] = {}
+    if bounds_specs:
+        abs_bounds = _parse_bounds(bounds_specs)
+
+    if scoring_mode == "absolute" and not abs_bounds:
+        raise UsageError(
+            "--scoring=absolute requires at least one --bounds specification",
+            remedy="provide --bounds METRIC:LOW:HIGH for each metric to score",
+        )
 
     # --- resolve inputs ---
     analysis_paths: list[Path] = []
@@ -304,9 +504,60 @@ def score_cmd(
 
     # --- normalize each parameter ---
     param_normalized: dict[str, dict[str, float]] = {}
-    for param in param_names:
-        direction = weight_specs[param].get("direction", "maximize")
-        param_normalized[param] = _normalize_scores(param_raw[param], direction)
+    param_ranges: dict[str, dict[str, float]] = {}  # for min-max reporting
+    relays: list[dict[str, str]] = []
+
+    if scoring_mode == "absolute":
+        # Absolute desirability normalization.
+        for param in param_names:
+            if param not in abs_bounds:
+                raise UsageError(
+                    f"--scoring=absolute requires --bounds for metric {param!r}",
+                    detail=f"provide --bounds {param}:LOW:HIGH",
+                )
+            direction = weight_specs[param].get("direction", "maximize")
+            low, high = abs_bounds[param]
+            param_normalized[param] = _normalize_absolute(
+                param_raw[param], direction, low, high,
+            )
+    else:
+        # Min-max normalization.
+        n_compounds = len(compounds)
+
+        # Small-N warning.
+        if n_compounds < _SMALL_COHORT_N:
+            warn(
+                f"Scoring {n_compounds} candidates with min-max normalization. "
+                "Consider --scoring absolute for small cohorts."
+            )
+
+        for param in param_names:
+            direction = weight_specs[param].get("direction", "maximize")
+            normalized, range_info = _normalize_scores(param_raw[param], direction)
+            param_normalized[param] = normalized
+            param_ranges[param] = range_info
+
+            # Small-range warning.
+            if range_info:
+                span = range_info["range"]
+                hi = range_info["max"]
+                max_abs = max(abs(hi), abs(range_info["min"])) if hi != 0 else 0
+                if max_abs > 0 and span < _SMALL_RANGE_FRACTION * max_abs:
+                    warn(
+                        f"Metric {param!r} has range {span:.4g} across "
+                        f"{n_compounds} candidates — min-max normalization "
+                        "may exaggerate small differences."
+                    )
+
+        # Fire the mandatory relay for min-max.
+        relays.append(
+            provenance.relay(
+                "mpo.minmax_cohort_relative",
+                "MPO scores were computed with min-max normalization. "
+                "Scores are relative to this specific cohort and are NOT "
+                "comparable across different scoring runs or candidate sets.",
+            )
+        )
 
     # --- compute weighted totals ---
     compound_scores: dict[str, dict[str, Any]] = {}
@@ -389,11 +640,21 @@ def score_cmd(
         "subcommand": "score",
         "source_analyses": source_files,
         "weights": weights_summary,
-        "normalization": "min-max",
+        "normalization": scoring_mode,
         "n_compounds": len(ranked),
         "n_parameters": len(param_names),
         "compounds": ranked,
     }
+
+    if scoring_mode == "absolute":
+        mpo_record["bounds"] = {
+            metric: {"low": low, "high": high}
+            for metric, (low, high) in abs_bounds.items()
+        }
+    if param_ranges:
+        mpo_record["metric_ranges"] = param_ranges
+    if relays:
+        mpo_record["mandatory_relays"] = relays
 
     result_path = target_dir / f"mpo-{file_hash}.mpo.json"
     result_path.write_text(
@@ -410,18 +671,37 @@ def score_cmd(
             "analyses": source_files,
             "weights_file": weights_path.name if weights_path else None,
             "n_parameters": len(param_names),
+            "scoring_mode": scoring_mode,
         },
     )
     for apath in analysis_paths:
         sidecar.note(f"input_sha256_{apath.name}", provenance.sha256_file(apath))
     if weights_path:
         sidecar.note("weights_sha256", provenance.sha256_file(weights_path))
-    sidecar.note("normalization_method", "min-max")
+    sidecar.note("normalization_method", scoring_mode)
     sidecar.note("weights_applied", weights_summary)
     sidecar.note("parameter_names", param_names)
+    if scoring_mode == "absolute":
+        sidecar.note("bounds", {
+            m: {"low": lo, "high": hi} for m, (lo, hi) in abs_bounds.items()
+        })
+    for r in relays:
+        sidecar.warn(r["message"], code=r["code"])
     sidecar.add_output(result_path)
 
     meta_path = sidecar.write(target_dir / f"mpo-{file_hash}.mpo.meta.json")
+
+    # --- emit min-max range table ---
+    if scoring_mode == "minmax" and param_ranges:
+        emit.line(f"{'Metric':<24} {'Range':>10} {'Min':>10} {'Max':>10}")
+        for param in param_names:
+            ri = param_ranges.get(param, {})
+            if ri:
+                emit.line(
+                    f"{param:<24} {ri['range']:>10.4g} "
+                    f"{ri['min']:>10.4g} {ri['max']:>10.4g}"
+                )
+        emit.line("")
 
     # --- emit ranked table ---
     for entry in ranked:
@@ -436,8 +716,14 @@ def score_cmd(
             f"{fail_str}"
         )
 
+    # --- emit relays ---
+    for r in relays:
+        emit.line(f"relay {r['code']}: {r['message']}")
+
     emit.data("compounds", ranked)
     emit.data("weights", weights_summary)
+    if relays:
+        emit.data("mandatory_relays", relays)
     emit.path(result_path, role="mpo")
     emit.path(meta_path, role="sidecar")
     emit.flush()

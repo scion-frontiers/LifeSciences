@@ -437,6 +437,14 @@ RELAY_CODES: dict[str, str] = {
         "IC50 or patch-clamp result. Rule-based hERG prediction has a documented "
         "false-negative rate: absence of this flag is not evidence of hERG safety."
     ),
+    "mpo.minmax_cohort_relative": (
+        "MPO scores computed with min-max normalization are relative to the "
+        "specific cohort scored in this run. Do not compare scores across "
+        "different scoring runs or candidate sets — a compound's score "
+        "changes when the cohort changes, even if its raw values do not. "
+        "Use --scoring absolute with explicit bounds for "
+        "cohort-independent scores."
+    ),
     "mmp.cliff_not_causation": (
         "Do not interpret a property cliff as evidence of a causal mechanism. "
         "A large property change across a single R-group transformation is a "
