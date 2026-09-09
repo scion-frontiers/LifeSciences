@@ -127,34 +127,80 @@ def _flatten_entry(entry: Any, key: str) -> str:
 def normalize_deliverables(deliverables: dict[str, Any]) -> dict[str, Any]:
     """Normalize deliverable key names to the canonical schema.
 
-    WO authors may use either ``layer_0_classes`` (the canonical name per
-    the issue-22 design) or the shorter ``layer_0`` (used by Phase 3
-    controllers).  Both refer to the same concept: a list of
-    artifact-class names whose Layer 0 artifacts the work order covers.
+    Handles the ``required_classes`` / ``authorized_classes`` split
+    (#103) with full backward compatibility:
 
-    Returns a *new* dict with canonical keys.  If both ``layer_0`` and
-    ``layer_0_classes`` are present, ``layer_0_classes`` wins (it is the
-    documented canonical name) and ``layer_0`` is dropped from the result
-    to avoid orphan-key confusion.
+    1. If ``required_classes`` is present → use it as the canonical source.
+    2. If ``layer_0_classes`` is present (and no ``required_classes``) →
+       map to ``required_classes``.
+    3. If ``layer_0`` is present (and neither of the above) → map to
+       ``required_classes``.
+    4. ``authorized_classes`` is a separate optional field — preserved
+       as-is.
 
-    Additionally, structured entries (dicts with a ``class`` or ``name``
-    key) are flattened to plain strings so downstream consumers can
-    safely sort and compare them.
+    For backward compatibility, ``layer_0_classes`` is always populated
+    in the output from ``required_classes`` so that downstream checks
+    (4–6) that read ``layer_0_classes`` continue to work.
+
+    ``required_classes`` entries may be plain strings or dicts with a
+    ``not_applicable`` key.  Plain strings are flattened for
+    ``layer_0_classes``; dicts with ``not_applicable`` are preserved in
+    ``required_classes`` but their class name is still included in
+    ``layer_0_classes`` for backward compatibility.
+
+    Returns a *new* dict with canonical keys.
     """
     normalized = dict(deliverables)
 
-    if "layer_0_classes" not in normalized and "layer_0" in normalized:
-        normalized["layer_0_classes"] = normalized.pop("layer_0")
-    elif "layer_0_classes" in normalized and "layer_0" in normalized:
-        # Canonical key wins; drop the alias to prevent orphan confusion.
-        del normalized["layer_0"]
+    # --- Resolve the canonical required_classes source ---
+    if "required_classes" in normalized:
+        # New canonical field present — use it.
+        # Drop legacy aliases to prevent orphan-key confusion.
+        normalized.pop("layer_0_classes", None)
+        normalized.pop("layer_0", None)
+    elif "layer_0_classes" in normalized:
+        # Legacy canonical name → map to required_classes.
+        normalized["required_classes"] = normalized.pop("layer_0_classes")
+        normalized.pop("layer_0", None)
+    elif "layer_0" in normalized:
+        # Shortest alias → map to required_classes.
+        normalized["required_classes"] = normalized.pop("layer_0")
 
-    # Flatten structured entries to plain strings.
-    if "layer_0_classes" in normalized and isinstance(normalized["layer_0_classes"], list):
-        normalized["layer_0_classes"] = [
-            _flatten_entry(e, "class") for e in normalized["layer_0_classes"]
+    # --- Normalize required_classes entries ---
+    if "required_classes" in normalized and isinstance(normalized["required_classes"], list):
+        req_raw = normalized["required_classes"]
+        # Build layer_0_classes (flattened strings for backward compat)
+        # and keep required_classes with not_applicable dicts preserved.
+        flattened: list[str] = []
+        req_normalized: list[Any] = []
+        for entry in req_raw:
+            if isinstance(entry, dict) and "not_applicable" in entry:
+                # Preserve the dict so _check_deliverables_exist can
+                # detect the not_applicable flag.
+                cls_name = _flatten_entry(entry, "class")
+                req_normalized.append(entry)
+                flattened.append(cls_name)
+            else:
+                flat = _flatten_entry(entry, "class")
+                req_normalized.append(flat)
+                flattened.append(flat)
+        normalized["required_classes"] = req_normalized
+        normalized["layer_0_classes"] = flattened
+    elif "required_classes" in normalized:
+        # Non-list required_classes — pass through for downstream error
+        # handling; set layer_0_classes to empty.
+        normalized["layer_0_classes"] = []
+    else:
+        # No layer-0 class info at all.
+        normalized.setdefault("layer_0_classes", [])
+
+    # --- authorized_classes passes through as-is ---
+    if "authorized_classes" in normalized and isinstance(normalized["authorized_classes"], list):
+        normalized["authorized_classes"] = [
+            _flatten_entry(e, "class") for e in normalized["authorized_classes"]
         ]
 
+    # --- Flatten layer_1 entries ---
     if "layer_1" in normalized and isinstance(normalized["layer_1"], list):
         normalized["layer_1"] = [
             _flatten_entry(e, "path") for e in normalized["layer_1"]

@@ -92,6 +92,8 @@ def _check_deliverables_schema(
     has_layer_0 = bool(
         deliverables.get("layer_0_classes")
         or deliverables.get("layer_0")
+        or deliverables.get("required_classes")
+        or deliverables.get("authorized_classes")
     )
     has_layer_1 = bool(deliverables.get("layer_1"))
 
@@ -239,13 +241,21 @@ def _check_deliverables_exist(
 ) -> dict[str, Any]:
     """Check 1 — verify all declared deliverable files exist.
 
+    Handles both ``required_classes`` and ``authorized_classes`` (#103):
+
+    - **required_classes** entries: missing → ``fail`` / ``COMPLETENESS``
+      (existing behavior).  Entries with ``not_applicable`` → ``skip``
+      with reason.
+    - **authorized_classes** entries: missing → no finding (pass
+      silently).  Present → provenance checked as before.
+
     When *wo_id* is provided, only artifacts attributed to that work
     order (or untagged, for backward compatibility with pre-#166 records)
-    count toward satisfying each ``layer_0_classes`` entry.  Artifacts
-    whose sidecar tags them to a different work order are excluded (#283).
+    count toward satisfying each class entry.
     """
     missing: list[str] = []
     confined_failures: list[str] = []
+    skipped: list[dict[str, str]] = []
 
     # Layer 1 paths
     layer_1 = deliverables.get("layer_1", [])
@@ -258,19 +268,31 @@ def _check_deliverables_exist(
             if not resolved.is_file():
                 missing.append(str(rel_path))
 
-    # Layer 0 classes
+    # --- Required classes (from required_classes or backward-compat layer_0_classes) ---
     consumes_map = _build_consumes_map(deliverables)
 
-    layer_0_classes = deliverables.get("layer_0_classes", [])
-    if isinstance(layer_0_classes, list):
-        for artifact_class in layer_0_classes:
+    required_classes = deliverables.get("required_classes", [])
+    # Fallback: if no required_classes, use layer_0_classes (backward compat).
+    if not required_classes:
+        required_classes = deliverables.get("layer_0_classes", [])
+
+    if isinstance(required_classes, list):
+        for entry in required_classes:
+            # Handle not_applicable entries.
+            if isinstance(entry, dict) and "not_applicable" in entry:
+                cls_name = entry.get("class") or entry.get("name") or str(entry)
+                reason = entry["not_applicable"]
+                skipped.append({"class": cls_name, "reason": reason})
+                continue
+
+            artifact_class = entry if isinstance(entry, str) else (
+                entry.get("class") or entry.get("name") or str(entry)
+            )
             artifacts = _find_layer0_artifacts(project_root, artifact_class)
             if not artifacts:
                 missing.append(f"layer_0_classes/{artifact_class} (no artifacts found)")
                 continue
-            # WO scoping: when wo_id is provided, at least one artifact
-            # must be attributed to this WO (or be untagged).  Mirrors
-            # the attribution logic in _check_provenance_valid (#166).
+            # WO scoping
             if wo_id is not None:
                 art_dir = artifacts[0].parent
                 sidecar_index, _, other_wo_hashes = _build_sidecar_index(
@@ -279,10 +301,8 @@ def _check_deliverables_exist(
                 has_own_artifact = False
                 for artifact_path in artifacts:
                     actual_sha = sha256_file(artifact_path)
-                    # Artifact belongs to another WO — skip it.
                     if actual_sha in other_wo_hashes and actual_sha not in sidecar_index:
                         continue
-                    # This artifact is ours (in our index) or untagged.
                     has_own_artifact = True
                     break
                 if not has_own_artifact:
@@ -301,11 +321,20 @@ def _check_deliverables_exist(
                         "(no artifacts attributed to this work order)"
                     )
 
+    # --- Authorized classes: missing is OK, present is checked for provenance later ---
+    # No action needed here for authorized_classes — they are checked
+    # in provenance/analysis checks (4–5) via layer_0_classes.
+
     detail: dict[str, Any] = {}
     if confined_failures:
         detail["path_confinement_failures"] = confined_failures
     if missing:
         detail["missing"] = missing
+    if skipped:
+        detail["not_applicable"] = skipped
+
+    # Determine layer_0_classes list for the detail dict (backward compat).
+    layer_0_classes = deliverables.get("layer_0_classes", [])
 
     if confined_failures or missing:
         return {
@@ -320,8 +349,11 @@ def _check_deliverables_exist(
         "result": "pass",
         "status": "ok",
         "kind": "COMPLETENESS",
-        "detail": {"layer_1_count": len(layer_1) if isinstance(layer_1, list) else 0,
-                    "layer_0_classes": layer_0_classes if isinstance(layer_0_classes, list) else []},
+        "detail": {
+            "layer_1_count": len(layer_1) if isinstance(layer_1, list) else 0,
+            "layer_0_classes": layer_0_classes if isinstance(layer_0_classes, list) else [],
+            **({} if not skipped else {"not_applicable": skipped}),
+        },
     }
 
 
@@ -331,7 +363,22 @@ def _check_report_headings(
     wo_id: str,
     revision: int,
 ) -> dict[str, Any]:
-    """Check 2 — verify Layer 1 findings contain the WO reference string."""
+    """Check 2 — verify Layer 1 findings contain the WO reference string
+    and the ``## Key Findings`` heading (or a plausible equivalent).
+
+    Two sub-checks:
+
+    1. **WO reference** — the string ``WO-<id>-r<rev>`` must appear in
+       each Layer 1 file.  Missing → ``fail`` / ``COMPLETENESS``.
+    2. **Key Findings heading** — ``## Key Findings`` must appear.
+       When absent, we look for any ``##``-level heading between
+       ``## Summary`` and ``## Implications`` (or end-of-file).
+       - Variant found → ``warn`` / ``CONVENTION``.
+       - Nothing found → ``fail`` / ``COMPLETENESS``.
+
+    The returned result reflects the *worst* status across both
+    sub-checks.
+    """
     reference = f"WO-{wo_id.removeprefix('WO-')}-r{revision}"
     missing_ref: list[str] = []
 
@@ -345,28 +392,90 @@ def _check_report_headings(
             "detail": "no layer_1 deliverables declared",
         }
 
+    # Heading-text variance tracking.
+    heading_variants: list[dict[str, str]] = []  # warn cases
+    missing_headings: list[str] = []  # fail cases
+
     for rel_path in layer_1:
         resolved = _confine_path(project_root, Path(rel_path))
         if resolved is None or not resolved.is_file():
             continue  # deliverables_exist already flags these
         content = resolved.read_text(encoding="utf-8", errors="replace")
+
+        # Sub-check 1: WO reference string.
         if reference not in content:
             missing_ref.append(str(rel_path))
 
+        # Sub-check 2: ## Key Findings heading.
+        if "## Key Findings" not in content:
+            # Look for a plausible equivalent: any ##-level heading
+            # between ## Summary and ## Implications.
+            lines = content.split("\n")
+            summary_pos: int | None = None
+            implications_pos: int | None = None
+            for idx, line in enumerate(lines):
+                stripped = line.strip()
+                if stripped.startswith("## Summary"):
+                    summary_pos = idx
+                elif stripped.startswith("## Implications"):
+                    implications_pos = idx
+
+            # Search region: after Summary, before Implications (or EOF).
+            search_start = (summary_pos + 1) if summary_pos is not None else 0
+            search_end = implications_pos if implications_pos is not None else len(lines)
+
+            variant_heading: str | None = None
+            for idx in range(search_start, search_end):
+                stripped = lines[idx].strip()
+                if stripped.startswith("## ") and not stripped.startswith("## Summary"):
+                    variant_heading = stripped
+                    break
+
+            if variant_heading is not None:
+                heading_variants.append({
+                    "file": str(rel_path),
+                    "found_heading": variant_heading,
+                })
+            else:
+                missing_headings.append(str(rel_path))
+
+    # Build detail dict.
+    detail: dict[str, Any] = {"reference": reference}
     if missing_ref:
+        detail["files_missing_reference"] = missing_ref
+    if heading_variants:
+        detail["heading_variants"] = heading_variants
+    if missing_headings:
+        detail["missing_headings"] = missing_headings
+
+    # Determine worst status across both sub-checks.
+    # Priority: fail > warn > ok.
+    has_fail = bool(missing_ref) or bool(missing_headings)
+    has_warn = bool(heading_variants)
+
+    if has_fail:
+        # Determine kind: missing_ref and missing_headings are COMPLETENESS.
         return {
             "name": "report_headings",
             "result": "fail",
             "status": "fail",
             "kind": "COMPLETENESS",
-            "detail": {"expected_reference": reference, "files_missing_reference": missing_ref},
+            "detail": detail,
+        }
+    if has_warn:
+        return {
+            "name": "report_headings",
+            "result": "pass",
+            "status": "warn",
+            "kind": "CONVENTION",
+            "detail": detail,
         }
     return {
         "name": "report_headings",
         "result": "pass",
         "status": "ok",
         "kind": "COMPLETENESS",
-        "detail": {"reference": reference},
+        "detail": detail,
     }
 
 
@@ -377,8 +486,16 @@ def _check_paths_resolve(
     project_root: Path,
     deliverables: dict[str, Any],
 ) -> dict[str, Any]:
-    """Check 3 — verify internal markdown links resolve within the project."""
-    broken: list[dict[str, str]] = []
+    """Check 3 — verify internal markdown links resolve within the project.
+
+    When a broken link would resolve from the project root, emit
+    ``warn`` / ``CONVENTION`` and suggest the corrected relative path.
+    Truly broken links (resolve nowhere) remain ``fail`` /
+    ``DATA_INTEGRITY``.
+    """
+    import os
+
+    broken: list[dict[str, Any]] = []
     confined_failures: list[dict[str, str]] = []
     links_checked = 0
 
@@ -414,7 +531,22 @@ def _check_paths_resolve(
                 confined_failures.append({"file": str(rel_path), "link": target})
                 continue
             if not link_resolved.exists():
-                broken.append({"file": str(rel_path), "link": target})
+                # Check whether the link would resolve from project root.
+                root_resolved = (project_root / target_no_fragment).resolve()
+                if root_resolved.exists() and root_resolved.is_relative_to(project_root.resolve()):
+                    correct_relative = os.path.relpath(root_resolved, resolved_file.parent)
+                    broken.append({
+                        "file": str(rel_path),
+                        "link": target,
+                        "would_resolve_from_root": True,
+                        "suggested_fix": correct_relative,
+                        "detail": (
+                            f"This link resolves from project root but not "
+                            f"from the file directory. Use {correct_relative!r} instead."
+                        ),
+                    })
+                else:
+                    broken.append({"file": str(rel_path), "link": target})
 
     detail: dict[str, Any] = {"links_checked": links_checked}
     if confined_failures:
@@ -423,7 +555,14 @@ def _check_paths_resolve(
         detail["broken_links"] = broken
 
     if confined_failures or broken:
-        return {"name": "paths_resolve", "result": "fail", "status": "fail", "kind": "DATA_INTEGRITY", "detail": detail}
+        truly_broken = [b for b in broken if not b.get("would_resolve_from_root")]
+        if confined_failures or truly_broken:
+            return {"name": "paths_resolve", "result": "fail", "status": "fail",
+                    "kind": "DATA_INTEGRITY", "detail": detail}
+        else:
+            # All broken links are root-resolvable → convention warning.
+            return {"name": "paths_resolve", "result": "pass", "status": "warn",
+                    "kind": "CONVENTION", "detail": detail}
     return {"name": "paths_resolve", "result": "pass", "status": "ok", "kind": "DATA_INTEGRITY", "detail": detail}
 
 
@@ -652,34 +791,26 @@ def _check_analysis_citations(
     return {"name": "analysis_citations", "result": "pass", "status": "ok", "kind": "DATA_INTEGRITY", "detail": detail}
 
 
-def _check_relay_coverage(
+def _collect_relay_codes(
     project_root: Path,
     deliverables: dict[str, Any],
     wo_id: str | None = None,
-) -> dict[str, Any]:
-    """Check 6 — verify mandatory relay codes are addressed in findings.
+) -> set[str]:
+    """Collect mandatory relay codes from sidecar and analysis files.
 
-    This is a substring check — mechanical, with known limitations.
-    Whether the finding actually acted on a relay is a judgment call
-    belonging to the scientific reviewer.
+    Scans all ``.meta.json`` and ``.analysis.json`` files in each
+    artifact-class directory declared in *deliverables* and returns
+    the set of relay code strings found in ``mandatory_relays[].code``.
 
-    When *wo_id* is provided, only relay codes from records tagged with
-    that work order (or untagged records) are checked (#166).
+    When *wo_id* is provided, records tagged with a different work
+    order are skipped (#166).
     """
     layer_0_classes = deliverables.get("layer_0_classes", [])
-    layer_1 = deliverables.get("layer_1", [])
-
-    if not isinstance(layer_0_classes, list) or not layer_0_classes:
-        return {
-            "name": "relay_coverage",
-            "result": "skip",
-            "status": "skip",
-            "kind": None,
-            "detail": "no layer_0_classes declared",
-        }
-
-    # Collect all mandatory relay codes from .meta.json and .analysis.json
     relay_codes: set[str] = set()
+
+    if not isinstance(layer_0_classes, list):
+        return relay_codes
+
     for artifact_class in layer_0_classes:
         normalized = normalize_artifact_class(artifact_class)
         rel_dir = ARTIFACT_DIRS.get(normalized)
@@ -709,6 +840,45 @@ def _check_relay_coverage(
                     if isinstance(r, dict) and "code" in r:
                         relay_codes.add(r["code"])
 
+    return relay_codes
+
+
+# Regex for the standard relay label format: **Relay: `<code>`**
+_RELAY_LABEL_RE = re.compile(r"\*\*Relay:\s*`([^`]+)`\*\*")
+
+
+def _check_relay_coverage(
+    project_root: Path,
+    deliverables: dict[str, Any],
+    wo_id: str | None = None,
+) -> dict[str, Any]:
+    """Check 6 — verify mandatory relay codes are addressed in findings.
+
+    Two-tier check:
+
+    1. **Presence** — the relay code string must appear somewhere in
+       the findings text.  Missing → ``fail`` / ``COMPLETENESS``.
+    2. **Label format** — when present, the code should appear in the
+       standard ``**Relay: \\`<code>\\`**`` format.  Present without the
+       label → ``warn`` / ``FORMAT`` sub-finding.
+
+    When *wo_id* is provided, only relay codes from records tagged with
+    that work order (or untagged records) are checked (#166).
+    """
+    layer_0_classes = deliverables.get("layer_0_classes", [])
+    layer_1 = deliverables.get("layer_1", [])
+
+    if not isinstance(layer_0_classes, list) or not layer_0_classes:
+        return {
+            "name": "relay_coverage",
+            "result": "skip",
+            "status": "skip",
+            "kind": None,
+            "detail": "no layer_0_classes declared",
+        }
+
+    relay_codes = _collect_relay_codes(project_root, deliverables, wo_id)
+
     if not relay_codes:
         return {
             "name": "relay_coverage",
@@ -727,12 +897,27 @@ def _check_relay_coverage(
             if resolved is not None and resolved.is_file():
                 findings_text += resolved.read_text(encoding="utf-8", errors="replace")
 
+    # Collect codes found in standard label format.
+    labeled_codes: set[str] = set()
+    for m in _RELAY_LABEL_RE.finditer(findings_text):
+        labeled_codes.add(m.group(1))
+
     # Check each code against findings text
     addressed: set[str] = set()
     unaddressed: list[str] = []
+    sub_findings: list[dict[str, Any]] = []
+
     for code in sorted(relay_codes):
         if code in findings_text:
             addressed.add(code)
+            # Label-format sub-check.
+            if code not in labeled_codes:
+                sub_findings.append({
+                    "code": code,
+                    "status": "warn",
+                    "kind": "FORMAT",
+                    "detail": "relay code found in text but not in standard label format",
+                })
         else:
             unaddressed.append(code)
 
@@ -744,8 +929,19 @@ def _check_relay_coverage(
     }
 
     if unaddressed:
-        return {"name": "relay_coverage", "result": "fail", "status": "fail", "kind": "COMPLETENESS", "detail": detail}
-    return {"name": "relay_coverage", "result": "pass", "status": "ok", "kind": "COMPLETENESS", "detail": detail}
+        result = {"name": "relay_coverage", "result": "fail", "status": "fail",
+                  "kind": "COMPLETENESS", "detail": detail}
+    elif sub_findings:
+        result = {"name": "relay_coverage", "result": "pass", "status": "warn",
+                  "kind": "FORMAT", "detail": detail}
+    else:
+        result = {"name": "relay_coverage", "result": "pass", "status": "ok",
+                  "kind": "COMPLETENESS", "detail": detail}
+
+    if sub_findings:
+        result["sub_findings"] = sub_findings
+
+    return result
 
 
 def _check_version_policy(

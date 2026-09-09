@@ -517,8 +517,10 @@ def test_relay_coverage_scoped() -> None:
         result = _check_relay_coverage(root, deliverables, wo_id="WO-A")
 
         assert result["result"] == "pass", f"Expected pass, got: {result}"
-        assert result["status"] == "ok"
-        assert result["kind"] == "COMPLETENESS"
+        # Phase 3c (#104): relay is found in text but not in label format
+        # → status escalates from ok to warn/FORMAT.
+        assert result["status"] == "warn"
+        assert result["kind"] == "FORMAT"
         # Only WO-A's relay should be checked; WO-B's relay out of scope
         assert result["detail"]["codes_checked"] == 1
         print("  PASS: relay coverage — scoped to WO-A, WO-B's relay excluded")
