@@ -43,12 +43,13 @@ from ..common import (
     pass_state,
 )
 from ..core import http, provenance
-from ..core.qps import qps_for_host
 from ..core.errors import (
     ArtifactError,
     Refusal,
     SchemaError,
 )
+from ..core.gene import resolve_gene
+from ..core.qps import qps_for_host
 
 TOOL = "pathway"
 ARTIFACT_CLASS = "genomics"  # pathway data is genomics-adjacent
@@ -277,7 +278,26 @@ def search_cmd(
     emit = emitter(as_json, quiet)
     target_dir = state.project().artifact_dir(ARTIFACT_CLASS, out)
 
-    resolved = gene.upper()
+    # ── HGNC gene symbol resolution (#147) ────────────────────────────
+    gene_res = resolve_gene(gene)
+    if not gene_res.resolved:
+        suggestions = ", ".join(gene_res.suggestions) if gene_res.suggestions else ""
+        hint = f" Did you mean: {suggestions}?" if suggestions else ""
+        provenance.relay(
+            "gene.unresolved_symbol",
+            f"Gene symbol {gene!r} could not be resolved via HGNC. "
+            f"No query was attempted. This is a lookup failure, not "
+            f"evidence of gene absence.{hint}",
+        )
+        raise Refusal(
+            f"could not resolve {gene!r} to a known gene via HGNC",
+            detail=f"suggestions: {suggestions}" if suggestions else "no near matches found",
+            remedy="check the gene symbol or pass an Ensembl gene ID (ENSG...)",
+        )
+    echo = gene_res.echo_line()
+    if echo:
+        emit.line(echo)
+    resolved = (gene_res.canonical_symbol or gene).upper()
 
     if source == "reactome":
         raw, entries = _search_reactome(resolved)
@@ -287,8 +307,19 @@ def search_cmd(
         endpoint = QUICKGO_API
 
     if not entries:
+        provenance.relay(
+            "pathway.no_data_found",
+            f"Gene {resolved} resolved successfully via HGNC "
+            f"({gene_res.source}) but no {source} results were found. "
+            f"This is a coverage gap, not evidence that the gene has "
+            f"no pathway involvement.",
+        )
         raise Refusal(
             f"no {source} results for {resolved!r}",
+            detail=(
+                f"HGNC resolved {gene!r} to {resolved} "
+                f"(source: {gene_res.source})"
+            ),
             remedy=(
                 "check the gene symbol; if querying GO, try the UniProt "
                 "accession instead of the gene symbol"
@@ -306,6 +337,7 @@ def search_cmd(
             "resolved_gene": resolved,
             "source": source,
             "display_name": name,
+            "gene_resolution": gene_res.to_dict(),
         },
     )
     sidecar.note("source_db", source)

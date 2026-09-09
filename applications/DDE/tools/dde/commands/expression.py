@@ -76,6 +76,7 @@ from ..common import (
 )
 from ..core import http, provenance
 from ..core.errors import ArtifactError, Refusal, SchemaError, UsageError
+from ..core.gene import resolve_gene
 from ..core.qps import qps_for_host
 
 HPA_BASE = "https://www.proteinatlas.org"
@@ -627,8 +628,51 @@ def fetch_cmd(
     emit = emitter(as_json, quiet)
     target_dir = state.project().artifact_dir("expression", out)
 
+    # ── HGNC gene symbol resolution (#147) ────────────────────────────
+    gene_res = resolve_gene(gene)
+    if not gene_res.resolved:
+        suggestions = ", ".join(gene_res.suggestions) if gene_res.suggestions else ""
+        hint = f" Did you mean: {suggestions}?" if suggestions else ""
+        provenance.relay(
+            "gene.unresolved_symbol",
+            f"Gene symbol {gene!r} could not be resolved via HGNC. "
+            f"No query was attempted. This is a lookup failure, not "
+            f"evidence of gene absence.{hint}",
+        )
+        raise Refusal(
+            f"could not resolve {gene!r} to a known gene via HGNC",
+            detail=f"suggestions: {suggestions}" if suggestions else "no near matches found",
+            remedy="check the gene symbol or pass an Ensembl gene ID (ENSG...)",
+        )
+    echo = gene_res.echo_line()
+    if echo:
+        emit.line(echo)
+    # Use Ensembl ID from HGNC when available for more reliable HPA lookup;
+    # fall back to canonical symbol, then original input.
+    query_gene = gene_res.ensembl_id or gene_res.canonical_symbol or gene
+
     release, release_failure = _hpa_release()
-    ensembl, symbol, how = _resolve_gene(gene)
+    try:
+        ensembl, symbol, how = _resolve_gene(query_gene)
+    except Refusal:
+        canonical = gene_res.canonical_symbol or gene
+        provenance.relay(
+            "expression.no_data_found",
+            f"Gene {canonical} resolved successfully via HGNC "
+            f"({gene_res.source}) but no expression data found in HPA. "
+            f"This is a data gap, not evidence of non-expression.",
+        )
+        raise Refusal(
+            f"gene {canonical!r} resolved via HGNC but HPA has no record",
+            detail=(
+                f"HGNC resolved {gene!r} to {canonical} "
+                f"(source: {gene_res.source})"
+            ),
+            remedy=(
+                "HPA may not index this gene. This is a data gap, not "
+                "evidence of non-expression."
+            ),
+        )
 
     sidecar = provenance.Sidecar(
         tool="expression",
@@ -640,6 +684,7 @@ def fetch_cmd(
             "resolved_symbol": symbol,
             "resolved_by": how,
             "tissues_requested": len(TISSUES),
+            "gene_resolution": gene_res.to_dict(),
         },
     )
     sidecar.note("source", "Human Protein Atlas")
@@ -986,8 +1031,50 @@ def fetch_single_cell_cmd(
     emit = emitter(as_json, quiet)
     target_dir = state.project().artifact_dir("expression", out)
 
+    # ── HGNC gene symbol resolution (#147) ────────────────────────────
+    gene_res = resolve_gene(gene)
+    if not gene_res.resolved:
+        suggestions = ", ".join(gene_res.suggestions) if gene_res.suggestions else ""
+        hint = f" Did you mean: {suggestions}?" if suggestions else ""
+        provenance.relay(
+            "gene.unresolved_symbol",
+            f"Gene symbol {gene!r} could not be resolved via HGNC. "
+            f"No query was attempted. This is a lookup failure, not "
+            f"evidence of gene absence.{hint}",
+        )
+        raise Refusal(
+            f"could not resolve {gene!r} to a known gene via HGNC",
+            detail=f"suggestions: {suggestions}" if suggestions else "no near matches found",
+            remedy="check the gene symbol or pass an Ensembl gene ID (ENSG...)",
+        )
+    echo = gene_res.echo_line()
+    if echo:
+        emit.line(echo)
+    query_gene = gene_res.ensembl_id or gene_res.canonical_symbol or gene
+
     release, release_failure = _hpa_release()
-    ensembl, symbol, how = _resolve_gene(gene)
+    try:
+        ensembl, symbol, how = _resolve_gene(query_gene)
+    except Refusal:
+        canonical = gene_res.canonical_symbol or gene
+        provenance.relay(
+            "expression.no_data_found",
+            f"Gene {canonical} resolved successfully via HGNC "
+            f"({gene_res.source}) but no single-cell expression data "
+            f"found in HPA. This is a data gap, not evidence of "
+            f"non-expression.",
+        )
+        raise Refusal(
+            f"gene {canonical!r} resolved via HGNC but HPA has no record",
+            detail=(
+                f"HGNC resolved {gene!r} to {canonical} "
+                f"(source: {gene_res.source})"
+            ),
+            remedy=(
+                "HPA may not index this gene. This is a data gap, not "
+                "evidence of non-expression."
+            ),
+        )
 
     sidecar = provenance.Sidecar(
         tool="expression",
@@ -999,6 +1086,7 @@ def fetch_single_cell_cmd(
             "resolved_symbol": symbol,
             "resolved_by": how,
             "cell_types_requested": len(CELL_TYPES),
+            "gene_resolution": gene_res.to_dict(),
         },
     )
     sidecar.note("source", "Human Protein Atlas")

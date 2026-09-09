@@ -57,6 +57,8 @@ HOST_QPS: dict[str, float] = {
     "www.informatics.jax.org": 2.0,         # phenotype/mgi=2
     "ontology.jax.org": 5.0,                # phenotype/hpo=5
     "www.alliancegenome.org": 5.0,          # phenotype/agr=5
+    # ── Gene nomenclature ──────────────────────────────────────────
+    "rest.genenames.org": 5.0,              # gene/hgnc=5
     # ── Protein / Pathway ────────────────────────────────────────────
     "string-db.org": 1.0,                   # ppi=1
     "reactome.org": 5.0,                    # pathway=5

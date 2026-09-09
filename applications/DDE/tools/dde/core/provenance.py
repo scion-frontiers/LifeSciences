@@ -236,6 +236,27 @@ RELAY_CODES: dict[str, str] = {
         "causality for a phenotype and not a clinical interpretation. Do "
         "not write 'pathogenic' — write 'predicted large regulatory effect.'"
     ),
+    "gene.unresolved_symbol": (
+        "Do not query any backend for this symbol. An unresolved identifier "
+        "is a lookup failure, not evidence of gene absence. State that the "
+        "symbol could not be resolved and that no query was attempted."
+    ),
+    "expression.no_data_found": (
+        "State that the gene was resolved successfully but no expression data "
+        "was found in the queried backend. This is a data gap, not evidence "
+        "of non-expression. Name the backend and the resolved symbol."
+    ),
+    "genetics.no_data_found": (
+        "State that the gene was resolved successfully via HGNC but the "
+        "genetics backend returned no data. This is a data gap in the "
+        "backend, not evidence that the gene has no constraint data."
+    ),
+    "pathway.no_data_found": (
+        "State that the gene was resolved successfully via HGNC but no "
+        "pathway or ontology results were found. This is a coverage gap "
+        "in the queried database, not evidence that the gene has no "
+        "pathway involvement."
+    ),
     "expression.absent_is_not_evidence": (
         "Write the negative as 'not detected above the cutoff in HPA bulk "
         "consensus', naming the dataset. Do not write that the gene is absent "

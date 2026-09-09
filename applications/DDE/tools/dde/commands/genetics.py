@@ -73,6 +73,7 @@ from ..core.errors import (
     Refusal,
     SchemaError,
 )
+from ..core.gene import resolve_gene
 from ..core.qps import qps_for_host
 
 GNOMAD_API = "https://gnomad.broadinstitute.org/api"
@@ -229,9 +230,53 @@ def fetch_cmd(
     emit = emitter(as_json, quiet)
     target_dir = state.project().artifact_dir("genomics", out)
 
-    raw, payload = _query_gnomad(symbol)
-    gene, constraint = _extract(payload, symbol)
-    resolved = gene.get("symbol") or symbol.upper()
+    # ── HGNC gene symbol resolution (#147) ────────────────────────────
+    gene_res = resolve_gene(symbol)
+    if not gene_res.resolved:
+        suggestions = ", ".join(gene_res.suggestions) if gene_res.suggestions else ""
+        hint = f" Did you mean: {suggestions}?" if suggestions else ""
+        provenance.relay(
+            "gene.unresolved_symbol",
+            f"Gene symbol {symbol!r} could not be resolved via HGNC. "
+            f"No query was attempted. This is a lookup failure, not "
+            f"evidence of gene absence.{hint}",
+        )
+        raise Refusal(
+            f"could not resolve {symbol!r} to a known gene via HGNC",
+            detail=f"suggestions: {suggestions}" if suggestions else "no near matches found",
+            remedy="check the gene symbol or pass an Ensembl gene ID (ENSG...)",
+        )
+    echo = gene_res.echo_line()
+    if echo:
+        emit.line(echo)
+    # gnomAD uses gene symbols; use canonical from HGNC when available
+    query_symbol = gene_res.canonical_symbol or symbol
+
+    try:
+        raw, payload = _query_gnomad(query_symbol)
+        gene, constraint = _extract(payload, query_symbol)
+    except Refusal:
+        canonical = gene_res.canonical_symbol or symbol
+        provenance.relay(
+            "genetics.no_data_found",
+            f"Gene {canonical} resolved successfully via HGNC "
+            f"({gene_res.source}) but gnomAD returned no data. "
+            f"This is a data gap, not evidence that the gene has no "
+            f"constraint data.",
+        )
+        raise Refusal(
+            f"gene {canonical!r} resolved via HGNC but gnomAD has no record",
+            detail=(
+                f"HGNC resolved {symbol!r} to {canonical} "
+                f"(source: {gene_res.source})"
+            ),
+            remedy=(
+                "gnomAD may not have constraint data for this gene. "
+                "This is a data gap, not evidence that the gene has "
+                "no constraint data."
+            ),
+        )
+    resolved = gene.get("symbol") or query_symbol.upper()
 
     sidecar = provenance.Sidecar(
         tool="genetics",
@@ -242,6 +287,7 @@ def fetch_cmd(
             "resolved_symbol": resolved,
             "resolved_gene_id": gene.get("gene_id"),
             "reference_genome": "GRCh38",
+            "gene_resolution": gene_res.to_dict(),
         },
     )
     sidecar.note("source", "gnomAD (Broad Institute)")
