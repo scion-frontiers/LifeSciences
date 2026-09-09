@@ -73,43 +73,46 @@ Your skills provide access to:
 Invocations run through the `dde` CLI. The skill's invocation table is authoritative
 for which command answers which question and where each artifact lands.
 
-> ### ⚠ REMAINING TOOLING GAPS
->
-> **Metabolite identification and PBPK modelling** have no dde skill yet. Where a
-> task needs one of these, **report the task blocked, name the missing capability,
-> and stop.**
->
-> In vivo PK analysis is now available via `in-vivo-pk-analysis`: NCA parameter
-> computation, allometric scaling for human dose projection, and DDI prediction via
-> the basic static R model. Allometric scaling is available for human dose projection
-> but full PBPK modelling is not — allometry is an empirical correlation, not a
-> mechanistic model.
->
-> ADMET endpoint prediction is available via `admet-property-prediction`. You can
-> predict metabolic stability, CYP inhibition risk, permeability, hERG liability, and
-> solubility class for a compound. Compound descriptor profiles
-> (`compound-property-profile`) tell you about physicochemical properties; ADMET
-> predictions (`admet-property-prediction`) tell you about predicted ADMET endpoints —
-> these are complementary, not substitutes.
->
-> The previous guard against letting a clean descriptor profile stand in for an ADMET
-> assessment is **retired for endpoints covered by `admet-property-prediction`**. You
-> now have the real ADMET prediction tool for those five endpoints. However:
-> - Predicted ADMET endpoints are rule-based predictions, not measurements. Do not
->   substitute a clean predicted ADMET profile for measured in vitro data.
-> - Metabolite identification (identifying specific metabolic products) remains
->   untooled. This is distinct from metabolic stability (Gleeson 2008 half-life
->   classification), which IS covered by `admet-property-prediction`. Do not confuse
->   them.
-> - Descriptor profiles are still not PBPK model outputs. PBPK remains untooled — do
->   not let any tool output stand in for it.
-> - Do not report a clearance, half-life, or in vivo PK value from background
->   knowledge. Use `in-vivo-pk-analysis` on actual concentration-time data and cite
->   the artifact. ADMET numbers recalled from memory look exactly like ADMET numbers
->   from a tool, and that is the failure this project exists to prevent.
-> - Do not present an estimate as a finding.
->
-> `artifact-conventions` still governs anything you write.
+### Tool-usage constraints
+
+In vivo PK analysis is available via `in-vivo-pk-analysis`: NCA parameter
+computation, allometric scaling for human dose projection, and DDI prediction via
+the basic static R model. Allometric scaling is available for human dose projection
+but full PBPK modelling is not — allometry is an empirical correlation, not a
+mechanistic model.
+
+ADMET endpoint prediction is available via `admet-property-prediction`. You can
+predict metabolic stability, CYP inhibition risk, permeability, hERG liability, and
+solubility class for a compound. Compound descriptor profiles
+(`compound-property-profile`) tell you about physicochemical properties; ADMET
+predictions (`admet-property-prediction`) tell you about predicted ADMET endpoints —
+these are complementary, not substitutes.
+
+The previous guard against letting a clean descriptor profile stand in for an ADMET
+assessment is **retired for endpoints covered by `admet-property-prediction`**. You
+now have the real ADMET prediction tool for those five endpoints. However:
+
+- Predicted ADMET endpoints are rule-based predictions, not measurements. Do not
+  substitute a clean predicted ADMET profile for measured in vitro data.
+- Metabolite identification (identifying specific metabolic products) is distinct
+  from metabolic stability (Gleeson 2008 half-life classification), which IS covered
+  by `admet-property-prediction`. Do not confuse them.
+- Descriptor profiles are not PBPK model outputs. Do not let any tool output stand
+  in for PBPK.
+- Do not report a clearance, half-life, or in vivo PK value from background
+  knowledge. Use `in-vivo-pk-analysis` on actual concentration-time data and cite
+  the artifact. ADMET numbers recalled from memory look exactly like ADMET numbers
+  from a tool, and that is the failure this project exists to prevent.
+- Do not present an estimate as a finding.
+
+`artifact-conventions` still governs anything you write.
+
+### Runtime capability check
+
+Do not assume a capability is missing because it is not mentioned here. Before
+reporting a task blocked for a missing tool, run `dde --help` to check the
+current command list. If the command exists, use it. Only report blocked after
+confirming the command does not exist, and name the exact command you tried.
 
 ## Output Contract
 

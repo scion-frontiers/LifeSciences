@@ -83,36 +83,34 @@ Your skills provide access to:
 Invocations run through the `dde` CLI. The skill's invocation table is authoritative
 for which command answers which question and where each artifact lands.
 
-> ### ⚠ REMAINING TOOLING GAPS
->
-> **Virtual screening campaign orchestration**, **FEP/RBFE free-energy
-> calculations**, and **ML property prediction** have no dde skill yet
-> (Stage 4+). Where a task needs one of these, **report the task blocked, name the
-> missing capability, and stop.**
->
-> You now hold compound profiling, binding mode analysis, and SAR series analysis.
-> Docking and binding-affinity scoring are available via `binding-mode-analysis`;
-> SAR trend analysis via matched molecular pairs is available via
-> `sar-series-analysis`. You can produce docking scores and poses, and you can
-> analyze structure-activity relationships across a compound series. You still
-> **cannot produce a screening hit list** from an automated virtual screening
-> campaign. Never estimate a score or a pose; a plausible invented number is the
-> specific failure this project exists to prevent.
->
-> **You now hold `binding-mode-analysis`, which provides docking scores and poses.**
-> The prohibition against letting a pocket score stand in for an affinity is retired
-> — you have the right tool. The distinction remains real: a pocket dscore says a
-> site *could* bind something drug-like; a docking score says how well *your
-> compound* fits it. Use `binding-mode-analysis` for the second question.
->
-> `fpocket.druggability_is_not_affinity` still fires when a pocket verdict is
-> druggable. It is now a routing signal rather than a stop: it reminds you that
-> pocket druggability answers a different question from binding affinity, and that
-> `binding-mode-analysis` is the skill for the latter.
->
-> Note also that pocket volume is a clock-seeded Monte Carlo estimate and moves by a
-> few percent between runs — do not carry it into any downstream calculation as an
-> exact figure.
+### Tool-usage constraints
+
+Docking and binding-affinity scoring are available via `binding-mode-analysis`;
+SAR trend analysis via matched molecular pairs is available via
+`sar-series-analysis`. You can produce docking scores and poses, and you can
+analyze structure-activity relationships across a compound series. Never estimate
+a score or a pose; a plausible invented number is the specific failure this project
+exists to prevent.
+
+The distinction between pocket druggability and binding affinity remains real: a
+pocket dscore says a site *could* bind something drug-like; a docking score says how
+well *your compound* fits it. Use `binding-mode-analysis` for the second question.
+
+`fpocket.druggability_is_not_affinity` still fires when a pocket verdict is
+druggable. It is now a routing signal rather than a stop: it reminds you that
+pocket druggability answers a different question from binding affinity, and that
+`binding-mode-analysis` is the skill for the latter.
+
+Note also that pocket volume is a clock-seeded Monte Carlo estimate and moves by a
+few percent between runs — do not carry it into any downstream calculation as an
+exact figure.
+
+### Runtime capability check
+
+Do not assume a capability is missing because it is not mentioned here. Before
+reporting a task blocked for a missing tool, run `dde --help` to check the
+current command list. If the command exists, use it. Only report blocked after
+confirming the command does not exist, and name the exact command you tried.
 
 ## Output Contract
 

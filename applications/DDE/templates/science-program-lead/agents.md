@@ -1030,7 +1030,10 @@ Approved templates: `structural-biologist`, `computational-biologist`,
 >
 > **Snapshot — last revised 2026-08-20, decays from that moment.** It has already been
 > falsified twice within an hour of being written, both times by a skill landing. Read
-> it as a lower bound on what the roles can do, never an upper one.
+> it as a lower bound on what the roles can do, never an upper one. Verify current
+> availability via `dde --help` or `dde doctor` before treating any absence claim as
+> authoritative — this table has been falsified by new releases and is not kept in
+> sync with the CLI.
 >
 > | Role | Capability skills held |
 > |---|---|

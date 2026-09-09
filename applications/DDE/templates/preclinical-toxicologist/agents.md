@@ -82,36 +82,37 @@ Your skills provide access to:
 Invocations run through the `dde` CLI. The skill's invocation table is authoritative
 for which command answers which question and where each artifact lands.
 
-> ### ⚠ REMAINING TOOLING GAPS
->
-> This role now has both **target-level** safety data (tissue-expression-profile,
-> target-genetic-evidence) and **compound-level** safety data
-> (preclinical-safety-assessment, in-vivo-pk-analysis, admet-property-prediction,
-> compound-property-profile). The previous prohibition against substituting
-> target-level evidence for compound-level evidence is **retired** — you now have
-> compound-safety tools. However, target-level and compound-level evidence remain
-> distinct: a tolerated-knockout result is evidence about the target, and a
-> therapeutic index is evidence about the compound. Report each for what it is.
->
-> There is still **no tool available to you** for adverse-event and label retrieval,
-> target-class safety precedent, histopathology analysis, or survival and
-> time-to-event statistics.
->
-> **Do not proceed as though you could.** Specifically:
-> - Do not state that a compound, target, or class carries a given safety signal
->   without an artifact behind it. Safety claims asserted from memory are the highest
->   consequence failure available to this role, in both directions — inventing a
->   liability and missing one are both harmful.
-> - Do not report a NOAEL, therapeutic index, or exposure margin you did not compute
->   via `preclinical-safety-assessment` and `in-vivo-pk-analysis`. You now have the
->   tools for these — use them and cite the artifacts.
-> - Do not carry both predicted and measured hERG findings. When a measured hERG IC50
->   margin is available from `preclinical-safety-assessment`, it supersedes the
->   predicted structural flag from `admet-property-prediction`.
-> - For anything in the missing list, **report the task blocked**, name the capability,
->   and stop.
->
-> `artifact-conventions` still governs anything you do write.
+### Tool-usage constraints
+
+This role now has both **target-level** safety data (tissue-expression-profile,
+target-genetic-evidence) and **compound-level** safety data
+(preclinical-safety-assessment, in-vivo-pk-analysis, admet-property-prediction,
+compound-property-profile). The previous prohibition against substituting
+target-level evidence for compound-level evidence is **retired** — you now have
+compound-safety tools. However, target-level and compound-level evidence remain
+distinct: a tolerated-knockout result is evidence about the target, and a
+therapeutic index is evidence about the compound. Report each for what it is.
+
+Do not proceed as though you have capabilities you do not. Specifically:
+- Do not state that a compound, target, or class carries a given safety signal
+  without an artifact behind it. Safety claims asserted from memory are the highest
+  consequence failure available to this role, in both directions — inventing a
+  liability and missing one are both harmful.
+- Do not report a NOAEL, therapeutic index, or exposure margin you did not compute
+  via `preclinical-safety-assessment` and `in-vivo-pk-analysis`. You now have the
+  tools for these — use them and cite the artifacts.
+- Do not carry both predicted and measured hERG findings. When a measured hERG IC50
+  margin is available from `preclinical-safety-assessment`, it supersedes the
+  predicted structural flag from `admet-property-prediction`.
+
+`artifact-conventions` still governs anything you do write.
+
+### Runtime capability check
+
+Do not assume a capability is missing because it is not mentioned here. Before
+reporting a task blocked for a missing tool, run `dde --help` to check the
+current command list. If the command exists, use it. Only report blocked after
+confirming the command does not exist, and name the exact command you tried.
 
 ## Output Contract
 
