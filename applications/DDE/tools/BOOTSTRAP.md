@@ -57,8 +57,8 @@ One directory containing four things:
 
 ```
 /scion-volumes/tools/
-├── .venv/               Python venv: the CLI, and the science stack
-├── bin/                 vina (downloaded), fpocket (compiled here)
+├── .venv/               Python venv: the CLI, Hypex deps, and science stack
+├── bin/                 external tools plus source-built Hypex commands
 ├── env.sh               the file agents source — GENERATED, do not edit
 └── env-manifest.txt     what ENV_VERSION is the hash of
 ```
@@ -102,6 +102,7 @@ Names are Debian 12 (bookworm), which is what this has been run on.
 | `libstdc++.a` | `libstdc++-N-dev` | vendored molfile plugin is C++ | Static link fails |
 | `ldd` | `libc-bin` | verifying the link really is static | Cannot verify; install refuses |
 | `git` | `git` | provenance, not construction | Every artifact records an environment nobody can reproduce |
+| Go 1.26.1+ | deployment image | build vendored `hypex` and `elo` source | Hypex unavailable; exit 4 |
 | `obabel` *(optional)* | `openbabel` | format conversion for chemistry skills | A warning; exit stays 0 |
 
 On a Debian container with none of it:
@@ -210,7 +211,7 @@ Useful flags:
 | flag | for |
 |---|---|
 | `--update` | existing venv; skip creation, refresh packages and binaries |
-| `--core-only` | CLI only, skip the science stack — a deliberate smaller environment, and it exits 0 |
+| `--core-only` | CLI and Go tools only; skip Hypex Python deps, `prox`, and the science stack |
 | `--binaries-only` | `bin/` and the stamp; touch no Python package |
 
 **Re-running is free and does not churn `ENV_VERSION`.** That is a
@@ -240,6 +241,27 @@ exiting non-zero, and the environment is still stamped for what it
 actually is. A stamp that waits for a perfect install is a stamp that is
 absent exactly when artifacts are being produced by a partial one.
 
+### Hypex is vendored and built during provisioning
+
+DDE owns the Hypex deployment source under `tools/vendor/hypex/`. The
+bootstrapper does not clone the standalone Hypex repository and no binary is
+committed to this repository. `install.sh` uses the deployment's Go 1.26.1+
+toolchain and `go build -mod=vendor` to build `hypex` and `elo`, copies the
+JSON schemas into `share/hypex/schemas`, and installs the vendored `prox`
+Python source with a launcher in `bin/`.
+
+`prox` depends on scikit-learn, scipy, NumPy, NetworkX, and Click. They are
+installed from `requirements-hypex.txt` in a transaction separate from the
+larger science stack. An unrelated source-build failure in that stack cannot
+roll back `prox`. `--core-only` deliberately skips `prox` and does not provide
+the Hypex strategy; the normal bootstrapper path performs a full install.
+`--binaries-only` can refresh the Hypex tools only after a full environment
+already contains those dependencies.
+
+Provisioning smoke-tests all three commands with `--help`. `dde doctor`
+repeats those executable checks and reports the Hypex strategy as available
+only when the complete toolchain is runnable.
+
 ---
 
 ## Activating it
@@ -251,7 +273,7 @@ source /scion-volumes/tools/env.sh
 **Source `env.sh`, not the venv's `activate`.** `env.sh` sets three
 things `activate` does not:
 
-- `bin/` on `PATH`, so `fpocket` and `vina` resolve — and resolve to the
+- `bin/` on `PATH`, so `fpocket`, `vina`, `hypex`, `elo`, and `prox` resolve — and resolve to the
   binaries that are hashed into `ENV_VERSION`, rather than to something
   else on the system that provenance cannot account for.
 - `DDE_TOOLS_HOME`, so the CLI reads *this* environment's stamp

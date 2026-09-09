@@ -82,7 +82,7 @@ HYPOTHESIS_STRATEGIES: dict[str, dict[str, Any]] = {
     "hypex": {
         "requires_binaries": ["hypex", "elo", "prox"],
         "requires_packages": [],
-        "description": "Hypothesis-explorer tournament (Track B)",
+        "description": "DDE Hypex multi-epoch exploration subgraph",
         "capabilities_provided": [
             "ELO-ranked hypothesis standings",
             "proximity-based clustering",

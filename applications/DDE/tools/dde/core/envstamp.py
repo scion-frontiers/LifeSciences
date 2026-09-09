@@ -242,7 +242,9 @@ def source_commit(tree: Path | None = None) -> dict[str, object]:
 PROVISIONING_INPUTS = (
     "install.sh",
     "requirements.txt",
+    "requirements-hypex.txt",
     "requirements-science.txt",
+    "vendor/hypex",
 )
 
 

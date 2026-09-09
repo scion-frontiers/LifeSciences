@@ -82,6 +82,12 @@ class TestDetectPython3Dev(unittest.TestCase):
             self.assertIn(tool, combined,
                           f"Expected preflight to check for {tool}")
 
+    def test_checks_hypex_go_toolchain(self):
+        """The bootstrapper must verify the Go version used for Hypex builds."""
+        r = _run(["--no-remediate"])
+        combined = r.stdout + r.stderr
+        self.assertIn("go 1.26.1", combined)
+
 
 # ---------------------------------------------------------------------------
 # Remediation logic — mock environment

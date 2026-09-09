@@ -93,8 +93,13 @@ def _slug(stem: str) -> str:
 
 
 def _extract_structured(data: dict[str, Any]) -> list[dict[str, Any]]:
-    """Extract from a JSON document with a citations/references array."""
-    citations = data.get("citations") or data.get("references") or []
+    """Extract from a JSON document with a DDE or Hypex citation array."""
+    citations = (
+        data.get("citations")
+        or data.get("references")
+        or data.get("evidence")
+        or []
+    )
     if not isinstance(citations, list):
         return []
     results: list[dict[str, Any]] = []
@@ -109,7 +114,8 @@ def _extract_structured(data: dict[str, Any]) -> list[dict[str, Any]]:
             })
         elif isinstance(entry, dict):
             raw = (
-                entry.get("doi")
+                entry.get("lit_id")
+                or entry.get("doi")
                 or entry.get("pmid")
                 or entry.get("pmcid")
                 or entry.get("nct")
@@ -181,7 +187,9 @@ def _extract_citations(file_path: Path) -> tuple[list[dict[str, Any]], str]:
     # Try structured extraction from JSON
     try:
         data = json.loads(text)
-        if isinstance(data, dict) and ("citations" in data or "references" in data):
+        if isinstance(data, dict) and any(
+            key in data for key in ("citations", "references", "evidence")
+        ):
             is_structured = True
             structured_citations = _extract_structured(data)
     except (json.JSONDecodeError, ValueError):
@@ -436,10 +444,10 @@ def verify_cmd(
 ) -> None:
     """Extract and verify citations in FILE against upstream registries.
 
-    FILE may be JSON (with a citations/references array), Markdown, or
-    plain text. Identifiers (DOI, PMID, PMCID, NCT) are resolved against
-    CrossRef, Europe PMC, or ClinicalTrials.gov. Titles are compared using
-    SequenceMatcher.
+    FILE may be JSON (with a citations/references array or Hypex evidence
+    array), Markdown, or plain text. Identifiers (DOI, PMID, PMCID, NCT) are
+    resolved against CrossRef, Europe PMC, or ClinicalTrials.gov. Titles are
+    compared using SequenceMatcher.
     """
     emit = emitter(as_json, quiet)
     target_dir = state.project().artifact_dir(ARTIFACT_CLASS, out)

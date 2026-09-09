@@ -218,6 +218,26 @@ else
     need_pkg git
 fi
 
+# Hypex's Go modules declare this minimum toolchain. The source and module
+# dependencies are vendored in DDE, so this check does not access the network.
+HYPEX_GO_VERSION="1.26.1"
+if command -v go >/dev/null 2>&1; then
+    GOV="$(GOTOOLCHAIN=local go env GOVERSION 2>/dev/null)"
+    GOV_NUMBER="${GOV#go}"
+    LOWEST="$(printf '%s\n' "$HYPEX_GO_VERSION" "$GOV_NUMBER" | sort -V | head -n 1)"
+    if [ "$LOWEST" = "$HYPEX_GO_VERSION" ]; then
+        ok "go ${GOV_NUMBER} (Hypex requires ${HYPEX_GO_VERSION} or newer)"
+    else
+        miss "go is ${GOV:-unknown}; vendored Hypex requires go${HYPEX_GO_VERSION} or newer"
+        info "        The deployment image supplies Go; install.sh does not replace it."
+        FAILED=1
+    fi
+else
+    miss "go${HYPEX_GO_VERSION} — required to build vendored Hypex tools"
+    info "        The deployment image must provide the Go toolchain."
+    FAILED=1
+fi
+
 # ---------------------------------------------------------------------------
 # C toolchain — fpocket is compiled here, not downloaded
 # ---------------------------------------------------------------------------

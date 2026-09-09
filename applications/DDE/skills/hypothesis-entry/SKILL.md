@@ -20,7 +20,7 @@ description: >
 | **Sponsor** | `dde hypothesis adopt --origin sponsor` | `dde.hypothesis-set.v1` | Always available |
 | **Charter** | `dde hypothesis adopt --origin charter` | `dde.hypothesis-set.v1` | Always available |
 | **Co-Scientist** | `dde coscientist ingest` | `dde.coscientist.v1` | Requires a Co-Scientist export file |
-| **hypex** | `dde hypex ingest` (Track B) | `dde.hypex.v1` | Requires hypex tools volume + templates + lease |
+| **Hypex** | `hypex-supervisor` work order, then `dde hypex ingest` | `dde.hypex.v1` | Requires DDE-provisioned Hypex tools, templates, and supervisor lease |
 
 Each strategy writes its own vendor-native Layer 0 artifact. The shared
 contract is `dde.hypothesis-assessment.v1`, emitted by each strategy's
@@ -35,7 +35,7 @@ cross-strategy comparison is a judgement the program lead makes in prose.
 | A sponsor-supplied list of hypotheses | `dde hypothesis adopt --origin sponsor` | Honest provenance; attestation recorded |
 | Hypotheses authored in the program charter | `dde hypothesis adopt --origin charter` | Same mechanism, charter-specific infix |
 | A Co-Scientist tournament export | `dde coscientist ingest` | Existing validated pipeline with ELO ranking |
-| A need for adversarial hypothesis exploration | hypex work order (Track B) | Tournament with review panel; requires tooling |
+| A need for adversarial hypothesis exploration | `hypex-supervisor` work order | Multi-epoch tournament with review panel, proximity, and evolution |
 | A published hypothesis set (paper, prior program) | `dde hypothesis adopt --origin publication` or `--origin prior-program` | Requires `--cite` for the source reference |
 
 ## 3. Tool invocations
@@ -89,7 +89,7 @@ dde doctor --json | jq '.checks[] | select(.name | startswith("hypothesis strate
 |---|---|---|
 | Adopted (sponsor, charter, prior-program, publication) | `hypothesis-set@1.0` | No — structural only (`min_candidates`) |
 | Co-Scientist | `coscientist@1.1` | Yes — ELO gap, win rate, contradiction count |
-| hypex | `hypex@1.0` (Track B) | Yes — but three values ship UNRESOLVED |
+| Hypex | `hypex@1.0` | Yes — but three values ship UNRESOLVED |
 
 ## 7. Assessment output
 

@@ -107,7 +107,8 @@ cd /workspace/tools && ./bootstrap-preflight.sh
 ```
 
 The preflight writes nothing and needs no privilege. It checks for `python3`,
-`python3-venv`, `python3-dev`, `build-essential`, and other system packages
+`python3-venv`, `python3-dev`, `build-essential`, Go 1.26.1 or newer used
+to build DDE's vendored Hypex commands, and other system packages
 documented in `tools/BOOTSTRAP.md`. If anything is missing, it prints the exact
 `apt-get install` line.
 
@@ -144,10 +145,10 @@ cd /workspace/tools && ./install.sh --update
 
 | Flag | Effect |
 |---|---|
-| *(none)* | Creates venv, installs all pip deps (core + science), downloads binaries, stamps env |
-| `--update` | Skips venv creation; re-installs pip deps and binaries into existing venv |
-| `--core-only` | Installs `requirements.txt` only; skips `requirements-science.txt` |
-| `--binaries-only` | Downloads/builds non-pip binaries and re-stamps; touches no Python package |
+| *(none)* | Creates venv, installs all pip deps, downloads external tools, builds vendored Hypex tools, and stamps env |
+| `--update` | Skips venv creation; refreshes packages and provisioned tools |
+| `--core-only` | Installs core CLI deps and Go tools; skips `requirements-hypex.txt`, `prox`, and the science stack |
+| `--binaries-only` | Downloads/builds tools and re-stamps; touches no Python package |
 
 `install.sh` exits non-zero when the science stack or a declared binary fails to
 install (exit 3 for science, exit 4 for binaries). **If `install.sh` exits
@@ -165,7 +166,7 @@ source /scion-volumes/tools/env.sh
 ```
 
 **Use `env.sh` — not the venv's `activate` directly.** `env.sh` also:
-- adds provisioned binaries (fpocket, vina) to `PATH`
+- adds provisioned tools (`fpocket`, `vina`, `hypex`, `elo`, `prox`) to `PATH`
 - sets `DDE_TOOLS_HOME`, which the CLI requires for provenance stamping
 - sets `PYTHONDONTWRITEBYTECODE=1` to prevent stale bytecode
 

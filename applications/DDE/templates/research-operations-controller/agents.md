@@ -175,7 +175,7 @@ Parse the JSON output and build your **capability exclusion list** for the sessi
 | `google.cloud.aiplatform` | `protein-structure-confidence` (AF3), AlphaGenome-dependent skills |
 | `alphagenome` | AlphaGenome-dependent skills |
 | `rdkit` | `compound-property-profile`, `admet-property-prediction`, `sar-series-analysis` (compound validation, molecular descriptors, and structural alerts) |
-| `hypex`, `elo`, `prox` | `hypothesis-exploration` (hypex tournament sub-team — all three binaries are required to run a tournament) |
+| `hypex`, `elo`, `prox`, `hypothesis strategy: hypex` | `hypothesis-exploration`, `tournament-orchestration` (the `hypex-supervisor` subgraph requires all three tools) |
 | `thresholds` | Analyses that depend on the named threshold set (match the `thresholds` prefix and cross-reference the threshold tag against which skills/analyses use that threshold set) |
 
 > If a `kind: "capability"` warning's check name does not match any row in the table
@@ -270,6 +270,12 @@ one exists; the message is not the work order. Validate before queueing:
   This is a persistent infrastructure failure — queueing does not help because the
   prerequisite will not become available on its own.
 
+A Hypex work order is admitted only with `requested_role: hypex-supervisor`,
+`resource_class: hypex-supervisor`, and both `hypothesis-exploration` and
+`tournament-orchestration` in `capabilities`. The supervisor owns the internal
+generation, review, proximity, tournament, evolution, and meta-review agents. Do
+not dispatch those internal templates directly from the DDE work-order queue.
+
 If validation fails, **reject the work order back to the science lead with the specific
 defect.** You may reject; you may not repair. Correcting a typo in a path is fine.
 Filling in an acceptance criterion the lead left blank is not — you would be authoring
@@ -360,7 +366,8 @@ AlphaFold 3 Vertex endpoint).
    state**: the resource is free.
    - Write a new lease record with `state: "held"`, the work order ID and
      revision, the run ID, the specialist agent name, the current timestamp
-     as `granted_at`, `ttl_minutes: 45`, and a computed `expires_at`.
+     as `granted_at`, the resource's default `ttl_minutes` from the table
+     below (45 when unlisted), and a computed `expires_at`.
    - Log a `lease_granted` event to `events.ndjson`.
    - Proceed to dispatch the specialist.
 
@@ -405,12 +412,14 @@ AlphaFold 3 Vertex endpoint).
 | `resource_class` | Resource | Constraint | Default TTL |
 |---|---|---|---|
 | `af3` | AlphaFold 3 Vertex endpoint | Max one concurrent prediction | 45 min |
-| `hypex-tournament` | Hypothesis-explorer tournament | Max one concurrent tournament program-wide | 120 min |
+| `hypex-supervisor` | Complete Hypex exploration subgraph | Max one concurrent Hypex run program-wide | 360 min |
 
 New single-flight resources are added to this table; the lease
-protocol above applies to all of them. For `hypex-tournament`, up to
-3 extensions of 30 minutes each are allowed (210-minute ceiling),
-since tournaments run longer than single predictions.
+protocol above applies to all of them. For `hypex-supervisor`, use the larger
+of 360 minutes or the work order's wall-clock budget plus 30 minutes. Extend
+by 60 minutes while the supervisor remains responsive. After three extensions,
+request an explicit progress report before each further renewal; elapsed time
+alone is not evidence that a live multi-epoch run crashed.
 
 ---
 

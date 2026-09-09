@@ -1,0 +1,12 @@
+schema_version: "1"
+description: "Hypothesis Meta-Review Agent - synthesizes reviews into epoch steering and the final DDE research report"
+agent_instructions: agents.md
+system_prompt: system-prompt.md
+
+skills:
+  - uri: "https://github.com/scion-frontiers/LifeSciences/tree/DDE/applications/DDE/skills/artifact-conventions"
+  - uri: "https://github.com/scion-frontiers/LifeSciences/tree/DDE/applications/DDE/skills/literature-search"
+  - uri: "https://github.com/scion-frontiers/LifeSciences/tree/DDE/applications/DDE/skills/citation-resolution"
+  - uri: "https://github.com/scion-frontiers/LifeSciences/tree/DDE/applications/DDE/skills/citation-verification"
+  - uri: "https://github.com/scion-frontiers/LifeSciences/tree/DDE/applications/DDE/skills/meta-review-protocol"
+  - uri: "https://github.com/scion-frontiers/LifeSciences/tree/DDE/applications/DDE/skills/hypex-tool-setup"
