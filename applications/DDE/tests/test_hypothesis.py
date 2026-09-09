@@ -271,12 +271,12 @@ def test_assessment_null_rank_and_score() -> None:
         assert analysis_files, "No analysis file found"
         analysis = json.loads(analysis_files[0].read_text())
 
-        # Check assessment
-        assessment = analysis["assessment"]
-        assert assessment["schema"] == "dde.hypothesis-assessment.v1"
-        assert assessment["strategy"] == "adopted"
+        # Check assessment — assessment_core envelope (shared path)
+        core = analysis["assessment"]["assessment_core"]
+        assert core["schema"] == "dde.hypothesis-assessment.v1"
+        assert core["strategy"] == "adopted"
 
-        for candidate in assessment["candidates"]:
+        for candidate in core["candidates"]:
             assert candidate["rank"] is None, (
                 f"rank should be null, got {candidate['rank']}"
             )
@@ -323,7 +323,7 @@ def test_score_not_bare_number() -> None:
 
         analysis_files = list(hyp_dir.glob("*.analysis.json"))
         analysis = json.loads(analysis_files[0].read_text())
-        for candidate in analysis["assessment"]["candidates"]:
+        for candidate in analysis["assessment"]["assessment_core"]["candidates"]:
             score = candidate["score"]
             assert not isinstance(score, (int, float)), (
                 f"score must NOT be a bare number, got {score!r}. "
@@ -510,7 +510,7 @@ def test_unranked_set_conditional() -> None:
 
         # Structural confirmation: the relay fires because all candidates
         # have null rank and score (adopted, not ranked).
-        for candidate in analysis["assessment"]["candidates"]:
+        for candidate in analysis["assessment"]["assessment_core"]["candidates"]:
             assert candidate["rank"] is None, "rank should be null for adopted"
             assert candidate["score"] is None, "score should be null for adopted"
 

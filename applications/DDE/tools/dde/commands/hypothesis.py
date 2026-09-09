@@ -457,7 +457,8 @@ def analyze(
             "origin": "adopted",
         })
 
-    assessment = {
+    assessment: dict[str, Any] = {}
+    assessment["assessment_core"] = {
         "schema": "dde.hypothesis-assessment.v1",
         "strategy": "adopted",
         "source_artifact": str(project.relative(path)),
