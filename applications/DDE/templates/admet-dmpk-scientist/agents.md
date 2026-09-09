@@ -88,6 +88,10 @@ solubility class for a compound. Compound descriptor profiles
 predictions (`admet-property-prediction`) tell you about predicted ADMET endpoints —
 these are complementary, not substitutes.
 
+The previous guard against letting a clean descriptor profile stand in for an ADMET
+assessment is **retired for endpoints covered by `admet-property-prediction`**. You
+now have the real ADMET prediction tool for those five endpoints. However:
+
 - Predicted ADMET endpoints are rule-based predictions, not measurements. Do not
   substitute a clean predicted ADMET profile for measured in vitro data.
 - Metabolite identification (identifying specific metabolic products) is distinct
