@@ -39,6 +39,7 @@ from __future__ import annotations
 import datetime
 import json
 import re
+from pathlib import Path
 from typing import Any
 
 import click
@@ -53,6 +54,7 @@ from ..common import (
 )
 from ..core import provenance
 from ..core.errors import ArtifactError, SchemaError
+from ..core.output import warn
 
 TOOL = "dde.differentiation"
 ARTIFACT_CLASS = "ip"
@@ -687,6 +689,45 @@ def _slug(text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Source-transparency helpers
+# ---------------------------------------------------------------------------
+
+#: Glob pattern for trial artifacts produced by ``dde trials search``.
+_TRIAL_ARTIFACT_GLOB = "*.trials-*.artifact.json"
+
+#: The patent source tag used in artifact filenames and metadata.
+_SOURCE_PATENT = "patent-google-patents"
+
+
+def _scan_unconsumed_trial_artifacts(source_dir: Path) -> list[str]:
+    """Return filenames of trial artifacts in *source_dir*.
+
+    These are artifacts that ``assess_cmd`` recognises but does not
+    consume — their presence is informational for the operator.
+    """
+    return sorted(p.name for p in source_dir.glob(_TRIAL_ARTIFACT_GLOB))
+
+
+def _extract_trial_source_tags(filenames: list[str]) -> list[str]:
+    """Extract source tags (e.g. ``trials-ctgov``) from trial artifact filenames.
+
+    Given ``GENE.trials-clinicaltrials.artifact.json``, returns
+    ``["trials-clinicaltrials"]``.
+    """
+    tags: list[str] = []
+    for name in filenames:
+        # Pattern: {slug}.{source_tag}.artifact.json
+        # The source_tag is the part between the first dot and ".artifact.json".
+        stem = name.removesuffix(".artifact.json")
+        parts = stem.split(".", 1)
+        if len(parts) == 2:
+            tag = parts[1]
+            if tag not in tags:
+                tags.append(tag)
+    return tags
+
+
+# ---------------------------------------------------------------------------
 # Click commands
 # ---------------------------------------------------------------------------
 
@@ -727,9 +768,15 @@ def assess_cmd(
 ) -> None:
     """Assess competitive differentiation from stored patent search results.
 
-    Reads patent data produced by ``dde patent search`` and produces a
-    three-dimension assessment (competitor activity, patentability, FTO).
-    The three dimensions are never collapsed into a single score.
+    Reads patent data produced by ``dde patent search``.  Does NOT currently
+    consume trial data from ``dde trials search/analyze``.
+
+    Produces a three-dimension assessment (competitor activity,
+    patentability, FTO).  The three dimensions are never collapsed into
+    a single score.
+
+    When the source directory contains trial artifacts that this command
+    does not consume, a notice is emitted on stderr.
 
     Every FTO finding carries an explicit disclaimer that a public
     search is not formal legal clearance.  No network access.
@@ -755,6 +802,25 @@ def assess_cmd(
 
     patents = artifact.get("patents", [])
 
+    # ------------------------------------------------------------------
+    # Source-transparency: detect unconsumed trial artifacts (#98)
+    # ------------------------------------------------------------------
+    unconsumed_trial_files = _scan_unconsumed_trial_artifacts(source_dir)
+    unconsumed_trial_tags = _extract_trial_source_tags(unconsumed_trial_files)
+
+    if unconsumed_trial_files and not as_json:
+        lines = [
+            "Notice: source directory contains trial artifacts that "
+            "this command does not consume:",
+        ]
+        for name in unconsumed_trial_files:
+            lines.append(f"  - {name}")
+        lines.append(
+            "Run `dde trials analyze` separately for clinical trial evidence."
+        )
+        for ln in lines:
+            warn(ln)
+
     result = assess_competitive_differentiation(
         patents,
         query_term,
@@ -763,6 +829,10 @@ def assess_cmd(
         entity=entity,
         charter_constraints=list(charter_constraints),
     )
+
+    # Inject source-transparency metadata into the result.
+    result["sources_used"] = [_SOURCE_PATENT]
+    result["sources_available_but_unused"] = unconsumed_trial_tags
 
     # Build relays.
     relays: list[dict[str, str]] = []
