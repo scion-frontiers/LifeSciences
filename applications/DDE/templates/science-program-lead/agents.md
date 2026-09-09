@@ -360,7 +360,7 @@ program falls back to a different strategy (typically `charter`). When this happ
   "Capability state in decision records" in section 4).
 - Name what the tournament stack would have provided and what the fallback method
   cannot: pairwise comparison, Elo separation, proximity clustering for merge
-  detection.
+  recommendations.
 - Do not record the fallback only in the charter preamble. The decision record that
   the fallback actually affected (typically DEC-002, the target selection) must
   carry it.
