@@ -43,7 +43,7 @@ from ..common import (
 )
 from ..core import provenance
 from ..core.errors import ArtifactError, DependencyError, Refusal
-from ..core.output import Emitter
+from ..core.output import Emitter, warn
 
 ARTIFACT_CLASS = "admet"
 
@@ -157,6 +157,50 @@ def _build_sidecar(
             code="compound.fragment_stripped",
         )
     return sidecar
+
+
+def _overwrite_option(func):
+    """--overwrite: bypass overwrite protection for phase-1 artifacts."""
+    return click.option(
+        "--overwrite",
+        is_flag=True,
+        help="Replace existing artifacts that differ from the new output. "
+        "Without it, a conflicting write is refused (exit 9).",
+    )(func)
+
+
+def _safe_write_artifact(path: Path, content: str, *, overwrite: bool) -> bool:
+    """Write artifact content with overwrite protection.
+
+    Returns True if the file was written (new file or overwrite mode).
+    Returns False if skipped because identical content already exists.
+    Raises :class:`Refusal` if the file exists with different content
+    and *overwrite* is False.
+    """
+    path = Path(path)
+    if not path.exists():
+        path.write_text(content, encoding="utf-8")
+        return True
+    if overwrite:
+        path.write_text(content, encoding="utf-8")
+        return True
+
+    existing_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+    new_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+    if existing_hash == new_hash:
+        warn(
+            f"artifact already exists with identical content, skipping: "
+            f"{path.name}"
+        )
+        return False
+
+    raise Refusal(
+        f"artifact {path} already exists with different content",
+        detail=f"existing SHA-256: {existing_hash}, new SHA-256: {new_hash}",
+        remedy="use --overwrite to replace, or use --out to write to a "
+        "different location",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -556,6 +600,7 @@ def admet() -> None:
 @click.argument("smiles")
 @out_option
 @name_option
+@_overwrite_option
 @output_options
 @pass_state
 def predict_cmd(
@@ -563,6 +608,7 @@ def predict_cmd(
     smiles: str,
     out: str | None,
     name: str | None,
+    overwrite: bool,
     as_json: bool,
     quiet: bool,
 ) -> None:
@@ -586,9 +632,8 @@ def predict_cmd(
         sidecar.note("compound_name", name)
 
     record_path = target_dir / f"{slug}.predict.json"
-    record_path.write_text(
-        json.dumps(record, indent=2, allow_nan=False) + "\n", encoding="utf-8"
-    )
+    content = json.dumps(record, indent=2, allow_nan=False) + "\n"
+    _safe_write_artifact(record_path, content, overwrite=overwrite)
     sidecar.add_output(record_path)
     meta_path = sidecar.write(target_dir / f"{slug}.predict.meta.json")
 

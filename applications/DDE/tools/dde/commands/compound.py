@@ -779,7 +779,7 @@ _VEBER_CHECKS: list[tuple[str, str, str, str]] = [
 
 
 @compound.command("analyze")
-@click.argument("smiles")
+@click.argument("smiles", required=False, default=None)
 @from_option
 @out_option
 @name_option
@@ -787,7 +787,7 @@ _VEBER_CHECKS: list[tuple[str, str, str, str]] = [
 @pass_state
 def analyze_cmd(
     state: AppState,
-    smiles: str,
+    smiles: str | None,
     from_dir: str | None,
     out: str | None,
     name: str | None,
@@ -802,7 +802,20 @@ def analyze_cmd(
     reads ``.sa-score.json`` when present (existing pipelines without
     SA-score are not affected).  This command never queries an endpoint —
     the phase-2 latch enforces that automatically.
+
+    When ``--name`` is provided, the SMILES positional argument may be
+    omitted — the slug is derived from the name and the canonical SMILES
+    is read from the stored descriptors record.
     """
+    if smiles is None and name is None:
+        raise Refusal(
+            "either SMILES or --name must be provided",
+            detail="compound analyze needs at least one identifier to locate "
+            "stored phase-1 artifacts",
+            remedy="pass a SMILES string as a positional argument, or use "
+            "--name to identify the compound by its registered name",
+        )
+
     emit = Emitter(as_json=as_json, quiet=quiet)
     source_dir = state.project().artifact_dir(ARTIFACT_CLASS, from_dir)
     target_dir = state.project().artifact_dir(ARTIFACT_CLASS, out)
@@ -823,7 +836,7 @@ def analyze_cmd(
             "canonical SMILES it printed",
         )
     desc_doc = provenance.read_json(desc_path, "descriptors record")
-    canonical = desc_doc.get("canonical_smiles", smiles)
+    canonical = desc_doc.get("canonical_smiles") or smiles or name
 
     alerts_path = source_dir / f"{slug}.alerts.json"
     if not alerts_path.is_file():

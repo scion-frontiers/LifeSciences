@@ -1352,14 +1352,14 @@ def run_cmd(
 
 
 @docking.command("analyze")
-@click.argument("path", type=click.Path())
+@click.argument("paths", nargs=-1, required=True, type=click.Path())
 @from_option
 @out_option
 @output_options
 @pass_state
 def analyze_cmd(
     state: AppState,
-    path: str,
+    paths: tuple[str, ...],
     from_dir: str | None,
     out: str | None,
     as_json: bool,
@@ -1367,26 +1367,42 @@ def analyze_cmd(
 ) -> None:
     """Apply binding-energy thresholds to stored docking scores.
 
-    Reads a ``.docking_result.json`` written by ``docking run``, applies
-    the ``docking-scores`` threshold set, and writes a
-    ``.docking.analysis.json`` with a verdict and mandatory relays.  This
-    command never queries an endpoint — the phase-2 latch enforces that
-    automatically.
+    Reads one or more ``.docking_result.json`` files written by
+    ``docking run``, applies the ``docking-scores`` threshold set, and
+    writes a ``.docking.analysis.json`` per input with a verdict and
+    mandatory relays.  This command never queries an endpoint — the
+    phase-2 latch enforces that automatically.
+
+    Accepts multiple paths and glob patterns::
+
+    \b
+      dde docking analyze result1.docking_result.json result2.docking_result.json
+      dde docking analyze raw/docking/*.docking_result.json
     """
+    import glob as globmod
+
     emit = Emitter(as_json=as_json, quiet=quiet)
-    source = resolve_artifact(state, path, "docking result")
-    result_doc = provenance.read_json(source, "docking result")
-    stem = source.name.replace(".docking_result.json", "")
 
-    # Where to look for phase-1 sidecars: --from directory, or beside
-    # the result file.
-    from_dir_path = (
-        state.project().artifact_dir(ARTIFACT_CLASS, from_dir)
-        if from_dir
-        else source.parent
-    )
+    # --- expand glob patterns ---
+    expanded_paths: list[str] = []
+    for p in paths:
+        # If the shell didn't expand globs (e.g. quoted argument),
+        # expand them here.
+        matches = sorted(globmod.glob(p))
+        if matches:
+            expanded_paths.extend(matches)
+        else:
+            # No glob match — pass through so resolve_artifact
+            # produces the standard "not found" error.
+            expanded_paths.append(p)
 
-    # --- load thresholds ---
+    if not expanded_paths:
+        raise UsageError(
+            "no paths provided",
+            remedy="pass one or more .docking_result.json paths",
+        )
+
+    # --- load thresholds once (shared across all inputs) ---
     thresholds = load_thresholds(state, "docking-scores")
 
     strong_threshold = thresholds.get("strong_binding_energy")
@@ -1399,159 +1415,173 @@ def analyze_cmd(
     weak_resolved = "weak_binding_energy" not in thresholds.unresolved()
     weak_threshold = thresholds.get("weak_binding_energy") if weak_resolved else None
 
-    # --- classify every pose by score band ---
-    raw_poses = result_doc.get("poses", [])
-    classified_poses: list[dict[str, Any]] = []
+    for path in expanded_paths:
+        source = resolve_artifact(state, path, "docking result")
+        result_doc = provenance.read_json(source, "docking result")
+        stem = source.name.replace(".docking_result.json", "")
 
-    for pose in raw_poses:
-        score = pose["affinity_kcalmol"]
-        # Vina scores are negative kcal/mol: more negative = stronger.
-        # score <= threshold is the test (e.g. -8.5 <= -8.0 → strong).
-        if score <= strong_threshold:
-            band = "strong"
-        elif score <= moderate_threshold:
-            band = "moderate"
-        elif weak_resolved and score <= weak_threshold:
-            band = "weak"
-        elif weak_resolved:
-            # Score is above the weak threshold — no meaningful binding
-            band = "no-binding"
-        else:
-            # weak_binding_energy is UNRESOLVED — score is above moderate
-            # but cannot be split into weak/no-binding.  Label the band
-            # descriptively rather than "unclassified" (which implies a
-            # tool failure rather than a missing threshold).
-            band = "above-moderate"
-
-        classified_poses.append({
-            "rank": pose["rank"],
-            "affinity_kcalmol": score,
-            "rmsd_lb": pose.get("rmsd_lb"),
-            "rmsd_ub": pose.get("rmsd_ub"),
-            "band": band,
-        })
-
-    best_score = result_doc.get("best_score")
-    if best_score is None and classified_poses:
-        best_score = min(p["affinity_kcalmol"] for p in classified_poses)
-
-    # --- determine verdict ---
-    has_strong = any(p["band"] == "strong" for p in classified_poses)
-    has_moderate = any(p["band"] == "moderate" for p in classified_poses)
-
-    if has_strong:
-        verdict = "strong-binders-found"
-        statement = (
-            f"At least one pose scores {best_score:.1f} kcal/mol, in the "
-            f"strong predicted binding band "
-            f"(≤ {strong_threshold} kcal/mol)."
-        )
-    elif has_moderate:
-        best_moderate = min(
-            p["affinity_kcalmol"]
-            for p in classified_poses
-            if p["band"] == "moderate"
-        )
-        verdict = "moderate-binders-found"
-        statement = (
-            f"Best pose scores {best_moderate:.1f} kcal/mol, in the "
-            f"moderate predicted binding band "
-            f"(≤ {moderate_threshold} kcal/mol)."
-        )
-    else:
-        verdict = "no-significant-binding"
-        score_str = f"{best_score:.1f}" if best_score is not None else "N/A"
-        statement = (
-            f"All {len(classified_poses)} pose(s) score above "
-            f"{moderate_threshold} kcal/mol (best: {score_str} kcal/mol); "
-            f"no significant predicted binding detected."
+        # Where to look for phase-1 sidecars: --from directory, or beside
+        # the result file.
+        from_dir_path = (
+            state.project().artifact_dir(ARTIFACT_CLASS, from_dir)
+            if from_dir
+            else source.parent
         )
 
-    advisories: list[str] = []
-    if not weak_resolved:
-        advisories.append(
-            "The weak_binding_energy threshold is unresolved (no cited "
-            "source defines this cutoff). Poses scoring above the moderate "
-            f"threshold (> {moderate_threshold} kcal/mol) are classified as "
-            "'above-moderate' rather than split into weak/no-binding bands. "
-            "All other classifications remain fully functional."
-        )
+        # --- classify every pose by score band ---
+        raw_poses = result_doc.get("poses", [])
+        classified_poses: list[dict[str, Any]] = []
 
-    # --- collect upstream relays from all phase-1 sidecars ---
-    relays: list[dict[str, str]] = []
-    seen_codes: set[str] = set()
-    for suffix in ("prepare", "docking"):
-        meta_candidate = from_dir_path / f"{stem}.{suffix}.meta.json"
-        if meta_candidate.is_file():
-            meta = provenance.read_json(meta_candidate, f"{suffix} sidecar")
-            for r in meta.get("mandatory_relays", []) or []:
-                if r["code"] not in seen_codes:
-                    relays.append(r)
-                    seen_codes.add(r["code"])
+        for pose in raw_poses:
+            score = pose["affinity_kcalmol"]
+            # Vina scores are negative kcal/mol: more negative = stronger.
+            # score <= threshold is the test (e.g. -8.5 <= -8.0 → strong).
+            if score <= strong_threshold:
+                band = "strong"
+            elif score <= moderate_threshold:
+                band = "moderate"
+            elif weak_resolved and score <= weak_threshold:
+                band = "weak"
+            elif weak_resolved:
+                # Score is above the weak threshold — no meaningful binding
+                band = "no-binding"
+            else:
+                # weak_binding_energy is UNRESOLVED — score is above moderate
+                # but cannot be split into weak/no-binding.  Label the band
+                # descriptively rather than "unclassified" (which implies a
+                # tool failure rather than a missing threshold).
+                band = "above-moderate"
 
-    # --- conditional relay: score_is_not_affinity ---
-    # Fires when any pose is in the strong or moderate band — the over-
-    # readable result is available and may be carried as an affinity.
-    if has_strong or has_moderate:
-        code = "docking.score_is_not_affinity"
-        if code not in seen_codes:
-            ligand_name = result_doc.get("ligand", stem)
-            relays.append(
-                provenance.relay(
-                    code,
-                    f"Best Vina score {best_score:.1f} kcal/mol for "
-                    f"{ligand_name}; this is a computed interaction "
-                    "energy, not a measured affinity.",
-                )
+            classified_poses.append({
+                "rank": pose["rank"],
+                "affinity_kcalmol": score,
+                "rmsd_lb": pose.get("rmsd_lb"),
+                "rmsd_ub": pose.get("rmsd_ub"),
+                "band": band,
+            })
+
+        best_score = result_doc.get("best_score")
+        if best_score is None and classified_poses:
+            best_score = min(p["affinity_kcalmol"] for p in classified_poses)
+
+        # --- determine verdict ---
+        has_strong = any(p["band"] == "strong" for p in classified_poses)
+        has_moderate = any(p["band"] == "moderate" for p in classified_poses)
+
+        if has_strong:
+            verdict = "strong-binders-found"
+            statement = (
+                f"At least one pose scores {best_score:.1f} kcal/mol, in the "
+                f"strong predicted binding band "
+                f"(≤ {strong_threshold} kcal/mol)."
             )
-            seen_codes.add(code)
+        elif has_moderate:
+            best_moderate = min(
+                p["affinity_kcalmol"]
+                for p in classified_poses
+                if p["band"] == "moderate"
+            )
+            verdict = "moderate-binders-found"
+            statement = (
+                f"Best pose scores {best_moderate:.1f} kcal/mol, in the "
+                f"moderate predicted binding band "
+                f"(≤ {moderate_threshold} kcal/mol)."
+            )
+        else:
+            verdict = "no-significant-binding"
+            score_str = f"{best_score:.1f}" if best_score is not None else "N/A"
+            statement = (
+                f"All {len(classified_poses)} pose(s) score above "
+                f"{moderate_threshold} kcal/mol (best: {score_str} kcal/mol); "
+                f"no significant predicted binding detected."
+            )
 
-    # --- build analysis record ---
-    # Carry docking_mode from Phase 1 artifact into analysis output
-    # for provenance completeness (rigid vs flexible).
-    docking_mode = result_doc.get("docking_mode", "rigid")
+        advisories: list[str] = []
+        if not weak_resolved:
+            advisories.append(
+                "The weak_binding_energy threshold is unresolved (no cited "
+                "source defines this cutoff). Poses scoring above the moderate "
+                f"threshold (> {moderate_threshold} kcal/mol) are classified as "
+                "'above-moderate' rather than split into weak/no-binding bands. "
+                "All other classifications remain fully functional."
+            )
 
-    metrics: dict[str, Any] = {
-        "ligand": result_doc.get("ligand"),
-        "receptor": result_doc.get("receptor"),
-        "docking_mode": docking_mode,
-        "n_poses": len(classified_poses),
-        "best_score": best_score,
-        "poses": classified_poses,
-    }
-    assessment: dict[str, Any] = {
-        "verdict": verdict,
-        "statement": statement,
-        "advisories": advisories,
-    }
+        # --- collect upstream relays from all phase-1 sidecars ---
+        relays: list[dict[str, str]] = []
+        seen_codes: set[str] = set()
+        for suffix in ("prepare", "docking"):
+            meta_candidate = from_dir_path / f"{stem}.{suffix}.meta.json"
+            if meta_candidate.is_file():
+                meta = provenance.read_json(meta_candidate, f"{suffix} sidecar")
+                for r in meta.get("mandatory_relays", []) or []:
+                    if r["code"] not in seen_codes:
+                        relays.append(r)
+                        seen_codes.add(r["code"])
 
-    analysis_path = beside_or_out(
-        state, source, f"{stem}.docking.analysis.json", out
-    )
-    provenance.write_analysis(
-        analysis_path,
-        source=str(source),
-        threshold_set=thresholds.tag,
-        thresholds_applied=thresholds.applied(),
-        threshold_sources=thresholds.sources(),
-        threshold_provenance=thresholds.provenance,
-        metrics=metrics,
-        assessment=assessment,
-        unresolved=thresholds.unresolved() or None,
-        mandatory_relays=relays,
-        suppress_warnings=as_json,
-    )
+        # --- conditional relay: score_is_not_affinity ---
+        # Fires when any pose is in the strong or moderate band — the over-
+        # readable result is available and may be carried as an affinity.
+        if has_strong or has_moderate:
+            code = "docking.score_is_not_affinity"
+            if code not in seen_codes:
+                ligand_name = result_doc.get("ligand", stem)
+                relays.append(
+                    provenance.relay(
+                        code,
+                        f"Best Vina score {best_score:.1f} kcal/mol for "
+                        f"{ligand_name}; this is a computed interaction "
+                        "energy, not a measured affinity.",
+                    )
+                )
+                seen_codes.add(code)
 
-    emit.data("assessment", assessment)
-    emit.data("metrics", metrics)
-    emit.data("mandatory_relays", relays)
-    emit.line(f"{stem}  [threshold_set {thresholds.tag}]")
-    emit.line(f"{verdict}: {statement}")
-    for note in advisories:
-        emit.line(f"  - {note}")
-    for record in relays:
-        emit.line(f"relay {record['code']}: {record['message']}")
-    emit.path(analysis_path, role="analysis")
+        # --- build analysis record ---
+        # Carry docking_mode from Phase 1 artifact into analysis output
+        # for provenance completeness (rigid vs flexible).
+        docking_mode = result_doc.get("docking_mode", "rigid")
+
+        metrics: dict[str, Any] = {
+            "ligand": result_doc.get("ligand"),
+            "receptor": result_doc.get("receptor"),
+            "docking_mode": docking_mode,
+            "n_poses": len(classified_poses),
+            "best_score": best_score,
+            "poses": classified_poses,
+        }
+        assessment: dict[str, Any] = {
+            "verdict": verdict,
+            "statement": statement,
+            "advisories": advisories,
+        }
+
+        analysis_path = beside_or_out(
+            state, source, f"{stem}.docking.analysis.json", out
+        )
+        provenance.write_analysis(
+            analysis_path,
+            source=str(source),
+            threshold_set=thresholds.tag,
+            thresholds_applied=thresholds.applied(),
+            threshold_sources=thresholds.sources(),
+            threshold_provenance=thresholds.provenance,
+            metrics=metrics,
+            assessment=assessment,
+            unresolved=thresholds.unresolved() or None,
+            mandatory_relays=relays,
+            suppress_warnings=as_json,
+        )
+
+        emit.data("assessment", assessment)
+        emit.data("metrics", metrics)
+        emit.data("mandatory_relays", relays)
+        emit.line(f"{stem}  [threshold_set {thresholds.tag}]")
+        emit.line(f"{verdict}: {statement}")
+        for note in advisories:
+            emit.line(f"  - {note}")
+        for record in relays:
+            emit.line(f"relay {record['code']}: {record['message']}")
+        emit.path(analysis_path, role="analysis")
+
     emit.flush()
 
 
