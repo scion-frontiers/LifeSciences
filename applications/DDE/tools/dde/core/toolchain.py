@@ -69,10 +69,10 @@ def _git_describe(git_root: Path) -> str:
 
 
 def _git_modified_files(git_root: Path) -> list[str]:
-    """Return list of modified files via `git diff --name-only`."""
+    """Return list of modified files via `git diff --name-only HEAD`."""
     try:
         result = subprocess.run(
-            ["git", "diff", "--name-only"],
+            ["git", "diff", "--name-only", "HEAD"],
             cwd=str(git_root),
             capture_output=True,
             text=True,

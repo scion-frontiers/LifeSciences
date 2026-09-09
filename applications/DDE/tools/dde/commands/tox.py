@@ -1501,14 +1501,6 @@ def margins_cmd(
             f"comparison to projected clinical exposure. Provide "
             f"--clinical-pk with human projected exposure."
         )
-    elif (
-        resolved_dose_context is None
-        and same_study_reason
-        and clinical_pk_doc is None
-    ):
-        # Redundant with the above but explicit for clarity
-        is_indeterminate = True
-
     # --- 4. Compute TI margins ---
     margins: dict[str, float] | None = None
     margin_note: str | None = None
