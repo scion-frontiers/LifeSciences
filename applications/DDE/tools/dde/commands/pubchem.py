@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +53,7 @@ PUBCHEM_API = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
 CHEMBL_API = "https://www.ebi.ac.uk/chembl/api/data"
 
 SCHEMA = "dde.pubchem-annotation.v1"
+FETCH_SCHEMA = "dde.pubchem-compound.v1"
 
 # Maximum synonyms to store — PubChem can return hundreds.
 MAX_SYNONYMS = 20
@@ -392,6 +394,265 @@ def _classify_annotation(
 @click.group("pubchem", cls=DDEGroup)
 def pubchem() -> None:
     """Compound annotation from PubChem and ChEMBL."""
+
+
+# ---------------------------------------------------------------------------
+# fetch — CID-to-compound-record (SMILES, InChIKey, formula, weight)
+# ---------------------------------------------------------------------------
+
+_PROPERTY_FIELDS = (
+    "CanonicalSMILES,IsomericSMILES,InChIKey,MolecularFormula,MolecularWeight"
+)
+
+
+def _fetch_properties(cid: int) -> tuple[str, dict[str, Any] | None]:
+    """Fetch the property endpoint for *cid*.
+
+    Returns ``(url, props_dict | None)``.  *None* means the CID does
+    not exist on PubChem (404).
+    """
+    url = f"{PUBCHEM_API}/compound/cid/{cid}/property/{_PROPERTY_FIELDS}/JSON"
+    response = http.request(
+        "GET", url,
+        qps=qps_for_host("pubchem.ncbi.nlm.nih.gov"),
+        timeout=60.0,
+        tolerate_status=(404,),
+    )
+    if response.status_code == 404:
+        return url, None
+    body = response.content
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except Exception as exc:
+        raise SchemaError("PubChem property endpoint did not return JSON", detail=str(exc))
+    props_list = payload.get("PropertyTable", {}).get("Properties", [])
+    if not props_list:
+        return url, None
+    return url, props_list[0]
+
+
+def _fetch_full_record(cid: int) -> tuple[str, dict[str, Any]]:
+    """Fetch the full compound record for *cid*.
+
+    Used as a fallback when the property endpoint returns N/A for
+    SMILES fields.
+    """
+    url = f"{PUBCHEM_API}/compound/cid/{cid}/JSON"
+    response = http.request(
+        "GET", url,
+        qps=qps_for_host("pubchem.ncbi.nlm.nih.gov"),
+        timeout=60.0,
+    )
+    body = response.content
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except Exception as exc:
+        raise SchemaError("PubChem full record did not return JSON", detail=str(exc))
+    return url, payload
+
+
+def _extract_smiles_from_full_record(payload: dict[str, Any]) -> dict[str, str]:
+    """Parse SMILES from the ``urn`` structure in a full PubChem record.
+
+    Walks ``PC_Compounds[0].props`` looking for entries whose
+    ``urn.label`` is ``"SMILES"``.  The ``urn.name`` sub-field
+    distinguishes ``"Canonical"`` from ``"Isomeric"``.
+    """
+    result: dict[str, str] = {}
+    compounds = payload.get("PC_Compounds", [])
+    if not compounds:
+        return result
+    props = compounds[0].get("props", [])
+    for prop in props:
+        urn = prop.get("urn", {})
+        if urn.get("label") != "SMILES":
+            continue
+        name = (urn.get("name") or "").lower()
+        value_obj = prop.get("value", {})
+        sval = value_obj.get("sval", "")
+        if not sval:
+            continue
+        if "canonical" in name:
+            result["canonical"] = sval
+        elif "isomeric" in name:
+            result["isomeric"] = sval
+        else:
+            # Fallback: if there is a SMILES entry without a clear
+            # canonical/isomeric label, treat it as canonical.
+            result.setdefault("canonical", sval)
+    return result
+
+
+def _needs_fallback(props: dict[str, Any]) -> bool:
+    """Return True if the property response has N/A or empty SMILES."""
+    canonical = props.get("CanonicalSMILES", "")
+    isomeric = props.get("IsomericSMILES", "")
+    return (
+        not canonical
+        or canonical == "N/A"
+        or not isomeric
+        or isomeric == "N/A"
+    )
+
+
+def _build_compound_artifact(
+    cid: int,
+    canonical_smiles: str,
+    isomeric_smiles: str,
+    inchikey: str,
+    molecular_formula: str,
+    molecular_weight: float | None,
+    source: str,
+) -> dict[str, Any]:
+    """Build the structured compound artifact."""
+    return {
+        "schema": FETCH_SCHEMA,
+        "cid": cid,
+        "canonical_smiles": canonical_smiles,
+        "isomeric_smiles": isomeric_smiles,
+        "inchikey": inchikey,
+        "molecular_formula": molecular_formula,
+        "molecular_weight": molecular_weight,
+        "source": source,
+        "retrieved": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+
+
+@pubchem.command("fetch")
+@click.argument("cids", type=int, nargs=-1, required=True)
+@click.option("--name", "slug_override", default=None,
+              help="Override the output filename slug (default: CID as string).")
+@out_option
+@output_options
+@pass_state
+def fetch_cmd(
+    state: AppState,
+    cids: tuple[int, ...],
+    slug_override: str | None,
+    out: str | None,
+    as_json: bool,
+    quiet: bool,
+) -> None:
+    """Fetch compound data (SMILES, InChIKey, formula, weight) for CID(s).
+
+    CID is one or more PubChem Compound IDs (integers). Resolve a
+    compound name or structure to a CID first via `dde compreg resolve`.
+
+    Falls back to the full record endpoint when the property endpoint
+    returns N/A for SMILES fields (a known PubChem quirk for some
+    compounds).
+    """
+    emit = emitter(as_json, quiet)
+    target_dir = state.project().artifact_dir(ARTIFACT_CLASS, out)
+
+    for cid in cids:
+        slug = slug_override if slug_override else str(cid)
+
+        # --- Try the property endpoint first ---
+        prop_url, props = _fetch_properties(cid)
+
+        if props is None:
+            # CID not found — write a not-found artifact.
+            not_found_artifact: dict[str, Any] = {
+                "schema": FETCH_SCHEMA,
+                "_not_found": True,
+                "cid": cid,
+            }
+            artifact_path = target_dir / f"{slug}.pubchem-compound.artifact.json"
+            artifact_path.write_text(
+                json.dumps(not_found_artifact, indent=2) + "\n", encoding="utf-8",
+            )
+            sidecar = provenance.Sidecar(
+                tool=TOOL,
+                subcommand="fetch",
+                endpoint=prop_url,
+                parameters={"cid": cid},
+            )
+            sidecar.note("not_found", True)
+            sidecar.add_output(artifact_path)
+            meta_path = sidecar.write(
+                target_dir / f"{slug}.pubchem-compound.meta.json",
+            )
+            emit.data("cid", cid)
+            emit.data("status", "not_found")
+            emit.line(f"CID {cid}: not found on PubChem")
+            emit.path(artifact_path, role="compound")
+            emit.path(meta_path, role="sidecar")
+            emit.flush()
+            continue
+
+        # --- Check for N/A quirk and fallback ---
+        source = "property"
+        canonical_smiles = props.get("CanonicalSMILES", "")
+        isomeric_smiles = props.get("IsomericSMILES", "")
+        inchikey = props.get("InChIKey", "")
+        molecular_formula = props.get("MolecularFormula", "")
+        molecular_weight: float | None = None
+        raw_weight = props.get("MolecularWeight")
+        if raw_weight is not None:
+            try:
+                molecular_weight = float(raw_weight)
+            except (TypeError, ValueError):
+                pass
+
+        endpoints_used: list[str] = [prop_url]
+
+        if _needs_fallback(props):
+            full_url, full_payload = _fetch_full_record(cid)
+            endpoints_used.append(full_url)
+            smiles = _extract_smiles_from_full_record(full_payload)
+            if smiles.get("canonical"):
+                canonical_smiles = smiles["canonical"]
+            if smiles.get("isomeric"):
+                isomeric_smiles = smiles["isomeric"]
+            source = "full_record"
+
+        # --- Build and write artifact ---
+        artifact = _build_compound_artifact(
+            cid=cid,
+            canonical_smiles=canonical_smiles,
+            isomeric_smiles=isomeric_smiles,
+            inchikey=inchikey,
+            molecular_formula=molecular_formula,
+            molecular_weight=molecular_weight,
+            source=source,
+        )
+
+        artifact_path = target_dir / f"{slug}.pubchem-compound.artifact.json"
+        artifact_path.write_text(
+            json.dumps(artifact, indent=2) + "\n", encoding="utf-8",
+        )
+
+        # --- Sidecar ---
+        sidecar = provenance.Sidecar(
+            tool=TOOL,
+            subcommand="fetch",
+            endpoint=", ".join(endpoints_used),
+            parameters={"cid": cid},
+        )
+        sidecar.note("source", source)
+        sidecar.note("canonical_smiles", canonical_smiles)
+        sidecar.add_output(artifact_path)
+        meta_path = sidecar.write(
+            target_dir / f"{slug}.pubchem-compound.meta.json",
+        )
+
+        # --- Output ---
+        emit.data("cid", cid)
+        emit.data("canonical_smiles", canonical_smiles)
+        emit.data("isomeric_smiles", isomeric_smiles)
+        emit.data("inchikey", inchikey)
+        emit.data("molecular_formula", molecular_formula)
+        emit.data("molecular_weight", molecular_weight)
+        emit.data("source", source)
+        emit.line(f"CID {cid}: {canonical_smiles}")
+        emit.line(f"  InChIKey: {inchikey}")
+        emit.line(f"  formula: {molecular_formula}  MW: {molecular_weight}")
+        if source == "full_record":
+            emit.line("  (SMILES resolved via full record fallback)")
+        emit.path(artifact_path, role="compound")
+        emit.path(meta_path, role="sidecar")
+        emit.flush()
 
 
 @pubchem.command("annotate")
