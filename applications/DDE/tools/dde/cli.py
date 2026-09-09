@@ -69,6 +69,7 @@ from .commands.run import run
 from .commands.selectivity import selectivity
 from .commands.site import site
 from .commands.validate import validate
+from .commands.tools_cmd import tools_group
 from .commands.workorder import workorder
 from .common import AppState, DDEGroup, enforce_phase_two
 from .core.context import init_project
@@ -389,6 +390,7 @@ cli.add_command(differentiation)
 cli.add_command(patent)
 cli.add_command(trials)
 cli.add_command(triage)
+cli.add_command(tools_group)
 
 # Must follow every add_command: the walk guards what is registered at
 # the time it runs, so a command added after this line would be missed.
