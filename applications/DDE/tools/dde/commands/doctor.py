@@ -1211,6 +1211,96 @@ def _check_phase_two_contract(report: Report) -> None:
     )
 
 
+# --- capability snapshot ---------------------------------------------------
+
+
+#: Capabilities whose status is captured by get_capability_snapshot().
+#: Maps a short name to a (check_function, detail_key) pair.  The check
+#: functions are the same ones `doctor` runs; this list selects the
+#: subset that represents *capabilities* (things that either work or
+#: don't) as opposed to advisory caveats.
+#:
+#: The snapshot is written into sidecars and analysis records so that a
+#: decision made when hypex was unavailable is structurally
+#: distinguishable from one made with full tooling — no prose required.
+
+def get_capability_snapshot() -> dict[str, str]:
+    """Return a dict mapping capability names to status strings.
+
+    Status is one of ``"available"``, ``"unavailable"``, or
+    ``"degraded"``.  The snapshot is intentionally cheap — it re-uses
+    the same check logic that ``dde doctor`` runs but does not probe
+    remote endpoints (those are caveats, not capabilities).
+
+    Designed to be called from provenance-writing code so the snapshot
+    can be stamped into sidecars and analysis records.
+    """
+    snapshot: dict[str, str] = {}
+
+    # --- Provisioned binaries ---
+    for binary in _PROVISIONED_BINARIES:
+        path = shutil.which(binary)
+        if path is None:
+            candidate = env.tools_home() / "bin" / binary
+            if candidate.is_file():
+                # Present but not on PATH — degraded (usable only via
+                # explicit path, not by tools that shell out).
+                snapshot[binary] = "degraded"
+            else:
+                snapshot[binary] = "unavailable"
+        elif binary in _CAPABILITY_VALIDATED:
+            # For capability-validated scripts, run the quick check.
+            try:
+                result = subprocess.run(
+                    [path, "--help"],
+                    capture_output=True,
+                    timeout=10,
+                )
+                snapshot[binary] = "available" if result.returncode == 0 else "unavailable"
+            except (subprocess.TimeoutExpired, OSError):
+                snapshot[binary] = "unavailable"
+        else:
+            snapshot[binary] = "available"
+
+    # --- Optional packages that gate capabilities ---
+    _optional_capability_packages = {
+        "google.cloud.aiplatform": "vertex_ai",
+        "alphagenome": "alphagenome_pip",
+        "rdkit.Chem": "rdkit",
+        "meeko": "meeko",
+    }
+    for module, cap_name in _optional_capability_packages.items():
+        try:
+            importlib.import_module(module)
+            snapshot[cap_name] = "available"
+        except ImportError:
+            snapshot[cap_name] = "unavailable"
+
+    # --- Credentials ---
+    if os.environ.get("ALPHAGENOME_API_KEY"):
+        snapshot["alphagenome_credential"] = "available"
+    else:
+        try:
+            import google.auth
+            google.auth.default()
+            snapshot["alphagenome_credential"] = "available"
+        except Exception:
+            snapshot["alphagenome_credential"] = "unavailable"
+
+    # --- GCP ---
+    if os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
+        snapshot["gcp_credential"] = "available"
+    else:
+        try:
+            import google.auth
+            google.auth.default()
+            snapshot["gcp_credential"] = "available"
+        except Exception:
+            snapshot["gcp_credential"] = "unavailable"
+
+    return snapshot
+
+
 # --- command ---------------------------------------------------------------
 
 
@@ -1351,6 +1441,7 @@ def doctor(state: AppState, as_json: bool, strict: bool) -> None:
                     "env_version": env.env_version(),
                     "ok": not report.failures,
                     "checks": [c.__dict__ for c in report.checks],
+                    "capability_snapshot": get_capability_snapshot(),
                 },
                 indent=2,
             )

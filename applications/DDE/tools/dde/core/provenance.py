@@ -737,6 +737,12 @@ RELAY_CODES: dict[str, str] = {
         "preference. Do not present it as a leaderboard or select 'the "
         "top candidate' from it."
     ),
+    "hypothesis.strategy_fallback": (
+        "The preferred hypothesis strategy was unavailable and a weaker "
+        "method was substituted. Any decision citing this assessment was "
+        "made with degraded methodology. Read strategy_requested vs "
+        "strategy_used in the sidecar to see what was lost."
+    ),
     # --- hypex tournament ---
     "hypex.citation_manifest_absent": (
         "Absence of a citation manifest is not evidence of verified "
@@ -935,6 +941,16 @@ class Sidecar:
     def note(self, key: str, value: Any) -> None:
         self.extra[key] = value
 
+    def set_capability_state(self, snapshot: dict[str, str]) -> None:
+        """Attach the current capability snapshot to this sidecar.
+
+        The snapshot is a dict mapping capability names to their status
+        (e.g. ``{"hypex": "unavailable", "alphafold3": "available"}``).
+        It makes a decision made under degraded capability state
+        structurally distinguishable from one made with full capability.
+        """
+        self.extra["capability_state"] = snapshot
+
     def to_dict(self) -> dict[str, Any]:
         tc = check_integrity()
         record = {
@@ -1055,6 +1071,7 @@ def write_analysis(
     unresolved: list[str] | None = None,
     mandatory_relays: list[dict[str, str]] | None = None,
     suppress_warnings: bool = False,
+    capability_state: dict[str, str] | None = None,
 ) -> Path:
     """Write a phase-2 `.analysis.json` record.
 
@@ -1131,6 +1148,8 @@ def write_analysis(
 
     if source_digest:
         record["source_sha256"] = source_digest
+    if capability_state:
+        record["capability_state"] = capability_state
 
     path = Path(path)
 

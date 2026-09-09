@@ -46,6 +46,129 @@ MAX_INPUT_BYTES = 50 * 1024 * 1024  # 50 MiB
 _VALID_ORIGINS = ("sponsor", "charter", "prior-program", "publication")
 _CITE_REQUIRED_ORIGINS = ("prior-program", "publication")
 
+# ---------------------------------------------------------------------------
+# Hypothesis strategy availability
+# ---------------------------------------------------------------------------
+
+#: The four hypothesis entry strategies and the capabilities each
+#: requires.  An empty list means always available.
+HYPOTHESIS_STRATEGIES: dict[str, dict[str, Any]] = {
+    "sponsor": {
+        "requires_binaries": [],
+        "requires_packages": [],
+        "description": "Sponsor-supplied hypothesis set (dde hypothesis adopt --origin sponsor)",
+        "capabilities_provided": [
+            "attestation-backed provenance",
+        ],
+    },
+    "charter": {
+        "requires_binaries": [],
+        "requires_packages": [],
+        "description": "Charter-authored hypothesis set (dde hypothesis adopt --origin charter)",
+        "capabilities_provided": [
+            "attestation-backed provenance",
+        ],
+    },
+    "co-scientist": {
+        "requires_binaries": [],
+        "requires_packages": [],
+        "description": "Co-scientist export ingest (dde coscientist ingest)",
+        "capabilities_provided": [
+            "tournament-derived ranking",
+            "contradiction profiles",
+            "review recommendations",
+        ],
+    },
+    "hypex": {
+        "requires_binaries": ["hypex", "elo", "prox"],
+        "requires_packages": [],
+        "description": "Hypothesis-explorer tournament (Track B)",
+        "capabilities_provided": [
+            "ELO-ranked hypothesis standings",
+            "proximity-based clustering",
+            "automated tournament lifecycle",
+            "pairwise evaluation history",
+        ],
+    },
+}
+
+#: Default fallback order: prefer the strongest available method.
+_FALLBACK_ORDER = ("hypex", "co-scientist", "charter", "sponsor")
+
+
+def _check_strategy_available(strategy: str) -> tuple[bool, str]:
+    """Check whether a hypothesis strategy is available.
+
+    Returns ``(available, reason)`` where *reason* explains why not,
+    or is empty when available.
+    """
+    import shutil
+
+    spec = HYPOTHESIS_STRATEGIES.get(strategy)
+    if spec is None:
+        return False, f"unknown strategy {strategy!r}"
+
+    missing_bins = []
+    for binary in spec["requires_binaries"]:
+        if shutil.which(binary) is None:
+            missing_bins.append(binary)
+    if missing_bins:
+        return False, f"missing binaries: {', '.join(missing_bins)}"
+
+    missing_pkgs = []
+    for module in spec["requires_packages"]:
+        try:
+            __import__(module)
+        except ImportError:
+            missing_pkgs.append(module)
+    if missing_pkgs:
+        return False, f"missing packages: {', '.join(missing_pkgs)}"
+
+    return True, ""
+
+
+def select_strategy(
+    preferred: str,
+) -> tuple[str, dict[str, Any] | None]:
+    """Select a hypothesis strategy, falling back if necessary.
+
+    Parameters
+    ----------
+    preferred:
+        The strategy the caller wants to use.
+
+    Returns
+    -------
+    (actual, fallback_info)
+        *actual* is the strategy name that should be used.
+        *fallback_info* is ``None`` when the preferred strategy was
+        available, or a dict with ``reason``, ``capabilities_lost``,
+        ``strategy_requested``, and ``strategy_used`` when a fallback
+        occurred.
+    """
+    available, reason = _check_strategy_available(preferred)
+    if available:
+        return preferred, None
+
+    # Walk the fallback order, skipping the preferred (already failed).
+    for candidate in _FALLBACK_ORDER:
+        if candidate == preferred:
+            continue
+        ok, _ = _check_strategy_available(candidate)
+        if ok:
+            spec = HYPOTHESIS_STRATEGIES.get(preferred, {})
+            capabilities_lost = spec.get("capabilities_provided", [])
+            return candidate, {
+                "strategy_requested": preferred,
+                "strategy_used": candidate,
+                "fallback_reason": reason,
+                "capabilities_lost": capabilities_lost,
+            }
+
+    # Nothing available — return the preferred and let the caller fail
+    # with a clear error rather than silently doing nothing.
+    return preferred, None
+
 
 def _slug(text: str | None, fallback: str = "hypothesis-set") -> str:
     if not text:
@@ -239,6 +362,31 @@ def adopt(
     sidecar.note("source_sha256", source_sha256)
     sidecar.note("attestation", attest)
 
+    # -- Capability snapshot --
+    # Stamped at adopt time so the artifact structurally records what
+    # capabilities were available.  Old artifacts without this field are
+    # treated as capability_state: unknown (not clean) — see §migration.
+    from .doctor import get_capability_snapshot
+    sidecar.set_capability_state(get_capability_snapshot())
+
+    # -- Auto-detect strategy fallback --
+    # The tool checks the capability state internally and fires the relay
+    # if the strongest strategy is unavailable (#153).
+    _best, _fb = select_strategy("hypex")
+    if _fb:
+        sidecar.note("strategy_requested", _fb["strategy_requested"])
+        sidecar.note("strategy_used", _fb["strategy_used"])
+        sidecar.note("fallback_reason", _fb["fallback_reason"])
+        caps_lost = ", ".join(_fb["capabilities_lost"]) or "none enumerated"
+        sidecar.warn(
+            f"Strategy '{_fb['strategy_requested']}' was unavailable "
+            f"({_fb['fallback_reason']}). Fell back to "
+            f"'{_fb['strategy_used']}'. Any decision citing this "
+            f"assessment was made with degraded methodology. The missing "
+            f"method would have provided: {caps_lost}.",
+            code="hypothesis.strategy_fallback",
+        )
+
     # -- Fire the mandatory relay: adopted_not_generated --
     # This fires on EVERY adoption — it is the one scoped exception to
     # criterion 27. The condition it reports is definitionally true of
@@ -333,8 +481,31 @@ def analyze(
         "origin": record.get("origin", "unknown"),
     }
 
-    # -- Relay: unranked_set --
+    # -- Auto-detect strategy fallback --
+    # The tool determines the best available strategy by checking the
+    # capability state internally (not from agent input — #153).  If the
+    # strongest strategy (hypex) is unavailable, the adopted strategy is
+    # necessarily a fallback and the relay fires automatically.
+    best_strategy, fallback_info = select_strategy("hypex")
+    if fallback_info:
+        assessment["strategy_requested"] = fallback_info["strategy_requested"]
+        assessment["strategy_used"] = fallback_info["strategy_used"]
+        assessment["strategy_fallback"] = True
+
+    # -- Relay: strategy_fallback --
     relays: list[dict[str, str]] = []
+
+    if fallback_info:
+        caps_lost = ", ".join(fallback_info["capabilities_lost"]) or "none enumerated"
+        relays.append(provenance.relay(
+            "hypothesis.strategy_fallback",
+            f"Strategy '{fallback_info['strategy_requested']}' was unavailable "
+            f"({fallback_info['fallback_reason']}). Fell back to "
+            f"'{fallback_info['strategy_used']}'. Any decision citing this "
+            f"assessment was made with degraded methodology. The missing "
+            f"method would have provided: {caps_lost}.",
+        ))
+
     relays.append(provenance.relay(
         "hypothesis.unranked_set",
         "Adopted hypothesis set carries no ranking. Array position is "
@@ -357,6 +528,11 @@ def analyze(
         for item in ingest_meta.get("mandatory_relays", []) or []:
             if not any(r["code"] == item.get("code") for r in relays):
                 relays.append(item)
+        # Schema migration (#153): old sidecars without capability_state
+        # are treated as unknown (not clean).  A missing field must not
+        # read as "no degradation".
+        if "capability_state" not in ingest_meta:
+            assessment["source_capability_state"] = "unknown"
 
     analysis_name = path.name
     for suffix in (".adopted.json", ".charter.json"):
@@ -365,6 +541,10 @@ def analyze(
             break
 
     analysis_path = beside_or_out(state, path, analysis_name, out)
+
+    # -- Capability snapshot --
+    from .doctor import get_capability_snapshot
+    cap_snapshot = get_capability_snapshot()
 
     provenance.write_analysis(
         analysis_path,
@@ -377,6 +557,7 @@ def analyze(
         assessment=assessment,
         mandatory_relays=relays,
         suppress_warnings=as_json,
+        capability_state=cap_snapshot,
     )
 
     emit = Emitter(as_json=as_json, quiet=quiet)
