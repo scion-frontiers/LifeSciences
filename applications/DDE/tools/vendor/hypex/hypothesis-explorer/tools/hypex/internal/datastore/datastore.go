@@ -1,0 +1,96 @@
+// Package datastore implements the file-based hypothesis-explorer datastore
+// operations: run lifecycle, atomic file writes, and concurrent-safe ID
+// allocation via filesystem locking.
+package datastore
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+)
+
+// RunSubdirs is the list of subdirectories created inside each run.
+var RunSubdirs = []string{
+	"hypotheses",
+	"reviews",
+	"matches",
+	"ratings",
+	"proximity",
+	"meta",
+	"quarantine",
+	"report",
+	"citations",
+}
+
+// RunPath returns the full path to a run directory.
+func RunPath(baseDir, runID string) string {
+	return filepath.Join(baseDir, runID)
+}
+
+// InitRun creates the run directory structure and writes run.yaml.
+func InitRun(baseDir, runID, runYAML string) error {
+	runDir := RunPath(baseDir, runID)
+
+	if _, err := os.Stat(runDir); err == nil {
+		return fmt.Errorf("run directory already exists: %s", runDir)
+	}
+
+	if err := os.MkdirAll(runDir, 0o755); err != nil {
+		return fmt.Errorf("creating run directory: %w", err)
+	}
+
+	for _, sub := range RunSubdirs {
+		if err := os.MkdirAll(filepath.Join(runDir, sub), 0o755); err != nil {
+			return fmt.Errorf("creating subdirectory %s: %w", sub, err)
+		}
+	}
+
+	// Write run.yaml atomically.
+	if err := WriteFileAtomic(filepath.Join(runDir, "run.yaml"), []byte(runYAML)); err != nil {
+		return fmt.Errorf("writing run.yaml: %w", err)
+	}
+
+	return nil
+}
+
+// WriteFileAtomic writes data to a file using the temp-file-then-rename
+// pattern to ensure atomicity. The file is either fully written or not
+// present — never partially written.
+func WriteFileAtomic(path string, data []byte) error {
+	dir := filepath.Dir(path)
+
+	// Create a temp file in the same directory so rename is atomic
+	// (same filesystem).
+	tmp, err := os.CreateTemp(dir, ".hypex-tmp-*")
+	if err != nil {
+		return fmt.Errorf("creating temp file: %w", err)
+	}
+	tmpName := tmp.Name()
+
+	// Clean up the temp file on any error path.
+	success := false
+	defer func() {
+		if !success {
+			os.Remove(tmpName)
+		}
+	}()
+
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return fmt.Errorf("writing temp file: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return fmt.Errorf("syncing temp file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("closing temp file: %w", err)
+	}
+
+	if err := os.Rename(tmpName, path); err != nil {
+		return fmt.Errorf("renaming temp file to %s: %w", path, err)
+	}
+
+	success = true
+	return nil
+}

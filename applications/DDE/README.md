@@ -107,6 +107,7 @@ Specialist roles are stage-agnostic. Each definition describes *who the speciali
 | **Preclinical Toxicologist** | GLP toxicology study design, NOAEL determination, safety pharmacology, risk assessment. |
 | **Regulatory Scientist** | IND dossier assembly, GLP compliance, CMC documentation, regulatory strategy. |
 | **Project Curator** | Optional editorial role for executive narrative or new stakeholder views. Deterministic tools maintain site synchronization. |
+| **Hypex Supervisor** | Runs DDE's bounded multi-epoch hypothesis-exploration subgraph and publishes its native datastore through `dde hypex ingest` and `analyze`. |
 
 ## Design Principles
 
@@ -148,6 +149,7 @@ dde/
 │   ├── bootstrap-preflight.sh   # Can this container build it? Run before install.sh
 │   ├── install.sh      # Environment setup: venv, compiled binaries, ENV_VERSION
 │   ├── requirements.txt
+│   ├── vendor/hypex/  # Vendored Hypex source; binaries are built during provisioning
 │   ├── pyproject.toml  # PEP 621 packaging; console_scripts entry point
 │   ├── legacy/         # The pre-contract CLI, kept for reference
 │   └── dde/

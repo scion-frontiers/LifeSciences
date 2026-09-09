@@ -347,10 +347,20 @@ terminating at the attestation. Quote the attestation verbatim in any finding. T
 
 #### Hypex
 
-When available, `dde hypex analyze` produces an assessment with its own scoring
-basis — match ledger, Elo rankings, proximity clustering, and merge recommendations.
-Handle analogously to the co-scientist branch, substituting the hypex-specific
-analysis output.
+When selected, commit one work order for `requested_role: hypex-supervisor` with
+`resource_class: hypex-supervisor` and the capabilities
+`hypothesis-exploration` and `tournament-orchestration`. The decision question,
+scientific constraints, and explicit match, epoch, hypothesis, and wall-clock
+budgets belong in the immutable context snapshot. The supervisor owns the six
+internal Hypex worker types; neither the lead nor controller dispatches those
+workers directly.
+
+The completed supervisor run produces the native append-only Hypex datastore,
+then `dde hypex ingest` and `dde hypex analyze` publish it into DDE Layer 0.
+The assessment has its own scoring basis: match ledger, Elo rankings, proximity
+clustering, and merge recommendations. Handle it analogously to the co-scientist
+branch, substituting the Hypex-specific analysis output. Do not accept a chat
+summary in place of the normalized artifact and assessment paths.
 
 If the hypothesis-exploration capability is unavailable (check `dde doctor`), the
 program falls back to a different strategy (typically `charter`). When this happens:
@@ -661,7 +671,7 @@ provenance and score basis:
 | Strategy | Stage 0 input | Provenance preserved |
 |---|---|---|
 | Co-Scientist | Concept records derived from tournament recommendation | ELO ranking, review panel recommendation, claim accuracy |
-| Hypex | Concept records derived from hypex assessment | Hypex scoring basis (Track B) |
+| Hypex | Concept records derived from Hypex assessment | Hypex scoring basis |
 | Adopted | Concept records from `dde hypothesis adopt` | Attestation, unranked-set relay |
 | Charter | Concept records from charter-authored hypotheses | Charter decision reference |
 
@@ -1075,7 +1085,7 @@ reordering rationale in `decision-log.md`. The enforcement mechanism in section 
 Approved templates: `structural-biologist`, `computational-biologist`,
 `computational-chemist`, `medicinal-chemist`, `experimental-biologist`,
 `admet-dmpk-scientist`, `preclinical-toxicologist`, `regulatory-scientist`,
-`project-curator`, `scientific-reviewer`.
+`project-curator`, `scientific-reviewer`, `hypex-supervisor`.
 
 > ### ⚠ SPECIALIST CAPABILITY IS PARTIAL, AND THIS PAGE IS NOT THE AUTHORITY ON IT
 >

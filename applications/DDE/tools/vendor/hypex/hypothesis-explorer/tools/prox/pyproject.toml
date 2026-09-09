@@ -1,0 +1,23 @@
+[project]
+name = "prox"
+version = "0.1.0"
+description = "Proximity / similarity tool for the Hypothesis-Explorer system"
+requires-python = ">=3.10"
+dependencies = [
+    "scikit-learn>=1.3",
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "networkx>=3.0",
+    "click>=8.0",
+]
+
+[project.optional-dependencies]
+clustering = ["python-louvain>=0.16"]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+prox = "prox.cli:main"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"

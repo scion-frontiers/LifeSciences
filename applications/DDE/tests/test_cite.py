@@ -224,6 +224,35 @@ def test_extract_structured_json() -> None:
     print("  PASS: extract structured JSON")
 
 
+def test_extract_hypex_evidence_json() -> None:
+    """Hypex evidence[].lit_id is a first-class structured citation source."""
+    with tempfile.TemporaryDirectory() as td:
+        doc_path = Path(td) / "H-0001.json"
+        doc = {
+            "evidence": [
+                {
+                    "lit_id": "PMID:25332249",
+                    "role": "supports",
+                    "note": "Supports the mechanism.",
+                },
+                {
+                    "lit_id": "10.1056/NEJMoa1505270",
+                    "role": "constrains",
+                    "note": "Constrains the population.",
+                },
+            ]
+        }
+        doc_path.write_text(json.dumps(doc), encoding="utf-8")
+        citations, basis = _extract_citations(doc_path)
+        assert basis == "structured"
+        assert [citation["kind"] for citation in citations] == ["pmid", "doi"]
+        assert [citation["raw_id"] for citation in citations] == [
+            "PMID:25332249",
+            "10.1056/NEJMoa1505270",
+        ]
+    print("  PASS: extract Hypex evidence JSON")
+
+
 def test_extract_regex_fallback() -> None:
     """Plain text with identifiers uses regex fallback."""
     with tempfile.TemporaryDirectory() as td:
@@ -1033,6 +1062,7 @@ def main() -> None:
         ("test_classify_nct", test_classify_nct),
         ("test_classify_title", test_classify_title),
         ("test_extract_structured_json", test_extract_structured_json),
+        ("test_extract_hypex_evidence_json", test_extract_hypex_evidence_json),
         ("test_extract_regex_fallback", test_extract_regex_fallback),
         ("test_extract_no_citations", test_extract_no_citations),
         # Title similarity

@@ -20,7 +20,7 @@ TOOLS_DIR = Path(__file__).resolve().parent.parent
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
-from dde.core.envstamp import source_commit
+from dde.core.envstamp import PROVISIONING_INPUTS, source_commit
 
 
 # ---------------------------------------------------------------------------
@@ -49,8 +49,7 @@ def test_happy_path_reachable_on_non_main_ref():
     git_responses = {
         ("rev-parse", "HEAD"): "abc123",
         ("status", "--porcelain", "--", "."): "",
-        ("status", "--porcelain", "--", "install.sh",
-         "requirements.txt", "requirements-science.txt"): "",
+        ("status", "--porcelain", "--", *PROVISIONING_INPUTS): "",
         ("for-each-ref", "--format=%(refname)", "refs/remotes/origin/"):
             "refs/remotes/origin/main\nrefs/remotes/origin/DDE\n",
     }
@@ -81,8 +80,7 @@ def test_not_reachable_on_any_ref():
     git_responses = {
         ("rev-parse", "HEAD"): "deadbeef",
         ("status", "--porcelain", "--", "."): "",
-        ("status", "--porcelain", "--", "install.sh",
-         "requirements.txt", "requirements-science.txt"): "",
+        ("status", "--porcelain", "--", *PROVISIONING_INPUTS): "",
         ("for-each-ref", "--format=%(refname)", "refs/remotes/origin/"):
             "refs/remotes/origin/main\nrefs/remotes/origin/DDE\n",
     }
@@ -106,8 +104,7 @@ def test_no_remote_refs_keeps_on_origin_none():
     git_responses = {
         ("rev-parse", "HEAD"): "abc123",
         ("status", "--porcelain", "--", "."): "",
-        ("status", "--porcelain", "--", "install.sh",
-         "requirements.txt", "requirements-science.txt"): "",
+        ("status", "--porcelain", "--", *PROVISIONING_INPUTS): "",
         ("for-each-ref", "--format=%(refname)", "refs/remotes/origin/"): "",
     }
 
@@ -139,8 +136,7 @@ def test_subprocess_error_in_ref_loop_skips_ref():
     git_responses = {
         ("rev-parse", "HEAD"): "abc123",
         ("status", "--porcelain", "--", "."): "",
-        ("status", "--porcelain", "--", "install.sh",
-         "requirements.txt", "requirements-science.txt"): "",
+        ("status", "--porcelain", "--", *PROVISIONING_INPUTS): "",
         ("for-each-ref", "--format=%(refname)", "refs/remotes/origin/"):
             "refs/remotes/origin/broken\nrefs/remotes/origin/good\n",
     }
@@ -170,8 +166,7 @@ def test_timeout_in_ref_loop_skips_ref():
     git_responses = {
         ("rev-parse", "HEAD"): "abc123",
         ("status", "--porcelain", "--", "."): "",
-        ("status", "--porcelain", "--", "install.sh",
-         "requirements.txt", "requirements-science.txt"): "",
+        ("status", "--porcelain", "--", *PROVISIONING_INPUTS): "",
         ("for-each-ref", "--format=%(refname)", "refs/remotes/origin/"):
             "refs/remotes/origin/slow\nrefs/remotes/origin/fast\n",
     }
@@ -196,8 +191,7 @@ def test_for_each_ref_failure_keeps_on_origin_none():
     git_responses = {
         ("rev-parse", "HEAD"): "abc123",
         ("status", "--porcelain", "--", "."): "",
-        ("status", "--porcelain", "--", "install.sh",
-         "requirements.txt", "requirements-science.txt"): "",
+        ("status", "--porcelain", "--", *PROVISIONING_INPUTS): "",
         ("for-each-ref", "--format=%(refname)", "refs/remotes/origin/"): None,
     }
 

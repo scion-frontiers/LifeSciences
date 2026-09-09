@@ -93,6 +93,7 @@ RECORD_FIELDS = {
     "exp_lof",
     "n_tracks_scored",
     "has_clash",
+    "phantom_citations",
     "quantile_artifact",
 }
 

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # DDE tools environment setup
-# Creates a Python venv, installs pip dependencies, and downloads
-# non-pip binaries used by dde agent skills.
+# Creates a Python venv, installs pip dependencies, and provisions
+# non-pip tools used by dde agent skills. Some tools are downloaded;
+# Hypex is built from a pinned source revision in the deployment.
 #
 # Usage:
 #   cd tools && ./install.sh              # fresh install
@@ -22,6 +23,15 @@ TOOLS_HOME_DIR="${DDE_TOOLS_HOME:-/scion-volumes/tools}"
 VENV_DIR="${DDE_VENV:-${TOOLS_HOME_DIR}/.venv}"
 BIN_DIR="${DDE_BIN:-${TOOLS_HOME_DIR}/bin}"
 
+# Hypex is vendored as source. Provisioning builds deployment-local binaries;
+# no generated artifact belongs in Git.
+HYPEX_REVISION="22316b2db118ab3f3f175a05faa75d74c42a698c"
+HYPEX_VENDOR_VERSION="${HYPEX_REVISION}+dde.2"
+HYPEX_GO_VERSION="1.26.1"
+HYPEX_SHARE_DIR="${TOOLS_HOME_DIR}/share/hypex"
+HYPEX_SOURCE_ROOT="${SCRIPT_DIR}/vendor/hypex"
+HYPEX_BUILD_WORK=""
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -29,6 +39,10 @@ BIN_DIR="${DDE_BIN:-${TOOLS_HOME_DIR}/bin}"
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m==> WARNING:\033[0m %s\n' "$*"; }
 err()  { printf '\033[1;31m==> ERROR:\033[0m %s\n' "$*" >&2; exit 1; }
+
+version_at_least() {
+    [ "$1" = "$(printf '%s\n' "$1" "$2" | sort -V | head -n 1)" ]
+}
 
 # ---------------------------------------------------------------------------
 # Parse flags
@@ -45,7 +59,7 @@ for arg in "$@"; do
         --help|-h)
             echo "Usage: $0 [--update] [--core-only]"
             echo "  --update      Skip venv creation, just update pip packages and binaries"
-            echo "  --core-only   Install requirements.txt only; skip requirements-science.txt"
+            echo "  --core-only   Install core deps and Go tools; skip prox and science deps"
             echo "  --binaries-only  Install bin/ tools and re-stamp; touch no Python package"
             echo ""
             echo "Environment:"
@@ -85,17 +99,31 @@ if [ "$BINARIES_ONLY" = false ]; then
     pip install --upgrade pip --quiet
 fi
 
-# The two requirement files are installed in separate transactions on
-# purpose. pip resolves and installs a file atomically, so when prody
+# The requirement files are installed in separate transactions on purpose.
+# pip resolves and installs a file atomically, so when prody
 # failed to compile it took click, numpy and zstandard down with it and
 # left an empty venv — an unusable CLI as the reported consequence of an
-# optional dependency. Core first, and its failure is fatal; the science
-# stack second, and its failure is loud but survivable.
+# optional dependency. Core is fatal, Hypex dependencies are isolated from
+# unrelated science builds, and the remaining science stack is survivable.
 
+CORE_STATUS="skipped"
 if [ "$BINARIES_ONLY" = false ]; then
     log "Installing core CLI dependencies from requirements.txt"
     pip install -r "${SCRIPT_DIR}/requirements.txt" --quiet \
         || err "Core dependencies failed to install; the CLI will not run."
+    CORE_STATUS="installed"
+fi
+
+HYPEX_PYTHON_STATUS="skipped"
+if [ "$CORE_ONLY" = false ] && [ "$BINARIES_ONLY" = false ]; then
+    log "Installing Hypex prox dependencies from requirements-hypex.txt"
+    if pip install -r "${SCRIPT_DIR}/requirements-hypex.txt" --quiet; then
+        HYPEX_PYTHON_STATUS="installed"
+    else
+        HYPEX_PYTHON_STATUS="failed"
+        warn "The Hypex prox dependency transaction failed."
+        warn "hypex and elo can still build, but the Hypex strategy will remain unavailable."
+    fi
 fi
 
 SCIENCE_STATUS="skipped"
@@ -268,114 +296,154 @@ install_fpocket() {
     log "fpocket ${FPOCKET_VERSION} installed at ${target} (static)"
 }
 
-# --- hypex ---
-# Hypothesis-explorer datastore lifecycle and integrity CLI, used by
-# the hypex sub-team for tournament management (init-run, add-hypothesis,
-# add-match, set-status, validate, etc.).
-#
-# PLACEHOLDER URLs — the scion-frontiers/hypex repo has not published
-# GitHub releases yet.  Replace with real release URLs once available.
-HYPEX_VERSION="1.0.0"
-HYPEX_URL="PLACEHOLDER://github.com/scion-frontiers/hypex/releases/download/v${HYPEX_VERSION}/hypex_${HYPEX_VERSION}_linux_amd64"
-HYPEX_SHA256="PLACEHOLDER"
+# --- Hypex toolchain (hypex, elo, prox) ---
+# Upstream does not publish release binaries. Provision from the source for a
+# recorded upstream revision vendored in DDE: the two Go CLIs are built locally
+# and prox's Python source is copied beside the shared environment. Nothing
+# generated is committed to this repository.
+
+cleanup_hypex_source() {
+    if [ -n "$HYPEX_BUILD_WORK" ] && [ -d "$HYPEX_BUILD_WORK" ]; then
+        rm -rf "$HYPEX_BUILD_WORK"
+    fi
+}
+trap cleanup_hypex_source EXIT
+
+hypex_tool_revision_installed() {
+    local name="$1"
+    [ -r "${HYPEX_SHARE_DIR}/${name}.SOURCE_REVISION" ] &&
+        [ "$(cat "${HYPEX_SHARE_DIR}/${name}.SOURCE_REVISION")" = "$HYPEX_VENDOR_VERSION" ]
+}
+
+prepare_hypex_source() {
+    # Tests may point at another copy, but production always uses DDE's vendored
+    # tree and therefore has no runtime GitHub/authentication dependency.
+    if [ -n "${DDE_HYPEX_SOURCE_DIR:-}" ]; then
+        HYPEX_SOURCE_ROOT="$(cd "$DDE_HYPEX_SOURCE_DIR" 2>/dev/null && pwd)" || {
+            warn "DDE_HYPEX_SOURCE_DIR does not exist: ${DDE_HYPEX_SOURCE_DIR}"
+            return 1
+        }
+    fi
+    [ -n "$HYPEX_BUILD_WORK" ] || HYPEX_BUILD_WORK="$(mktemp -d)"
+
+    local required
+    for required in \
+        hypothesis-explorer/tools/hypex/go.mod \
+        hypothesis-explorer/tools/hypex/vendor/modules.txt \
+        hypothesis-explorer/tools/elo/go.mod \
+        hypothesis-explorer/tools/elo/vendor/modules.txt \
+        hypothesis-explorer/tools/prox/prox/cli.py \
+        hypothesis-explorer/schemas/hypothesis.schema.json; do
+        if [ ! -f "${HYPEX_SOURCE_ROOT}/${required}" ]; then
+            warn "Hypex source is incomplete; missing ${required}."
+            return 1
+        fi
+    done
+}
+
+build_hypex_go_tool() {
+    local name="$1"
+    local source_dir="${HYPEX_SOURCE_ROOT}/hypothesis-explorer/tools/${name}"
+    local output="${HYPEX_BUILD_WORK}/${name}"
+
+    if ! command -v go >/dev/null 2>&1; then
+        warn "${name} requires Go ${HYPEX_GO_VERSION}; go is not on PATH."
+        return 1
+    fi
+    log "Building ${name} from Hypex ${HYPEX_REVISION}"
+    local actual_go
+    actual_go="$(GOTOOLCHAIN=local go env GOVERSION 2>/dev/null || true)"
+    if ! version_at_least "$HYPEX_GO_VERSION" "${actual_go#go}"; then
+        warn "${name} requires Go ${HYPEX_GO_VERSION} or newer; found ${actual_go:-unknown}."
+        return 1
+    fi
+    if ! (cd "$source_dir" && CGO_ENABLED=0 GOTOOLCHAIN=local \
+            go build -mod=vendor -trimpath -ldflags='-s -w -buildid=' \
+            -o "$output" .); then
+        warn "${name} failed to build from pinned Hypex source."
+        return 1
+    fi
+    if ! "$output" --help >/dev/null 2>&1; then
+        warn "${name} built but failed its --help smoke test."
+        return 1
+    fi
+    install -m 0755 "$output" "${BIN_DIR}/${name}"
+}
 
 install_hypex() {
     local target="${BIN_DIR}/hypex"
-    if [ -x "$target" ]; then
-        log "hypex already installed at ${target}"
+    if hypex_tool_revision_installed hypex && [ -x "$target" ] && \
+            "$target" --help >/dev/null 2>&1; then
+        log "hypex ${HYPEX_REVISION} already installed at ${target}"
         return 0
     fi
-    if [ "$HYPEX_SHA256" = "PLACEHOLDER" ] || [[ "$HYPEX_URL" == PLACEHOLDER://* ]]; then
-        log "Binary hypex has no upstream release. Skipping."
-        return 0
-    fi
-    log "Downloading hypex ${HYPEX_VERSION}"
-    if curl -fsSL -o "$target" "$HYPEX_URL" 2>/dev/null; then
-        chmod +x "$target"
-        local got
-        got="$(sha256sum "$target" | cut -d' ' -f1)"
-        if [ "$got" != "$HYPEX_SHA256" ]; then
-            warn "hypex checksum mismatch; refusing to install."
-            rm -f "$target"
-            return 1
-        fi
-        log "hypex installed at ${target}"
-    else
-        warn "Could not download hypex (network may be unavailable). Skipping."
-        rm -f "$target"
-        return 1
-    fi
+    prepare_hypex_source || return 1
+    build_hypex_go_tool hypex || return 1
+    mkdir -p "$HYPEX_SHARE_DIR"
+    local staged_schemas
+    staged_schemas="$(mktemp -d "${HYPEX_SHARE_DIR}/schemas.XXXXXX")"
+    cp -R "${HYPEX_SOURCE_ROOT}/hypothesis-explorer/schemas/." "$staged_schemas/"
+    rm -rf "${HYPEX_SHARE_DIR}/schemas"
+    mv "$staged_schemas" "${HYPEX_SHARE_DIR}/schemas"
+    printf '%s\n' "$HYPEX_VENDOR_VERSION" > "${HYPEX_SHARE_DIR}/hypex.SOURCE_REVISION"
+    log "hypex installed at ${target}"
 }
-
-# --- elo ---
-# ELO rating engine for hypothesis tournaments.  Computes pairwise
-# ratings from match ledgers and produces per-epoch standings.
-HYPEX_ELO_VERSION="1.0.0"
-HYPEX_ELO_URL="PLACEHOLDER://github.com/scion-frontiers/hypex/releases/download/v${HYPEX_ELO_VERSION}/elo_${HYPEX_ELO_VERSION}_linux_amd64"
-HYPEX_ELO_SHA256="PLACEHOLDER"
 
 install_elo() {
     local target="${BIN_DIR}/elo"
-    if [ -x "$target" ]; then
-        log "elo already installed at ${target}"
+    if hypex_tool_revision_installed elo && [ -x "$target" ] && \
+            "$target" --help >/dev/null 2>&1; then
+        log "elo ${HYPEX_REVISION} already installed at ${target}"
         return 0
     fi
-    if [ "$HYPEX_ELO_SHA256" = "PLACEHOLDER" ] || [[ "$HYPEX_ELO_URL" == PLACEHOLDER://* ]]; then
-        log "Binary elo has no upstream release. Skipping."
-        return 0
-    fi
-    log "Downloading elo ${HYPEX_ELO_VERSION}"
-    if curl -fsSL -o "$target" "$HYPEX_ELO_URL" 2>/dev/null; then
-        chmod +x "$target"
-        local got
-        got="$(sha256sum "$target" | cut -d' ' -f1)"
-        if [ "$got" != "$HYPEX_ELO_SHA256" ]; then
-            warn "elo checksum mismatch; refusing to install."
-            rm -f "$target"
-            return 1
-        fi
-        log "elo installed at ${target}"
-    else
-        warn "Could not download elo (network may be unavailable). Skipping."
-        rm -f "$target"
-        return 1
-    fi
+    prepare_hypex_source || return 1
+    build_hypex_go_tool elo || return 1
+    mkdir -p "$HYPEX_SHARE_DIR"
+    printf '%s\n' "$HYPEX_VENDOR_VERSION" > "${HYPEX_SHARE_DIR}/elo.SOURCE_REVISION"
+    log "elo installed at ${target}"
 }
-
-# --- prox ---
-# Proximity / similarity tool for hypothesis clustering.  Computes
-# TF-IDF similarity between hypotheses and produces cluster
-# assignments that feed ELO pairing and merge recommendations.
-HYPEX_PROX_VERSION="0.1.0"
-HYPEX_PROX_URL="PLACEHOLDER://github.com/scion-frontiers/hypex/releases/download/v${HYPEX_PROX_VERSION}/prox_${HYPEX_PROX_VERSION}_linux_amd64"
-HYPEX_PROX_SHA256="PLACEHOLDER"
 
 install_prox() {
     local target="${BIN_DIR}/prox"
-    if [ -x "$target" ]; then
-        log "prox already installed at ${target}"
+    local prox_lib="${HYPEX_SHARE_DIR}/python"
+    if hypex_tool_revision_installed prox && [ -x "$target" ] && \
+            "$target" --help 2>&1 | grep -q "Commands:"; then
+        log "prox ${HYPEX_REVISION} already installed at ${target}"
         return 0
     fi
-    if [ "$HYPEX_PROX_SHA256" = "PLACEHOLDER" ] || [[ "$HYPEX_PROX_URL" == PLACEHOLDER://* ]]; then
-        log "Binary prox has no upstream release. Skipping."
-        return 0
-    fi
-    log "Downloading prox ${HYPEX_PROX_VERSION}"
-    if curl -fsSL -o "$target" "$HYPEX_PROX_URL" 2>/dev/null; then
-        chmod +x "$target"
-        local got
-        got="$(sha256sum "$target" | cut -d' ' -f1)"
-        if [ "$got" != "$HYPEX_PROX_SHA256" ]; then
-            warn "prox checksum mismatch; refusing to install."
-            rm -f "$target"
-            return 1
-        fi
-        log "prox installed at ${target}"
-    else
-        warn "Could not download prox (network may be unavailable). Skipping."
-        rm -f "$target"
+    prepare_hypex_source || return 1
+
+    if ! "${VENV_DIR}/bin/python" -c \
+            'import click, networkx, numpy, scipy, sklearn' >/dev/null 2>&1; then
+        warn "prox dependencies are unavailable in ${VENV_DIR}."
+        warn "Run a full install so requirements-hypex.txt is installed;"
+        warn "--core-only intentionally excludes the prox dependencies."
         return 1
     fi
+
+    log "Installing prox source from Hypex ${HYPEX_REVISION}"
+    mkdir -p "$HYPEX_SHARE_DIR"
+    local staged
+    staged="$(mktemp -d "${HYPEX_SHARE_DIR}/python.XXXXXX")"
+    cp -R "${HYPEX_SOURCE_ROOT}/hypothesis-explorer/tools/prox/prox" \
+        "${staged}/prox"
+    rm -rf "$prox_lib"
+    mv "$staged" "$prox_lib"
+
+    cat > "${target}.tmp" <<PROXSH
+#!/usr/bin/env bash
+export PYTHONPATH="${prox_lib}\${PYTHONPATH:+:\${PYTHONPATH}}"
+exec "${VENV_DIR}/bin/python" -c 'from prox.cli import main; main()' "\$@"
+PROXSH
+    chmod 0755 "${target}.tmp"
+    mv "${target}.tmp" "$target"
+    printf '%s\n' "$HYPEX_VENDOR_VERSION" > "${HYPEX_SHARE_DIR}/prox.SOURCE_REVISION"
+
+    if ! "$target" --help 2>&1 | grep -q "Commands:"; then
+        warn "prox was installed but failed its --help smoke test."
+        return 1
+    fi
+    log "prox installed at ${target}"
 }
 
 # --- rate4site ---
@@ -454,26 +522,14 @@ install_muscle() {
     log "muscle ${MUSCLE_VERSION} installed at ${target}"
 }
 
-# Map a tool name to the name of its SHA256 variable so the loop can
-# detect PLACEHOLDER binaries generically.  Tools without a SHA256
-# variable (vina downloads a fixed URL, rate4site pins a commit) return
-# empty — they are never PLACEHOLDER.
-_sha_var_for() {
-    case "$1" in
-        hypex) echo "HYPEX_SHA256" ;;
-        elo)   echo "HYPEX_ELO_SHA256" ;;
-        prox)  echo "HYPEX_PROX_SHA256" ;;
-        *)     echo "" ;;
-    esac
-}
-
 BINARY_STATUS=""
 for tool in vina fpocket rate4site muscle hypex elo prox; do
-    sha_var="$(_sha_var_for "$tool")"
-    if [ -n "$sha_var" ] && [ "${!sha_var}" = "PLACEHOLDER" ]; then
-        log "Binary ${tool} has no upstream release. Skipping."
-        BINARY_STATUS="${BINARY_STATUS} ${tool}=PLACEHOLDER"
-    elif "install_${tool}"; then
+    if [ "$CORE_ONLY" = true ] && [ "$tool" = "prox" ]; then
+        log "prox requires Hypex Python dependencies; skipped by --core-only."
+        BINARY_STATUS="${BINARY_STATUS} prox=SKIPPED(core-only)"
+        continue
+    fi
+    if "install_${tool}"; then
         BINARY_STATUS="${BINARY_STATUS} ${tool}=ok"
     else
         BINARY_STATUS="${BINARY_STATUS} ${tool}=MISSING"
@@ -502,11 +558,11 @@ fi
 # dde-cli shim that was symlinked by hand — the pip-managed wrapper
 # works correctly in subshells and shell loops without PYTHONPATH.
 #
-# --no-deps because dependencies are already installed above from
-# requirements.txt (and optionally requirements-science.txt) in separate
-# transactions with separate failure semantics.  The deps declared in
+# --no-deps because dependencies are already installed above from the
+# core, Hypex, and optional science requirement files in separate
+# transactions with separate failure semantics. The deps declared in
 # pyproject.toml mirror those files for metadata completeness but must
-# not override the two-transaction install order.
+# not override the explicit install order.
 #
 # Guarded by BINARIES_ONLY: that flag means "touch no Python package",
 # and on a previously provisioned venv the entry point is already set
@@ -547,14 +603,14 @@ if mkdir -p "$TOOLS_HOME_DIR" 2>/dev/null; then
 DDE_TOOLS_DIR="${TOOLS_HOME_DIR}"
 
 # shellcheck disable=SC1091
-source "\${DDE_TOOLS_DIR}/.venv/bin/activate"
+source "${VENV_DIR}/bin/activate"
 
 # Read by dde/core/env.py to find the ENV_VERSION stamp. Without it
 # every artifact records an "unpinned-dev" env_version and carries a
 # warning saying its environment is not reproducible.
 export DDE_TOOLS_HOME="\${DDE_TOOLS_DIR}"
 
-# Provisioned binaries — fpocket, vina. They are hashed into
+# Provisioned binaries — fpocket, vina, hypex, elo, prox. They are hashed into
 # ENV_VERSION, so a tool found here is a tool the provenance record can
 # account for; one found elsewhere on PATH is not. Hence prepend.
 export PATH="${BIN_DIR}:\${PATH}"
@@ -620,7 +676,8 @@ fi
 
 log "Setup complete."
 echo ""
-echo "  Core CLI dependencies: installed"
+echo "  Core CLI dependencies: ${CORE_STATUS}"
+echo "  Hypex Python deps:      ${HYPEX_PYTHON_STATUS}"
 echo "  Science stack:         ${SCIENCE_STATUS}"
 echo "  Binaries:             ${BINARY_STATUS}"
 echo ""
@@ -674,11 +731,6 @@ fi
 # partial one. But the script exits non-zero so nothing upstream records
 # this as a completed provisioning, and `dde doctor` names the
 # missing binary directly.
-if [[ "$BINARY_STATUS" == *PLACEHOLDER* ]]; then
-    log "Some declared binaries have no upstream release (PLACEHOLDER). This is expected."
-    log "Update URLs and hashes in this script when releases are published."
-fi
-
 if [[ "$BINARY_STATUS" == *MISSING* ]]; then
     warn "Exiting non-zero: a declared binary did not install:${BINARY_STATUS}"
     exit 4

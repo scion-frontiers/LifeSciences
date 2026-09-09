@@ -48,7 +48,11 @@ You receive a task message from the supervisor containing:
 2. **Run directory** — path to the run directory (e.g.,
    `/scion-volumes/executions/cognitive-decline-01`).
 3. **Run ID** — the run identifier (e.g., `cognitive-decline-01`).
-4. **Epoch** — the current epoch number (0 for B1).
+4. **Epoch** — the current epoch number.
+
+Set `<run-base>` to the parent directory of `<run-dir>`. Pass both
+`--run <run-id>` and `--run-dir <run-base>` to every `hypex` command; do not
+rely on the executable's default path. `elo` takes `<run-dir>` directly.
 
 ## Workflow
 
@@ -162,7 +166,7 @@ the next sequential `M-NNNN` ID, validates against `match.schema.json`, and
 writes atomically to `<run-dir>/matches/M-NNNN.json`:
 
 ```bash
-cat <<'EOF' | hypex add-match --run <run-id> -
+cat <<'EOF' | hypex add-match --run <run-id> --run-dir <run-base> -
 {
   "epoch": 0,
   "a": "H-XXXX",

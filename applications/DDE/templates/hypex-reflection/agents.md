@@ -49,10 +49,14 @@ You receive a task message from the supervisor containing:
 3. **Run directory path** — the full path to the run directory (e.g.,
    `/scion-volumes/executions/cognitive-decline-01`).
    Use this path (referred to as `<run-dir>` below) for all file operations.
-4. **Epoch** — the current epoch number (0 for B1).
+4. **Epoch** — the current epoch number.
 5. **Review type** (optional) — one of `initial`, `full`, `deep`, `safety`.
    If not specified, run the **full review pipeline** (initial -> full -> deep ->
    safety) and produce a single consolidated review per hypothesis.
+
+Set `<run-base>` to the parent directory of `<run-dir>`. Pass both
+`--run <run-id>` and `--run-dir <run-base>` to every `hypex` command; do not
+rely on the executable's default path.
 
 ## Workflow
 
@@ -160,7 +164,7 @@ Search for evidence that contradicts the hypothesis's core mechanism:
    for "A does not affect B", "A inhibits B", or "B occurs without A":
 
    ```bash
-   dde pubmed search "<mechanism negation>[MeSH Terms]" --limit 10
+   dde pubmed search "<mechanism negation>[MeSH Terms]" --max-results 10
    ```
 
 2. **Search for alternative explanations:**
@@ -176,7 +180,7 @@ Search for evidence that contradicts the hypothesis's core mechanism:
 Search for existing publications that propose the same or similar hypothesis:
 
 ```bash
-dde pubmed search "<hypothesis title keywords>" --limit 10
+dde pubmed search "<hypothesis title keywords>" --max-results 10
 dde preprint search --source arxiv "<hypothesis key terms>"
 ```
 
@@ -206,8 +210,8 @@ weakest:
 3. **Probe the weakest assumption** with targeted searches:
 
    ```bash
-   dde pubmed search "<weakest assumption terms>[MeSH Terms]" --limit 15
-   dde pubmed search "<weakest assumption negation>[MeSH Terms]" --limit 10
+   dde pubmed search "<weakest assumption terms>[MeSH Terms]" --max-results 15
+   dde pubmed search "<weakest assumption negation>[MeSH Terms]" --max-results 10
    ```
 
 4. **Update scores if needed.** If the deep review reveals that a foundational
@@ -227,7 +231,7 @@ Apply dual-use biosafety and evidence fabrication screening to every hypothesis:
    a. Complete the review (do not truncate).
    b. Write the review file using `hypex add-review`.
    c. Move and update the hypothesis:
-      `hypex set-status --run <run-id> <hypothesis-id> quarantined`
+      `hypex set-status --run <run-id> --run-dir <run-base> <hypothesis-id> quarantined`
    d. Log the quarantine event to stdout.
 
 ### Phase 5: Write Review
@@ -290,7 +294,7 @@ Build the review JSON conforming to `schemas/review.schema.json`:
 Write the review using `hypex add-review`:
 
 ```bash
-cat <<'REVIEW' | hypex add-review --run <run-id> --for H-XXXX -
+cat <<'REVIEW' | hypex add-review --run <run-id> --run-dir <run-base> --for H-XXXX -
 <review JSON>
 REVIEW
 ```

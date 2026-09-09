@@ -46,7 +46,11 @@ You receive a task message from the supervisor containing:
    axis in neurodegeneration").
 2. **Run ID** — the identifier for the current run (used with `--run` flag).
 3. **Run directory path** — the full path to the run directory.
-4. **Epoch** — the current epoch number (0 for B1).
+4. **Epoch** — the current epoch number.
+
+Set `<run-base>` to the parent directory of the supplied run directory. Pass
+both `--run <run-id>` and `--run-dir <run-base>` to every `hypex` command; do
+not rely on the executable's default path.
 
 ## Workflow
 
@@ -58,24 +62,23 @@ Use DDE's literature commands to search across multiple sources:
 1. **PubMed search** for peer-reviewed biomedical evidence:
 
    ```bash
-   dde pubmed search "<focus area keywords>" --limit 15
+   dde pubmed search "<focus area keywords>" --max-results 15
    ```
 
 2. **arXiv search** for computational/theoretical angles:
 
    ```bash
-   dde preprint search --source arxiv "<keywords>" --limit 10
+   dde preprint search --source arxiv "<keywords>" --max-results 10
    ```
 
 3. **bioRxiv search** for recent unpublished work:
 
    ```bash
-   dde preprint search --source biorxiv "<keywords>" --limit 10
+   dde preprint search --source biorxiv "<keywords>" --max-results 10
    ```
 
-> **Capability gap:** There is no DDE equivalent of `lit multi` for fan-out
-> search across all sources in one command. Use the individual search commands
-> above instead.
+Run all three DDE searches for broad fan-out; DDE keeps their outputs as
+separate provenance-bearing artifacts.
 
 4. **Read the results.** Identify key themes, active debates, recent
    breakthroughs, and gaps in the literature.
@@ -90,24 +93,23 @@ For each promising direction identified in Phase 1, do targeted searches:
 1. **PubMed** for peer-reviewed evidence with MeSH terms:
 
    ```bash
-   dde pubmed search "<mechanism>[MeSH Terms] AND <disease>[MeSH Terms]" --limit 20
+   dde pubmed search "<mechanism>[MeSH Terms] AND <disease>[MeSH Terms]" --max-results 20
    ```
 
 2. **arXiv** for computational/theoretical work:
 
    ```bash
-   dde preprint search --source arxiv "<keywords>" --limit 10
+   dde preprint search --source arxiv "<keywords>" --max-results 10
    ```
 
 3. **bioRxiv** for recent preprints:
 
    ```bash
-   dde preprint search --source biorxiv "<keywords>" --limit 10
+   dde preprint search --source biorxiv "<keywords>" --max-results 10
    ```
 
-> **Capability gap:** There is no DDE equivalent of `lit pubmed related <pmid>`
-> or `lit pubmed cites <pmid>` for following citation chains. Use keyword-based
-> searches to find related work instead.
+DDE does not expose citation-graph traversal. Use targeted keyword searches
+and `dde litref resolve` for known identifiers.
 
 4. **Verify citations** for any key papers you plan to reference:
 
@@ -176,7 +178,7 @@ Submit each surviving hypothesis using `hypex add-hypothesis`. **Always pipe
 from stdin** using the `-` argument:
 
 ```bash
-cat <<'HYPO' | hypex add-hypothesis --run <run-id> -
+cat <<'HYPO' | hypex add-hypothesis --run <run-id> --run-dir <run-base> -
 {
   "title": "...",
   "statement": "...",

@@ -52,6 +52,7 @@ lifecycle?"
 | `gtex` | GTEx whole-blood median gene expression (RNA-seq, TPM). |
 | `gwas` | GWAS and disease association lookup. |
 | `homology` | Structural homology search via RCSB PDB BLAST. |
+| `hypex` | Normalize and analyze a completed DDE Hypex exploration run. |
 | `litref` | Resolve a cited paper or trial to a real record — or fail. |
 | `mmp` | Matched molecular pair analysis (RDKit BRICS). |
 | `mpo` | Multiparameter optimization scoring. |
@@ -61,6 +62,7 @@ lifecycle?"
 | `pocket` | Binding-site detection and druggability (fpocket). |
 | `ppi` | Protein-protein interaction lookup (STRING, free and unauthenticated). |
 | `pubmed` | PubMed literature search. |
+| `preprint` | Search arXiv and bioRxiv preprints. |
 | `screen` | Virtual screening of compound libraries. |
 | `selectivity` | Selectivity panel: compare and analyze. |
 | `tox` | Preclinical toxicology data processing and assessment. |
@@ -75,6 +77,7 @@ lifecycle?"
 ## Further reading
 
 - [BOOTSTRAP.md](BOOTSTRAP.md) — setup and installation
+- [Hypex integration](../docs/hypex-integration.md) — vendoring, provisioning, and orchestration boundary
 - [docs/workorder-yaml-reference.md](../docs/workorder-yaml-reference.md) — work-order YAML schema
 - [docs/tool-design-guidance.md](../docs/tool-design-guidance.md) — conventions for building new tools
 - [docs/operating-environment.md](../docs/operating-environment.md) — runtime environment details

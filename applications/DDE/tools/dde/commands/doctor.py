@@ -491,57 +491,41 @@ def _check_packages(report: Report) -> None:
 #: this tells the agent whether there is one at all before it plans work
 #: around a tool that is not there.
 #:
-#: Each entry is ``(purpose, remedy, released)``. ``released=False``
-#: means the binary's URL or hash is PLACEHOLDER in install.sh — there
-#: is no upstream release to download. Both the binary check and the
-#: capability snapshot derive from this declaration so they cannot
-#: disagree about whether a binary exists yet.
+#: Each entry is ``(purpose, remedy)``. Every declared tool is provisioned by
+#: DDE; availability is an observed runtime state, not a release-plan flag.
 _PROVISIONED_BINARIES = {
     "fpocket": (
         "pocket detection — `dde pocket run` cannot answer tractability",
         "re-provision with `tools/install.sh --binaries-only`",
-        True,
     ),
     "vina": (
         "docking — structural-biologist and computational-chemist skills",
         "re-provision with `tools/install.sh --binaries-only`",
-        True,
     ),
     "hypex": (
         "hypothesis-explorer datastore lifecycle — tournament management "
         "(init-run, add-hypothesis, add-match, validate)",
-        "not yet published upstream; no local action available. "
-        "Use sponsor, charter or co-scientist hypothesis strategies "
-        "in the interim",
-        False,
+        "re-provision from pinned source with `tools/install.sh --binaries-only`",
     ),
     "elo": (
         "ELO rating engine — pairwise rankings and per-epoch standings "
         "for hypothesis tournaments",
-        "not yet published upstream; no local action available. "
-        "Use sponsor, charter or co-scientist hypothesis strategies "
-        "in the interim",
-        False,
+        "re-provision from pinned source with `tools/install.sh --binaries-only`",
     ),
     "prox": (
         "proximity / similarity — hypothesis clustering for tournament "
         "pairing and merge recommendations",
-        "not yet published upstream; no local action available. "
-        "Use sponsor, charter or co-scientist hypothesis strategies "
-        "in the interim",
-        False,
+        "re-run a full `tools/install.sh --update` to provision prox and its Python dependencies",
     ),
     "mk_prepare_receptor.py": (
         "receptor PDBQT preparation for docking (installed by meeko)",
         "install meeko and gemmi into the tools environment "
         "(pip install meeko>=0.5 gemmi>=0.7)",
-        True,
     ),
     "mk_prepare_ligand.py": (
         "ligand PDBQT preparation for docking (installed by meeko)",
         "install meeko and gemmi into the tools environment "
         "(pip install meeko>=0.5 gemmi>=0.7)",
-        True,
     ),
 }
 
@@ -552,7 +536,19 @@ _PROVISIONED_BINARIES = {
 #: ``bootstrap-preflight.sh`` (tool-design-guidance.md §8). The shim
 #: exists because pip installed it; whether the package it calls into
 #: actually imports is a separate question the shim cannot answer.
-_CAPABILITY_VALIDATED = {"mk_prepare_receptor.py", "mk_prepare_ligand.py"}
+_CAPABILITY_VALIDATED = {
+    "hypex",
+    "elo",
+    "prox",
+    "mk_prepare_receptor.py",
+    "mk_prepare_ligand.py",
+}
+
+_HELP_MARKERS = {
+    "hypex": "Usage:",
+    "elo": "Usage:",
+    "prox": "Commands:",
+}
 
 
 def _validate_script_capability(
@@ -591,7 +587,10 @@ def _validate_script_capability(
         )
         return
 
-    if result.returncode == 0:
+    expected_help = _HELP_MARKERS.get(binary)
+    if result.returncode == 0 and (
+        expected_help is None or expected_help in result.stdout
+    ):
         report.add(f"binary {binary}", OK, path)
         return
 
@@ -603,6 +602,8 @@ def _validate_script_capability(
         if "ModuleNotFoundError" in line or "ImportError" in line:
             error_detail = line.strip()
             break
+    if not error_detail and result.returncode == 0 and expected_help:
+        error_detail = f"--help output did not contain {expected_help!r}"
     if not error_detail:
         # Fall back to the last non-empty line of stderr.
         for line in reversed(result.stderr.strip().splitlines()):
@@ -634,15 +635,7 @@ def _check_binaries(report: Report) -> None:
                 kind=CAPABILITY,
             )
 
-    for binary, (purpose, remedy, released) in _PROVISIONED_BINARIES.items():
-        if not released:
-            report.add(
-                f"binary {binary}",
-                INFO,
-                f"not yet released upstream — {purpose}",
-                remedy,
-            )
-            continue
+    for binary, (purpose, remedy) in _PROVISIONED_BINARIES.items():
         path = shutil.which(binary)
         if path is None:
             candidate = env.tools_home() / "bin" / binary
@@ -1145,40 +1138,46 @@ def _check_hypothesis_strategies(report: Report) -> None:
         "available (dde coscientist ingest — requires an export file)",
     )
 
-    # hypex requires tools volume + templates + lease (Track B).
-    # Derive status from _PROVISIONED_BINARIES so that the binary check
-    # and the capability check cannot disagree about whether it exists.
-    _hypex_purpose, _hypex_remedy, hypex_released = _PROVISIONED_BINARIES["hypex"]
-    if not hypex_released:
+    # Hypex requires the complete three-tool volume + templates + lease.
+    # Derive provisioning status from _PROVISIONED_BINARIES so the binary
+    # and strategy checks cannot disagree about whether DDE owns the tools.
+    missing = []
+    for tool in ("hypex", "elo", "prox"):
+        path = shutil.which(tool)
+        if path is None:
+            candidate = env.tools_home() / "bin" / tool
+            path = str(candidate) if candidate.is_file() else None
+        if not path:
+            missing.append(tool)
+            continue
+        try:
+            result = subprocess.run(
+                [path, "--help"], capture_output=True, text=True, timeout=10,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            missing.append(tool)
+        else:
+            marker = _HELP_MARKERS[tool]
+            if result.returncode != 0 or marker not in result.stdout:
+                missing.append(tool)
+
+    if not missing:
         report.add(
             "hypothesis strategy: hypex",
-            INFO,
-            "not yet available — hypex binary has no upstream release "
-            "(Track B, pending)",
-            "hypex integration is in development; use sponsor, charter or "
-            "co-scientist strategies in the interim",
+            OK,
+            "available (hypex tools + DDE ingest/analyze; requires templates and a lease)",
         )
     else:
-        # Released but may not be installed — check PATH.
-        hypex_path = shutil.which("hypex")
-        if hypex_path is None:
-            candidate = env.tools_home() / "bin" / "hypex"
-            hypex_path = str(candidate) if candidate.is_file() else None
-        if hypex_path:
-            report.add(
-                "hypothesis strategy: hypex",
-                OK,
-                "available (dde hypex — requires templates and a lease)",
-            )
-        else:
-            report.add(
-                "hypothesis strategy: hypex",
-                WARN,
-                "hypex binary released but not installed — "
-                "tournament management unavailable",
-                _hypex_remedy,
-                kind=CAPABILITY,
-            )
+        report.add(
+            "hypothesis strategy: hypex",
+            WARN,
+            "incomplete Hypex toolchain (missing or non-runnable: "
+            + ", ".join(missing)
+            + ") — tournament orchestration unavailable",
+            "run a full `tools/install.sh --update` to provision "
+            "hypex, elo, prox, and dependencies",
+            kind=CAPABILITY,
+        )
 
 
 def _check_phase_two_contract(report: Report) -> None:
@@ -1289,10 +1288,7 @@ def get_capability_snapshot() -> dict[str, str]:
     snapshot: dict[str, str] = {}
 
     # --- Provisioned binaries ---
-    for binary, (_purpose, _remedy, released) in _PROVISIONED_BINARIES.items():
-        if not released:
-            snapshot[binary] = "unreleased"
-            continue
+    for binary, (_purpose, _remedy) in _PROVISIONED_BINARIES.items():
         path = shutil.which(binary)
         if path is None:
             candidate = env.tools_home() / "bin" / binary

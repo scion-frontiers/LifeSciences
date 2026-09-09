@@ -590,7 +590,8 @@ The tools environment itself does **not** live in the repo. `install.sh` provisi
 shared virtualenv and binary directory on a scion shared volume
 (`/scion-volumes/tools/`), which every specialist mounts read-only. A local
 venv under `tools/` is the development mode only; a running program uses the shared
-volume. This keeps heavy and compiled dependencies — RDKit, AutoDock Vina, fpocket —
+volume. This keeps heavy and compiled dependencies — RDKit, AutoDock Vina, fpocket,
+and deployment-built Hypex executables —
 out of both the repo and the container images, and makes adding a tool additive rather
 than release-managed. See [`tool-design-guidance.md`](tool-design-guidance.md) §2 for
 the rules that make a shared mutable environment safe.

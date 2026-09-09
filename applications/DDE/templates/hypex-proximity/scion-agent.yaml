@@ -1,0 +1,9 @@
+schema_version: "1"
+description: "Hypothesis Proximity Agent - clusters hypotheses and adjudicates near-duplicate candidates"
+agent_instructions: agents.md
+system_prompt: system-prompt.md
+
+skills:
+  - uri: "https://github.com/scion-frontiers/LifeSciences/tree/DDE/applications/DDE/skills/artifact-conventions"
+  - uri: "https://github.com/scion-frontiers/LifeSciences/tree/DDE/applications/DDE/skills/proximity-protocol"
+  - uri: "https://github.com/scion-frontiers/LifeSciences/tree/DDE/applications/DDE/skills/hypex-tool-setup"
