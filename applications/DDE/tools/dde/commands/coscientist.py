@@ -580,7 +580,7 @@ def analyze(
     # Moved to a sidecar field on .analysis.json per the always-true rule
     # (tool-design-guidance §8, exit 2: relabel and move).  The finding
     # author reading the artifact still has the information; it no longer
-    # competes with partial_export in the relay channel.  See issue #2.
+    # competes with partial_export in the relay channel.
     metrics["claim_denominator"] = COSCIENTIST_CLAIM_DENOMINATOR
 
     # -- Review recommendation ------------------------------------------------
@@ -654,7 +654,7 @@ def analyze(
     # contradicted-claim count among all candidates AND at least one
     # contradicted claim.  This guards against recommending a target whose
     # foundational claims are the most disputed in the tournament.
-    # See issue #24.
+    # (leader-contradiction relay from pre-migration design review).
     if len(per_idea) >= 2 and per_idea[0]["n_contradicted_claims"] > 0:
         leader_bad = per_idea[0]["n_contradicted_claims"]
         max_bad_any = max(i["n_contradicted_claims"] for i in per_idea)

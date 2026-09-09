@@ -20,7 +20,7 @@ Runs 8 checks, each producing a named pass/fail/skip result:
 4. **provenance_valid** — verifies `.meta.json` sidecars exist and sha256 checksums match
 5. **analysis_citations** — verifies `.analysis.json` records have `source` and `threshold_set`
 6. **relay_coverage** — checks mandatory relay codes appear in Layer 1 findings (substring match)
-7. **version_policy** — skips gracefully when `program.yaml` absent (deferred to issue #16)
+7. **version_policy** — skips gracefully when `program.yaml` absent (deferred to a future program.yaml configuration issue)
 8. **findings_integrity** — flags `.meta.json`/`.analysis.json` files misplaced under `findings/`
 
 ### State machine integration

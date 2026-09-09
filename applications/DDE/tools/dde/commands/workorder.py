@@ -479,7 +479,7 @@ def _perform_commit(
 
     # Build context snapshot.
     # 256 KB default cap (design §4 Q2); configurable via program.yaml
-    # once issue #16 lands.
+    # once program.yaml configuration support lands.
     MAX_CONTEXT_BYTES = 256 * 1024
 
     content_str = ""

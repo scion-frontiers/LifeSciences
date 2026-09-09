@@ -11,10 +11,25 @@ levels, most specific wins:
 Every `.analysis.json` names the `threshold_set` it applied, so a Layer 1
 finding can cite the criterion and not merely the value.
 
+UNRESOLVED thresholds
+~~~~~~~~~~~~~~~~~~~~~
 A threshold whose defensible value we do not have is declared as
-`UNRESOLVED` rather than filled with a plausible number. Requesting an
-unresolved threshold raises, which turns "invented cutoff" into "blocked
-task".
+``UNRESOLVED`` rather than filled with a plausible number. Requesting an
+unresolved threshold raises `ThresholdError`, which turns "invented
+cutoff" into "blocked task".
+
+This is intentional and should be treated as a legitimate terminal
+state (tool-design-guidance.md §7).  An UNRESOLVED threshold must only
+be resolved when a citable, peer-reviewed or authoritative source
+becomes available.  Do NOT fill in "reasonable-looking" numbers: a
+plausible guess behind a negative claim about a drug target is the
+precise failure mode this sentinel exists to prevent.
+
+The ``ThresholdSet.unresolved()`` method lists which keys remain
+UNRESOLVED, and ``dde doctor`` surfaces them at agent start so the
+gap is visible without inventing a fix.  Programs that have their own
+defensible cutoffs can supply them via ``.dde/thresholds.yaml``
+without modifying this file.
 """
 
 from __future__ import annotations

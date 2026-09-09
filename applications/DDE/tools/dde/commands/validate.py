@@ -747,7 +747,8 @@ def _check_version_policy(
     """Check 7 — verify version policy compliance.
 
     Today program.yaml does not exist, so skip is the expected result.
-    When program.yaml is added (issue #16), this check will read version
+    When program.yaml is added (deferred to a future program.yaml /
+    exemption-scope-configuration issue), this check will read version
     requirements and verify cli_version/env_version in sidecars.
     """
     program_yaml = project_root / "program.yaml"
@@ -757,7 +758,7 @@ def _check_version_policy(
             "result": "skip",
             "status": "skip",
             "kind": None,
-            "detail": "program.yaml not present — check deferred to issue #16",
+            "detail": "program.yaml not present — check deferred to a future program.yaml configuration issue",
         }
 
     # Future: read version requirements and check against sidecars.
