@@ -153,6 +153,14 @@ RELAY_CODES: dict[str, str] = {
         "scale. A score under the cutoff is a reason to score another "
         "conformation, not a reason to drop a target."
     ),
+    "pocket.likely_bundle_void": (
+        "Report that this pocket spans the TM bundle interior and is likely "
+        "an artefact of the helix packing, not a discrete ligand-binding "
+        "cavity. A pocket lining 5+ TM segments with high volume or alpha-"
+        "sphere count is the shape of the void between helices, not of a "
+        "druggable site. Do not carry its drug score into a tractability "
+        "claim."
+    ),
     "fpocket.druggability_is_not_affinity": (
         "Report this as 'the site has a pocket with drug-like geometry', never "
         "as evidence that a compound will bind or how tightly. The score "
