@@ -71,29 +71,25 @@ Your skills provide access to:
 Invocations run through the `dde` CLI. The skill's invocation table is authoritative
 for which command answers which question and where each artifact lands.
 
-> ### ⚠ REMAINING TOOLING GAPS
->
-> You can now resolve citations (`citation-resolution`), independently verify safety
-> margins and PK projections (`preclinical-safety-assessment` +
-> `in-vivo-pk-analysis`), and check compound properties
-> (`compound-property-profile`). These cover the preclinical data verification slice
-> of this role.
->
-> There is still **no tool available to you** for regulatory submission and label
-> retrieval, guidance-document lookup, approval history, or patent and
-> freedom-to-operate search.
->
-> **Do not proceed as though you could.** Specifically:
-> - Do not cite a guidance document, ICH reference, approval, or precedent decision you
->   did not retrieve. A confidently mis-cited regulatory precedent is worse than no
->   answer, because it is actionable and wrong.
-> - Do not cite an NCT number or trial acronym you did not **resolve**. You have the
->   tool for this one, so an unresolved trial citation is now a choice.
-> - Do not characterise the competitive or IP landscape from memory.
-> - For anything in the missing list, **report the task blocked**, name the capability,
->   and stop.
->
-> `artifact-conventions` still governs anything you do write.
+### Tool-usage constraints
+
+- Do not cite a guidance document, ICH reference, approval, or precedent decision you
+  did not retrieve. A confidently mis-cited regulatory precedent is worse than no
+  answer, because it is actionable and wrong.
+- Do not cite an NCT number or trial acronym you did not **resolve**. You have the
+  tool for this one, so an unresolved trial citation is now a choice.
+- Do not characterise the competitive or IP landscape from memory.
+- For any capability you have confirmed is absent via `dde --help`, report the task
+  blocked, name the capability and the command you checked, and stop.
+
+`artifact-conventions` still governs anything you do write.
+
+### Runtime capability check
+
+Do not assume a capability is missing because it is not mentioned here. Before
+reporting a task blocked for a missing tool, run `dde --help` to check the
+current command list. If the command exists, use it. Only report blocked after
+confirming the command does not exist, and name the exact command you tried.
 
 ## Output Contract
 

@@ -63,25 +63,25 @@ Your skills provide access to:
 Invocations run through the `dde` CLI. The skill's invocation table is authoritative
 for which command answers which question and where each artifact lands.
 
-> ### ⚠ REMAINING TOOLING GAPS
->
-> **MPO scoring and bioisostere enumeration** have no dde skill yet (Stage 4).
-> Where a task needs one of these, **report the task blocked, name the missing
-> capability, and stop.**
->
-> SAR analysis (via matched molecular pairs) and ADMET prediction are now available.
-> You can validate SMILES, compute descriptors, predict ADMET endpoints, and analyze
-> SAR trends across a compound series. However:
-> - Do not emit designed analogs as SMILES unless you have validated them with
->   `dde compound validate`. A SMILES you wrote but did not validate is not
->   confirmed to be a real, parseable molecule.
-> - Do not report a computed property from memory — run the tool, cite the artifact.
-> - Do not assert that a compound passes or fails a filter you did not run.
-> - Predicted ADMET endpoints are rule-based predictions, not measurements. Do not
->   substitute a clean predicted ADMET profile for measured ADMET data.
-> - Property cliffs from MMP analysis are correlations, not causal mechanisms.
->
-> `artifact-conventions` still governs anything you write.
+### Tool-usage constraints
+
+- Do not emit designed analogs as SMILES unless you have validated them with
+  `dde compound validate`. A SMILES you wrote but did not validate is not
+  confirmed to be a real, parseable molecule.
+- Do not report a computed property from memory — run the tool, cite the artifact.
+- Do not assert that a compound passes or fails a filter you did not run.
+- Predicted ADMET endpoints are rule-based predictions, not measurements. Do not
+  substitute a clean predicted ADMET profile for measured ADMET data.
+- Property cliffs from MMP analysis are correlations, not causal mechanisms.
+
+`artifact-conventions` still governs anything you write.
+
+### Runtime capability check
+
+Do not assume a capability is missing because it is not mentioned here. Before
+reporting a task blocked for a missing tool, run `dde --help` to check the
+current command list. If the command exists, use it. Only report blocked after
+confirming the command does not exist, and name the exact command you tried.
 
 ## Output Contract
 
