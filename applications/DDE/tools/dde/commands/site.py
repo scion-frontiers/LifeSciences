@@ -698,6 +698,127 @@ def _enrich_findings_with_viewers(
         finding["viewer_artifacts"] = viewer_artifacts
 
 
+def _strip_leading_h1(text: str) -> str:
+    """Strip the first markdown H1 (``# Title``) to avoid duplication with template H1.
+
+    The Jinja2 templates already supply ``<h1>{{ title }}</h1>`` from
+    page metadata.  The markdown source typically starts with ``# Title``
+    which would produce a second ``<h1>`` after rendering.  Stripping the
+    markdown H1 before rendering eliminates the duplicate.
+
+    Only the *first* line matching ``^# `` (single hash + space) is
+    removed; deeper headings (``##``, ``###``, …) are left untouched.
+    """
+    lines = text.split("\n")
+    for i, line in enumerate(lines):
+        if re.match(r"^# ", line):
+            lines.pop(i)
+            return "\n".join(lines)
+    return text
+
+
+def _slugify_heading(text: str) -> str:
+    """Slugify heading text for use as an HTML ``id`` attribute.
+
+    Lowercases, replaces whitespace runs with single hyphens, and strips
+    everything that isn't alphanumeric or a hyphen.
+
+    Example::
+
+        >>> _slugify_heading("Decision DEC-003")
+        'decision-dec-003'
+    """
+    slug = text.lower()
+    # Strip non-alphanumeric characters except spaces and hyphens
+    slug = re.sub(r"[^a-z0-9\s-]", "", slug)
+    # Collapse whitespace to single hyphens
+    slug = re.sub(r"[\s]+", "-", slug.strip())
+    # Collapse multiple hyphens
+    slug = re.sub(r"-+", "-", slug)
+    return slug
+
+
+_HEADING_TAG_RE = re.compile(r"<(h[1-6])(\s[^>]*)?>(.+?)</\1>", re.DOTALL)
+
+
+def _add_heading_ids(html: str) -> str:
+    """Add ``id`` attributes to ``<h1>``–``<h6>`` elements.
+
+    Generates stable, slugified IDs from heading text content.
+    Duplicate heading text receives ``-1``, ``-2``, … suffixes to keep
+    IDs unique within the page.
+
+    Headings that already carry an ``id=`` attribute are left unchanged.
+    """
+    seen: dict[str, int] = {}
+
+    def _replace(match: re.Match) -> str:  # type: ignore[type-arg]
+        tag = match.group(1)       # e.g. "h2"
+        attrs = match.group(2)     # existing attributes or None
+        content = match.group(3)   # inner HTML
+
+        # Don't overwrite an existing id
+        if attrs and "id=" in attrs:
+            return match.group(0)
+
+        # Strip inner HTML tags to get plain text for the slug
+        plain = re.sub(r"<[^>]+>", "", content)
+        slug = _slugify_heading(plain)
+
+        if not slug:
+            return match.group(0)
+
+        # De-duplicate
+        if slug in seen:
+            seen[slug] += 1
+            slug = f"{slug}-{seen[slug]}"
+        else:
+            seen[slug] = 0
+
+        attrs_str = attrs if attrs else ""
+        return f'<{tag} id="{slug}"{attrs_str}>{content}</{tag}>'
+
+    return _HEADING_TAG_RE.sub(_replace, html)
+
+
+_MD_HREF_RE = re.compile(r'href="([^"]*\.md(?:#[^"]*)?)"')
+
+
+def _rewrite_md_links(html: str) -> str:
+    """Rewrite internal ``.md`` links to ``.html`` in rendered HTML.
+
+    Only relative links are rewritten — external URLs (``http://``,
+    ``https://``, ``//``) are left unchanged.  Fragment identifiers
+    (``#section``) are preserved across the rewrite.
+
+    Examples::
+
+        href="other-page.md"            → href="other-page.html"
+        href="other-page.md#section"    → href="other-page.html#section"
+        href="../dir/page.md"           → href="../dir/page.html"
+        href="https://example.com/f.md" → (unchanged)
+    """
+
+    def _replace(match: re.Match) -> str:  # type: ignore[type-arg]
+        url = match.group(1)
+        # Skip external URLs
+        if url.startswith(("http://", "https://", "//")):
+            return match.group(0)
+        # Split off fragment
+        if "#" in url:
+            path, fragment = url.split("#", 1)
+            fragment = "#" + fragment
+        else:
+            path = url
+            fragment = ""
+        # Rewrite .md → .html
+        if path.endswith(".md"):
+            path = path[:-3] + ".html"
+        return f'href="{path}{fragment}"'
+
+    return _MD_HREF_RE.sub(_replace, html)
+
+
 def _dedent_tables(text: str) -> str:
     """Dedent pipe tables that are indented inside list items.
 
@@ -771,7 +892,17 @@ def _render_site(
     )
     from markupsafe import Markup
     _md = mistune.create_markdown(escape=True, plugins=['table', 'strikethrough', 'math'])
-    env.filters["markdown"] = lambda text: Markup(_md(_dedent_tables(text)))
+
+    def _render_markdown(text: str) -> Markup:
+        """Render markdown with H1 de-dup, heading IDs, and .md link rewriting."""
+        text = _strip_leading_h1(text)
+        text = _dedent_tables(text)
+        html = _md(text)
+        html = _add_heading_ids(html)
+        html = _rewrite_md_links(html)
+        return Markup(html)
+
+    env.filters["markdown"] = _render_markdown
 
     # Copy viewers into output
     viewers_src = template_dir / "viewers"
