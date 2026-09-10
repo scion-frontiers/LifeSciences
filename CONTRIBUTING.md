@@ -37,14 +37,25 @@ information on using pull requests.
 All source files must include a copyright license header. We use
 [addlicense](https://github.com/google/addlicense) to manage headers.
 
+Third-party vendored files retain their original license headers. Do not add
+Google LLC copyright to third-party code.
+
 Before submitting a pull request, run addlicense to ensure all files have
 headers:
 
-    addlicense .
+    addlicense --ignore '**/vendor/**' \
+               --ignore '**/node_modules/**' \
+               --ignore '**/site_templates/katex/**' \
+               --ignore '**/static/js/3Dmol-min.js' \
+               --ignore '**/static/js/marked.min.js' .
 
 Or to check without modifying files:
 
-    addlicense -check .
+    addlicense -check --ignore '**/vendor/**' \
+               --ignore '**/node_modules/**' \
+               --ignore '**/site_templates/katex/**' \
+               --ignore '**/static/js/3Dmol-min.js' \
+               --ignore '**/static/js/marked.min.js' .
 
 The tool uses Apache 2.0 license headers with "Google LLC" as the copyright
 holder by default, matching this project's LICENSE file.
