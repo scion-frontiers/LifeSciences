@@ -31,3 +31,24 @@ All submissions, including submissions by project members, require review. We
 use GitHub pull requests for this purpose. Consult
 [GitHub Help](https://help.github.com/articles/about-pull-requests/) for more
 information on using pull requests.
+
+### License headers
+
+All source files must include a copyright license header. We use
+[addlicense](https://github.com/google/addlicense) to manage headers.
+
+Before submitting a pull request, run addlicense to ensure all files have
+headers:
+
+    addlicense .
+
+Or to check without modifying files:
+
+    addlicense -check .
+
+The tool uses Apache 2.0 license headers with "Google LLC" as the copyright
+holder by default, matching this project's LICENSE file.
+
+A pre-installed copy of addlicense is available at
+`/scion-volumes/scratchpad/bin/addlicense` for agents operating within the
+Scion environment.
