@@ -13,18 +13,35 @@ the pipeline, adjudicate borderline pairs, label clusters, and report results.
 
 ## Similarity Thresholds
 
-The `prox` tool computes pairwise cosine similarity between hypothesis texts
-(title + statement + mechanism). Similarity scores are interpreted as follows:
+The `prox` tool computes pairwise cosine similarity of TF-IDF vectors built
+from hypothesis texts (title + statement + mechanism). Because TF-IDF is a
+**lexical** metric, scores reflect vocabulary overlap, not semantic meaning.
+Two hypotheses that describe the same mechanism in different words may score
+low, while two that share boilerplate phrasing may score high. Keep this
+limitation in mind when interpreting results.
+
+> **Note:** A sentence-transformer backend (`sbert`) is planned but not yet
+> implemented — `prox embed --backend sbert` raises `NotImplementedError`.
+> All current scores are TF-IDF–based.
+
+Similarity scores are interpreted as follows:
 
 | Range | Interpretation | Action |
 |---|---|---|
-| < 0.30 | **Unrelated** — no meaningful textual overlap | No edge in the proximity graph |
+| < 0.30 | **Low lexical overlap** — little shared vocabulary (not necessarily semantically unrelated) | No edge in the proximity graph |
 | 0.30 – 0.80 | **Same cluster** — related hypotheses exploring similar themes | Grouped into the same cluster; no merge concern |
 | 0.80 – 0.92 | **Borderline duplicate** — high surface similarity, may or may not be genuinely distinct | LLM must adjudicate (see procedure below) |
-| > 0.92 | **Auto-merge candidate** — very likely duplicates or paraphrases | Recommend merge to supervisor without further analysis |
+| ≥ 0.92 | **Auto-merge candidate** — very likely duplicates or paraphrases | Recommend merge to supervisor without further analysis |
 
 The graph threshold (0.30) determines which pairs get edges. The dupe threshold
 (0.80) determines which pairs are flagged for review.
+
+> **Important:** The 0.92 auto-merge threshold is a **protocol-level guideline**
+> for the adjudicating agent, not a feature enforced by the `prox` tool. The
+> `prox dupes` command reports all pairs at or above the dupe threshold (default
+> 0.80) without distinguishing borderline from auto-merge. The agent reading
+> the output applies the 0.92 cutoff when deciding which pairs to auto-merge
+> versus adjudicate.
 
 ---
 

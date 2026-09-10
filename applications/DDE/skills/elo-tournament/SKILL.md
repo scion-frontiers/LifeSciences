@@ -165,6 +165,24 @@ presentation order).
 - **narrow** — Close contest; score gap ≤ 2 total points or winner is stronger
   on some criteria but weaker on others.
 
+### Margin Multipliers (Rating Impact)
+
+The margin field is not just a label — it directly affects the Elo rating
+calculation. The `elo recompute` engine applies a **margin multiplier** to the
+rating delta (the K × (S − E) term):
+
+| Margin | Multiplier | Effect |
+|---|---|---|
+| `decisive` | 1.0× | Full rating change applied |
+| `narrow` | 0.75× | Rating change reduced by 25% |
+
+A narrow win moves ratings less than a decisive win. This means close matches
+have a smaller impact on rankings than clear-cut victories, reflecting the
+lower confidence in the outcome. For draws, use `"narrow"` as the margin
+(per the required fields table above); the draw itself already halves the
+actual score (0.5 instead of 1.0), and the 0.75× multiplier further dampens
+the rating exchange between unevenly-rated contestants.
+
 ## elo CLI Usage
 
 The `elo` CLI is the interface to the Elo rating engine. All commands require
