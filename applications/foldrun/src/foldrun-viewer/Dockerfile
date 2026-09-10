@@ -14,7 +14,13 @@
 
 # AlphaFold Structure Viewer - Cloud Run Dockerfile
 
-# Stage 1: Build environment
+# Stage 1: Vendor JS dependencies via npm
+FROM node:18-slim AS npm-deps
+WORKDIR /npm
+COPY package.json .
+RUN npm install --production
+
+# Stage 2: Build environment (Python)
 FROM python:3.13-slim AS builder
 
 # Install uv
@@ -28,7 +34,7 @@ COPY pyproject.toml uv.lock ./
 # Install dependencies (frozen, no-dev, no-install-project)
 RUN uv sync --frozen --no-install-project --no-dev --no-editable
 
-# Stage 2: Runtime image
+# Stage 3: Runtime image
 FROM python:3.13-slim
 
 WORKDIR /app
@@ -41,6 +47,10 @@ ENV PATH="/app/.venv/bin:$PATH"
 COPY app.py .
 COPY templates/ templates/
 COPY static/ static/
+
+# Copy vendor JS libraries from npm stage
+COPY --from=npm-deps /npm/node_modules/3dmol/build/3Dmol-min.js static/js/3Dmol-min.js
+COPY --from=npm-deps /npm/node_modules/marked/marked.min.js static/js/marked.min.js
 
 # Create non-root user for security
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app && chmod o+w /app

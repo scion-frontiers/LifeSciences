@@ -1,0 +1,7 @@
+# Vendor JS libraries — provisioned via npm at Docker build time
+static/js/3Dmol-min.js
+static/js/marked.min.js
+
+# npm artifacts (should not appear in repo; created during Docker build)
+node_modules/
+package-lock.json
