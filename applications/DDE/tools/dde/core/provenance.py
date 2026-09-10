@@ -55,6 +55,20 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+#: Subset of volatile fields that are interesting when they change on
+#: an otherwise-agreeing record.  ``timestamp`` and ``written_by`` are
+#: excluded — they change on every re-run and carry no diagnostic value.
+#: ``cli_modified_note`` is excluded because ``cli_modified`` already
+#: covers the condition.  ``work_order_id`` is excluded because cross-WO
+#: changes have their own protection mechanism.
+_INTERESTING_VOLATILE_FIELDS = (
+    "env_version",
+    "capability_state",
+    "cli_integrity",
+    "cli_modified",
+)
+
+
 #: Provenance fields — excluded from the overwrite comparison so an
 #: idempotent re-run stays frictionless.  What matters is whether the
 #: *verdict* would change, not whether the clock moved, the commit
@@ -1319,6 +1333,104 @@ def _comparable(record: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _volatile_stamp_changes(
+    existing: dict[str, Any], new: dict[str, Any]
+) -> dict[str, tuple[Any, Any]]:
+    """Collect interesting volatile fields that differ between two records.
+
+    Returns a dict mapping field name to ``(old_value, new_value)`` for
+    each field in ``_INTERESTING_VOLATILE_FIELDS`` whose value changed.
+    Fields absent from either record are represented as ``None``.
+    """
+    changes: dict[str, tuple[Any, Any]] = {}
+    for field in _INTERESTING_VOLATILE_FIELDS:
+        old_val = existing.get(field)
+        new_val = new.get(field)
+        if old_val != new_val:
+            changes[field] = (old_val, new_val)
+    return changes
+
+
+def _capability_upgrades(
+    old_state: dict[str, str] | None,
+    new_state: dict[str, str] | None,
+) -> list[tuple[str, str, str]]:
+    """Detect capabilities that improved between runs.
+
+    Returns a list of ``(capability, old_status, new_status)`` tuples
+    where the new state represents a gain — i.e. the capability was
+    previously ``"unavailable"`` and is now something else, or was absent
+    and is now present.
+    """
+    if not old_state or not new_state:
+        return []
+    upgrades: list[tuple[str, str, str]] = []
+    all_caps = sorted(set(old_state) | set(new_state))
+    for cap in all_caps:
+        old = old_state.get(cap, "absent")
+        new = new_state.get(cap, "absent")
+        if old != new and new not in ("unavailable", "absent"):
+            if old in ("unavailable", "absent"):
+                upgrades.append((cap, old, new))
+    return upgrades
+
+
+def _emit_volatile_stamp_warning(
+    path: Path,
+    changes: dict[str, tuple[Any, Any]],
+) -> None:
+    """Emit a NOTE to stderr listing volatile stamp differences.
+
+    Called when ``_may_write`` determines that two records agree on
+    science but differ on provenance stamps.  Informational only — does
+    not affect exit code or rewrite behaviour.
+    """
+    lines: list[str] = [
+        f"NOTE: {path.name} agrees (science unchanged). Not rewritten.",
+        "Provenance stamps differ from stored record:",
+    ]
+    for field, (old_val, new_val) in sorted(changes.items()):
+        old_repr = json.dumps(old_val) if not isinstance(old_val, str) else f'"{old_val}"'
+        new_repr = json.dumps(new_val) if not isinstance(new_val, str) else f'"{new_val}"'
+
+        # For dict-type fields like capability_state, show per-key diffs.
+        if isinstance(old_val, dict) and isinstance(new_val, dict):
+            diff_keys = sorted(
+                k for k in set(old_val) | set(new_val)
+                if old_val.get(k) != new_val.get(k)
+            )
+            for k in diff_keys:
+                ok = old_val.get(k, "absent")
+                nk = new_val.get(k, "absent")
+                lines.append(f'  {field}.{k}: "{ok}" → "{nk}"')
+        else:
+            lines.append(f"  {field}: {old_repr} → {new_repr}")
+
+    # Detect capability upgrades for the specific signal.
+    old_cap = changes.get("capability_state", (None, None))[0]
+    new_cap = changes.get("capability_state", (None, None))[1]
+    upgrades = _capability_upgrades(
+        old_cap if isinstance(old_cap, dict) else None,
+        new_cap if isinstance(new_cap, dict) else None,
+    )
+    if upgrades:
+        for cap, old_status, new_status in upgrades:
+            lines.append(
+                f"Capability upgrade available: {cap} was "
+                f'"{old_status}", now "{new_status}". Re-running with '
+                "--overwrite would update the record with current capabilities."
+            )
+
+    lines.append(
+        "The stored record was produced under different toolchain conditions."
+    )
+    # Emit as a single block to stderr via click.echo (click is
+    # already a dependency via the output module).
+    import click  # noqa: F811 — local import avoids top-level coupling
+
+    click.echo("\n".join(lines), err=True)
+
+
 def _may_write(path: Path, record: dict[str, Any], *, suppress_warnings: bool = False) -> bool:
     """Decide whether this analysis may land at this path.
 
@@ -1386,6 +1498,12 @@ def _may_write(path: Path, record: dict[str, Any], *, suppress_warnings: bool = 
                     f"{path.name} already holds an identical record ({when}); "
                     "not rewritten."
                 )
+            # Additive: warn when provenance stamps differ on an
+            # otherwise-agreeing record so toolchain boundary crossings
+            # (e.g. Hypex vendoring, env upgrades) are visible.
+            stamp_changes = _volatile_stamp_changes(existing, record)
+            if stamp_changes:
+                _emit_volatile_stamp_warning(path, stamp_changes)
         return False
 
     if isinstance(existing, dict):
