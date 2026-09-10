@@ -37,23 +37,18 @@ information on using pull requests.
 All source files must include a copyright license header. We use
 [addlicense](https://github.com/google/addlicense) to manage headers.
 
-Third-party Go module vendor directories and vendored JS libraries retain their
-original license headers. Do not add Google LLC copyright to third-party code.
+Third-party code is not committed to this repository; it is provisioned at
+build or install time. The node_modules/ directory (created during
+provisioning) is excluded from license checks.
 
 Before submitting a pull request, run addlicense to ensure all files have
 headers:
 
-    addlicense --ignore '**/hypothesis-explorer/tools/*/vendor/**' \
-               --ignore '**/node_modules/**' \
-               --ignore '**/static/js/3Dmol-min.js' \
-               --ignore '**/static/js/marked.min.js' .
+    addlicense --ignore '**/node_modules/**' .
 
 Or to check without modifying files:
 
-    addlicense -check --ignore '**/hypothesis-explorer/tools/*/vendor/**' \
-               --ignore '**/node_modules/**' \
-               --ignore '**/static/js/3Dmol-min.js' \
-               --ignore '**/static/js/marked.min.js' .
+    addlicense -check --ignore '**/node_modules/**' .
 
 The tool uses Apache 2.0 license headers with "Google LLC" as the copyright
 holder by default, matching this project's LICENSE file.
