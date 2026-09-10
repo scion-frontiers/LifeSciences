@@ -29,10 +29,8 @@ def test_vendored_runtime_sources_are_complete() -> None:
     required = (
         "tools/hypex/go.mod",
         "tools/hypex/main.go",
-        "tools/hypex/vendor/modules.txt",
         "tools/elo/go.mod",
         "tools/elo/main.go",
-        "tools/elo/vendor/modules.txt",
         "tools/prox/pyproject.toml",
         "tools/prox/prox/cli.py",
         "schemas/hypothesis.schema.json",
@@ -46,7 +44,7 @@ def test_vendored_runtime_sources_are_complete() -> None:
 
 def test_installer_builds_vendored_source_without_clone_or_release_binary() -> None:
     assert 'HYPEX_SOURCE_ROOT="${SCRIPT_DIR}/vendor/hypex"' in INSTALL
-    assert "go build -mod=vendor" in INSTALL
+    assert "go build -trimpath" in INSTALL
     assert "github.com/scion-frontiers/hypex.git" not in INSTALL
     assert "PLACEHOLDER://github.com/scion-frontiers/hypex" not in INSTALL
 

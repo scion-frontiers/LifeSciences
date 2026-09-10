@@ -246,9 +246,9 @@ absent exactly when artifacts are being produced by a partial one.
 DDE owns the Hypex deployment source under `tools/vendor/hypex/`. The
 bootstrapper does not clone the standalone Hypex repository and no binary is
 committed to this repository. `install.sh` uses the deployment's Go 1.26.1+
-toolchain and `go build -mod=vendor` to build `hypex` and `elo`, copies the
-JSON schemas into `share/hypex/schemas`, and installs the vendored `prox`
-Python source with a launcher in `bin/`.
+toolchain to build `hypex` and `elo` from source (dependencies resolved via
+`go mod` at build time), copies the JSON schemas into `share/hypex/schemas`,
+and installs the vendored `prox` Python source with a launcher in `bin/`.
 
 `prox` depends on scikit-learn, scipy, NumPy, NetworkX, and Click. They are
 installed from `requirements-hypex.txt` in a transaction separate from the
