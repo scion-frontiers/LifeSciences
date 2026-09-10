@@ -371,9 +371,7 @@ prepare_hypex_source() {
     local required
     for required in \
         hypothesis-explorer/tools/hypex/go.mod \
-        hypothesis-explorer/tools/hypex/vendor/modules.txt \
         hypothesis-explorer/tools/elo/go.mod \
-        hypothesis-explorer/tools/elo/vendor/modules.txt \
         hypothesis-explorer/tools/prox/prox/cli.py \
         hypothesis-explorer/schemas/hypothesis.schema.json; do
         if [ ! -f "${HYPEX_SOURCE_ROOT}/${required}" ]; then
@@ -400,7 +398,7 @@ build_hypex_go_tool() {
         return 1
     fi
     if ! (cd "$source_dir" && CGO_ENABLED=0 GOTOOLCHAIN=local \
-            go build -mod=vendor -trimpath -ldflags='-s -w -buildid=' \
+            go build -trimpath -ldflags='-s -w -buildid=' \
             -o "$output" .); then
         warn "${name} failed to build from pinned Hypex source."
         return 1

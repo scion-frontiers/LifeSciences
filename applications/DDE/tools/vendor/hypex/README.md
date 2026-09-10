@@ -16,8 +16,9 @@ remain valid:
 the deployment tools volume. Generated binaries, Python environments, and
 runtime data must not be committed here.
 
-The Go module dependencies are committed in each tool's `vendor/` directory;
-provisioning uses `go build -mod=vendor` and never downloads Go source.
+Go module dependencies are fetched at build time via `go mod download`;
+`go.mod` and `go.sum` in each tool directory pin the exact dependency versions
+and checksums. Network access is already required during provisioning.
 
 The DDE patch level is `dde.2`: the small change in
 `hypothesis-explorer/tools/hypex/cmd/root.go` makes the schema default resolve
