@@ -253,6 +253,34 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Node.js / npm — KaTeX is installed from npm at provision time
+# ---------------------------------------------------------------------------
+
+head_ "Node.js / npm (KaTeX)"
+
+if command -v node >/dev/null 2>&1; then
+    NODEV="$(node --version 2>/dev/null)"
+    NODEV_NUMBER="${NODEV#v}"
+    NODEV_MAJOR="${NODEV_NUMBER%%.*}"
+    if [ "$NODEV_MAJOR" -ge 18 ] 2>/dev/null; then
+        ok "node ${NODEV} (>= v18 required)"
+    else
+        miss "node is ${NODEV}; need v18 or newer"
+        FAILED=1
+    fi
+else
+    miss "node — required for npm to install KaTeX"
+    FAILED=1
+fi
+
+if command -v npm >/dev/null 2>&1; then
+    ok "npm $(npm --version 2>/dev/null)"
+else
+    miss "npm — required to install KaTeX for site math rendering"
+    FAILED=1
+fi
+
+# ---------------------------------------------------------------------------
 # C toolchain — fpocket is compiled here, not downloaded
 # ---------------------------------------------------------------------------
 

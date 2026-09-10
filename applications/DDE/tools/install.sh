@@ -157,6 +157,34 @@ if [ "$CORE_ONLY" = false ] && [ "$BINARIES_ONLY" = false ]; then
 fi
 
 # ---------------------------------------------------------------------------
+# npm dependencies — KaTeX for site math rendering
+# ---------------------------------------------------------------------------
+#
+# KaTeX was previously vendored in site_templates/katex/. Google OSS policy
+# requires that third-party code not be committed to the repo when it can be
+# provisioned at build time. npm installs KaTeX to a known location; site.py
+# copies the dist/ assets into the generated site output at build time.
+
+NPM_STATUS="skipped"
+if [ "$BINARIES_ONLY" = false ]; then
+    if command -v npm >/dev/null 2>&1; then
+        log "Installing npm dependencies..."
+        if npm install --prefix "${TOOLS_HOME_DIR}/npm" katex@0.16.21 --silent 2>/dev/null; then
+            NPM_STATUS="installed"
+            log "KaTeX 0.16.21 installed at ${TOOLS_HOME_DIR}/npm/node_modules/katex/"
+        else
+            NPM_STATUS="failed"
+            warn "npm install of KaTeX failed. Site math rendering will be"
+            warn "unavailable until this is resolved."
+        fi
+    else
+        NPM_STATUS="failed"
+        warn "npm not found. KaTeX cannot be installed for site math rendering."
+        warn "Install node/npm and re-run install.sh."
+    fi
+fi
+
+# ---------------------------------------------------------------------------
 # Non-pip binaries
 # ---------------------------------------------------------------------------
 
@@ -693,6 +721,7 @@ echo ""
 echo "  Core CLI dependencies: ${CORE_STATUS}"
 echo "  Hypex Python deps:      ${HYPEX_PYTHON_STATUS}"
 echo "  Science stack:         ${SCIENCE_STATUS}"
+echo "  npm (KaTeX):           ${NPM_STATUS}"
 echo "  Binaries:             ${BINARY_STATUS}"
 echo ""
 # Point at env.sh, not at the venv's activate. This block used to say

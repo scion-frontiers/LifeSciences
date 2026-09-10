@@ -924,10 +924,31 @@ def _render_site(
         viewers_dst = output_dir / "viewers"
         shutil.copytree(str(viewers_src), str(viewers_dst))
 
-    # Copy KaTeX assets for math rendering
-    katex_src = template_dir / "katex"
-    if katex_src.is_dir():
-        shutil.copytree(str(katex_src), str(output_dir / "katex"))
+    # Copy KaTeX assets for math rendering.
+    # KaTeX is npm-installed at provision time (install.sh); the dist/
+    # directory under the npm package contains the files the site needs.
+    # The generated site remains fully self-contained — no CDN dependency.
+    tools_home = os.environ.get("DDE_TOOLS_HOME", "/scion-volumes/tools")
+    katex_npm = Path(tools_home) / "npm" / "node_modules" / "katex" / "dist"
+    if not katex_npm.is_dir():
+        raise ArtifactError(
+            "KaTeX not installed",
+            detail=f"expected KaTeX at {katex_npm}",
+            remedy="Run install.sh to provision npm dependencies.",
+        )
+    katex_dst = output_dir / "katex"
+    katex_dst.mkdir()
+    # Copy the specific assets the site templates reference:
+    #   katex.min.css, katex.min.js, contrib/auto-render.min.js, fonts/
+    shutil.copy2(str(katex_npm / "katex.min.css"), str(katex_dst / "katex.min.css"))
+    shutil.copy2(str(katex_npm / "katex.min.js"), str(katex_dst / "katex.min.js"))
+    contrib_dst = katex_dst / "contrib"
+    contrib_dst.mkdir()
+    shutil.copy2(
+        str(katex_npm / "contrib" / "auto-render.min.js"),
+        str(contrib_dst / "auto-render.min.js"),
+    )
+    shutil.copytree(str(katex_npm / "fonts"), str(katex_dst / "fonts"))
 
     # Helper for nav_sections kwargs shared across all pages
     def _nav(active: str | None = None) -> list[dict[str, Any]]:
