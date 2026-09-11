@@ -31,9 +31,7 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
-
 from dde.core import provenance
-
 
 # ---------------------------------------------------------------------------
 # record_type_from_schema
@@ -78,7 +76,9 @@ class TestRecordTypeFromSchema:
         assert provenance.record_type_from_schema("not-a-schema") == "not-a-schema"
 
     def test_fallback_no_version(self):
-        assert provenance.record_type_from_schema("dde.tox-margins") == "dde.tox-margins"
+        assert (
+            provenance.record_type_from_schema("dde.tox-margins") == "dde.tox-margins"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -94,10 +94,7 @@ class TestRecordTypeFromFilename:
         )
 
     def test_pk_nca(self):
-        assert (
-            provenance.record_type_from_filename("study1.pk-nca.json")
-            == "pk-nca"
-        )
+        assert provenance.record_type_from_filename("study1.pk-nca.json") == "pk-nca"
 
     def test_no_json_suffix(self):
         assert provenance.record_type_from_filename("foo.txt") is None
@@ -243,7 +240,8 @@ class TestCrossWOOverwrite:
                 written = json.loads(analysis_path.read_text(encoding="utf-8"))
                 relays = written.get("mandatory_relays", [])
                 cross_wo_relays = [
-                    r for r in relays
+                    r
+                    for r in relays
                     if r.get("code") == "provenance.cross_wo_overwrite"
                 ]
                 assert len(cross_wo_relays) == 1
@@ -350,12 +348,8 @@ class TestBackwardCompat:
 
         assert old_path.exists()
         assert new_path.exists()
-        assert (
-            json.loads(old_path.read_text(encoding="utf-8"))["verdict"] == "old"
-        )
-        assert (
-            json.loads(new_path.read_text(encoding="utf-8"))["verdict"] == "new"
-        )
+        assert json.loads(old_path.read_text(encoding="utf-8"))["verdict"] == "old"
+        assert json.loads(new_path.read_text(encoding="utf-8"))["verdict"] == "new"
 
 
 # ---------------------------------------------------------------------------

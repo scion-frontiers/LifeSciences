@@ -43,7 +43,6 @@ if str(TOOLS_DIR) not in sys.path:
 
 from dde.commands.coscientist import _extract_recommendation
 
-
 # ---------------------------------------------------------------------------
 # Helper: build a normalised tournament artifact
 # ---------------------------------------------------------------------------
@@ -201,19 +200,23 @@ Here are the top-ranked ideas from the tournament.
 Additional details.
 """
 
-_MD_LONG_RECOMMENDATION = """\
+_MD_LONG_RECOMMENDATION = (
+    """\
 ## Overview
 
 Overview content.
 
 ## Recommendation and Best Next Steps
 
-""" + "This is a very detailed recommendation. " * 50 + """
+"""
+    + "This is a very detailed recommendation. " * 50
+    + """
 
 ## Appendix
 
 End.
 """
+)
 
 
 # ---------------------------------------------------------------------------
@@ -402,7 +405,9 @@ def test_analyze_cli_shows_recommendation_preview() -> None:
 
         assert result.exit_code == 0
         assert "--- Review Recommendation ---" in result.output
-        assert "Full recommendation available in the analysis artifact." in result.output
+        assert (
+            "Full recommendation available in the analysis artifact." in result.output
+        )
     print("  PASS: analyze CLI shows recommendation preview")
 
 
@@ -473,8 +478,11 @@ def test_analyze_json_includes_recommendation() -> None:
         result = runner.invoke(
             cli,
             [
-                "--project", str(project),
-                "coscientist", "analyze", str(artifact_path),
+                "--project",
+                str(project),
+                "coscientist",
+                "analyze",
+                str(artifact_path),
                 "--json",
             ],
             catch_exceptions=False,
@@ -512,7 +520,9 @@ def test_analyze_long_recommendation_truncated_in_cli() -> None:
         assert result.exit_code == 0
         # The full recommendation is >500 chars, so CLI should show "..."
         # and the "Full recommendation available" message.
-        assert "Full recommendation available in the analysis artifact." in result.output
+        assert (
+            "Full recommendation available in the analysis artifact." in result.output
+        )
     print("  PASS: analyze long recommendation truncated in CLI")
 
 
@@ -723,7 +733,9 @@ def test_assessment_core_null_rank_score() -> None:
         analysis = json.loads(analysis_path.read_text(encoding="utf-8"))
         candidate = analysis["assessment"]["assessment_core"]["candidates"][0]
         assert candidate["rank"] is None, f"expected rank=null, got {candidate['rank']}"
-        assert candidate["score"] is None, f"expected score=null, got {candidate['score']}"
+        assert candidate["score"] is None, (
+            f"expected score=null, got {candidate['score']}"
+        )
     print("  PASS: assessment_core null rank/score for missing elo")
 
 
@@ -737,25 +749,70 @@ def main() -> None:
         # _extract_recommendation unit tests
         ("test_extract_recommendation_found", test_extract_recommendation_found),
         ("test_extract_recommendation_h3", test_extract_recommendation_h3),
-        ("test_extract_recommendation_none_empty", test_extract_recommendation_none_empty),
-        ("test_extract_recommendation_none_no_heading", test_extract_recommendation_none_no_heading),
-        ("test_extract_recommendation_case_insensitive", test_extract_recommendation_case_insensitive),
-        ("test_extract_recommendation_best_next_steps_only", test_extract_recommendation_best_next_steps_only),
+        (
+            "test_extract_recommendation_none_empty",
+            test_extract_recommendation_none_empty,
+        ),
+        (
+            "test_extract_recommendation_none_no_heading",
+            test_extract_recommendation_none_no_heading,
+        ),
+        (
+            "test_extract_recommendation_case_insensitive",
+            test_extract_recommendation_case_insensitive,
+        ),
+        (
+            "test_extract_recommendation_best_next_steps_only",
+            test_extract_recommendation_best_next_steps_only,
+        ),
         # CliRunner integration tests — analyze with recommendation
-        ("test_analyze_recommendation_in_assessment", test_analyze_recommendation_in_assessment),
-        ("test_analyze_recommendation_empty_report", test_analyze_recommendation_empty_report),
-        ("test_analyze_no_recommendation_heading", test_analyze_no_recommendation_heading),
-        ("test_analyze_cli_shows_recommendation_preview", test_analyze_cli_shows_recommendation_preview),
+        (
+            "test_analyze_recommendation_in_assessment",
+            test_analyze_recommendation_in_assessment,
+        ),
+        (
+            "test_analyze_recommendation_empty_report",
+            test_analyze_recommendation_empty_report,
+        ),
+        (
+            "test_analyze_no_recommendation_heading",
+            test_analyze_no_recommendation_heading,
+        ),
+        (
+            "test_analyze_cli_shows_recommendation_preview",
+            test_analyze_cli_shows_recommendation_preview,
+        ),
         ("test_analyze_cli_fallback_message", test_analyze_cli_fallback_message),
-        ("test_analyze_cli_no_recommendation_message_when_empty", test_analyze_cli_no_recommendation_message_when_empty),
-        ("test_analyze_json_includes_recommendation", test_analyze_json_includes_recommendation),
-        ("test_analyze_long_recommendation_truncated_in_cli", test_analyze_long_recommendation_truncated_in_cli),
+        (
+            "test_analyze_cli_no_recommendation_message_when_empty",
+            test_analyze_cli_no_recommendation_message_when_empty,
+        ),
+        (
+            "test_analyze_json_includes_recommendation",
+            test_analyze_json_includes_recommendation,
+        ),
+        (
+            "test_analyze_long_recommendation_truncated_in_cli",
+            test_analyze_long_recommendation_truncated_in_cli,
+        ),
         # Assessment core tests
-        ("test_assessment_core_present_in_analysis", test_assessment_core_present_in_analysis),
+        (
+            "test_assessment_core_present_in_analysis",
+            test_assessment_core_present_in_analysis,
+        ),
         ("test_assessment_core_score_is_object", test_assessment_core_score_is_object),
-        ("test_assessment_core_strategy_is_coscientist", test_assessment_core_strategy_is_coscientist),
-        ("test_assessment_core_basis_is_coscientist_elo", test_assessment_core_basis_is_coscientist_elo),
-        ("test_assessment_core_backward_compatible", test_assessment_core_backward_compatible),
+        (
+            "test_assessment_core_strategy_is_coscientist",
+            test_assessment_core_strategy_is_coscientist,
+        ),
+        (
+            "test_assessment_core_basis_is_coscientist_elo",
+            test_assessment_core_basis_is_coscientist_elo,
+        ),
+        (
+            "test_assessment_core_backward_compatible",
+            test_assessment_core_backward_compatible,
+        ),
         ("test_assessment_core_null_rank_score", test_assessment_core_null_rank_score),
     ]
 
@@ -768,10 +825,11 @@ def main() -> None:
         except Exception as exc:
             print(f"  FAIL: {name} — {exc}")
             import traceback
+
             traceback.print_exc()
             failed += 1
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Results: {passed} passed, {failed} failed, {passed + failed} total")
     if failed:
         sys.exit(1)

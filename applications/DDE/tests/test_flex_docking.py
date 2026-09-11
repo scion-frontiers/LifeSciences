@@ -37,7 +37,6 @@ from dde.commands.docking import (
 )
 from dde.core.errors import ArtifactError, UsageError
 
-
 # ---------------------------------------------------------------------------
 # Sample PDBQT content for testing
 # ---------------------------------------------------------------------------

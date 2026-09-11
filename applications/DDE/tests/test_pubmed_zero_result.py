@@ -73,21 +73,21 @@ def _esearch_count_json(count: int) -> dict[str, Any]:
 def _efetch_xml_with_articles() -> bytes:
     """Build minimal efetch XML with one article."""
     return (
-        '<?xml version="1.0" ?>\n'
-        "<PubmedArticleSet>\n"
-        "  <PubmedArticle>\n"
-        "    <MedlineCitation>\n"
-        "      <PMID>12345</PMID>\n"
-        "      <Article>\n"
-        "        <ArticleTitle>Test Article</ArticleTitle>\n"
-        "        <Journal><ISOAbbreviation>J Test</ISOAbbreviation>\n"
-        "          <JournalIssue><PubDate><Year>2024</Year></PubDate></JournalIssue>\n"
-        "        </Journal>\n"
-        "      </Article>\n"
-        "    </MedlineCitation>\n"
-        "  </PubmedArticle>\n"
-        "</PubmedArticleSet>\n"
-    ).encode("utf-8")
+        b'<?xml version="1.0" ?>\n'
+        b"<PubmedArticleSet>\n"
+        b"  <PubmedArticle>\n"
+        b"    <MedlineCitation>\n"
+        b"      <PMID>12345</PMID>\n"
+        b"      <Article>\n"
+        b"        <ArticleTitle>Test Article</ArticleTitle>\n"
+        b"        <Journal><ISOAbbreviation>J Test</ISOAbbreviation>\n"
+        b"          <JournalIssue><PubDate><Year>2024</Year></PubDate></JournalIssue>\n"
+        b"        </Journal>\n"
+        b"      </Article>\n"
+        b"    </MedlineCitation>\n"
+        b"  </PubmedArticle>\n"
+        b"</PubmedArticleSet>\n"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -124,8 +124,10 @@ def test_zero_results_per_term_counts() -> None:
             result = runner.invoke(
                 cli,
                 [
-                    "--project", str(project),
-                    "pubmed", "search",
+                    "--project",
+                    str(project),
+                    "pubmed",
+                    "search",
                     "OSMR keratinocyte",
                 ],
                 catch_exceptions=False,
@@ -146,7 +148,9 @@ def test_zero_results_per_term_counts() -> None:
         artifact = json.loads(artifact_files[0].read_text(encoding="utf-8"))
         assert "per_term_counts" in artifact
         assert len(artifact["per_term_counts"]) == 2
-        assert artifact["zero_result_reason"] == "no_results_query_may_be_overconstrained"
+        assert (
+            artifact["zero_result_reason"] == "no_results_query_may_be_overconstrained"
+        )
 
     print("  PASS: per-term counts reported on zero results")
 
@@ -174,8 +178,10 @@ def test_zero_results_genuinely_empty() -> None:
             result = runner.invoke(
                 cli,
                 [
-                    "--project", str(project),
-                    "pubmed", "search",
+                    "--project",
+                    str(project),
+                    "pubmed",
+                    "search",
                     "xyznonexistentterm",
                 ],
                 catch_exceptions=False,
@@ -220,8 +226,10 @@ def test_results_found_no_per_term_counts() -> None:
             result = runner.invoke(
                 cli,
                 [
-                    "--project", str(project),
-                    "pubmed", "search",
+                    "--project",
+                    str(project),
+                    "pubmed",
+                    "search",
                     "OSMR",
                 ],
                 catch_exceptions=False,
@@ -269,8 +277,10 @@ def test_per_term_count_api_error() -> None:
             result = runner.invoke(
                 cli,
                 [
-                    "--project", str(project),
-                    "pubmed", "search",
+                    "--project",
+                    str(project),
+                    "pubmed",
+                    "search",
                     "failterm okterm",
                 ],
                 catch_exceptions=False,
@@ -300,7 +310,10 @@ def main() -> None:
     tests = [
         ("test_zero_results_per_term_counts", test_zero_results_per_term_counts),
         ("test_zero_results_genuinely_empty", test_zero_results_genuinely_empty),
-        ("test_results_found_no_per_term_counts", test_results_found_no_per_term_counts),
+        (
+            "test_results_found_no_per_term_counts",
+            test_results_found_no_per_term_counts,
+        ),
         ("test_per_term_count_api_error", test_per_term_count_api_error),
     ]
 
@@ -313,10 +326,11 @@ def main() -> None:
         except Exception as exc:
             print(f"  FAIL: {name} -- {exc}")
             import traceback
+
             traceback.print_exc()
             failed += 1
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Results: {passed} passed, {failed} failed, {passed + failed} total")
     if failed:
         sys.exit(1)

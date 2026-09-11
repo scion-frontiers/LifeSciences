@@ -334,8 +334,7 @@ def test_relay_absent_when_report_empty() -> None:
         relays = analysis.get("mandatory_relays", [])
         codes = [r["code"] for r in relays]
         assert RELAY_CODE not in codes, (
-            f"Relay {RELAY_CODE!r} should NOT fire on empty report; "
-            f"got codes: {codes}"
+            f"Relay {RELAY_CODE!r} should NOT fire on empty report; got codes: {codes}"
         )
     print("  PASS: relay absent when report empty")
 
@@ -402,10 +401,19 @@ def test_relay_deduplicated_with_meta_sidecar() -> None:
 def main() -> None:
     tests = [
         ("test_relay_code_registered", test_relay_code_registered),
-        ("test_relay_fires_when_recommendation_present", test_relay_fires_when_recommendation_present),
-        ("test_relay_absent_when_no_recommendation_heading", test_relay_absent_when_no_recommendation_heading),
+        (
+            "test_relay_fires_when_recommendation_present",
+            test_relay_fires_when_recommendation_present,
+        ),
+        (
+            "test_relay_absent_when_no_recommendation_heading",
+            test_relay_absent_when_no_recommendation_heading,
+        ),
         ("test_relay_absent_when_report_empty", test_relay_absent_when_report_empty),
-        ("test_relay_deduplicated_with_meta_sidecar", test_relay_deduplicated_with_meta_sidecar),
+        (
+            "test_relay_deduplicated_with_meta_sidecar",
+            test_relay_deduplicated_with_meta_sidecar,
+        ),
     ]
 
     passed = 0
@@ -417,10 +425,11 @@ def main() -> None:
         except Exception as exc:
             print(f"  FAIL: {name} — {exc}")
             import traceback
+
             traceback.print_exc()
             failed += 1
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Results: {passed} passed, {failed} failed, {passed + failed} total")
     if failed:
         sys.exit(1)

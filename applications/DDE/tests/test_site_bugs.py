@@ -27,7 +27,6 @@ Exit 0 = all tests passed, exit 1 = at least one failure.
 
 from __future__ import annotations
 
-import re
 import sys
 import traceback
 from pathlib import Path
@@ -38,7 +37,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 
-from dde.commands.site import _strip_code, _dedent_tables, _MARKDOWN_LINK_RE
+from dde.commands.site import _MARKDOWN_LINK_RE, _dedent_tables, _strip_code
 
 # ---------------------------------------------------------------------------
 # Test infrastructure
@@ -47,7 +46,7 @@ from dde.commands.site import _strip_code, _dedent_tables, _MARKDOWN_LINK_RE
 _RESULTS: list[tuple[str, bool, str]] = []
 
 
-def _run(name: str, fn):  # noqa: ANN001
+def _run(name: str, fn):
     try:
         fn()
         _RESULTS.append((name, True, ""))
@@ -73,7 +72,9 @@ def test_strip_code_removes_fenced_code_blocks():
     text = "Before\n```\n[link](target.md)\nsome code\n```\nAfter"
     result = _strip_code(text)
     assert "```" not in result, f"Fenced block remains: {result!r}"
-    assert "[link](target.md)" not in result, f"Link in fenced block remains: {result!r}"
+    assert "[link](target.md)" not in result, (
+        f"Link in fenced block remains: {result!r}"
+    )
     assert "Before" in result
     assert "After" in result
 
@@ -102,8 +103,8 @@ def test_validate_links_ignores_smiles_in_code():
     Sets up a minimal project with a finding containing SMILES in backticks
     and verifies no broken-link issues are produced for them.
     """
-    import json
     import tempfile
+
     from dde.commands.site import _validate_links
     from dde.core.controlstore import ensure_control_dirs, write_record
 
@@ -189,6 +190,7 @@ def test_dedent_tables_unindented_passthrough():
 def test_mistune_renders_table_html():
     """Mistune with table plugin renders a simple pipe table to an HTML table."""
     import mistune
+
     md = mistune.create_markdown(escape=True, plugins=["table", "strikethrough"])
     table_md = "| Header A | Header B |\n|---|---|\n| Cell 1 | Cell 2 |\n"
     html = md(table_md)
@@ -200,6 +202,7 @@ def test_mistune_renders_table_html():
 def test_mistune_renders_dedented_table():
     """Mistune with table plugin renders a dedented table correctly."""
     import mistune
+
     md = mistune.create_markdown(escape=True, plugins=["table", "strikethrough"])
     indented = "    | X | Y |\n    |---|---|\n    | a | b |\n"
     dedented = _dedent_tables(indented)
@@ -215,13 +218,28 @@ def test_mistune_renders_dedented_table():
 
 if __name__ == "__main__":
     _run("strip_code_removes_inline_code", test_strip_code_removes_inline_code)
-    _run("strip_code_removes_fenced_code_blocks", test_strip_code_removes_fenced_code_blocks)
+    _run(
+        "strip_code_removes_fenced_code_blocks",
+        test_strip_code_removes_fenced_code_blocks,
+    )
     _run("strip_code_preserves_real_links", test_strip_code_preserves_real_links)
-    _run("smiles_no_false_positive_after_stripping", test_smiles_no_false_positive_after_stripping)
-    _run("validate_links_ignores_smiles_in_code", test_validate_links_ignores_smiles_in_code)
+    _run(
+        "smiles_no_false_positive_after_stripping",
+        test_smiles_no_false_positive_after_stripping,
+    )
+    _run(
+        "validate_links_ignores_smiles_in_code",
+        test_validate_links_ignores_smiles_in_code,
+    )
     _run("dedent_tables_indented_pipe_table", test_dedent_tables_indented_pipe_table)
-    _run("dedent_tables_leaves_non_table_unchanged", test_dedent_tables_leaves_non_table_unchanged)
-    _run("dedent_tables_unindented_passthrough", test_dedent_tables_unindented_passthrough)
+    _run(
+        "dedent_tables_leaves_non_table_unchanged",
+        test_dedent_tables_leaves_non_table_unchanged,
+    )
+    _run(
+        "dedent_tables_unindented_passthrough",
+        test_dedent_tables_unindented_passthrough,
+    )
     _run("mistune_renders_table_html", test_mistune_renders_table_html)
     _run("mistune_renders_dedented_table", test_mistune_renders_dedented_table)
 
@@ -230,14 +248,14 @@ if __name__ == "__main__":
     failed = sum(1 for _, ok, _ in _RESULTS if not ok)
     total = len(_RESULTS)
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     for name, ok, err in _RESULTS:
         status = "PASS" if ok else "FAIL"
         print(f"  [{status}] {name}")
         if err:
             for line in err.strip().splitlines():
                 print(f"         {line}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"  {passed}/{total} passed, {failed} failed")
 
     sys.exit(0 if failed == 0 else 1)

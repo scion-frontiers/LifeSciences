@@ -36,7 +36,6 @@ if str(TOOLS_DIR) not in sys.path:
 
 from dde.core import provenance
 
-
 # ---------------------------------------------------------------------------
 # Helper: project setup and canned PMC responses
 # ---------------------------------------------------------------------------
@@ -147,12 +146,12 @@ def _pmc_fulltext_xml(
 def _empty_pmc_response() -> bytes:
     """Build a PMC response with no article content (not in OA subset)."""
     return (
-        '<?xml version="1.0" encoding="UTF-8"?>\n'
-        '<!DOCTYPE pmc-articleset PUBLIC "-//NLM//DTD ARTICLE SET 2.0//EN" '
-        '"https://dtd.nlm.nih.gov/ncbi/pmc/articleset/nlm-articleset-2.0.dtd">\n'
-        "<pmc-articleset>\n"
-        "</pmc-articleset>\n"
-    ).encode("utf-8")
+        b'<?xml version="1.0" encoding="UTF-8"?>\n'
+        b'<!DOCTYPE pmc-articleset PUBLIC "-//NLM//DTD ARTICLE SET 2.0//EN" '
+        b'"https://dtd.nlm.nih.gov/ncbi/pmc/articleset/nlm-articleset-2.0.dtd">\n'
+        b"<pmc-articleset>\n"
+        b"</pmc-articleset>\n"
+    )
 
 
 def _mock_http_response(content: bytes, status_code: int = 200) -> mock.Mock:
@@ -201,8 +200,10 @@ def test_fulltext_valid_pmcid() -> None:
             result = runner.invoke(
                 cli,
                 [
-                    "--project", str(project),
-                    "pubmed", "fulltext",
+                    "--project",
+                    str(project),
+                    "pubmed",
+                    "fulltext",
                     "PMC1234567",
                 ],
                 catch_exceptions=False,
@@ -315,8 +316,10 @@ def test_fulltext_unavailable() -> None:
             result = runner.invoke(
                 cli,
                 [
-                    "--project", str(project),
-                    "pubmed", "fulltext",
+                    "--project",
+                    str(project),
+                    "pubmed",
+                    "fulltext",
                     "PMC9999999",
                 ],
                 catch_exceptions=False,
@@ -336,9 +339,9 @@ def test_fulltext_unavailable() -> None:
         )
 
         # Should also be in warnings
-        assert any(
-            "not available" in w for w in meta.get("warnings", [])
-        ), f"Expected unavailable warning in warnings: {meta.get('warnings', [])}"
+        assert any("not available" in w for w in meta.get("warnings", [])), (
+            f"Expected unavailable warning in warnings: {meta.get('warnings', [])}"
+        )
 
     print("  PASS: article not in OA subset fires pubmed.fulltext_unavailable")
 
@@ -366,26 +369,26 @@ def test_fulltext_nested_sections() -> None:
     from dde.commands.pubmed import _parse_fulltext_xml
 
     xml = (
-        '<?xml version="1.0" encoding="UTF-8"?>'
-        "<pmc-articleset>"
-        '<article article-type="research-article">'
-        "  <front><article-meta>"
-        '    <article-id pub-id-type="doi">10.1234/nested</article-id>'
-        "    <title-group><article-title>Nested Test</article-title></title-group>"
-        "    <contrib-group>"
-        '      <contrib contrib-type="author"><name>'
-        "        <surname>Doe</surname><given-names>Jane</given-names>"
-        "      </name></contrib>"
-        "    </contrib-group>"
-        "    <abstract><p>Abstract.</p></abstract>"
-        "  </article-meta></front>"
-        "  <body>"
-        "    <sec><title>Introduction</title><p>Intro text.</p>"
-        "      <sec><title>Background</title><p>Background text.</p></sec>"
-        "    </sec>"
-        "  </body>"
-        "</article></pmc-articleset>"
-    ).encode("utf-8")
+        b'<?xml version="1.0" encoding="UTF-8"?>'
+        b"<pmc-articleset>"
+        b'<article article-type="research-article">'
+        b"  <front><article-meta>"
+        b'    <article-id pub-id-type="doi">10.1234/nested</article-id>'
+        b"    <title-group><article-title>Nested Test</article-title></title-group>"
+        b"    <contrib-group>"
+        b'      <contrib contrib-type="author"><name>'
+        b"        <surname>Doe</surname><given-names>Jane</given-names>"
+        b"      </name></contrib>"
+        b"    </contrib-group>"
+        b"    <abstract><p>Abstract.</p></abstract>"
+        b"  </article-meta></front>"
+        b"  <body>"
+        b"    <sec><title>Introduction</title><p>Intro text.</p>"
+        b"      <sec><title>Background</title><p>Background text.</p></sec>"
+        b"    </sec>"
+        b"  </body>"
+        b"</article></pmc-articleset>"
+    )
 
     result = _parse_fulltext_xml(xml)
     headings = [s["heading"] for s in result["sections"]]
@@ -421,10 +424,11 @@ def main() -> None:
         except Exception as exc:
             print(f"  FAIL: {name} -- {exc}")
             import traceback
+
             traceback.print_exc()
             failed += 1
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Results: {passed} passed, {failed} failed, {passed + failed} total")
     if failed:
         sys.exit(1)

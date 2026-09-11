@@ -53,10 +53,7 @@ from dde.core.provenance import (
     _VOLATILE_ANALYSIS_FIELDS,
     _comparable,
     _may_write,
-    _normalize_source,
 )
-from dde.core.errors import ArtifactError
-
 
 # ---------------------------------------------------------------------------
 # The canonical registry of scientific fields.  A field is scientific
@@ -65,18 +62,20 @@ from dde.core.errors import ArtifactError
 # scientific field — the test below enforces that.
 # ---------------------------------------------------------------------------
 
-_SCIENTIFIC_ANALYSIS_FIELDS = frozenset({
-    "cli_version",
-    "threshold_set",
-    "thresholds_applied",
-    "metrics",
-    "assessment",
-    "mandatory_relays",
-    "threshold_sources",
-    "threshold_provenance",
-    "thresholds_unresolved",
-    "source_sha256",
-})
+_SCIENTIFIC_ANALYSIS_FIELDS = frozenset(
+    {
+        "cli_version",
+        "threshold_set",
+        "thresholds_applied",
+        "metrics",
+        "assessment",
+        "mandatory_relays",
+        "threshold_sources",
+        "threshold_provenance",
+        "thresholds_unresolved",
+        "source_sha256",
+    }
+)
 
 # All three buckets must be disjoint and exhaustive.
 _ALL_CLASSIFIED = (
@@ -89,6 +88,7 @@ _ALL_CLASSIFIED = (
 # ---------------------------------------------------------------------------
 # Helper: build a maximal analysis record (all optional fields present)
 # ---------------------------------------------------------------------------
+
 
 def _maximal_record() -> dict[str, object]:
     """Return an analysis record with every optional field populated.
@@ -197,7 +197,9 @@ class TestComparableSourceNormalization:
     filenames (pre-#129) and project-relative paths (post-#129)
     compare equal when they refer to the same file."""
 
-    def test_bare_filename_and_relative_path_compare_equal(self, tmp_path: Path) -> None:
+    def test_bare_filename_and_relative_path_compare_equal(
+        self, tmp_path: Path
+    ) -> None:
         """Old artifact: source='compound_data.json'
         New artifact: source='raw/compounds/compound_data.json'
         Same file -> _comparable() should produce equal dicts."""
@@ -219,6 +221,7 @@ class TestComparableSourceNormalization:
         # our tmp_path instead of the real project root.
         def mock_normalize(source: str) -> str:
             from dde.core.context import ARTIFACT_DIRS
+
             if "/" not in source and "\\" not in source and "." in source:
                 for rel_dir in sorted(set(ARTIFACT_DIRS.values())):
                     candidate = tmp_path / rel_dir / source
@@ -249,6 +252,7 @@ class TestComparableSourceNormalization:
 
         def mock_normalize(source: str) -> str:
             from dde.core.context import ARTIFACT_DIRS
+
             if "/" not in source and "\\" not in source and "." in source:
                 for rel_dir in sorted(set(ARTIFACT_DIRS.values())):
                     candidate = tmp_path / rel_dir / source
@@ -456,6 +460,7 @@ class TestArtifactErrorCaughtInMayWrite:
         """_may_write() catches ArtifactError from _comparable() and
         raises Refusal rather than letting ArtifactError escape."""
         import json as _json
+
         from dde.core.errors import Refusal
 
         # Write a stored record with a pathological source that will

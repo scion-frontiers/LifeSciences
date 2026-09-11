@@ -23,6 +23,7 @@ Verifies that:
 - Real validation still requires submitted state
 - Output includes dry-run markers
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -42,10 +43,10 @@ from dde.commands.validate import (
 )
 from dde.core.controlstore import CONTROL_DIR
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _write(path: Path, content: str | bytes) -> str:
     """Write a file and return its sha256."""

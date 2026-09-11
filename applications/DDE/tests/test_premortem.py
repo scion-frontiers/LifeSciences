@@ -50,6 +50,11 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 
+from dde.core.controlstore import (
+    CONTROL_DIR,
+    ensure_control_dirs,
+    write_record,
+)
 from dde.core.errors import Refusal, SchemaError
 from dde.core.evidence import validate_decision
 from dde.core.premortem import (
@@ -64,11 +69,6 @@ from dde.core.premortem import (
     validate_failure_hypothesis,
     validate_objection_resolution,
     validate_premortem,
-)
-from dde.core.controlstore import (
-    CONTROL_DIR,
-    ensure_control_dirs,
-    write_record,
 )
 
 # ---------------------------------------------------------------------------
@@ -128,6 +128,7 @@ def _write_concept_to_disk(
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 def _substantive_hypothesis(**overrides: Any) -> dict[str, Any]:
     """A failure hypothesis WITH a discriminating check."""
@@ -249,8 +250,7 @@ def test_speculative_with_empty_check():
     assert is_speculative(hyp), "empty whitespace check should be speculative"
 
 
-_check("empty discriminating_check => speculative",
-       test_speculative_with_empty_check)
+_check("empty discriminating_check => speculative", test_speculative_with_empty_check)
 
 
 def test_hypothesis_missing_fields():
@@ -259,8 +259,7 @@ def test_hypothesis_missing_fields():
     assert any("missing required fields" in e for e in errors)
 
 
-_check("hypothesis missing required fields => error",
-       test_hypothesis_missing_fields)
+_check("hypothesis missing required fields => error", test_hypothesis_missing_fields)
 
 
 def test_hypothesis_bad_id():
@@ -305,8 +304,7 @@ def test_premortem_missing_fields():
     assert any("missing required fields" in e for e in errors)
 
 
-_check("pre-mortem missing required fields => error",
-       test_premortem_missing_fields)
+_check("pre-mortem missing required fields => error", test_premortem_missing_fields)
 
 
 def test_premortem_bad_schema():
@@ -337,8 +335,10 @@ def test_premortem_duplicate_hypothesis_ids():
     assert any("duplicate" in e for e in errors)
 
 
-_check("pre-mortem duplicate hypothesis ids => error",
-       test_premortem_duplicate_hypothesis_ids)
+_check(
+    "pre-mortem duplicate hypothesis ids => error",
+    test_premortem_duplicate_hypothesis_ids,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -387,8 +387,7 @@ def test_rebutted_without_evidence():
     assert any("evidence_refs" in e for e in errors)
 
 
-_check("rebutted without evidence_refs => error",
-       test_rebutted_without_evidence)
+_check("rebutted without evidence_refs => error", test_rebutted_without_evidence)
 
 
 def test_valid_accepted_risk_resolution():
@@ -417,8 +416,7 @@ def test_accepted_risk_without_policy():
     assert any("policy_ref" in e for e in errors)
 
 
-_check("accepted_risk without policy_ref => error",
-       test_accepted_risk_without_policy)
+_check("accepted_risk without policy_ref => error", test_accepted_risk_without_policy)
 
 
 def test_valid_unresolved_resolution():
@@ -495,8 +493,9 @@ _check("encode accepted_risk with policy", test_encode_accepted_risk_with_policy
 
 
 def test_encode_unresolved_with_owner():
-    s = encode_resolution_condition("unresolved", "OBJ-004",
-                                    owner="computational-biologist")
+    s = encode_resolution_condition(
+        "unresolved", "OBJ-004", owner="computational-biologist"
+    )
     assert s == "objection_resolution:unresolved:OBJ-004:owner=computational-biologist"
 
 
@@ -544,8 +543,7 @@ def test_encode_invalid_type():
         pass
 
 
-_check("encode invalid resolution type => SchemaError",
-       test_encode_invalid_type)
+_check("encode invalid resolution type => SchemaError", test_encode_invalid_type)
 
 
 def test_extract_resolutions_from_decision():
@@ -564,8 +562,10 @@ def test_extract_resolutions_from_decision():
     assert resolutions[1]["resolution_type"] == "unresolved"
 
 
-_check("extract resolutions from decision conditions",
-       test_extract_resolutions_from_decision)
+_check(
+    "extract resolutions from decision conditions",
+    test_extract_resolutions_from_decision,
+)
 
 
 # ===========================================================================
@@ -595,11 +595,13 @@ def test_scenario_1_accepted_objection_changes_plan():
     """
     # 1. Pre-mortem with a substantive hypothesis
     pm = _valid_premortem()
-    pm["resolutions"] = [{
-        "objection_id": "OBJ-001",
-        "resolution_type": "accepted",
-        "rationale": "Docking validation needed before advancing",
-    }]
+    pm["resolutions"] = [
+        {
+            "objection_id": "OBJ-001",
+            "resolution_type": "accepted",
+            "rationale": "Docking validation needed before advancing",
+        }
+    ]
     errors = validate_premortem(pm)
     assert errors == [], f"pre-mortem validation: {errors}"
 
@@ -630,8 +632,10 @@ def test_scenario_1_accepted_objection_changes_plan():
     assert "OBJ-001" not in obj_ids, "accepted objection should be resolved"
 
 
-_check("Scenario 1: accepted objection changes plan",
-       test_scenario_1_accepted_objection_changes_plan)
+_check(
+    "Scenario 1: accepted objection changes plan",
+    test_scenario_1_accepted_objection_changes_plan,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -680,8 +684,10 @@ def test_scenario_2_speculative_does_not_block():
     assert dec_errors == [], f"decision validation: {dec_errors}"
 
 
-_check("Scenario 2: speculative objection does not block",
-       test_scenario_2_speculative_does_not_block)
+_check(
+    "Scenario 2: speculative objection does not block",
+    test_scenario_2_speculative_does_not_block,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -722,8 +728,9 @@ def test_scenario_3_budget_exhausted_unresolved_risk():
     decision = _valid_decision(
         conditions=[
             encode_resolution_condition("accepted", "OBJ-001"),
-            encode_resolution_condition("unresolved", "OBJ-003",
-                                        owner="computational-chemist"),
+            encode_resolution_condition(
+                "unresolved", "OBJ-003", owner="computational-chemist"
+            ),
         ],
         rationale=(
             "Review budget (1) exhausted. OBJ-001 accepted (plan change). "
@@ -753,8 +760,10 @@ def test_scenario_3_budget_exhausted_unresolved_risk():
     assert missing == [], f"OBJ-003 should be tracked in liabilities: {missing}"
 
 
-_check("Scenario 3: budget-exhausted with unresolved risk",
-       test_scenario_3_budget_exhausted_unresolved_risk)
+_check(
+    "Scenario 3: budget-exhausted with unresolved risk",
+    test_scenario_3_budget_exhausted_unresolved_risk,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -796,14 +805,12 @@ def test_scenario_4_dissent_survives_gate_document():
 
     # OBJ-003 MUST appear
     assert "OBJ-003" in section, (
-        f"OBJ-003 must appear in gate document dissent section. "
-        f"Got:\n{section}"
+        f"OBJ-003 must appear in gate document dissent section. Got:\n{section}"
     )
 
     # OBJ-002 (speculative) should NOT appear in unresolved section
     assert "OBJ-002" not in section, (
-        f"OBJ-002 (speculative) should not appear in dissent section. "
-        f"Got:\n{section}"
+        f"OBJ-002 (speculative) should not appear in dissent section. Got:\n{section}"
     )
 
     # The section should have the heading
@@ -811,11 +818,15 @@ def test_scenario_4_dissent_survives_gate_document():
     assert "Unresolved Objections" in section
 
     # The section should include the discriminating check
-    assert "discriminating check" in section.lower() or "Discriminating check" in section
+    assert (
+        "discriminating check" in section.lower() or "Discriminating check" in section
+    )
 
 
-_check("Scenario 4: dissent survives gate-document generation",
-       test_scenario_4_dissent_survives_gate_document)
+_check(
+    "Scenario 4: dissent survives gate-document generation",
+    test_scenario_4_dissent_survives_gate_document,
+)
 
 
 def test_scenario_4b_accepted_risk_appears_in_gate_document():
@@ -835,8 +846,10 @@ def test_scenario_4b_accepted_risk_appears_in_gate_document():
     assert "GP-001" in section
 
 
-_check("Scenario 4b: accepted risk appears in gate document",
-       test_scenario_4b_accepted_risk_appears_in_gate_document)
+_check(
+    "Scenario 4b: accepted risk appears in gate document",
+    test_scenario_4b_accepted_risk_appears_in_gate_document,
+)
 
 
 def test_scenario_4c_empty_dissent_produces_empty_section():
@@ -845,8 +858,10 @@ def test_scenario_4c_empty_dissent_produces_empty_section():
     assert section == ""
 
 
-_check("Scenario 4c: empty dissent => empty section",
-       test_scenario_4c_empty_dissent_produces_empty_section)
+_check(
+    "Scenario 4c: empty dissent => empty section",
+    test_scenario_4c_empty_dissent_produces_empty_section,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -898,8 +913,10 @@ def test_scenario_5_accepted_objection_cannot_bypass_refusal():
             assert "human approval" in exc.message.lower(), exc.message
 
 
-_check("Scenario 5: pre-mortem accepted objection => terminate => Refusal(9)",
-       test_scenario_5_accepted_objection_cannot_bypass_refusal)
+_check(
+    "Scenario 5: pre-mortem accepted objection => terminate => Refusal(9)",
+    test_scenario_5_accepted_objection_cannot_bypass_refusal,
+)
 
 
 def test_scenario_5b_terminate_with_approval_succeeds():
@@ -913,9 +930,7 @@ def test_scenario_5b_terminate_with_approval_succeeds():
         decision = _valid_decision(
             action="terminate",
             affected_entity={"entity_type": "concept", "entity_ref": "IC-001"},
-            rationale=(
-                "Pre-mortem OBJ-001 accepted. Terminating with approval."
-            ),
+            rationale=("Pre-mortem OBJ-001 accepted. Terminating with approval."),
             conditions=[
                 encode_resolution_condition("accepted", "OBJ-001"),
             ],
@@ -931,8 +946,10 @@ def test_scenario_5b_terminate_with_approval_succeeds():
         assert path.is_file(), "should succeed with human approval"
 
 
-_check("Scenario 5b: pre-mortem + terminate + approval => success",
-       test_scenario_5b_terminate_with_approval_succeeds)
+_check(
+    "Scenario 5b: pre-mortem + terminate + approval => success",
+    test_scenario_5b_terminate_with_approval_succeeds,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -945,8 +962,7 @@ def test_dissent_tracked_in_liabilities():
     """Unresolved objections with liability-tracker entries pass."""
     unresolved = [
         _substantive_hypothesis(id="OBJ-001"),
-        _substantive_hypothesis(id="OBJ-003",
-                                description="Selectivity concern"),
+        _substantive_hypothesis(id="OBJ-003", description="Selectivity concern"),
     ]
     liabilities = [
         {"name": "Binding pocket concern", "source": "pre-mortem OBJ-001"},
@@ -956,16 +972,14 @@ def test_dissent_tracked_in_liabilities():
     assert errors == [], f"unexpected errors: {errors}"
 
 
-_check("dissent tracked in liabilities => pass",
-       test_dissent_tracked_in_liabilities)
+_check("dissent tracked in liabilities => pass", test_dissent_tracked_in_liabilities)
 
 
 def test_dissent_missing_from_liabilities():
     """Unresolved objections WITHOUT liability-tracker entries fail."""
     unresolved = [
         _substantive_hypothesis(id="OBJ-001"),
-        _substantive_hypothesis(id="OBJ-003",
-                                description="Selectivity concern"),
+        _substantive_hypothesis(id="OBJ-003", description="Selectivity concern"),
     ]
     liabilities = [
         {"name": "Binding pocket concern", "source": "pre-mortem OBJ-001"},
@@ -976,8 +990,9 @@ def test_dissent_missing_from_liabilities():
     assert "OBJ-003" in errors[0]
 
 
-_check("dissent missing from liabilities => error",
-       test_dissent_missing_from_liabilities)
+_check(
+    "dissent missing from liabilities => error", test_dissent_missing_from_liabilities
+)
 
 
 def test_dissent_empty_liabilities():
@@ -988,8 +1003,7 @@ def test_dissent_empty_liabilities():
     assert "OBJ-001" in errors[0]
 
 
-_check("unresolved with empty liabilities => error",
-       test_dissent_empty_liabilities)
+_check("unresolved with empty liabilities => error", test_dissent_empty_liabilities)
 
 
 def test_no_unresolved_no_errors():
@@ -1041,8 +1055,10 @@ def test_decision_with_resolution_conditions_validates():
     assert errors == [], f"unexpected errors: {errors}"
 
 
-_check("decision with resolution conditions validates in evidence.py",
-       test_decision_with_resolution_conditions_validates)
+_check(
+    "decision with resolution conditions validates in evidence.py",
+    test_decision_with_resolution_conditions_validates,
+)
 
 
 # ===========================================================================

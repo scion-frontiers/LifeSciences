@@ -39,7 +39,6 @@ if str(_TOOLS_ROOT) not in sys.path:
 
 from dde.core.context import ARTIFACT_DIRS, normalize_artifact_class
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -82,14 +81,18 @@ class TestArtifactDirsCompleteness:
     def discovered(self) -> list[tuple[str, str]]:
         return _discover_artifact_classes()
 
-    def test_at_least_one_class_discovered(self, discovered: list[tuple[str, str]]) -> None:
+    def test_at_least_one_class_discovered(
+        self, discovered: list[tuple[str, str]]
+    ) -> None:
         """Sanity check: the scanner must find at least one declaration."""
         assert discovered, (
             "No ARTIFACT_CLASS declarations found in dde/commands/ — "
             "the scanner is broken, not the registry"
         )
 
-    def test_all_artifact_classes_registered(self, discovered: list[tuple[str, str]]) -> None:
+    def test_all_artifact_classes_registered(
+        self, discovered: list[tuple[str, str]]
+    ) -> None:
         """Every ARTIFACT_CLASS value must resolve via ARTIFACT_DIRS.
 
         This is the systemic guard for issues #83, #85, #131.  A failure

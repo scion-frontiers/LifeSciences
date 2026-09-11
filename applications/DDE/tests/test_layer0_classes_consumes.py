@@ -22,6 +22,7 @@ Verifies that:
 - layer_0_classes_optional passes when present
 - Cross-WO citations are recorded
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -38,7 +39,6 @@ from dde.commands.validate import (
     _check_deliverables_exist,
 )
 from dde.core.controlstore import normalize_deliverables
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -74,7 +74,9 @@ def _setup_consumed_project(
         "work_order_id": upstream_wo,
         "outputs": [{"sha256": sha, "path": artifact_name}],
     }
-    _write(art_dir / f"{artifact_name.rsplit('.', 1)[0]}.meta.json", json.dumps(sidecar))
+    _write(
+        art_dir / f"{artifact_name.rsplit('.', 1)[0]}.meta.json", json.dumps(sidecar)
+    )
     return sha
 
 
@@ -89,13 +91,15 @@ def test_consumed_class_satisfies_layer0_classes() -> None:
         root = Path(tmp)
         _setup_consumed_project(root, upstream_wo="WO-001")
 
-        deliverables = normalize_deliverables({
-            "layer_0_classes": ["dde.structures"],
-            "consumes": [
-                {"artifact_class": "dde.structures", "from_work_order": "WO-001"},
-            ],
-            "layer_1": [],
-        })
+        deliverables = normalize_deliverables(
+            {
+                "layer_0_classes": ["dde.structures"],
+                "consumes": [
+                    {"artifact_class": "dde.structures", "from_work_order": "WO-001"},
+                ],
+                "layer_1": [],
+            }
+        )
 
         result = _check_deliverables_exist(root, deliverables, wo_id="WO-002")
         assert result["result"] == "pass", f"expected pass, got {result}"
@@ -120,19 +124,23 @@ def test_non_consumed_missing_class_fails() -> None:
         # Create structures from WO-001 (consumed).
         _setup_consumed_project(root, upstream_wo="WO-001")
 
-        deliverables = normalize_deliverables({
-            "layer_0_classes": ["dde.structures", "dde.compounds"],
-            "consumes": [
-                {"artifact_class": "dde.structures", "from_work_order": "WO-001"},
-            ],
-            "layer_1": [],
-        })
+        deliverables = normalize_deliverables(
+            {
+                "layer_0_classes": ["dde.structures", "dde.compounds"],
+                "consumes": [
+                    {"artifact_class": "dde.structures", "from_work_order": "WO-001"},
+                ],
+                "layer_1": [],
+            }
+        )
 
         result = _check_deliverables_exist(root, deliverables, wo_id="WO-002")
         assert result["result"] == "fail", f"expected fail, got {result}"
         # structures should pass (consumed), compounds should fail (no artifacts).
         missing = result["detail"].get("missing", [])
-        assert any("compounds" in m for m in missing), f"compounds not in missing: {missing}"
+        assert any("compounds" in m for m in missing), (
+            f"compounds not in missing: {missing}"
+        )
         # consumed_satisfied should still be recorded even when overall is fail.
         consumed = result["detail"].get("consumed_satisfied", [])
         assert len(consumed) == 1
@@ -151,13 +159,15 @@ def test_consumed_artifacts_keep_original_wo_id() -> None:
         root = Path(tmp)
         _setup_consumed_project(root, upstream_wo="WO-001")
 
-        deliverables = normalize_deliverables({
-            "layer_0_classes": ["dde.structures"],
-            "consumes": [
-                {"artifact_class": "dde.structures", "from_work_order": "WO-001"},
-            ],
-            "layer_1": [],
-        })
+        deliverables = normalize_deliverables(
+            {
+                "layer_0_classes": ["dde.structures"],
+                "consumes": [
+                    {"artifact_class": "dde.structures", "from_work_order": "WO-001"},
+                ],
+                "layer_1": [],
+            }
+        )
 
         result = _check_deliverables_exist(root, deliverables, wo_id="WO-002")
         assert result["result"] == "pass", f"expected pass, got {result}"
@@ -185,15 +195,22 @@ def test_optional_class_absent_passes() -> None:
         art_dir = root / "raw" / "structures"
         art_dir.mkdir(parents=True)
         sha = _write(art_dir / "model.pdb", "ATOM mock")
-        _write(art_dir / "model.meta.json", json.dumps({
-            "outputs": [{"sha256": sha, "path": "model.pdb"}],
-        }))
+        _write(
+            art_dir / "model.meta.json",
+            json.dumps(
+                {
+                    "outputs": [{"sha256": sha, "path": "model.pdb"}],
+                }
+            ),
+        )
 
-        deliverables = normalize_deliverables({
-            "layer_0_classes": ["dde.structures"],
-            "layer_0_classes_optional": ["dde.genomics"],
-            "layer_1": [],
-        })
+        deliverables = normalize_deliverables(
+            {
+                "layer_0_classes": ["dde.structures"],
+                "layer_0_classes_optional": ["dde.genomics"],
+                "layer_1": [],
+            }
+        )
 
         result = _check_deliverables_exist(root, deliverables)
         assert result["result"] == "pass", f"expected pass, got {result}"
@@ -219,22 +236,34 @@ def test_optional_class_present_passes() -> None:
         art_dir = root / "raw" / "structures"
         art_dir.mkdir(parents=True)
         sha = _write(art_dir / "model.pdb", "ATOM mock")
-        _write(art_dir / "model.meta.json", json.dumps({
-            "outputs": [{"sha256": sha, "path": "model.pdb"}],
-        }))
+        _write(
+            art_dir / "model.meta.json",
+            json.dumps(
+                {
+                    "outputs": [{"sha256": sha, "path": "model.pdb"}],
+                }
+            ),
+        )
         # Create genomics (optional, present).
         gen_dir = root / "raw" / "genomics"
         gen_dir.mkdir(parents=True)
         gen_sha = _write(gen_dir / "genes.json", '{"gene": "BRCA1"}')
-        _write(gen_dir / "genes.meta.json", json.dumps({
-            "outputs": [{"sha256": gen_sha, "path": "genes.json"}],
-        }))
+        _write(
+            gen_dir / "genes.meta.json",
+            json.dumps(
+                {
+                    "outputs": [{"sha256": gen_sha, "path": "genes.json"}],
+                }
+            ),
+        )
 
-        deliverables = normalize_deliverables({
-            "layer_0_classes": ["dde.structures"],
-            "layer_0_classes_optional": ["dde.genomics"],
-            "layer_1": [],
-        })
+        deliverables = normalize_deliverables(
+            {
+                "layer_0_classes": ["dde.structures"],
+                "layer_0_classes_optional": ["dde.genomics"],
+                "layer_1": [],
+            }
+        )
 
         result = _check_deliverables_exist(root, deliverables)
         assert result["result"] == "pass", f"expected pass, got {result}"
@@ -257,19 +286,23 @@ def test_cross_wo_citation_recorded() -> None:
         root = Path(tmp)
         _setup_consumed_project(root, upstream_wo="WO-001")
 
-        deliverables = normalize_deliverables({
-            "layer_0_classes": ["dde.structures"],
-            "consumes": [
-                {"artifact_class": "dde.structures", "from_work_order": "WO-001"},
-            ],
-            "layer_1": [],
-        })
+        deliverables = normalize_deliverables(
+            {
+                "layer_0_classes": ["dde.structures"],
+                "consumes": [
+                    {"artifact_class": "dde.structures", "from_work_order": "WO-001"},
+                ],
+                "layer_1": [],
+            }
+        )
 
         result = _check_deliverables_exist(root, deliverables, wo_id="WO-002")
         assert result["result"] == "pass", f"expected pass, got {result}"
         # Verify cross-WO citations are recorded.
         citations = result["detail"].get("cross_wo_citations", [])
-        assert len(citations) >= 1, f"expected cross_wo_citations, got {result['detail']}"
+        assert len(citations) >= 1, (
+            f"expected cross_wo_citations, got {result['detail']}"
+        )
         citation = citations[0]
         assert citation["class"] == "dde.structures"
         assert "WO-001" in citation["from_work_orders"]

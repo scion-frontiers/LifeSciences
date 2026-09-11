@@ -27,7 +27,6 @@ Covers:
 
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -40,10 +39,10 @@ if str(TOOLS_DIR) not in sys.path:
 from dde.commands.trials import _analyze_trials
 from dde.core.provenance import RELAY_CODES
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_study(
     nct_id: str = "NCT00000001",
@@ -55,6 +54,7 @@ def _make_study(
     if phases is None:
         phases = ["PHASE2"]
     from dde.commands.trials import _phase_label
+
     return {
         "nct_id": nct_id,
         "title": f"Study {nct_id}",
@@ -97,11 +97,15 @@ def _run_analyze(
 
     def add_relay(code: str, message: str) -> None:
         from dde.core.provenance import relay
+
         if not any(r["code"] == code for r in relays):
             relays.append(relay(code, message))
 
     active, metrics, assessment = _analyze_trials(
-        query_term, studies, active_min_phase, add_relay,
+        query_term,
+        studies,
+        active_min_phase,
+        add_relay,
     )
     return active, metrics, assessment, relays
 
@@ -109,6 +113,7 @@ def _run_analyze(
 # ---------------------------------------------------------------------------
 # Tests: relay code registration
 # ---------------------------------------------------------------------------
+
 
 def test_text_match_relay_registered():
     """trials.text_match_not_mechanism must be in RELAY_CODES."""
@@ -118,6 +123,7 @@ def test_text_match_relay_registered():
 # ---------------------------------------------------------------------------
 # Tests: confidence triggers
 # ---------------------------------------------------------------------------
+
 
 def test_short_query_high_hits_triggers_low_confidence():
     """Short query (<=4 chars) with >200 studies triggers low confidence."""
@@ -196,7 +202,9 @@ def test_no_trigger_when_all_below_thresholds():
     """No trigger when query is long, hits are low, and Phase 3+ ratio is low."""
     # 50 studies, 1 Phase 3 => 2% < 5%, long query, low hit count
     studies = _make_studies(49, phases=["PHASE1"], status="COMPLETED")
-    studies.append(_make_study(nct_id="NCT_P3_ONLY", phases=["PHASE3"], status="COMPLETED"))
+    studies.append(
+        _make_study(nct_id="NCT_P3_ONLY", phases=["PHASE3"], status="COMPLETED")
+    )
 
     _, _, assessment, relays = _run_analyze("VERYLONGQUERY", studies)
 

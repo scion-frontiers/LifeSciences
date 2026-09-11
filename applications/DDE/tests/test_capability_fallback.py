@@ -35,7 +35,6 @@ import json
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any
 
 # Ensure the tools package is importable.
 TOOLS_DIR = Path(__file__).resolve().parent.parent / "tools"
@@ -43,7 +42,6 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 from dde.core.provenance import RELAY_CODES
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -81,10 +79,15 @@ def _adopt_hypothesis_set(project: Path, slug: str = "test-hyps") -> Path:
     result = runner.invoke(
         cli,
         [
-            "--project", str(project),
-            "hypothesis", "adopt", str(source_path),
-            "--origin", "charter",
-            "--attest", "Test attestation for unit tests",
+            "--project",
+            str(project),
+            "hypothesis",
+            "adopt",
+            str(source_path),
+            "--origin",
+            "charter",
+            "--attest",
+            "Test attestation for unit tests",
         ],
         catch_exceptions=False,
     )
@@ -120,8 +123,11 @@ def test_adopted_set_analyze_no_strategy_fallback_relay() -> None:
         result = runner.invoke(
             cli,
             [
-                "--project", str(project),
-                "hypothesis", "analyze", str(adopted),
+                "--project",
+                str(project),
+                "hypothesis",
+                "analyze",
+                str(adopted),
             ],
             catch_exceptions=False,
         )
@@ -134,9 +140,7 @@ def test_adopted_set_analyze_no_strategy_fallback_relay() -> None:
         assert analysis_path.is_file(), f"Analysis not found: {analysis_path}"
         analysis = json.loads(analysis_path.read_text(encoding="utf-8"))
 
-        relay_codes = [
-            r["code"] for r in analysis.get("mandatory_relays", [])
-        ]
+        relay_codes = [r["code"] for r in analysis.get("mandatory_relays", [])]
         assert "hypothesis.strategy_fallback" not in relay_codes, (
             f"hypothesis.strategy_fallback must NOT fire for adopted sets; "
             f"got codes: {relay_codes}"
@@ -168,8 +172,11 @@ def test_adopted_set_no_fallback_fields_in_assessment() -> None:
         result = runner.invoke(
             cli,
             [
-                "--project", str(project),
-                "hypothesis", "analyze", str(adopted),
+                "--project",
+                str(project),
+                "hypothesis",
+                "analyze",
+                str(adopted),
             ],
             catch_exceptions=False,
         )
@@ -217,6 +224,7 @@ def test_capability_snapshot_captures_state() -> None:
 
     # Must contain the provisioned binaries
     from dde.commands.doctor import _PROVISIONED_BINARIES
+
     for binary in _PROVISIONED_BINARIES:
         assert binary in snapshot, (
             f"snapshot should contain {binary!r}; keys: {list(snapshot.keys())}"
@@ -252,8 +260,11 @@ def test_capability_snapshot_in_analysis() -> None:
         result = runner.invoke(
             cli,
             [
-                "--project", str(project),
-                "hypothesis", "analyze", str(adopted),
+                "--project",
+                str(project),
+                "hypothesis",
+                "analyze",
+                str(adopted),
             ],
             catch_exceptions=False,
         )
@@ -266,16 +277,14 @@ def test_capability_snapshot_in_analysis() -> None:
         analysis = json.loads(analysis_path.read_text(encoding="utf-8"))
 
         assert "capability_state" in analysis, (
-            f"analysis should contain capability_state; "
-            f"keys: {list(analysis.keys())}"
+            f"analysis should contain capability_state; keys: {list(analysis.keys())}"
         )
         cap_state = analysis["capability_state"]
         assert isinstance(cap_state, dict), (
             f"capability_state should be a dict; got {type(cap_state).__name__}"
         )
         assert "hypex" in cap_state, (
-            f"capability_state should contain 'hypex'; "
-            f"keys: {list(cap_state.keys())}"
+            f"capability_state should contain 'hypex'; keys: {list(cap_state.keys())}"
         )
     print("  PASS: capability snapshot in analysis records")
 
@@ -298,10 +307,15 @@ def test_capability_snapshot_in_sidecar() -> None:
         result = runner.invoke(
             cli,
             [
-                "--project", str(project),
-                "hypothesis", "adopt", str(source_path),
-                "--origin", "sponsor",
-                "--attest", "Test attestation",
+                "--project",
+                str(project),
+                "hypothesis",
+                "adopt",
+                str(source_path),
+                "--origin",
+                "sponsor",
+                "--attest",
+                "Test attestation",
             ],
             catch_exceptions=False,
         )
@@ -315,8 +329,7 @@ def test_capability_snapshot_in_sidecar() -> None:
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
 
         assert "capability_state" in meta, (
-            f"sidecar should contain capability_state; "
-            f"keys: {list(meta.keys())}"
+            f"sidecar should contain capability_state; keys: {list(meta.keys())}"
         )
         cap_state = meta["capability_state"]
         assert isinstance(cap_state, dict)
@@ -348,10 +361,15 @@ def test_adopt_sidecar_no_fallback_fields() -> None:
         result = runner.invoke(
             cli,
             [
-                "--project", str(project),
-                "hypothesis", "adopt", str(source_path),
-                "--origin", "charter",
-                "--attest", "Test attestation",
+                "--project",
+                str(project),
+                "hypothesis",
+                "adopt",
+                str(source_path),
+                "--origin",
+                "charter",
+                "--attest",
+                "Test attestation",
             ],
             catch_exceptions=False,
         )
@@ -414,12 +432,11 @@ def test_doctor_json_includes_capability_snapshot() -> None:
         # doctor may exit 0 or 1 depending on environment; we only
         # care about the JSON structure.
         import re
+
         # Extract the JSON object from the output (doctor may print
         # to stderr as well).
-        match = re.search(r'\{.*\}', result.output, re.DOTALL)
-        assert match, (
-            f"Could not find JSON in doctor output:\n{result.output}"
-        )
+        match = re.search(r"\{.*\}", result.output, re.DOTALL)
+        assert match, f"Could not find JSON in doctor output:\n{result.output}"
         doc = json.loads(match.group())
 
         assert "capability_snapshot" in doc, (
@@ -467,12 +484,9 @@ def test_select_strategy_no_fallback_when_available() -> None:
 
     # charter is always available (no binary/package requirements)
     actual, fallback_info = select_strategy("charter")
-    assert actual == "charter", (
-        f"actual strategy should be 'charter'; got {actual!r}"
-    )
+    assert actual == "charter", f"actual strategy should be 'charter'; got {actual!r}"
     assert fallback_info is None, (
-        f"fallback_info should be None for available strategy; "
-        f"got {fallback_info!r}"
+        f"fallback_info should be None for available strategy; got {fallback_info!r}"
     )
 
     # sponsor is always available
@@ -507,17 +521,18 @@ def test_old_sidecar_without_capability_state_treated_as_unknown() -> None:
         meta_path = project / "raw" / "hypotheses" / "test-hyps.charter.meta.json"
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
         meta.pop("capability_state", None)
-        meta_path.write_text(
-            json.dumps(meta, indent=2) + "\n", encoding="utf-8"
-        )
+        meta_path.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
 
         # 3. Analyze the artifact
         runner = CliRunner()
         result = runner.invoke(
             cli,
             [
-                "--project", str(project),
-                "hypothesis", "analyze", str(adopted),
+                "--project",
+                str(project),
+                "hypothesis",
+                "analyze",
+                str(adopted),
             ],
             catch_exceptions=False,
         )
@@ -544,16 +559,37 @@ def test_old_sidecar_without_capability_state_treated_as_unknown() -> None:
 
 def main() -> None:
     tests = [
-        ("test_adopted_set_analyze_no_strategy_fallback_relay", test_adopted_set_analyze_no_strategy_fallback_relay),
-        ("test_adopted_set_no_fallback_fields_in_assessment", test_adopted_set_no_fallback_fields_in_assessment),
-        ("test_capability_snapshot_captures_state", test_capability_snapshot_captures_state),
+        (
+            "test_adopted_set_analyze_no_strategy_fallback_relay",
+            test_adopted_set_analyze_no_strategy_fallback_relay,
+        ),
+        (
+            "test_adopted_set_no_fallback_fields_in_assessment",
+            test_adopted_set_no_fallback_fields_in_assessment,
+        ),
+        (
+            "test_capability_snapshot_captures_state",
+            test_capability_snapshot_captures_state,
+        ),
         ("test_capability_snapshot_in_analysis", test_capability_snapshot_in_analysis),
         ("test_capability_snapshot_in_sidecar", test_capability_snapshot_in_sidecar),
-        ("test_adopt_sidecar_no_fallback_fields", test_adopt_sidecar_no_fallback_fields),
-        ("test_doctor_json_includes_capability_snapshot", test_doctor_json_includes_capability_snapshot),
+        (
+            "test_adopt_sidecar_no_fallback_fields",
+            test_adopt_sidecar_no_fallback_fields,
+        ),
+        (
+            "test_doctor_json_includes_capability_snapshot",
+            test_doctor_json_includes_capability_snapshot,
+        ),
         ("test_strategy_fallback_registered", test_strategy_fallback_registered),
-        ("test_select_strategy_no_fallback_when_available", test_select_strategy_no_fallback_when_available),
-        ("test_old_sidecar_without_capability_state_treated_as_unknown", test_old_sidecar_without_capability_state_treated_as_unknown),
+        (
+            "test_select_strategy_no_fallback_when_available",
+            test_select_strategy_no_fallback_when_available,
+        ),
+        (
+            "test_old_sidecar_without_capability_state_treated_as_unknown",
+            test_old_sidecar_without_capability_state_treated_as_unknown,
+        ),
     ]
 
     passed = 0
@@ -565,10 +601,11 @@ def main() -> None:
         except Exception as exc:
             print(f"  FAIL: {name} -- {exc}")
             import traceback
+
             traceback.print_exc()
             failed += 1
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Results: {passed} passed, {failed} failed, {passed + failed} total")
     if failed:
         sys.exit(1)

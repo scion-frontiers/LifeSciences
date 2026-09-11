@@ -32,8 +32,6 @@ Exit 0 = all tests passed, exit 1 = at least one failure.
 
 from __future__ import annotations
 
-import json
-import os
 import shutil
 import sys
 import tempfile
@@ -50,12 +48,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 
 from click.testing import CliRunner
-
 from dde.cli import cli
 from dde.commands.site import viewer_url_for
-from dde.core import controlstore
 from dde.core.controlstore import (
-    CONTROL_DIR,
     ensure_control_dirs,
     write_record,
 )
@@ -198,7 +193,11 @@ def _test(name: str):
             _results.append((name, "FAIL", str(exc)))
         except Exception as exc:
             _results.append(
-                (name, "ERROR", f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}")
+                (
+                    name,
+                    "ERROR",
+                    f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}",
+                )
             )
         return fn
 
@@ -475,8 +474,7 @@ def test_export_default_filename():
 
     expected_zip = project / f"{project.name}-site.zip"
     assert expected_zip.is_file(), (
-        f"default zip should be named {expected_zip.name}, "
-        f"output was: {result.output}"
+        f"default zip should be named {expected_zip.name}, output was: {result.output}"
     )
 
 
@@ -508,9 +506,9 @@ def test_export_includes_raw():
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Site self-contained tests")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     passed = sum(1 for _, s, _ in _results if s == "PASS")
     failed = sum(1 for _, s, _ in _results if s == "FAIL")
@@ -523,9 +521,11 @@ if __name__ == "__main__":
             for line in detail.splitlines():
                 print(f"      {line}")
 
-    print(f"\n{'='*60}")
-    print(f"Total: {len(_results)} | Passed: {passed} | Failed: {failed} | Errors: {errors}")
-    print(f"{'='*60}\n")
+    print(f"\n{'=' * 60}")
+    print(
+        f"Total: {len(_results)} | Passed: {passed} | Failed: {failed} | Errors: {errors}"
+    )
+    print(f"{'=' * 60}\n")
 
     # Cleanup
     shutil.rmtree(_TMPBASE, ignore_errors=True)
