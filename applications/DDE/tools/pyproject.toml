@@ -75,3 +75,11 @@ include = ["dde*"]
 
 [tool.setuptools.package-data]
 dde = ["site_templates/**/*.html"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "C4", "B", "UP", "RUF"]
+ignore = ["E501", "C901", "B006"]
