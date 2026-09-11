@@ -100,7 +100,7 @@ def _search_events(drug: str, max_results: int) -> tuple[bytes, dict[str, Any]]:
     try:
         payload = json.loads(raw.decode("utf-8"))
     except Exception as exc:
-        raise SchemaError("openFDA did not return valid JSON", detail=str(exc))
+        raise SchemaError("openFDA did not return valid JSON", detail=str(exc)) from exc
     return raw, payload
 
 
@@ -130,7 +130,7 @@ def _search_labels(drug: str, max_results: int) -> tuple[bytes, dict[str, Any]]:
     try:
         payload = json.loads(raw.decode("utf-8"))
     except Exception as exc:
-        raise SchemaError("openFDA did not return valid JSON", detail=str(exc))
+        raise SchemaError("openFDA did not return valid JSON", detail=str(exc)) from exc
     return raw, payload
 
 

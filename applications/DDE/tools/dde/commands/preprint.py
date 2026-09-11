@@ -86,7 +86,7 @@ def _parse_arxiv_entries(xml_bytes: bytes) -> tuple[list[dict[str, Any]], int]:
     try:
         root = ET.fromstring(xml_bytes)
     except ET.ParseError as exc:
-        raise SchemaError("arXiv API response is not valid XML", detail=str(exc))
+        raise SchemaError("arXiv API response is not valid XML", detail=str(exc)) from exc
 
     # Total results from opensearch namespace
     total_results = 0

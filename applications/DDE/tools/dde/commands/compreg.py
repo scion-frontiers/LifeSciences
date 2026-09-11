@@ -140,7 +140,7 @@ def _pubchem_by_cid(cid: str) -> tuple[str, bytes]:
     try:
         json.loads(body.decode("utf-8"))
     except Exception as exc:
-        raise SchemaError("PubChem did not return JSON", detail=str(exc))
+        raise SchemaError("PubChem did not return JSON", detail=str(exc)) from exc
     return url, body
 
 
@@ -169,7 +169,7 @@ def _pubchem_by_name(name: str) -> tuple[str, bytes]:
     try:
         json.loads(body.decode("utf-8"))
     except Exception as exc:
-        raise SchemaError("PubChem did not return JSON", detail=str(exc))
+        raise SchemaError("PubChem did not return JSON", detail=str(exc)) from exc
     return url, body
 
 
@@ -196,7 +196,7 @@ def _chembl_by_id(chembl_id: str) -> tuple[str, bytes]:
     try:
         json.loads(body.decode("utf-8"))
     except Exception as exc:
-        raise SchemaError("ChEMBL did not return JSON", detail=str(exc))
+        raise SchemaError("ChEMBL did not return JSON", detail=str(exc)) from exc
     return url, body
 
 
@@ -222,7 +222,7 @@ def _chembl_by_name(name: str) -> tuple[str, bytes]:
     try:
         json.loads(body.decode("utf-8"))
     except Exception as exc:
-        raise SchemaError("ChEMBL did not return JSON", detail=str(exc))
+        raise SchemaError("ChEMBL did not return JSON", detail=str(exc)) from exc
     return url, body
 
 

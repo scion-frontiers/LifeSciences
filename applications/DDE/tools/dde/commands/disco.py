@@ -111,7 +111,7 @@ def _fetch_samples(
         raise SchemaError(
             "DISCO metadata endpoint did not return valid JSON",
             detail=str(exc),
-        )
+        ) from exc
 
     raw = resp.content
 

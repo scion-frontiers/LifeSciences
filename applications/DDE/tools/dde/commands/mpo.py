@@ -343,11 +343,11 @@ def _parse_bounds(bounds_list: tuple[str, ...]) -> dict[str, tuple[float, float]
         try:
             low = float(parts[1])
             high = float(parts[2])
-        except ValueError:
+        except ValueError as e:
             raise UsageError(
                 f"--bounds values must be numeric: {spec!r}",
                 detail="LOW and HIGH must be valid floating-point numbers",
-            )
+            ) from e
         if low >= high:
             raise UsageError(
                 f"--bounds LOW must be less than HIGH: {spec!r}",

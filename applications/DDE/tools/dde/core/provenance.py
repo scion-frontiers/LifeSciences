@@ -1545,4 +1545,4 @@ def read_json(path: Path, what: str = "artifact") -> Any:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
-        raise ArtifactError(f"{what} is not valid JSON: {path}", detail=str(exc))
+        raise ArtifactError(f"{what} is not valid JSON: {path}", detail=str(exc)) from exc

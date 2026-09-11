@@ -135,7 +135,7 @@ def _fetch(url: str, qps: float, what: str) -> tuple[str, bytes]:
     try:
         json.loads(body.decode("utf-8"))
     except Exception as exc:
-        raise SchemaError(f"{what} did not return JSON", detail=str(exc))
+        raise SchemaError(f"{what} did not return JSON", detail=str(exc)) from exc
     return url, body
 
 
@@ -188,7 +188,7 @@ def _ctgov_by_id(nct: str) -> tuple[str, bytes]:
     try:
         json.loads(body.decode("utf-8"))
     except Exception as exc:
-        raise SchemaError("ClinicalTrials.gov did not return JSON", detail=str(exc))
+        raise SchemaError("ClinicalTrials.gov did not return JSON", detail=str(exc)) from exc
     return url, body
 
 

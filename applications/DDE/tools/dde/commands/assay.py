@@ -85,14 +85,14 @@ def _require_scipy():
         from scipy.optimize import curve_fit
 
         return curve_fit
-    except ImportError:
+    except ImportError as e:
         from ..core.errors import DependencyError
 
         raise DependencyError(
             "scipy is not installed",
             detail="dose-response curve fitting requires scipy.optimize.curve_fit",
             remedy="install scipy into the tools environment (pip install scipy)",
-        )
+        ) from e
 
 
 # ---------------------------------------------------------------------------
@@ -891,11 +891,11 @@ def _fetch_chembl(compound_id: str, target: str | None) -> list[dict[str, Any]]:
 
         try:
             data = resp.json()
-        except ValueError:
+        except ValueError as e:
             raise Refusal(
                 f"unexpected response from ChEMBL for {compound_id!r}",
                 remedy="check the ChEMBL ID (e.g. CHEMBL25) and try again",
-            )
+            ) from e
 
         if not isinstance(data, dict):
             raise Refusal(
@@ -964,11 +964,11 @@ def _fetch_pubchem(compound_id: str, target: str | None) -> list[dict[str, Any]]
 
     try:
         resp = raw_resp.json()
-    except ValueError:
+    except ValueError as e:
         raise Refusal(
             f"unexpected response from PubChem for CID {compound_id!r}",
             remedy="check the PubChem CID (e.g. 2244) and try again",
-        )
+        ) from e
 
     # PubChem returns an error object with a Fault key on some errors.
     if isinstance(resp, dict) and "Fault" in resp:

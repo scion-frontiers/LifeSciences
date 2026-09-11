@@ -107,7 +107,7 @@ def detect_structure_format(path: Path) -> Literal["pdb", "cif"]:
         raise ArtifactError(
             f"could not read structure file: {path}",
             detail=str(exc),
-        )
+        ) from exc
 
     content_format = _sniff_content(head)
     ext_format = _classify_extension(path)

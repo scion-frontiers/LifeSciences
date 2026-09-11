@@ -477,7 +477,7 @@ def read_record(
         raise ArtifactError(
             f"{record_type} record is not valid JSON: {identifier}",
             detail=str(exc),
-        )
+        ) from exc
 
 
 def _default_concept_loader(project_root: Path):
@@ -702,7 +702,7 @@ def read_publish_state(project_root: str | Path) -> dict[str, Any] | None:
         raise ArtifactError(
             "publish-state.json is not valid JSON",
             detail=str(exc),
-        )
+        ) from exc
 
 
 def write_publish_state(project_root: str | Path, data: dict[str, Any]) -> Path:

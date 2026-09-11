@@ -78,12 +78,12 @@ def _require_rdkit():
         from rdkit.Chem import BRICS
 
         return Chem, BRICS, rdkit
-    except ImportError:
+    except ImportError as e:
         raise DependencyError(
             "RDKit is not installed",
             detail="matched molecular pair analysis requires RDKit (Chem, BRICS)",
             remedy="install rdkit into the tools environment (pip install rdkit-pypi)",
-        )
+        ) from e
 
 
 # ---------------------------------------------------------------------------

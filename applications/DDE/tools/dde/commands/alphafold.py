@@ -189,7 +189,7 @@ def fetch(
                 f"UniProt accession {accession} has no AlphaFold DB entry",
                 remedy="check the accession, or use AF3 prediction for a sequence "
                 "with no AFDB record",
-            )
+            ) from exc
         raise
 
     if not isinstance(data, list) or not data:
@@ -1027,12 +1027,12 @@ def predict(
 
     try:
         from google.cloud import aiplatform
-    except ImportError:
+    except ImportError as e:
         raise DependencyError(
             "google-cloud-aiplatform is not installed; AF3 prediction is unavailable",
             remedy="install google-cloud-aiplatform into the tools environment, "
             "then re-run `dde doctor`",
-        )
+        ) from e
 
     payload = provenance.read_json(Path(input_file), "AF3 input")
     if isinstance(payload, dict) and "instances" in payload:
@@ -1106,7 +1106,7 @@ def predict(
                     raise EndpointUnavailable(
                         "transport failure calling the AF3 endpoint",
                         detail=f"{type(exc).__name__}: {exc}",
-                    )
+                    ) from exc
                 elapsed = round(time.time() - started)
                 click.echo(
                     f"waiting for AF3 endpoint (attempt {attempts}, "

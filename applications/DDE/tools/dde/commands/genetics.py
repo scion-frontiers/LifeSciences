@@ -157,7 +157,7 @@ def _query_gnomad(symbol: str) -> tuple[bytes, dict[str, Any]]:
         try:
             payload = json.loads(raw.decode("utf-8"))
         except Exception as exc:
-            raise SchemaError("gnomAD did not return JSON", detail=str(exc))
+            raise SchemaError("gnomAD did not return JSON", detail=str(exc)) from exc
 
         if not payload.get("errors"):
             return raw, payload
@@ -272,7 +272,7 @@ def fetch_cmd(
     try:
         raw, payload = _query_gnomad(query_symbol)
         gene, constraint = _extract(payload, query_symbol)
-    except Refusal:
+    except Refusal as e:
         canonical = gene_res.canonical_symbol or symbol
         provenance.relay(
             "genetics.no_data_found",
@@ -291,7 +291,7 @@ def fetch_cmd(
                 "This is a data gap, not evidence that the gene has "
                 "no constraint data."
             ),
-        )
+        ) from e
     resolved = gene.get("symbol") or query_symbol.upper()
 
     sidecar = provenance.Sidecar(

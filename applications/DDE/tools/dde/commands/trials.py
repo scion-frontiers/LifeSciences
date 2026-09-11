@@ -138,7 +138,7 @@ def _fetch_clinicaltrials(query: str, search_by: str) -> tuple[bytes, dict[str, 
         try:
             payload = json.loads(response.content.decode("utf-8"))
         except Exception as exc:
-            raise SchemaError("ClinicalTrials.gov did not return JSON", detail=str(exc))
+            raise SchemaError("ClinicalTrials.gov did not return JSON", detail=str(exc)) from exc
 
         studies = payload.get("studies", [])
         if not studies:

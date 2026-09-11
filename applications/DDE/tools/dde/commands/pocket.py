@@ -169,7 +169,7 @@ def _is_experimental(structure: Path) -> tuple[bool, str]:
     try:
         head = structure.read_text(encoding="utf-8", errors="replace")[:200_000]
     except OSError as exc:
-        raise ArtifactError(f"could not read {structure}", detail=str(exc))
+        raise ArtifactError(f"could not read {structure}", detail=str(exc)) from exc
     for line in head.splitlines():
         if line.startswith("EXPDTA"):
             return True, line[6:].strip() or "EXPDTA"
@@ -901,11 +901,11 @@ def _parse_near(spec: str) -> list[tuple[str, int]]:
             )
         try:
             residues.append((chain.strip() or "_", int(number)))
-        except ValueError:
+        except ValueError as e:
             raise UsageError(
                 f"{token!r} does not name a residue number",
                 detail="expected CHAIN:RESNUM, e.g. A:145",
-            )
+            ) from e
     if not residues:
         raise UsageError("--near was given no residues")
     return residues

@@ -482,7 +482,7 @@ def _fetch_bytes(url: str, what: str) -> bytes:
     try:
         json.loads(body.decode("utf-8"))
     except Exception as exc:
-        raise SchemaError(f"{what} is not valid JSON", detail=str(exc))
+        raise SchemaError(f"{what} is not valid JSON", detail=str(exc)) from exc
     return body
 
 
@@ -516,10 +516,10 @@ def _check_columns(row: dict[str, Any]) -> dict[str, float]:
         label = match.group(1)
         try:
             present[label] = float(value)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as e:
             raise SchemaError(
                 f"tissue column {label!r} carried a non-numeric nTPM: {value!r}"
-            )
+            ) from e
     missing = [t for t in TISSUES if t not in present]
     if missing:
         raise SchemaError(
@@ -562,10 +562,10 @@ def _check_sc_columns(row: dict[str, Any]) -> dict[str, float]:
             continue
         try:
             present[label] = float(value)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as e:
             raise SchemaError(
                 f"cell type column {label!r} carried a non-numeric nCPM: {value!r}"
-            )
+            ) from e
     missing = [ct for ct in CELL_TYPES if ct not in present]
     if missing:
         raise SchemaError(
@@ -684,7 +684,7 @@ def fetch_cmd(
     release, release_failure = _hpa_release()
     try:
         ensembl, symbol, how = _resolve_gene(query_gene)
-    except Refusal:
+    except Refusal as e:
         canonical = gene_res.canonical_symbol or gene
         provenance.relay(
             "expression.no_data_found",
@@ -701,7 +701,7 @@ def fetch_cmd(
                 "HPA may not index this gene. This is a data gap, not "
                 "evidence of non-expression."
             ),
-        )
+        ) from e
 
     sidecar = provenance.Sidecar(
         tool="expression",
@@ -1090,7 +1090,7 @@ def fetch_single_cell_cmd(
     release, release_failure = _hpa_release()
     try:
         ensembl, symbol, how = _resolve_gene(query_gene)
-    except Refusal:
+    except Refusal as e:
         canonical = gene_res.canonical_symbol or gene
         provenance.relay(
             "expression.no_data_found",
@@ -1108,7 +1108,7 @@ def fetch_single_cell_cmd(
                 "HPA may not index this gene. This is a data gap, not "
                 "evidence of non-expression."
             ),
-        )
+        ) from e
 
     sidecar = provenance.Sidecar(
         tool="expression",

@@ -144,7 +144,7 @@ def _fetch_network(
     try:
         rows = json.loads(raw.decode("utf-8"))
     except Exception as exc:
-        raise SchemaError("STRING did not return JSON", detail=str(exc))
+        raise SchemaError("STRING did not return JSON", detail=str(exc)) from exc
 
     if not isinstance(rows, list):
         raise SchemaError(

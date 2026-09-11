@@ -264,7 +264,7 @@ def _execute_search(
         raise SchemaError(
             "google-cloud-bigquery package is not available",
             detail=str(exc),
-        )
+        ) from exc
 
     terms = query.split()
     if not terms:
@@ -326,7 +326,7 @@ def _execute_search(
                 "(run `gcloud auth application-default login` or set "
                 "GOOGLE_APPLICATION_CREDENTIALS)"
             ),
-        )
+        ) from exc
 
     try:
         query_job = client.query(sql, job_config=job_config)
@@ -343,7 +343,7 @@ def _execute_search(
                     f"expected columns: {', '.join(EXPECTED_COLUMNS)}; "
                     f"error: {exc_str[:300]}"
                 ),
-            )
+            ) from exc
         if "not found" in exc_lower and (
             "table" in exc_lower or "dataset" in exc_lower
         ):
@@ -354,11 +354,11 @@ def _execute_search(
                     "check that the dataset exists; override with "
                     "--bq-dataset or $DDE_PUBMED_BQ_DATASET"
                 ),
-            )
+            ) from exc
         raise SchemaError(
             "BigQuery query failed",
             detail=exc_str[:500],
-        )
+        ) from exc
 
     articles = _rows_to_articles(result_rows)
 

@@ -84,12 +84,12 @@ def _require_rdkit():
         )
 
         return Chem, Descriptors, rdMolDescriptors, FilterCatalog, FilterCatalogParams
-    except ImportError:
+    except ImportError as e:
         raise DependencyError(
             "RDKit is not installed",
             detail="compound validation, descriptors and structural alerts require RDKit",
             remedy="install rdkit into the tools environment (pip install rdkit-pypi)",
-        )
+        ) from e
 
 
 def _require_rdkit_3d():
@@ -99,12 +99,12 @@ def _require_rdkit_3d():
         from rdkit.Chem import AllChem
 
         return Chem, AllChem
-    except ImportError:
+    except ImportError as e:
         raise DependencyError(
             "RDKit is not installed",
             detail="3D coordinate generation requires RDKit with AllChem",
             remedy="install rdkit into the tools environment (pip install rdkit-pypi)",
-        )
+        ) from e
 
 
 def _require_rdkit_sa_score():
@@ -121,14 +121,14 @@ def _require_rdkit_sa_score():
         import sascorer
 
         return sascorer
-    except (ImportError, AttributeError):
+    except (ImportError, AttributeError) as e:
         raise DependencyError(
             "RDKit SA_Score module is not available",
             detail="SA-score computation requires the SA_Score Contrib module "
             "bundled with RDKit (rdkit/Contrib/SA_Score/sascorer.py)",
             remedy="install rdkit into the tools environment (pip install rdkit-pypi); "
             "the SA_Score module is included in the Contrib directory",
-        )
+        ) from e
 
 
 # ---------------------------------------------------------------------------
@@ -600,7 +600,7 @@ def prepare_3d_cmd(
             if ff_result == -1:
                 raise RuntimeError("MMFF parameterization failed")
             converged = ff_result == 0
-        except RuntimeError:
+        except RuntimeError as e:
             if explicit_ff:
                 raise ArtifactError(
                     f"MMFF force field cannot parameterize {canonical!r}",
@@ -608,7 +608,7 @@ def prepare_3d_cmd(
                     "was explicitly requested",
                     remedy="try --force-field UFF, which covers a broader "
                     "range of atom types",
-                )
+                ) from e
             # Automatic fallback to UFF.
             selected_ff = "UFF"
             sidecar.warn(
@@ -619,14 +619,14 @@ def prepare_3d_cmd(
         try:
             ff_result = AllChem.UFFOptimizeMolecule(mol_h)
             converged = ff_result == 0
-        except (ValueError, RuntimeError):
+        except (ValueError, RuntimeError) as e:
             raise ArtifactError(
                 f"UFF force field cannot parameterize {canonical!r}",
                 detail="UFF optimization failed; the molecule may contain "
                 "atom types not covered by the Universal Force Field",
                 remedy="verify the SMILES encodes a valid organic molecule; "
                 "exotic metals or unusual valences may not be parameterizable",
-            )
+            ) from e
 
     # Write SDF with 3D coordinates.
     sdf_path = target_dir / f"{slug}.3d.sdf"

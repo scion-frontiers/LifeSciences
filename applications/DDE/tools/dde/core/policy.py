@@ -547,17 +547,17 @@ def load_program_config(project_root: Any) -> dict[str, Any]:
 
     try:
         import yaml
-    except ImportError:
+    except ImportError as e:
         raise SchemaError(
             "PyYAML is required to read program configuration",
             detail=f"{path} exists but yaml is not importable",
             remedy="install PyYAML into the tools environment",
-        )
+        ) from e
 
     try:
         data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     except Exception as exc:
-        raise SchemaError(f"could not parse {path}", detail=str(exc))
+        raise SchemaError(f"could not parse {path}", detail=str(exc)) from exc
 
     if not isinstance(data, dict):
         raise SchemaError(f"{path} must contain a YAML mapping")
