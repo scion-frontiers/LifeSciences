@@ -43,9 +43,9 @@ _module_patches = patch.dict(
 )
 _module_patches.start()
 
-import unittest
+import unittest  # noqa: E402
 
-from dde.core.provenance import RELAY_CODES
+from dde.core.provenance import RELAY_CODES  # noqa: E402
 
 
 def _make_gnomad_payload(

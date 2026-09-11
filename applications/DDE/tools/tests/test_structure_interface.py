@@ -281,7 +281,7 @@ class TestChainFilter(unittest.TestCase):
         all_chains = sorted(chain_atoms.keys())
 
         # When filtering to chain A, only A-B and A-C pairs
-        filtered_pairs = [(chain_filter, other) for other in all_chains if other != "A"]
+        filtered_pairs = [("A", other) for other in all_chains if other != "A"]
         self.assertEqual(len(filtered_pairs), 2)
         pair_set = {(a, b) for a, b in filtered_pairs}
         self.assertIn(("A", "B"), pair_set)

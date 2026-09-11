@@ -30,6 +30,7 @@ from __future__ import annotations
 import math
 import textwrap
 import unittest
+from typing import ClassVar
 
 from dde.commands.structure import (
     MAX_ASA_TIEN,
@@ -580,7 +581,7 @@ class TestSurfaceThresholdSet(unittest.TestCase):
 class TestMaxASATable(unittest.TestCase):
     """Tien et al. 2013 maxASA table is complete for standard amino acids."""
 
-    STANDARD_AA = [
+    STANDARD_AA: ClassVar[list[str]] = [
         "ALA",
         "ARG",
         "ASN",

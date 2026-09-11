@@ -35,13 +35,13 @@ TOOLS_DIR = Path(__file__).resolve().parent.parent
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
-from dde.commands.site import _check_all_accepted
-from dde.commands.workorder import (
+from dde.commands.site import _check_all_accepted  # noqa: E402
+from dde.commands.workorder import (  # noqa: E402
     _list_latest_work_orders,
     _try_accept_single,
 )
-from dde.core import controlstore
-from dde.core.errors import ArtifactError
+from dde.core import controlstore  # noqa: E402
+from dde.core.errors import ArtifactError  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers

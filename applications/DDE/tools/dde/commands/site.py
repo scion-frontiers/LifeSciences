@@ -811,7 +811,7 @@ _HEADING_TAG_RE = re.compile(r"<(h[1-6])(\s[^>]*)?>(.+?)</\1>", re.DOTALL)
 
 
 def _add_heading_ids(html: str) -> str:
-    """Add ``id`` attributes to ``<h1>``–``<h6>`` elements.
+    """Add ``id`` attributes to ``<h1>``-``<h6>`` elements.
 
     Generates stable, slugified IDs from heading text content.
     Duplicate heading text receives ``-1``, ``-2``, … suffixes to keep

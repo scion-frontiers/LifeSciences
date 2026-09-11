@@ -304,7 +304,7 @@ _declare(
         "elo_decisive_gap": UNRESOLVED,
         # No corpus has been measured.
         "max_suspect_citations": UNRESOLVED,
-        # 1–5 anchors are LLM-reviewer judgements; no basis for cutoff.
+        # 1-5 anchors are LLM-reviewer judgements; no basis for cutoff.
         "min_safety_score": UNRESOLVED,
     },
 )
@@ -714,11 +714,11 @@ _declare(
 # --- compound descriptors (drug-likeness) ---------------------------------
 # Lipinski Rule of Five (Lipinski et al., "Experimental and computational
 # approaches to estimate solubility and permeability in drug discovery and
-# development settings", Adv Drug Deliv Rev 2001;46:3–26): MW ≤ 500,
+# development settings", Adv Drug Deliv Rev 2001;46:3-26): MW <= 500,
 # LogP ≤ 5, HBD ≤ 5, HBA ≤ 10.
 #
 # Veber criteria (Veber et al., "Molecular properties that influence the
-# oral bioavailability of drug candidates", J Med Chem 2002;45:2615–23):
+# oral bioavailability of drug candidates", J Med Chem 2002;45:2615-23):
 # rotatable bonds ≤ 10, TPSA ≤ 140.
 #
 # One Lipinski violation is tolerated ("Rule of Five" admits one); two or
@@ -727,8 +727,8 @@ _declare(
     "compound-descriptors",
     "1.0",
     provenance=(
-        "Lipinski et al., Adv Drug Deliv Rev 2001;46:3–26 (MW, LogP, HBD, "
-        "HBA); Veber et al., J Med Chem 2002;45:2615–23 (rotatable bonds, "
+        "Lipinski et al., Adv Drug Deliv Rev 2001;46:3-26 (MW, LogP, HBD, "
+        "HBA); Veber et al., J Med Chem 2002;45:2615-23 (rotatable bonds, "
         "TPSA)"
     ),
     values={
@@ -744,7 +744,7 @@ _declare(
 # --- compound SA-score (synthetic accessibility) --------------------------
 # Ertl & Schuffenhauer, "Estimation of Synthetic Accessibility Score of
 # Drug-like Molecules based on Molecular Complexity and Fragment
-# Contributions", J Cheminformatics 2009;1:8.  The score runs 1–10
+# Contributions", J Cheminformatics 2009;1:8.  The score runs 1-10
 # (1 = easy, 10 = hard).  The <= 6 cutoff is a widely used community
 # convention in virtual screening literature for filtering synthetically
 # inaccessible compounds; it is not a single-paper citation.
@@ -774,8 +774,8 @@ _declare(
     "1.0",
     provenance=(
         "operational defaults for alert classification; PAINS weighting from "
-        "Baell & Holloway, J Med Chem 2010;53:2719–40; Brenk tolerance from "
-        "Brenk et al., ChemMedChem 2008;3:435–44"
+        "Baell & Holloway, J Med Chem 2010;53:2719-40; Brenk tolerance from "
+        "Brenk et al., ChemMedChem 2008;3:435-44"
     ),
     values={
         "max_pains_hits": 0,  # any PAINS hit is a concern

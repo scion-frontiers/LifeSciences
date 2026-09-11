@@ -471,7 +471,7 @@ def _fetch_gwas_catalog(symbol: str) -> tuple[bytes, dict[str, Any]]:
                 "disease_id": "",
                 "disease_name": disease_name,
                 # NB: score is p-value here (lower = more significant), unlike
-                # Open Targets where score is 0–1 (higher = stronger association).
+                # Open Targets where score is 0-1 (higher = stronger association).
                 # The analyze command branches on source to interpret correctly.
                 "score": p_value,
                 "rs_ids": rs_ids,
@@ -900,7 +900,7 @@ def search_disease_cmd(
     default=None,
     help=(
         "Override the minimum significance threshold. For Open Targets "
-        "this is a composite score (0–1, higher = stronger association) "
+        "this is a composite score (0-1, higher = stronger association) "
         "that blends genetic_association, literature, expression, and "
         "other data types — it is NOT a p-value. For GWAS Catalog it is "
         "a p-value (lower = more significant). Default: 0.1 for Open "

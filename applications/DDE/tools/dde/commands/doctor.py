@@ -691,7 +691,7 @@ def _check_credentials(report: Report) -> None:
         # check below).  Vertex backend authenticates via ADC, so the key
         # is not required when ADC resolves.
         try:
-            import google.auth  # noqa: lazy import
+            import google.auth  # lazy import
 
             google.auth.default()
             report.add(
@@ -748,7 +748,7 @@ def _check_credentials(report: Report) -> None:
         return
 
     try:
-        import google.auth  # noqa: lazy import
+        import google.auth  # lazy import
 
         credentials, project = google.auth.default()
         cred_type = type(credentials).__name__
@@ -1052,7 +1052,7 @@ def _check_known_faults(report: Report) -> None:
     adc_here = False
     if not key_here:
         try:
-            import google.auth  # noqa: lazy import
+            import google.auth  # lazy import
 
             google.auth.default()
             adc_here = True

@@ -74,7 +74,7 @@ NCT_RE = re.compile(r"(NCT\d{8})", re.IGNORECASE)
 # with a period, possibly followed by a journal-style suffix.  Very loose —
 # this is a fallback extractor, not a parser.
 TITLE_RE = re.compile(
-    r"^([A-Z][A-Za-z0-9 ,;:\-–—()/'\"]{18,}\.)\s*$",
+    r"^([A-Z][A-Za-z0-9 ,;:\-–—()/'\"]{18,}\.)\s*$",  # noqa: RUF001 — en-dash/em-dash intentional in char class
     re.MULTILINE,
 )
 

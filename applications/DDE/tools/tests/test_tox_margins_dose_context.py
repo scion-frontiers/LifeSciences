@@ -46,14 +46,14 @@ _module_patches = patch.dict(
 )
 _module_patches.start()
 
-import unittest
+import unittest  # noqa: E402
 
-from dde.commands.tox import (
+from dde.commands.tox import (  # noqa: E402
     VALID_DOSE_CONTEXTS,
     _compute_ti_values,
     _detect_same_study,
 )
-from dde.core.provenance import RELAY_CODES
+from dde.core.provenance import RELAY_CODES  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Fixture helpers

@@ -478,7 +478,7 @@ RELAY_CODES: dict[str, str] = {
     ),
     "pk.rule_of_exponents_uncorrected": (
         "State that the fitted allometric exponent falls outside the simple "
-        "allometry range (0.55–0.70) and that the Mahmood & Balian 1996 rule "
+        "allometry range (0.55-0.70) and that the Mahmood & Balian 1996 rule "
         "of exponents recommends a correction (MLP or brain weight) that has "
         "not been applied. The predicted human CL may be less reliable without "
         "this correction."
@@ -857,7 +857,7 @@ RELAY_CODES: dict[str, str] = {
     ),
     "hypex.pacing_uncoordinated": (
         "The run fanned out without verified shared pacing, so its "
-        "retrieval rate against upstream hosts was up to roster_size × "
+        "retrieval rate against upstream hosts was up to roster_size x "
         "the intended limit. Findings resting on this run's retrievals "
         "may be incomplete through throttling rather than through "
         "absence. State the roster size and the tier observed."

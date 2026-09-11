@@ -17,7 +17,7 @@
 Creates, updates, commits, revises, transitions, accepts, displays,
 and lists work-order records in the control-plane state store.  Work
 orders are the unit of work assignment in the orchestration design
-(orchestration-design-guidance.md §3–§5).
+(orchestration-design-guidance.md S3-S5).
 
 This is NOT a science tool: no ``Sidecar``, ``write_analysis``, HTTP
 client, or thresholds.  It is CRUD + state-machine operations over

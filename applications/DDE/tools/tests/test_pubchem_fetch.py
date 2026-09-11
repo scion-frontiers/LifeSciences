@@ -42,9 +42,9 @@ _module_patches = patch.dict(
 )
 _module_patches.start()
 
-import unittest
+import unittest  # noqa: E402
 
-from dde.commands.pubchem import (
+from dde.commands.pubchem import (  # noqa: E402
     _build_compound_artifact,
     _extract_smiles_from_full_record,
     _needs_fallback,

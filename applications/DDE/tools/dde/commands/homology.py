@@ -750,7 +750,7 @@ def _build_statement(
     if verdict == "no-hits":
         return (
             f"No homologous structures found for the query region "
-            f"(residues {residue_range[0]}–{residue_range[1]}) of {accession}."
+            f"(residues {residue_range[0]}-{residue_range[1]}) of {accession}."
         )
 
     identities = [h["sequence_identity"] for h in hit_assessments]
@@ -768,8 +768,8 @@ def _build_statement(
 
     parts = [
         f"{n} homologous structure{'s' if n != 1 else ''} found covering the "
-        f"region (residues {residue_range[0]}–{residue_range[1]}) of {accession}, "
-        f"with sequence identities {worst_id:.1%}–{best_id:.1%} ({zone}).",
+        f"region (residues {residue_range[0]}-{residue_range[1]}) of {accession}, "
+        f"with sequence identities {worst_id:.1%}-{best_id:.1%} ({zone}).",
     ]
 
     if direct_count == 0:

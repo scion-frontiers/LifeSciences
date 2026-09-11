@@ -28,6 +28,7 @@ from __future__ import annotations
 import ast
 import unittest
 from pathlib import Path
+from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
 # Patch optional dependencies before importing the module under test.
@@ -135,7 +136,7 @@ class TestCallSitesUseRegistry(unittest.TestCase):
 
     # Allowlist: qps=0 (disables pacing), qps=qps (local forwarding of
     # an already-validated value from a function parameter).
-    _ALLOWED_PATTERNS = {"qps_for_host", "0"}
+    _ALLOWED_PATTERNS: ClassVar[set[str]] = {"qps_for_host", "0"}
 
     def test_qps_kwargs_use_registry(self):
         if not _COMMANDS_DIR.is_dir():

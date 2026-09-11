@@ -244,7 +244,7 @@ def _predict_metabolic_stability(
 
     Gleeson's rules:
       - LogP > 4 AND aromatic ring count >= 3 → high metabolic liability
-      - LogP 1–3 → low metabolic liability
+      - LogP 1-3 → low metabolic liability
       - Intermediate → moderate
     """
     if logp > 4 and aromatic_rings >= 3:
@@ -263,7 +263,7 @@ def _predict_metabolic_stability(
         },
         "rules_applied": (
             "Gleeson 2008: LogP > 4 AND aromatic rings >= 3 → high; "
-            "LogP 1–3 → low; otherwise → moderate"
+            "LogP 1-3 → low; otherwise → moderate"
         ),
         "citation": (
             "Gleeson, 'Generation of a Set of Simple, Interpretable ADMET "

@@ -1086,7 +1086,7 @@ def analyze(
     # goes negative, rather than left to whoever writes it up to remember
     # on the day the answer is disappointing.
     if reported is not None and reported != "druggable":
-        relays = list(relays) + [
+        relays = [*relays,
             provenance.relay(
                 "fpocket.single_conformation",
                 # The calibration numbers ride in the message, not only
@@ -1100,7 +1100,7 @@ def analyze(
                 )
                 + "; the same CDK2 ATP site scores 0.17, 0.29 and 0.94 "
                 "in three crystals.",
-            )
+            ),
         ]
 
     # The positive verdict has the opposite exposure and needs its own
@@ -1113,7 +1113,7 @@ def analyze(
     # there is no affinity claim available to make, and a relay that
     # fired on every run would be quoted and ignored.
     if reported == "druggable":
-        relays = list(relays) + [
+        relays = [*relays,
             provenance.relay(
                 "fpocket.druggability_is_not_affinity",
                 # Kept under the stdout budget deliberately: the

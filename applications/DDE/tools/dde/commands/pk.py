@@ -929,7 +929,7 @@ def scale_cmd(
     """Allometric scaling from animal PK to predicted human PK.
 
     Takes one or more ``.pk-nca.json`` files (from ``pk nca``), one per
-    species.  Fits allometric scaling (Y = a × BW^b) to predict human PK
+    species.  Fits allometric scaling (Y = a x BW^b) to predict human PK
     parameters.
 
     With a single species, uses published average exponents (CL: 0.75,
@@ -1039,7 +1039,7 @@ def scale_cmd(
     roe_warning: str | None = None
 
     if n_species == 1:
-        # Single species: Y_human = Y_animal × (BW_human / BW_animal)^b
+        # Single species: Y_human = Y_animal x (BW_human / BW_animal)^b
         # using published average exponents (Boxenbaum 1982).
         sd = species_data[0]
         cl_exponent = DEFAULT_CL_EXPONENT
@@ -1065,7 +1065,7 @@ def scale_cmd(
             ),
         }
     else:
-        # Multi-species: fit log(Y) = log(a) + b×log(BW) via regression.
+        # Multi-species: fit log(Y) = log(a) + b*log(BW) via regression.
         log_bws = [math.log(sd["body_weight_kg"]) for sd in species_data]
         log_cls = [math.log(sd["clearance"]) for sd in species_data]
         log_vds = [math.log(sd["vd"]) for sd in species_data]
@@ -1079,7 +1079,7 @@ def scale_cmd(
         vd_coefficient = math.exp(vd_intercept)
 
         # Rule of exponents classification (Mahmood & Balian 1996) for CL.
-        # The prediction formula is always simple allometry (Y = a × BW^b);
+        # The prediction formula is always simple allometry (Y = a x BW^b);
         # MLP and brain weight corrections are NOT applied — only classified.
         scaling_method = "simple_allometry"
         roe_class: str | None = None
@@ -1100,7 +1100,7 @@ def scale_cmd(
                 "this correction."
             )
 
-        # Y_human = a × BW_human^b
+        # Y_human = a x BW_human^b
         predicted_cl = cl_coefficient * (human_bw**cl_exponent)
         predicted_vd = vd_coefficient * (human_bw**vd_exponent)
 
@@ -1118,7 +1118,7 @@ def scale_cmd(
         if roe_warning is not None:
             scaling_details["warning"] = roe_warning
 
-    # Derived half-life: t½ = 0.693 × Vd / CL
+    # Derived half-life: t1/2 = 0.693 x Vd / CL
     predicted_half_life = (
         0.693 * predicted_vd / predicted_cl if predicted_cl > 0 else None
     )

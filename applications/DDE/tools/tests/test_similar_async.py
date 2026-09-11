@@ -50,14 +50,14 @@ _module_patches = patch.dict(
 )
 _module_patches.start()
 
-from dde.commands.similar import (
+from dde.commands.similar import (  # noqa: E402
     _build_artifact,
     _classify_results,
     _poll_pubchem_listkey,
     _pubchem_similarity,
 )
-from dde.core import http
-from dde.core.errors import ArtifactError
+from dde.core import http  # noqa: E402
+from dde.core.errors import ArtifactError  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Fixtures
