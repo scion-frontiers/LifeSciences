@@ -39,7 +39,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-
 # Intentionally evaluated once at import time and shared across all
 # fixtures.  All synthetic records carry the same timestamp because they
 # represent a single evaluation snapshot, not a time-ordered sequence.
@@ -195,8 +194,7 @@ FIXTURE_NEGATIVE_POCKET = FixtureDefinition(
     work_order=_wo(
         wo_id="WO-002",
         decision_question=(
-            "Is the binding pocket of synthetic kinase Y druggable by "
-            "small molecules?"
+            "Is the binding pocket of synthetic kinase Y druggable by small molecules?"
         ),
         requested_role="structural-biologist",
         stage="target-nomination",
@@ -392,9 +390,7 @@ FIXTURE_ABSENT_ENTITY = FixtureDefinition(
     ),
     work_order=_wo(
         wo_id="WO-005",
-        decision_question=(
-            "What are the ADMET properties of the lead compound?"
-        ),
+        decision_question=("What are the ADMET properties of the lead compound?"),
         requested_role="admet-dmpk-scientist",
         stage="target-nomination",
         layer_0_classes=["compounds", "descriptors", "admet"],
@@ -439,8 +435,7 @@ FIXTURE_TOOL_FAILURE = FixtureDefinition(
     work_order=_wo(
         wo_id="WO-006",
         decision_question=(
-            "What is the expression profile of synthetic gene V "
-            "across GTEx tissues?"
+            "What is the expression profile of synthetic gene V across GTEx tissues?"
         ),
         requested_role="computational-biologist",
         stage="target-nomination",
