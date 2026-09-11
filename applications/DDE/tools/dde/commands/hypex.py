@@ -89,7 +89,7 @@ def _read_json_file(path: Path, what: str) -> Any:
         raise SchemaError(
             f"{what} is not valid JSON: {path.name}",
             detail=str(exc),
-        )
+        ) from exc
 
 
 def _walk_json_dir(directory: Path) -> list[tuple[Path, dict]]:
@@ -456,11 +456,11 @@ def _archive_run_dir(run_dir: Path, dest: Path) -> str:
 
     try:
         import zstandard as zstd
-    except ImportError:
+    except ImportError as e:
         raise ArtifactError(
             "zstandard is required for run directory archival",
             remedy="pip install zstandard",
-        )
+        ) from e
 
     def _safe_filter(tarinfo):
         if tarinfo.issym() or tarinfo.islnk():

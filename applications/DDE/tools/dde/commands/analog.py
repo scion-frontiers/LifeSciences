@@ -75,13 +75,13 @@ def _require_rdkit():
         from rdkit.Chem import AllChem, Descriptors, rdMolDescriptors
 
         return Chem, AllChem, Descriptors, rdMolDescriptors
-    except ImportError:
+    except ImportError as e:
         raise DependencyError(
             "RDKit is not installed",
             detail="analog evaluation requires RDKit for SMILES validation "
             "and 3D coordinate generation",
             remedy="install rdkit into the tools environment (pip install rdkit-pypi)",
-        )
+        ) from e
 
 
 # ---------------------------------------------------------------------------
@@ -340,7 +340,7 @@ def evaluate_cmd(
         raise ArtifactError(
             f"invalid JSON in {analogs_path.name}: {exc}",
             remedy="check the JSON syntax in the analogs file",
-        )
+        ) from exc
 
     if not isinstance(analogs_raw, list):
         from ..core.errors import UsageError

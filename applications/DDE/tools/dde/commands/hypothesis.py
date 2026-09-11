@@ -292,7 +292,7 @@ def adopt(
         raise ArtifactError(
             f"hypothesis set is not valid JSON: {source}",
             detail=str(exc),
-        )
+        ) from exc
     if not isinstance(doc, list):
         raise SchemaError(
             "hypothesis set must be a JSON array of hypothesis objects",

@@ -119,7 +119,7 @@ def _fetch_gene(
         raise SchemaError(
             "SpatialDB search endpoint did not return valid JSON",
             detail=str(exc),
-        )
+        ) from exc
 
     if not isinstance(raw_data, dict):
         raise SchemaError(

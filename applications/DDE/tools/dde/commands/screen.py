@@ -74,13 +74,13 @@ def _require_rdkit():
         from rdkit.Chem import AllChem, Descriptors, rdMolDescriptors
 
         return Chem, AllChem, Descriptors, rdMolDescriptors
-    except ImportError:
+    except ImportError as e:
         raise DependencyError(
             "RDKit is not installed",
             detail="virtual screening requires RDKit for SMILES validation, "
             "descriptor computation, and 3D coordinate generation",
             remedy="install rdkit into the tools environment (pip install rdkit-pypi)",
-        )
+        ) from e
 
 
 # ---------------------------------------------------------------------------

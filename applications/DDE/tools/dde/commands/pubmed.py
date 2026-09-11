@@ -84,7 +84,7 @@ def _parse_articles(xml_bytes: bytes) -> list[dict[str, Any]]:
     try:
         root = ET.fromstring(xml_bytes)
     except ET.ParseError as exc:
-        raise SchemaError("PubMed efetch response is not valid XML", detail=str(exc))
+        raise SchemaError("PubMed efetch response is not valid XML", detail=str(exc)) from exc
 
     for article_el in root.findall(".//PubmedArticle"):
         citation = article_el.find(".//MedlineCitation")
@@ -603,7 +603,7 @@ def _parse_fulltext_xml(xml_bytes: bytes) -> dict[str, Any]:
     try:
         root = ET.fromstring(xml_bytes)
     except ET.ParseError as exc:
-        raise SchemaError("PMC efetch response is not valid XML", detail=str(exc))
+        raise SchemaError("PMC efetch response is not valid XML", detail=str(exc)) from exc
 
     # The response may be a <pmc-articleset> wrapping one <article>,
     # or just an <article> at the root.

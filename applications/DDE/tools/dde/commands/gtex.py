@@ -229,7 +229,7 @@ def _fetch_expression_bytes(gencode_id: str) -> bytes:
         raise SchemaError(
             "GTEx expression response is not valid JSON",
             detail=str(exc),
-        )
+        ) from exc
     return body
 
 

@@ -130,7 +130,7 @@ def _load_yaml(path: Path) -> dict[str, Any]:
         raise SchemaError(
             f"invalid YAML in {path}",
             detail=str(exc),
-        )
+        ) from exc
     if not isinstance(data, dict):
         raise SchemaError(
             f"YAML input must be a mapping, got {type(data).__name__}",

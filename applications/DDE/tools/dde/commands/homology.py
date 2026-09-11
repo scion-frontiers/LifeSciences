@@ -113,10 +113,10 @@ def _parse_range(residue_range: str, canonical_length: int) -> tuple[int, int]:
         )
     try:
         start, end = int(parts[0]), int(parts[1])
-    except ValueError:
+    except ValueError as e:
         raise UsageError(
             f"range values must be integers, got {residue_range!r}",
-        )
+        ) from e
     if start > end:
         raise UsageError(
             f"range START ({start}) must be ≤ END ({end})",
@@ -179,7 +179,7 @@ def _blast_search(
         raise EndpointError(
             "RCSB Search API did not return valid JSON",
             detail=str(exc),
-        )
+        ) from exc
 
     return data.get("result_set") or []
 
@@ -270,7 +270,7 @@ def _fetch_structure_metadata(hits: list[dict[str, Any]], query_accession: str) 
         raise EndpointError(
             "RCSB GraphQL API did not return valid JSON",
             detail=str(exc),
-        )
+        ) from exc
 
     entries = (gql_data.get("data") or {}).get("entries") or []
     entry_map: dict[str, dict[str, Any]] = {}

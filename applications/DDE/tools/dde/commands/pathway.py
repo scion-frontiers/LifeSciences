@@ -133,7 +133,7 @@ def _search_reactome(gene: str) -> tuple[bytes, list[dict[str, Any]]]:
     try:
         payload = json.loads(raw.decode("utf-8"))
     except Exception as exc:
-        raise SchemaError("Reactome did not return JSON", detail=str(exc))
+        raise SchemaError("Reactome did not return JSON", detail=str(exc)) from exc
 
     # Reactome search returns results grouped by type; extract pathway entries.
     entries: list[dict[str, Any]] = []
@@ -186,7 +186,7 @@ def _search_go(gene: str) -> tuple[bytes, list[dict[str, Any]]]:
         try:
             payload = json.loads(response.content.decode("utf-8"))
         except Exception as exc:
-            raise SchemaError("QuickGO did not return JSON", detail=str(exc))
+            raise SchemaError("QuickGO did not return JSON", detail=str(exc)) from exc
 
         results = payload.get("results", [])
         all_annotations.extend(results)

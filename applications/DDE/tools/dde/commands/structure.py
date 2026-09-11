@@ -1834,7 +1834,7 @@ def _kabsch_superimpose(
             detail=str(exc),
             remedy="check that the coordinate sets are not degenerate "
             "(e.g. all atoms collinear)",
-        )
+        ) from exc
 
     # Ensure proper rotation (det = +1, not reflection)
     d = np.linalg.det(Vt.T @ U.T)

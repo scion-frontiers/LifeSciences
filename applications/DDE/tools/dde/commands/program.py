@@ -256,7 +256,7 @@ def _parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
         raise SchemaError(
             "markdown work order has invalid YAML frontmatter",
             detail=str(exc),
-        )
+        ) from exc
 
     if not isinstance(frontmatter, dict):
         raise SchemaError(
@@ -672,7 +672,7 @@ def resume_cmd(
     has_control_plane = True
     try:
         source_root = _resolve_source(source)
-    except ArtifactError:
+    except ArtifactError as e:
         # No control plane — check for a directory of markdown files.
         source_path = Path(source).resolve()
         if not source_path.is_dir():
@@ -681,7 +681,7 @@ def resume_cmd(
                 remedy="provide a path to a prior phase's project root, "
                 "its .dde/control/ directory, or a directory of "
                 "markdown work-order files",
-            )
+            ) from e
         if not list(source_path.glob("*.md")):
             raise ArtifactError(
                 f"source path contains neither a dde control plane "
@@ -689,7 +689,7 @@ def resume_cmd(
                 remedy="provide a path to a prior phase's project root, "
                 "its .dde/control/ directory, or a directory of "
                 "markdown work-order files",
-            )
+            ) from e
         source_root = source_path
         has_control_plane = False
 

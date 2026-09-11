@@ -98,7 +98,7 @@ def _fetch_askcos_retro(
         raise SchemaError(
             "ASKCOS submit endpoint did not return valid JSON",
             detail=str(exc),
-        )
+        ) from exc
 
     if not isinstance(task_id, str) or not task_id.strip():
         raise SchemaError(
@@ -131,7 +131,7 @@ def _fetch_askcos_retro(
             raise SchemaError(
                 "ASKCOS poll endpoint did not return valid JSON",
                 detail=str(exc),
-            )
+            ) from exc
 
         if poll_data.get("complete"):
             break

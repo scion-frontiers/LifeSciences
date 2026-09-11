@@ -86,12 +86,12 @@ def _require_rdkit():
         from rdkit import Chem
 
         return Chem
-    except ImportError:
+    except ImportError as e:
         raise DependencyError(
             "RDKit is not installed",
             detail="SMILES validation requires RDKit",
             remedy="install rdkit into the tools environment (pip install rdkit-pypi)",
-        )
+        ) from e
 
 
 def _validate_smiles(smiles: str) -> str:

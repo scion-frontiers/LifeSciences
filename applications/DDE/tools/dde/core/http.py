@@ -309,7 +309,7 @@ def request(
                     f"transport failure calling {_sanitize_url(url)}",
                     detail=last_detail,
                     remedy="check network access and endpoint health, then retry",
-                )
+                ) from exc
             time.sleep(backoff**attempt)
             continue
 
@@ -399,7 +399,7 @@ def get_json(url: str, **kwargs: Any) -> Any:
     except ValueError as exc:
         raise EndpointError(
             f"{_sanitize_url(url)} did not return valid JSON", detail=str(exc)
-        )
+        ) from exc
 
 
 def get_bytes(url: str, **kwargs: Any) -> bytes:

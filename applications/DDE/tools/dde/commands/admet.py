@@ -74,12 +74,12 @@ def _require_rdkit():
         from rdkit.Chem import Descriptors, rdMolDescriptors
 
         return Chem, Descriptors, rdMolDescriptors
-    except ImportError:
+    except ImportError as e:
         raise DependencyError(
             "RDKit is not installed",
             detail="ADMET prediction requires RDKit for molecular descriptor computation",
             remedy="install rdkit into the tools environment (pip install rdkit-pypi)",
-        )
+        ) from e
 
 
 # ---------------------------------------------------------------------------
@@ -1027,12 +1027,12 @@ def topical_cmd(
         try:
             logp_used = _compute_logp_from_smiles(smiles)
             logp_source = "RDKit MolLogP"
-        except DependencyError:
+        except DependencyError as e:
             raise Refusal(
                 "RDKit is not available and --logp was not provided",
                 detail="logP is required for the Potts-Guy equation",
                 remedy="install RDKit or provide --logp explicitly",
-            )
+            ) from e
 
     # --- Compute MW from SMILES ---
     mw = _compute_mw_from_smiles(smiles)

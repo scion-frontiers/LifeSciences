@@ -295,14 +295,14 @@ def _access_token() -> tuple[str, str]:
             text=True,
             timeout=60,
         )
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         raise CredentialError(
             "no Google credentials: neither ADC nor the gcloud CLI is available",
             remedy="run `gcloud auth application-default login`, or provide a "
             "service account via GOOGLE_APPLICATION_CREDENTIALS",
-        )
-    except subprocess.TimeoutExpired:
-        raise CredentialError("`gcloud auth print-access-token` timed out after 60s")
+        ) from e
+    except subprocess.TimeoutExpired as e:
+        raise CredentialError("`gcloud auth print-access-token` timed out after 60s") from e
 
     token = result.stdout.strip()
     if result.returncode != 0 or not token:
@@ -410,13 +410,13 @@ def _call(
 def _require_numpy():
     try:
         import numpy
-    except ImportError:
+    except ImportError as e:
         raise DependencyError(
             "numpy is not installed; AlphaGenome responses cannot be decoded",
             detail="the endpoint returns packed binary tensors, so there is no "
             "numpy-free path to a number",
             remedy="install numpy into the tools environment",
-        )
+        ) from e
     return numpy
 
 
@@ -434,11 +434,11 @@ def _decompress(chunk: dict[str, Any]) -> bytes:
         )
     try:
         import zstandard
-    except ImportError:
+    except ImportError as e:
         raise DependencyError(
             "zstandard is not installed; AlphaGenome tensor chunks cannot be read",
             remedy="install zstandard into the tools environment",
-        )
+        ) from e
     return zstandard.ZstdDecompressor().decompressobj().decompress(payload)
 
 
@@ -502,7 +502,7 @@ def _decode_response(raw: bytes) -> list[tuple[dict[str, Any], Any]]:
             raise SchemaError(
                 f"NDJSON line {index} is not valid JSON",
                 detail=f"{exc}; first 300 bytes: {line[:300]!r}",
-            )
+            ) from exc
 
     if "output" not in records[0]:
         raise SchemaError(
@@ -1231,13 +1231,13 @@ def ism(
     _require_api_key()
     try:
         import alphagenome  # noqa: F401
-    except ImportError:
+    except ImportError as e:
         raise DependencyError(
             "the `alphagenome` package is not installed; ISM is unavailable",
             detail="ISM has no Vertex endpoint equivalent — the endpoint rejects "
             "score_ism_variants as an invalid request_type",
             remedy="install alphagenome>=0.6.1 into the tools environment",
-        )
+        ) from e
     raise DependencyError(
         "ISM support is not implemented yet",
         detail="the pip backend is unexercised: no ALPHAGENOME_API_KEY has been "

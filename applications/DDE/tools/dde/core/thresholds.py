@@ -1261,16 +1261,16 @@ def _load_program_file(project_root: Path) -> dict[str, Any]:
         return {}
     try:
         import yaml
-    except ImportError:
+    except ImportError as e:
         raise ThresholdError(
             "PyYAML is required to read program threshold overrides",
             detail=f"{path} exists but yaml is not importable",
             remedy="install PyYAML into the tools environment",
-        )
+        ) from e
     try:
         data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     except Exception as exc:
-        raise ThresholdError(f"could not parse {path}", detail=str(exc))
+        raise ThresholdError(f"could not parse {path}", detail=str(exc)) from exc
     if not isinstance(data, dict):
         raise ThresholdError(
             f"{path} must contain a mapping of threshold-set name to values"
