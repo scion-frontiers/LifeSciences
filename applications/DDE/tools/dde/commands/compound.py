@@ -678,7 +678,7 @@ def sa_score_cmd(
     """Compute the synthetic accessibility score for a SMILES string.
 
     The SA-score (Ertl & Schuffenhauer 2009) rates how easy a molecule
-    is to synthesize on a 1–10 scale (1 = easy, 10 = hard).  Phase 1:
+    is to synthesize on a 1-10 scale (1 = easy, 10 = hard).  Phase 1:
     the score is recorded, not judged.
     """
     emit = Emitter(as_json=as_json, quiet=quiet)

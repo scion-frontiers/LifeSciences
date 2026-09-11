@@ -192,7 +192,7 @@ def _extract_recommendation(top_ideas_summary: str) -> str | None:
 
     Looks for a heading like "## Recommendation", "## Best Next Steps",
     or "## Recommendation and Best Next Steps" (case-insensitive, levels
-    1–3).  Returns everything from that heading to the next heading of the
+    1-3).  Returns everything from that heading to the next heading of the
     same or higher level, or end of string.
     """
     if not top_ideas_summary:

@@ -41,15 +41,15 @@ _module_patches = patch.dict(
 )
 _module_patches.start()
 
-from dde.commands import cbioportal as cbioportal_mod
-from dde.commands.cbioportal import (
+from dde.commands import cbioportal as cbioportal_mod  # noqa: E402
+from dde.commands.cbioportal import (  # noqa: E402
     ARTIFACT_CLASS,
     TOOL,
     _fetch_studies,
     _slugify,
 )
-from dde.core.provenance import RELAY_CODES
-from dde.core.thresholds import _DEFAULTS
+from dde.core.provenance import RELAY_CODES  # noqa: E402
+from dde.core.thresholds import _DEFAULTS  # noqa: E402
 
 # Sample cBioPortal study records for mocking
 _SAMPLE_STUDIES = [

@@ -413,7 +413,7 @@ def _check_deliverables_exist(
 
     # --- Authorized classes: presence is optional, absence is not a failure ---
     # authorized_classes are NOT provenance-checked by the mechanical validator.
-    # They do not appear in layer_0_classes, so checks 4–6 skip them.
+    # They do not appear in layer_0_classes, so checks 4-6 skip them.
 
     # --- Optional classes (layer_0_classes_optional, #132) ---
     # Classes listed here are checked but do not fail validation if absent.

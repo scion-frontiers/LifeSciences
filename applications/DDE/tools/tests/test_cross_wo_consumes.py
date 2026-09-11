@@ -32,12 +32,12 @@ TOOLS_DIR = Path(__file__).resolve().parent.parent
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
-from dde.commands.validate import (
+from dde.commands.validate import (  # noqa: E402
     _build_consumes_map,
     _check_deliverables_exist,
 )
-from dde.core.controlstore import normalize_deliverables
-from dde.core.provenance import Sidecar
+from dde.core.controlstore import normalize_deliverables  # noqa: E402
+from dde.core.provenance import Sidecar  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers

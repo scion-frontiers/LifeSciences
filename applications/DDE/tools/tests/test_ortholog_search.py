@@ -37,13 +37,13 @@ _module_patches = patch.dict(
 )
 _module_patches.start()
 
-from dde.commands.homology import (
+from dde.commands.homology import (  # noqa: E402
     _UNIPROT_RE,
     _format_fasta,
     _resolve_gene_to_accession,
     _search_orthologs,
 )
-from dde.core.errors import UsageError
+from dde.core.errors import UsageError  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Test fixtures

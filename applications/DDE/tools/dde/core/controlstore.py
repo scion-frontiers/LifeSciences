@@ -155,7 +155,7 @@ def normalize_deliverables(deliverables: dict[str, Any]) -> dict[str, Any]:
 
     For backward compatibility, ``layer_0_classes`` is always populated
     in the output from ``required_classes`` so that downstream checks
-    (4–6) that read ``layer_0_classes`` continue to work.
+    (4-6) that read ``layer_0_classes`` continue to work.
 
     ``required_classes`` entries may be plain strings or dicts with a
     ``not_applicable`` key.  Plain strings are flattened for

@@ -799,7 +799,7 @@ def _parse_pdbqt_atoms(text: str) -> list[dict[str, Any]]:
     """Parse ATOM/HETATM records from PDBQT text.
 
     Returns a list of dicts with chain, res_name, res_num, x, y, z.
-    PDBQT uses standard PDB column layout for coordinates (cols 30–54).
+    PDBQT uses standard PDB column layout for coordinates (cols 30-54).
     """
     atoms: list[dict[str, Any]] = []
     for line in text.splitlines():

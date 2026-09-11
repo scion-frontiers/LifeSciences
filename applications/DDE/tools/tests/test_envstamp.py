@@ -34,7 +34,7 @@ TOOLS_DIR = Path(__file__).resolve().parent.parent
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
-from dde.core.envstamp import PROVISIONING_INPUTS, source_commit
+from dde.core.envstamp import PROVISIONING_INPUTS, source_commit  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers

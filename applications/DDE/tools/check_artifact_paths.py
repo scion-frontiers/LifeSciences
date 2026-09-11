@@ -263,7 +263,7 @@ def main() -> int:
             "persist until a command writes each class. These are not "
             "outstanding work:"
         )
-    for rel, lineno, line, reason in notes:
+    for rel, lineno, _line, reason in notes:
         print(f"  note {rel}:{lineno}: {reason}")
     if problems:
         print(f"\n{len(problems)} problem(s) — these are defects:")

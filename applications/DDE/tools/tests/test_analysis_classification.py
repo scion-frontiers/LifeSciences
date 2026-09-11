@@ -34,13 +34,13 @@ TOOLS_DIR = Path(__file__).resolve().parent.parent
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
-from dde.commands.validate import (
+from dde.commands.validate import (  # noqa: E402
     _check_provenance_valid,
     _check_unrecognized_json,
     _is_analysis,
 )
-from dde.core.context import ARTIFACT_DIRS
-from dde.core.provenance import sha256_file
+from dde.core.context import ARTIFACT_DIRS  # noqa: E402
+from dde.core.provenance import sha256_file  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
