@@ -129,6 +129,25 @@ def _find_connections(kb: dict) -> dict:
     return {}
 
 
+def _find_report_references(report: dict) -> tuple[str | None, list[dict]]:
+    """Locate the references list inside the executive report by shape.
+
+    Shape criterion: a value that is a non-empty list of dicts where the
+    first item has a 'title' or 'source' key.  This is structurally
+    distinct from the report's markdown sections (dicts with a 'markdown'
+    key) and from scalar values.
+    """
+    for key, value in report.items():
+        if (
+            isinstance(value, list)
+            and value
+            and isinstance(value[0], dict)
+            and ("title" in value[0] or "source" in value[0])
+        ):
+            return key, value
+    return None, []
+
+
 def _md(obj: Any, *keys: str) -> str:
     cur = obj
     for key in keys:
@@ -194,11 +213,26 @@ def _normalise(doc: dict, source: Path) -> dict:
     report_key, report = _find_report(doc)
     kb = doc.get("knowledgeBase") if isinstance(doc.get("knowledgeBase"), dict) else {}
     connections = _find_connections(kb)
+    report_refs_key, report_refs_raw = _find_report_references(report)
 
     ideas = []
     for raw in raw_ideas:
         match = raw.get("matchResult") if isinstance(raw.get("matchResult"), dict) else {}
         claims = _claims(raw)
+        reviews_raw = raw.get("reviews", []) or []
+        review_refs: list[dict] = []
+        for ri, rev in enumerate(reviews_raw):
+            if not isinstance(rev, dict):
+                continue
+            for ref in rev.get("references", []) or []:
+                if isinstance(ref, dict):
+                    review_refs.append(
+                        {
+                            "title": ref.get("title", ""),
+                            "source": ref.get("source", ""),
+                            "review_index": ri,
+                        }
+                    )
         ideas.append(
             {
                 "id": raw.get("id"),
@@ -214,7 +248,8 @@ def _normalise(doc: dict, source: Path) -> dict:
                     "lost": match.get("numMatchesLost"),
                     "win_rate": match.get("winRate"),
                 },
-                "n_reviews": len(raw.get("reviews", []) or []),
+                "n_reviews": len(reviews_raw),
+                "review_references": review_refs,
                 "claims": [
                     {
                         "claim": c.get("claim"),
@@ -222,6 +257,11 @@ def _normalise(doc: dict, source: Path) -> dict:
                         "source_sentence": c.get("sourceSentence"),
                         "reasoning": c.get("reasoning"),
                         "n_references": len(c.get("references", []) or []),
+                        "references": [
+                            {"title": r.get("title", ""), "source": r.get("source", "")}
+                            for r in (c.get("references", []) or [])
+                            if isinstance(r, dict)
+                        ],
                     }
                     for c in claims
                     if isinstance(c, dict)
@@ -263,18 +303,37 @@ def _normalise(doc: dict, source: Path) -> dict:
         "knowledge_base": {
             "summary": _md(kb, "knowledgeSummary"),
             "n_references": len(kb.get("references", []) or []),
+            "references": [
+                {"title": r.get("title", ""), "source": r.get("source", "")}
+                for r in (kb.get("references", []) or [])
+                if isinstance(r, dict)
+            ],
             "n_learned_claims": len(kb.get("learnedClaims", []) or []),
             "connections_summary": _md(connections, "summary"),
             "n_connections": len(connections.get("connections", []) or []),
+            "connections": [
+                {
+                    "title": c.get("title", c.get("name", "")),
+                    "description": c.get("description", c.get("markdown", "")),
+                }
+                for c in (connections.get("connections", []) or [])
+                if isinstance(c, dict)
+            ],
         },
         "report": {
             "overview": _md(report, "overview"),
             "top_ideas_summary": _md(report, "topRankingIdeasSummary"),
             "reviews_overview": _md(report, "reviewsOverview"),
+            "references": [
+                {"title": r.get("title", ""), "source": r.get("source", "")}
+                for r in report_refs_raw
+                if isinstance(r, dict)
+            ],
         },
         "_resolved_keys": {
             "ideas": ideas_key,
             "report": report_key,
+            "report_references": report_refs_key,
         },
     }
 
@@ -876,3 +935,599 @@ def show(
     emit.line(f"Wrote {section} section ({sum(len(prose.get(k) or '') for k in wanted)} chars).")
     emit.path(project.relative(dest), "prose")
     emit.flush()
+
+
+# ---------------------------------------------------------------------------
+# Shared loader for read-only subcommands operating on normalised artifacts
+# ---------------------------------------------------------------------------
+
+
+def _load_normalised(state: AppState, artifact: str) -> tuple[Path, dict]:
+    """Load and validate a normalised tournament artifact.
+
+    Returns the resolved path and the parsed record.  Raises
+    ``ArtifactError`` if the file is missing and ``SchemaError`` if the
+    schema tag is wrong.
+    """
+    path = resolve_artifact(state, artifact, "normalised tournament")
+    record = provenance.read_json(path, "normalised tournament")
+    if record.get("schema") != "dde.coscientist.v1":
+        raise SchemaError(
+            f"{path.name} is not a normalised tournament artifact",
+            detail=f"expected schema dde.coscientist.v1, got {record.get('schema')!r}",
+            remedy="run `dde coscientist ingest` on the raw export first",
+        )
+    return path, record
+
+
+# ---------------------------------------------------------------------------
+# references
+# ---------------------------------------------------------------------------
+
+
+@coscientist.command()
+@click.argument("artifact")
+@click.option(
+    "--source",
+    type=click.Choice(["kb", "report", "reviews", "claims"]),
+    default=None,
+    help="Reference pool to show (default: all).",
+)
+@click.option("--rank", type=int, default=None, help="Filter to idea at this rank.")
+@click.option("--gene", default=None, help="Filter to idea with this gene symbol.")
+@click.option("--search", default=None, help="Case-insensitive search in title/source.")
+@out_option
+@output_options
+@pass_state
+def references(
+    state: AppState,
+    artifact: str,
+    source: str | None,
+    rank: int | None,
+    gene: str | None,
+    search: str | None,
+    out: str | None,
+    as_json: bool,
+    quiet: bool,
+) -> None:
+    """Extract references from a normalised tournament artifact.
+
+    Collects references from the selected pools (default: all), optionally
+    filtered by --search (case-insensitive match on title/source) and
+    --rank / --gene (for idea-scoped pools).  Writes the full reference
+    list to a file and emits a bounded summary + path.
+    """
+    project = state.project()
+    path, record = _load_normalised(state, artifact)
+
+    # Check for expanded normalisation fields (backward compat with old artifacts).
+    if "references" not in record.get("knowledge_base", {}):
+        raise SchemaError(
+            "artifact was ingested before reference data was carried; "
+            "re-run dde coscientist ingest",
+        )
+
+    ideas = record.get("ideas", [])
+
+    # Scope ideas by --rank / --gene when filtering idea-level pools.
+    if rank is not None:
+        scoped = [i for i in ideas if i.get("ranking") == rank]
+        if not scoped:
+            raise UsageError(
+                f"no idea with rank {rank}",
+                detail="available ranks: "
+                + ", ".join(str(i.get("ranking")) for i in ideas),
+            )
+        ideas = scoped
+    elif gene is not None:
+        target = gene.strip().upper()
+        scoped = [
+            i
+            for i in ideas
+            if target
+            in {
+                g.strip().upper()
+                for g in (i.get("gene") or "").split(",")
+                if g.strip()
+            }
+        ]
+        if not scoped:
+            raise UsageError(f"no idea with gene {gene!r}")
+        ideas = scoped
+
+    # Collect reference pools.
+    ref_pools: list[tuple[str, list[dict]]] = []
+
+    if source is None or source == "kb":
+        ref_pools.append(
+            ("Knowledge Base", record.get("knowledge_base", {}).get("references", []))
+        )
+
+    if source is None or source == "report":
+        ref_pools.append(
+            ("Executive Report", record.get("report", {}).get("references", []))
+        )
+
+    if source is None or source == "reviews":
+        for idea in ideas:
+            g = idea.get("gene") or "N/A"
+            r = idea.get("ranking", "?")
+            rev_refs = idea.get("review_references", [])
+            if rev_refs:
+                ref_pools.append((f"Idea #{r} ({g}) Reviews", rev_refs))
+
+    if source is None or source == "claims":
+        for idea in ideas:
+            g = idea.get("gene") or "N/A"
+            r = idea.get("ranking", "?")
+            for claim in idea.get("claims", []):
+                claim_refs = claim.get("references", [])
+                if claim_refs:
+                    ref_pools.append((f"Idea #{r} ({g}) Claim", claim_refs))
+
+    # Apply search filter and flatten.
+    all_refs: list[dict] = []
+    for pool_name, refs in ref_pools:
+        for ref in refs:
+            title = ref.get("title", "")
+            src = ref.get("source", "")
+            if search and search.lower() not in title.lower() and search.lower() not in src.lower():
+                continue
+            all_refs.append({"pool": pool_name, "title": title, "source": src})
+
+    # Write output file.
+    target_dir = project.artifact_dir(ARTIFACT_CLASS, out)
+    stem = path.name.replace(".tournament.json", "")
+
+    if as_json:
+        dest = target_dir / f"{stem}.references.json"
+        dest.write_text(json.dumps(all_refs, indent=2) + "\n", encoding="utf-8")
+    else:
+        lines = ["# References\n"]
+        if not all_refs:
+            qualifier = f" matching '{search}'" if search else ""
+            lines.append(f"No references found{qualifier}.\n")
+        else:
+            current_pool = None
+            for ref in all_refs:
+                if ref["pool"] != current_pool:
+                    current_pool = ref["pool"]
+                    lines.append(f"\n## {current_pool}\n")
+                lines.append(
+                    f"- [{ref['title'] or 'Untitled'}]({ref['source']})"
+                )
+            lines.append(f"\n---\n**Total references**: {len(all_refs)}\n")
+        dest = target_dir / f"{stem}.references.md"
+        dest.write_text("\n".join(lines), encoding="utf-8")
+
+    emit = Emitter(as_json=as_json, quiet=quiet)
+    emit.data("total", len(all_refs))
+    if not all_refs:
+        qualifier = f" matching '{search}'" if search else ""
+        emit.line(f"No references found{qualifier}.")
+    else:
+        emit.line(f"References: {len(all_refs)} found")
+        if search:
+            emit.line(f"Search: '{search}'")
+    emit.path(project.relative(dest), "references")
+    emit.flush()
+
+
+# ---------------------------------------------------------------------------
+# knowledge
+# ---------------------------------------------------------------------------
+
+
+@coscientist.command()
+@click.argument("artifact")
+@click.option(
+    "--section",
+    default="full",
+    type=click.Choice(["summary", "connections", "full"]),
+    help="Section to extract (default: full).",
+)
+@out_option
+@output_options
+@pass_state
+def knowledge(
+    state: AppState,
+    artifact: str,
+    section: str,
+    out: str | None,
+    as_json: bool,
+    quiet: bool,
+) -> None:
+    """Extract knowledge base content from a normalised tournament artifact.
+
+    Renders the requested KB section(s) to a file and emits a bounded
+    summary + path.
+    """
+    project = state.project()
+    path, record = _load_normalised(state, artifact)
+
+    kb = record.get("knowledge_base", {})
+
+    # Check for expanded normalisation fields.
+    if "connections" not in kb:
+        raise SchemaError(
+            "artifact was ingested before connection data was carried; "
+            "re-run dde coscientist ingest",
+        )
+
+    stem = path.name.replace(".tournament.json", "")
+    target_dir = project.artifact_dir(ARTIFACT_CLASS, out)
+
+    if as_json:
+        payload: dict[str, Any] = {}
+        if section in ("summary", "full"):
+            payload["summary"] = kb.get("summary", "")
+        if section in ("connections", "full"):
+            payload["connections_summary"] = kb.get("connections_summary", "")
+            payload["connections"] = kb.get("connections", [])
+        dest = target_dir / f"{stem}.knowledge.{section}.json"
+        dest.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    else:
+        lines: list[str] = []
+        if section in ("summary", "full"):
+            lines.append("# Knowledge Base Summary\n")
+            summary = kb.get("summary", "")
+            lines.append(summary if summary else "(No knowledge summary available)")
+            lines.append("")
+
+        if section in ("connections", "full"):
+            lines.append("# Unexpected Connections Analysis\n")
+            conn_summary = kb.get("connections_summary", "")
+            lines.append(
+                conn_summary if conn_summary else "(No connections analysis available)"
+            )
+            lines.append("")
+            conns = kb.get("connections", [])
+            if conns:
+                lines.append(f"## Individual Connections ({len(conns)} total)\n")
+                for j, conn in enumerate(conns, 1):
+                    lines.append(f"### {j}. {conn.get('title', f'Connection {j}')}")
+                    desc = conn.get("description", "")
+                    if desc:
+                        lines.append(desc)
+                    lines.append("")
+
+        dest = target_dir / f"{stem}.knowledge.{section}.md"
+        dest.write_text("\n".join(lines), encoding="utf-8")
+
+    n_conns = len(kb.get("connections", []))
+    emit = Emitter(as_json=as_json, quiet=quiet)
+    emit.data("n_references", kb.get("n_references", 0))
+    emit.data("n_connections", n_conns)
+    emit.line(f"Knowledge base: {kb.get('n_references', 0)} references, {n_conns} connections")
+    emit.path(project.relative(dest), "knowledge")
+    emit.flush()
+
+
+# ---------------------------------------------------------------------------
+# report
+# ---------------------------------------------------------------------------
+
+
+@coscientist.command()
+@click.argument("artifact")
+@click.option(
+    "--section",
+    default="all",
+    type=click.Choice(["overview", "top-ideas", "reviews", "recommendation", "all"]),
+    help="Section to extract (default: all).",
+)
+@out_option
+@output_options
+@pass_state
+def report(
+    state: AppState,
+    artifact: str,
+    section: str,
+    out: str | None,
+    as_json: bool,
+    quiet: bool,
+) -> None:
+    """Extract executive report sections from a normalised tournament artifact.
+
+    Renders the requested report section(s) to a file and emits a bounded
+    summary + path.
+    """
+    project = state.project()
+    path, record = _load_normalised(state, artifact)
+
+    rpt = record.get("report", {})
+
+    # Report entirely empty.
+    if not any(rpt.get(k) for k in ("overview", "top_ideas_summary", "reviews_overview")):
+        raise SchemaError(
+            "no executive report found in this tournament artifact",
+            remedy="confirm this tournament produced an executive report",
+        )
+
+    stem = path.name.replace(".tournament.json", "")
+    target_dir = project.artifact_dir(ARTIFACT_CLASS, out)
+
+    if as_json:
+        payload = {}
+        if section in ("overview", "all"):
+            payload["overview"] = rpt.get("overview", "")
+        if section in ("top-ideas", "all"):
+            payload["top_ideas_summary"] = rpt.get("top_ideas_summary", "")
+        if section in ("reviews", "all"):
+            payload["reviews_overview"] = rpt.get("reviews_overview", "")
+        if section in ("recommendation", "all"):
+            payload["recommendation"] = _extract_recommendation(
+                rpt.get("top_ideas_summary", "")
+            )
+        dest = target_dir / f"{stem}.report.{section}.json"
+        dest.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    else:
+        lines: list[str] = []
+
+        if section in ("overview", "all"):
+            lines.append("# Executive Overview\n")
+            lines.append(rpt.get("overview", "") or "_(section not present)_")
+            lines.append("")
+
+        if section in ("top-ideas", "all"):
+            lines.append("# Top Ranking Ideas Summary\n")
+            lines.append(rpt.get("top_ideas_summary", "") or "_(section not present)_")
+            lines.append("")
+
+        if section in ("reviews", "all"):
+            lines.append("# Reviews Overview\n")
+            lines.append(rpt.get("reviews_overview", "") or "_(section not present)_")
+            lines.append("")
+
+        if section in ("recommendation", "all"):
+            rec = _extract_recommendation(rpt.get("top_ideas_summary", ""))
+            if rec:
+                lines.append("# Recommendation\n")
+                lines.append(rec)
+                lines.append("")
+            else:
+                lines.append(
+                    "No structured recommendation section found in "
+                    "top-ideas summary."
+                )
+                lines.append("")
+
+        ref_count = len(rpt.get("references", []))
+        if ref_count:
+            lines.append(f"---\n*{ref_count} references cited in executive report*\n")
+
+        dest = target_dir / f"{stem}.report.{section}.md"
+        dest.write_text("\n".join(lines), encoding="utf-8")
+
+    emit = Emitter(as_json=as_json, quiet=quiet)
+    emit.data("sections_available", {
+        "overview": bool(rpt.get("overview")),
+        "top_ideas_summary": bool(rpt.get("top_ideas_summary")),
+        "reviews_overview": bool(rpt.get("reviews_overview")),
+    })
+    emit.line(f"Report section: {section}")
+    emit.path(project.relative(dest), "report")
+    emit.flush()
+
+
+# ---------------------------------------------------------------------------
+# compare
+# ---------------------------------------------------------------------------
+
+
+@coscientist.command()
+@click.argument("artifact1")
+@click.argument("artifact2")
+@click.option(
+    "--aspect",
+    default="genes",
+    type=click.Choice(["genes", "rankings", "elo"]),
+    help="What to compare (default: genes).",
+)
+@out_option
+@output_options
+@pass_state
+def compare(
+    state: AppState,
+    artifact1: str,
+    artifact2: str,
+    aspect: str,
+    out: str | None,
+    as_json: bool,
+    quiet: bool,
+) -> None:
+    """Compare two normalised tournament artifacts side by side.
+
+    Requires prior ``ingest`` on both files.  Produces a side-by-side
+    comparison written to a file and emits a bounded summary + path.
+    This is a read-only viewer — it does not produce analysis artifacts
+    or provenance sidecars.
+    """
+    project = state.project()
+    path_a, record_a = _load_normalised(state, artifact1)
+    path_b, record_b = _load_normalised(state, artifact2)
+
+    ideas_a = record_a.get("ideas", [])
+    ideas_b = record_b.get("ideas", [])
+
+    if not ideas_a:
+        raise SchemaError(
+            f"tournament artifact {path_a.name} contains no ideas",
+        )
+    if not ideas_b:
+        raise SchemaError(
+            f"tournament artifact {path_b.name} contains no ideas",
+        )
+
+    title_a = record_a.get("tournament", {}).get("title") or "Tournament A"
+    title_b = record_b.get("tournament", {}).get("title") or "Tournament B"
+    stem_a = path_a.name.replace(".tournament.json", "")
+    stem_b = path_b.name.replace(".tournament.json", "")
+    target_dir = project.artifact_dir(ARTIFACT_CLASS, out)
+
+    if as_json:
+        payload = _compare_json(ideas_a, ideas_b, title_a, title_b, aspect)
+        dest = target_dir / f"{stem_a}-vs-{stem_b}.compare.{aspect}.json"
+        dest.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    else:
+        text = _compare_markdown(ideas_a, ideas_b, title_a, title_b, aspect)
+        dest = target_dir / f"{stem_a}-vs-{stem_b}.compare.{aspect}.md"
+        dest.write_text(text, encoding="utf-8")
+
+    emit = Emitter(as_json=as_json, quiet=quiet)
+    emit.data("aspect", aspect)
+    emit.data("n_ideas_a", len(ideas_a))
+    emit.data("n_ideas_b", len(ideas_b))
+    emit.line(f"Compare ({aspect}): {title_a[:30]} vs {title_b[:30]}")
+    emit.line(f"Ideas: {len(ideas_a)} vs {len(ideas_b)}")
+    emit.path(project.relative(dest), "comparison")
+    emit.flush()
+
+
+def _compare_json(
+    ideas_a: list[dict],
+    ideas_b: list[dict],
+    title_a: str,
+    title_b: str,
+    aspect: str,
+) -> dict:
+    """Build the machine-readable comparison payload."""
+    genes_a = {i["gene"] for i in ideas_a if i.get("gene")}
+    genes_b = {i["gene"] for i in ideas_b if i.get("gene")}
+
+    if aspect == "genes":
+        return {
+            "tournament_a": title_a,
+            "tournament_b": title_b,
+            "shared_genes": sorted(genes_a & genes_b),
+            "only_in_a": sorted(genes_a - genes_b),
+            "only_in_b": sorted(genes_b - genes_a),
+            "ideas_a": [
+                {"ranking": i["ranking"], "gene": i["gene"], "elo_rating": i["elo_rating"], "title": i["title"]}
+                for i in ideas_a
+            ],
+            "ideas_b": [
+                {"ranking": i["ranking"], "gene": i["gene"], "elo_rating": i["elo_rating"], "title": i["title"]}
+                for i in ideas_b
+            ],
+        }
+    elif aspect == "rankings":
+        max_rank = max(
+            max((i["ranking"] for i in ideas_a if i["ranking"] is not None), default=0),
+            max((i["ranking"] for i in ideas_b if i["ranking"] is not None), default=0),
+        )
+        rows = []
+        for r in range(1, max_rank + 1):
+            a = next((i for i in ideas_a if i["ranking"] == r), None)
+            b = next((i for i in ideas_b if i["ranking"] == r), None)
+            rows.append({
+                "rank": r,
+                "a": {"gene": a["gene"], "title": a["title"]} if a else None,
+                "b": {"gene": b["gene"], "title": b["title"]} if b else None,
+            })
+        return {"tournament_a": title_a, "tournament_b": title_b, "rankings": rows}
+    else:  # elo
+        entries = []
+        for i in ideas_a:
+            entries.append({"source": "A", "gene": i["gene"], "elo_rating": i["elo_rating"],
+                            "ranking": i["ranking"], "title": i["title"]})
+        for i in ideas_b:
+            entries.append({"source": "B", "gene": i["gene"], "elo_rating": i["elo_rating"],
+                            "ranking": i["ranking"], "title": i["title"]})
+        entries.sort(key=lambda x: x["elo_rating"] or 0, reverse=True)
+        return {"tournament_a": title_a, "tournament_b": title_b, "leaderboard": entries}
+
+
+def _compare_markdown(
+    ideas_a: list[dict],
+    ideas_b: list[dict],
+    title_a: str,
+    title_b: str,
+    aspect: str,
+) -> str:
+    """Render a markdown comparison of two tournament idea sets."""
+    lines = [
+        "# Tournament Comparison\n",
+        f"**Tournament A**: {title_a}",
+        f"**Tournament B**: {title_b}\n",
+    ]
+
+    if aspect == "genes":
+        genes_a: set[str] = set()
+        genes_b: set[str] = set()
+
+        lines.append("## Tournament A - Top Ideas")
+        lines.append("| Rank | Gene | ELO | Title |")
+        lines.append("|------|------|-----|-------|")
+        for idea in ideas_a:
+            g = idea.get("gene") or "N/A"
+            genes_a.add(g)
+            elo = idea.get("elo_rating")
+            elo_s = f"{elo:.0f}" if elo is not None else "N/A"
+            lines.append(f"| {idea['ranking']} | {g} | {elo_s} | {(idea['title'] or '')[:60]} |")
+        lines.append("")
+
+        lines.append("## Tournament B - Top Ideas")
+        lines.append("| Rank | Gene | ELO | Title |")
+        lines.append("|------|------|-----|-------|")
+        for idea in ideas_b:
+            g = idea.get("gene") or "N/A"
+            genes_b.add(g)
+            elo = idea.get("elo_rating")
+            elo_s = f"{elo:.0f}" if elo is not None else "N/A"
+            lines.append(f"| {idea['ranking']} | {g} | {elo_s} | {(idea['title'] or '')[:60]} |")
+        lines.append("")
+
+        shared = genes_a & genes_b
+        only_a = genes_a - genes_b
+        only_b = genes_b - genes_a
+        lines.append("## Overlap Analysis")
+        lines.append(f"- **Shared genes**: {', '.join(sorted(shared)) if shared else 'None'}")
+        lines.append(f"- **Only in A**: {', '.join(sorted(only_a)) if only_a else 'None'}")
+        lines.append(f"- **Only in B**: {', '.join(sorted(only_b)) if only_b else 'None'}")
+        lines.append("")
+
+    elif aspect == "rankings":
+        lines.append("## Rankings Comparison\n")
+        lines.append("| Rank | Tournament A | Tournament B |")
+        lines.append("|------|-------------|-------------|")
+        max_rank = max(
+            max((i["ranking"] for i in ideas_a if i["ranking"] is not None), default=0),
+            max((i["ranking"] for i in ideas_b if i["ranking"] is not None), default=0),
+        )
+        for r in range(1, max_rank + 1):
+            a_name = ""
+            for i in ideas_a:
+                if i["ranking"] == r:
+                    g = i.get("gene") or ""
+                    a_name = f"{g}: {(i.get('title') or '')[:50]}"
+            b_name = ""
+            for i in ideas_b:
+                if i["ranking"] == r:
+                    g = i.get("gene") or ""
+                    b_name = f"{g}: {(i.get('title') or '')[:50]}"
+            lines.append(f"| {r} | {a_name} | {b_name} |")
+        lines.append("")
+
+    elif aspect == "elo":
+        lines.append("## ELO Ratings Comparison\n")
+        entries: list[dict] = []
+        for idea in ideas_a:
+            entries.append({"source": "A", "gene": idea.get("gene") or "N/A",
+                            "elo": idea.get("elo_rating") or 0,
+                            "ranking": idea.get("ranking", "?"),
+                            "title": (idea.get("title") or "")[:50]})
+        for idea in ideas_b:
+            entries.append({"source": "B", "gene": idea.get("gene") or "N/A",
+                            "elo": idea.get("elo_rating") or 0,
+                            "ranking": idea.get("ranking", "?"),
+                            "title": (idea.get("title") or "")[:50]})
+        entries.sort(key=lambda x: x["elo"], reverse=True)
+        lines.append("| Source | Rank | Gene | ELO | Title |")
+        lines.append("|--------|------|------|-----|-------|")
+        for e in entries:
+            elo_s = f"{e['elo']:.0f}" if isinstance(e["elo"], (int, float)) else "N/A"
+            lines.append(f"| {e['source']} | {e['ranking']} | {e['gene']} | {elo_s} | {e['title']} |")
+        lines.append("")
+
+    return "\n".join(lines) + "\n"

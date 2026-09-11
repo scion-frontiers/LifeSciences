@@ -151,7 +151,6 @@ dde/
 │   ├── requirements.txt
 │   ├── vendor/hypex/  # Vendored Hypex source; binaries are built during provisioning
 │   ├── pyproject.toml  # PEP 621 packaging; console_scripts entry point
-│   ├── legacy/         # The pre-contract CLI, kept for reference
 │   └── dde/
 │       ├── cli.py      # Click entry point; one command group per tool
 │       ├── core/       # Project root, HTTP, provenance, thresholds, output
@@ -253,9 +252,10 @@ dde env diff <before> [after]   # explain a partition after the fact
 
 Command groups today: `alphafold`, `alphagenome`, `coscientist`,
 `doctor`, `env`, `expression`, `genetics`, `init`, `litref`, `pocket`,
-`relays`. The single-file CLI that predated the two-phase contract is
-kept in `tools/legacy/`, with a write-up of the silent failure it hid.
-Four of its subcommands are not yet ported.
+`relays`. The single-file CLI that predated the two-phase contract has
+been deleted after all subcommands were ported to the two-phase model.
+The silent-failure defect it contained is documented in
+`docs/dde-plan.md` §8.1.
 
 ## Working in a shared checkout
 
