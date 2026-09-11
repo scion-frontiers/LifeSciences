@@ -566,8 +566,10 @@ def test_json_output():
     # Output should be valid JSON
     try:
         payload = json.loads(result.output)
-    except json.JSONDecodeError:
-        raise AssertionError(f"--json output is not valid JSON: {result.output[:500]}")
+    except json.JSONDecodeError as exc:
+        raise AssertionError(
+            f"--json output is not valid JSON: {result.output[:500]}"
+        ) from exc
 
     assert "imported_work_orders" in payload, "JSON missing imported_work_orders"
     assert "WO-001" in payload["imported_work_orders"], (

@@ -410,7 +410,7 @@ def test_bundle_void_enough_segments_low_metrics():
 def test_resolve_accession_direct():
     """A UniProt accession passes through without a network call."""
     # This should NOT make a network call — just pattern-match.
-    acc, gene = (
+    _acc, _gene = (
         resolve_accession.__wrapped__(resolve_accession, "P07550")
         if hasattr(resolve_accession, "__wrapped__")
         else _test_resolve_accession_direct()

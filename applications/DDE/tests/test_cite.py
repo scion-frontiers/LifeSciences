@@ -209,7 +209,7 @@ def test_classify_nct() -> None:
 
 
 def test_classify_title() -> None:
-    kind, value = _classify("Some paper about proteins")
+    kind, _value = _classify("Some paper about proteins")
     assert kind == "title"
     print("  PASS: classify title")
 
@@ -547,7 +547,7 @@ def test_no_citations_exit_zero() -> None:
         doc_path = _write_document(project, "empty.txt", "No references at all.")
 
         runner = CliRunner()
-        with mock.patch("dde.commands.cite.http.request") as mock_req:
+        with mock.patch("dde.commands.cite.http.request"):
             result = runner.invoke(
                 cli,
                 ["--project", str(project), "cite", "verify", str(doc_path)],

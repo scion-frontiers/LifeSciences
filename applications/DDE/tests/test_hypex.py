@@ -160,7 +160,7 @@ def _make_ratings(
     if elos is None:
         elos = [1500.0 + (i * 50) for i in range(len(hypotheses))]
     ratings = {}
-    for h_id, elo in zip(hypotheses, elos):
+    for h_id, elo in zip(hypotheses, elos, strict=True):
         ratings[h_id] = {
             "elo": elo,
             "matches": 10,

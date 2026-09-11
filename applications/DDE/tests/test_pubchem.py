@@ -378,7 +378,7 @@ def test_analyze_known_drug() -> None:
             {"target_name": "COX-2", "action_type": "INHIBITOR", "source": "chembl"}
         ],
     )
-    verdict, relays = _classify(annotation)
+    verdict, _relays = _classify(annotation)
     assert verdict == "known-drug", f"Expected known-drug, got {verdict}"
     print("  PASS: analyze verdict — known-drug")
 
@@ -392,7 +392,7 @@ def test_analyze_known_compound() -> None:
         max_phase=None,
         chembl_id=None,
     )
-    verdict, relays = _classify(annotation)
+    verdict, _relays = _classify(annotation)
     assert verdict == "known-compound", f"Expected known-compound, got {verdict}"
     print("  PASS: analyze verdict — known-compound")
 
@@ -407,7 +407,7 @@ def test_analyze_unknown() -> None:
         max_phase=None,
         chembl_id=None,
     )
-    verdict, relays = _classify(annotation)
+    verdict, _relays = _classify(annotation)
     assert verdict == "unknown", f"Expected unknown, got {verdict}"
     print("  PASS: analyze verdict — unknown")
 
@@ -420,7 +420,7 @@ def test_analyze_known_drug_max_phase_1() -> None:
         max_phase=1,
         chembl_id="CHEMBL9999",
     )
-    verdict, relays = _classify(annotation)
+    verdict, _relays = _classify(annotation)
     assert verdict == "known-drug", f"Expected known-drug, got {verdict}"
     print("  PASS: analyze verdict — known-drug (max_phase=1)")
 
@@ -433,7 +433,7 @@ def test_analyze_max_phase_0_is_not_drug() -> None:
         max_phase=0,
         chembl_id="CHEMBL8888",
     )
-    verdict, relays = _classify(annotation)
+    verdict, _relays = _classify(annotation)
     assert verdict == "known-compound", f"Expected known-compound, got {verdict}"
     print("  PASS: analyze verdict — max_phase=0 is known-compound, not known-drug")
 
@@ -451,7 +451,7 @@ def test_relay_fires_known_drug() -> None:
         max_phase=4,
         chembl_id="CHEMBL25",
     )
-    verdict, relays = _classify(annotation)
+    _verdict, relays = _classify(annotation)
     codes = {r["code"] for r in relays}
     assert "pubchem.annotation_is_not_validation" in codes, (
         "annotation_is_not_validation should fire on known-drug"
@@ -470,7 +470,7 @@ def test_relay_fires_known_compound() -> None:
         max_phase=None,
         chembl_id=None,
     )
-    verdict, relays = _classify(annotation)
+    _verdict, relays = _classify(annotation)
     codes = {r["code"] for r in relays}
     assert "pubchem.annotation_is_not_validation" in codes, (
         "annotation_is_not_validation should fire on known-compound"
@@ -556,7 +556,7 @@ def test_chembl_fallback_pubchem_only() -> None:
     assert artifact["drug_status"]["source"] is None
     assert artifact["mechanisms"] == []
     # Verdict should be known-compound (has synonyms), not an error
-    verdict, relays = _classify(artifact)
+    verdict, _relays = _classify(artifact)
     assert verdict == "known-compound", f"Expected known-compound, got {verdict}"
     print("  PASS: ChEMBL fallback — PubChem-only annotation valid")
 

@@ -405,7 +405,7 @@ def test_biologic_no_fabricated_data():
     concept = _biologic_concept()
     result = assess_stage0(concept)
 
-    result_str = json.dumps(result)
+    json.dumps(result)
     fabrication_terms = [
         "yield",
         "cost_of_goods",
@@ -414,7 +414,7 @@ def test_biologic_no_fabricated_data():
     ]
     for term in fabrication_terms:
         # These terms should not appear as values (only as limitations/disclaimers)
-        findings_str = json.dumps(result["findings"])
+        json.dumps(result["findings"])
         # Check that none of these appear as actual data values
         for f in result["findings"]:
             assert term not in f.get("status", ""), (

@@ -241,7 +241,7 @@ def test_kabsch_identical_coordinates() -> None:
             [10.0, 11.0, 12.0],
         ]
     )
-    rotation, translation, rmsd = _kabsch_superimpose(coords, coords.copy())
+    _rotation, _translation, rmsd = _kabsch_superimpose(coords, coords.copy())
     assert rmsd < 1e-10
 
 
@@ -257,7 +257,7 @@ def test_kabsch_known_translation() -> None:
     )
     offset = np.array([5.0, 10.0, 15.0])
     mob = ref + offset
-    rotation, translation, rmsd = _kabsch_superimpose(ref, mob)
+    _rotation, _translation, rmsd = _kabsch_superimpose(ref, mob)
     # After optimal superposition, RMSD should be ~0
     assert rmsd < 1e-6
 
@@ -281,7 +281,7 @@ def test_kabsch_known_rotation() -> None:
             [-1.0, 1.0, 1.0],
         ]
     )
-    rotation, translation, rmsd = _kabsch_superimpose(ref, mob)
+    _rotation, _translation, rmsd = _kabsch_superimpose(ref, mob)
     assert rmsd < 1e-6
 
 
@@ -316,7 +316,7 @@ def test_kabsch_known_offset_rmsd() -> None:
     mob = ref + np.array([5.0, 5.0, 5.0])
     mob[0] += np.array([2.0, 0.0, 0.0])  # perturb atom 0
 
-    rotation, translation, rmsd = _kabsch_superimpose(ref, mob)
+    _rotation, _translation, rmsd = _kabsch_superimpose(ref, mob)
     # RMSD should be > 0 because of the per-atom distortion
     assert rmsd > 0.0
     # But should be moderate (around 1.0 A since only 1 of 4 atoms moves 2 A)
@@ -335,7 +335,7 @@ def test_per_residue_distances_identical() -> None:
     mob_residues = _collect_residues(atoms, None)
 
     # All Ca atoms match
-    for ref_res, mob_res in zip(ref_residues, mob_residues):
+    for ref_res, mob_res in zip(ref_residues, mob_residues, strict=True):
         if "CA" in ref_res["atom_coords"] and "CA" in mob_res["atom_coords"]:
             ref_ca = np.array(ref_res["atom_coords"]["CA"])
             mob_ca = np.array(mob_res["atom_coords"]["CA"])
@@ -355,7 +355,7 @@ def test_per_residue_distances_translated() -> None:
     mob_residues = _collect_residues(mob_atoms, None)
 
     expected_dist = math.sqrt(dx * dx + dy * dy + dz * dz)
-    for ref_res, mob_res in zip(ref_residues, mob_residues):
+    for ref_res, mob_res in zip(ref_residues, mob_residues, strict=True):
         if "CA" in ref_res["atom_coords"] and "CA" in mob_res["atom_coords"]:
             ref_ca = np.array(ref_res["atom_coords"]["CA"])
             mob_ca = np.array(mob_res["atom_coords"]["CA"])
@@ -494,7 +494,7 @@ def test_write_transformed_pdb() -> None:
         # Re-parse the output and check that coordinates are shifted
         transformed_atoms = _parse_atoms_with_names_pdb(content)
         assert len(transformed_atoms) == len(atoms)
-        for orig, trans in zip(atoms, transformed_atoms):
+        for orig, trans in zip(atoms, transformed_atoms, strict=True):
             assert abs(trans["x"] - (orig["x"] + 1.0)) < 0.01
             assert abs(trans["y"] - (orig["y"] + 2.0)) < 0.01
             assert abs(trans["z"] - (orig["z"] + 3.0)) < 0.01

@@ -1140,7 +1140,7 @@ def test_concept_loader_rejects_malformed_id():
         # Write a file with a malformed name to disk
         concepts_dir = project / CONTROL_DIR / "concepts"
         concepts_dir.mkdir(parents=True, exist_ok=True)
-        bad_path = concepts_dir / "../../evil.json"
+        concepts_dir / "../../evil.json"
         # Don't actually write — just confirm the loader rejects the ID
         loader = _default_concept_loader(project)
         result = loader("../../evil")

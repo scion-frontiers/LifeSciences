@@ -128,7 +128,7 @@ def test_text_match_relay_registered():
 def test_short_query_high_hits_triggers_low_confidence():
     """Short query (<=4 chars) with >200 studies triggers low confidence."""
     studies = _make_studies(250, phases=["PHASE2"])
-    _, _, assessment, relays = _run_analyze("ARTN", studies)
+    _, _, assessment, _relays = _run_analyze("ARTN", studies)
 
     assert assessment.get("confidence") == "low_text_match_only"
     assert assessment.get("confidence_reason") is not None
@@ -192,7 +192,7 @@ def test_high_phase3_ratio_triggers():
 
     all_studies = phase2_studies + phase3_studies
     # Use a long query so only the ratio trigger fires
-    _, _, assessment, relays = _run_analyze("LONGQUERY", all_studies)
+    _, _, assessment, _relays = _run_analyze("LONGQUERY", all_studies)
 
     assert assessment.get("confidence") == "low_text_match_only"
     assert "Phase 3+ ratio" in assessment.get("confidence_reason", "")

@@ -635,7 +635,7 @@ def test_multi_concept_triage():
     cancel_competing_alternatives(outcome.concept_results, "IC-001-r1")
 
     # IC-002's workstreams should now be cancelled
-    cr2 = [cr for cr in outcome.concept_results if cr.concept_id == "IC-002"][0]
+    cr2 = next(cr for cr in outcome.concept_results if cr.concept_id == "IC-002")
     any_cancelled = any(ws.cancelled for ws in cr2.workstream_results.values())
     if cr2.workstream_results:
         assert any_cancelled, (
@@ -653,7 +653,7 @@ def test_cancelled_alternatives_are_recorded():
 
     results = cancel_competing_alternatives([cr1, cr2], "IC-001-r1")
 
-    cr2_after = [r for r in results if r.concept_id == "IC-002"][0]
+    cr2_after = next(r for r in results if r.concept_id == "IC-002")
     mfg = cr2_after.workstream_results["manufacturing"]
     assert mfg.cancelled, "Competing alternative should be marked cancelled"
     assert "IC-001-r1" in mfg.cancel_reason, (
@@ -1279,7 +1279,7 @@ def test_cancellation_persistence():
         )
 
         # IC-002 should be parked (cancelled alternative)
-        cr2 = [cr for cr in outcome.concept_results if cr.concept_id == "IC-002"][0]
+        cr2 = next(cr for cr in outcome.concept_results if cr.concept_id == "IC-002")
         assert cr2.disposition == "parked", (
             f"IC-002 should be parked after IC-001 accepted, got {cr2.disposition!r}"
         )

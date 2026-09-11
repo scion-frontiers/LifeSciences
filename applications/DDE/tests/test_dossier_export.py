@@ -376,11 +376,11 @@ def test_tsv_output_is_tabular() -> None:
 
         # Must contain tab characters in data rows.
         data_lines = [
-            l
-            for l in tsv.splitlines()
-            if l and not l.startswith("#") and not l.startswith("##")
+            line
+            for line in tsv.splitlines()
+            if line and not line.startswith("#") and not line.startswith("##")
         ]
-        tab_lines = [l for l in data_lines if "\t" in l]
+        tab_lines = [line for line in data_lines if "\t" in line]
         assert len(tab_lines) > 0
 
         print("  PASS: TSV output is tabular")

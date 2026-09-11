@@ -17,4 +17,14 @@ target-version = "py310"
 
 [lint]
 select = ["E", "F", "W", "I", "C4", "B", "UP", "RUF"]
-ignore = ["E501", "C901", "B006"]
+ignore = [
+    "E501",
+    "C901",
+    "B006",
+    # E402: every test file manipulates sys.path before importing from dde/eval
+    # packages, so module-level imports intentionally follow path setup.
+    "E402",
+    # B011: assert-false is idiomatic in pytest test patterns (assert False, "msg"
+    # inside try/except blocks to mark expected-exception paths).
+    "B011",
+]
