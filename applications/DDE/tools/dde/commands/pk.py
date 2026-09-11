@@ -258,7 +258,11 @@ def _apply_blq(
         return time_points, concentrations, 0
 
     if blq_method == "exclude":
-        pairs = [(t, c) for t, c in zip(time_points, concentrations, strict=False) if c != blq_value]
+        pairs = [
+            (t, c)
+            for t, c in zip(time_points, concentrations, strict=False)
+            if c != blq_value
+        ]
         if not pairs:
             raise Refusal(
                 "all concentrations are BLQ — no data remains after exclusion",
@@ -388,7 +392,9 @@ def _linear_regression(x: list[float], y: list[float]) -> tuple[float, float, fl
     # R-squared
     y_mean = sum_y / n
     ss_tot = sum((yi - y_mean) ** 2 for yi in y)
-    ss_res = sum((yi - (slope * xi + intercept)) ** 2 for xi, yi in zip(x, y, strict=False))
+    ss_res = sum(
+        (yi - (slope * xi + intercept)) ** 2 for xi, yi in zip(x, y, strict=False)
+    )
     r_squared = 1.0 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
 
     return slope, intercept, r_squared
@@ -618,7 +624,9 @@ def nca_cmd(
     terminal_times, terminal_log_concs, _term_start_idx = _find_terminal_phase(
         times, concs
     )
-    slope, _intercept, r_squared = _linear_regression(terminal_times, terminal_log_concs)
+    slope, _intercept, r_squared = _linear_regression(
+        terminal_times, terminal_log_concs
+    )
 
     # lambda_z is the negative slope (slope should be negative for decay)
     lambda_z = -slope

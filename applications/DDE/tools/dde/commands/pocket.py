@@ -1086,7 +1086,8 @@ def analyze(
     # goes negative, rather than left to whoever writes it up to remember
     # on the day the answer is disappointing.
     if reported is not None and reported != "druggable":
-        relays = [*relays,
+        relays = [
+            *relays,
             provenance.relay(
                 "fpocket.single_conformation",
                 # The calibration numbers ride in the message, not only
@@ -1113,7 +1114,8 @@ def analyze(
     # there is no affinity claim available to make, and a relay that
     # fired on every run would be quoted and ignored.
     if reported == "druggable":
-        relays = [*relays,
+        relays = [
+            *relays,
             provenance.relay(
                 "fpocket.druggability_is_not_affinity",
                 # Kept under the stdout budget deliberately: the
@@ -1123,7 +1125,7 @@ def analyze(
                 f"{reported_score:.3f} is cavity shape in "
                 f"{doc.get('structure', stem)}; not an affinity, not a "
                 "potency, not evidence a compound binds.",
-            )
+            ),
         ]
 
     if doc.get("experimental_structure") is False:

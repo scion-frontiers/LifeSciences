@@ -105,7 +105,9 @@ def _fetch_synonyms(cid: int) -> tuple[str, bytes]:
     try:
         json.loads(body.decode("utf-8"))
     except Exception as exc:
-        raise SchemaError("PubChem synonyms did not return JSON", detail=str(exc)) from exc
+        raise SchemaError(
+            "PubChem synonyms did not return JSON", detail=str(exc)
+        ) from exc
     return url, body
 
 
@@ -184,7 +186,9 @@ def _fetch_chembl_molecule(inchikey: str) -> tuple[str, bytes]:
     try:
         json.loads(body.decode("utf-8"))
     except Exception as exc:
-        raise SchemaError("ChEMBL molecule did not return JSON", detail=str(exc)) from exc
+        raise SchemaError(
+            "ChEMBL molecule did not return JSON", detail=str(exc)
+        ) from exc
     return url, body
 
 
@@ -207,7 +211,9 @@ def _fetch_chembl_mechanism(chembl_id: str) -> tuple[str, bytes]:
     try:
         json.loads(body.decode("utf-8"))
     except Exception as exc:
-        raise SchemaError("ChEMBL mechanism did not return JSON", detail=str(exc)) from exc
+        raise SchemaError(
+            "ChEMBL mechanism did not return JSON", detail=str(exc)
+        ) from exc
     return url, body
 
 
@@ -493,7 +499,9 @@ def _fetch_full_record(cid: int) -> tuple[str, dict[str, Any]]:
     try:
         payload = json.loads(body.decode("utf-8"))
     except Exception as exc:
-        raise SchemaError("PubChem full record did not return JSON", detail=str(exc)) from exc
+        raise SchemaError(
+            "PubChem full record did not return JSON", detail=str(exc)
+        ) from exc
     return url, payload
 
 

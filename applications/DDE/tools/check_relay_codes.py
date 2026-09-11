@@ -158,7 +158,9 @@ def emitted_codes_from_ast() -> dict[str, list[tuple[str, int]]]:
             ):
                 constants[target.id] = node.value.value
 
-        def _resolve(node: ast.expr, constants: dict[str, str] = constants) -> str | None:
+        def _resolve(
+            node: ast.expr, constants: dict[str, str] = constants
+        ) -> str | None:
             if isinstance(node, ast.Constant) and isinstance(node.value, str):
                 return node.value
             if isinstance(node, ast.Name) and node.id in constants:

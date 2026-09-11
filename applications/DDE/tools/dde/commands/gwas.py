@@ -519,7 +519,9 @@ def _fetch_clinvar(symbol: str) -> tuple[bytes, dict[str, Any]]:
     try:
         search_data = json.loads(search_response.content.decode("utf-8"))
     except Exception as exc:
-        raise SchemaError("ClinVar esearch did not return JSON", detail=str(exc)) from exc
+        raise SchemaError(
+            "ClinVar esearch did not return JSON", detail=str(exc)
+        ) from exc
 
     esearch_result = search_data.get("esearchresult") or {}
     id_list = esearch_result.get("idlist", [])
@@ -544,7 +546,9 @@ def _fetch_clinvar(symbol: str) -> tuple[bytes, dict[str, Any]]:
     try:
         summary_data = json.loads(summary_response.content.decode("utf-8"))
     except Exception as exc:
-        raise SchemaError("ClinVar esummary did not return JSON", detail=str(exc)) from exc
+        raise SchemaError(
+            "ClinVar esummary did not return JSON", detail=str(exc)
+        ) from exc
 
     raw = json.dumps(summary_data, indent=2).encode("utf-8")
     result_data = summary_data.get("result", {})
