@@ -891,9 +891,7 @@ def resume_cmd(
     if id_remapping:
         emit.data("id_remapping", id_remapping)
     if md_refused:
-        emit.data(
-            "refused_markdown_files", dict(md_refused)
-        )
+        emit.data("refused_markdown_files", dict(md_refused))
 
     if not quiet:
         emit.line(f"Source: {source_str}")

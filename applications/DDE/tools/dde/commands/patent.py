@@ -124,7 +124,9 @@ def _fetch_google_patents(query: str) -> tuple[bytes, dict[str, Any]]:
         try:
             payload = json.loads(response.content.decode("utf-8"))
         except Exception as exc:
-            raise SchemaError("Google Patents did not return JSON", detail=str(exc)) from exc
+            raise SchemaError(
+                "Google Patents did not return JSON", detail=str(exc)
+            ) from exc
 
         # Extract patents from the response structure.
         results = payload.get("results") or {}

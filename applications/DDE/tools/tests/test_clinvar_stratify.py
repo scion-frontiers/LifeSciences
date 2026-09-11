@@ -334,7 +334,9 @@ class TestAnalyzeClinvarStratification(unittest.TestCase):
             ),
         ]
         _relays, add_relay = self._collect_relays()
-        _significant, metrics, _assessment = _analyze_clinvar("GENE", variants, add_relay)
+        _significant, metrics, _assessment = _analyze_clinvar(
+            "GENE", variants, add_relay
+        )
 
         self.assertEqual(metrics["pathogenic_gene_specific"], 1)
         self.assertEqual(metrics["pathogenic_locus_overlapping"], 1)

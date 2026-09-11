@@ -302,7 +302,9 @@ def _access_token() -> tuple[str, str]:
             "service account via GOOGLE_APPLICATION_CREDENTIALS",
         ) from e
     except subprocess.TimeoutExpired as e:
-        raise CredentialError("`gcloud auth print-access-token` timed out after 60s") from e
+        raise CredentialError(
+            "`gcloud auth print-access-token` timed out after 60s"
+        ) from e
 
     token = result.stdout.strip()
     if result.returncode != 0 or not token:
