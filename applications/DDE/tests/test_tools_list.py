@@ -37,10 +37,10 @@ if str(TOOLS_DIR) not in sys.path:
 
 from dde.cli import cli
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _invoke(*args: str) -> object:
     """Run the CLI and return the CliRunner result."""
@@ -125,7 +125,9 @@ def test_quiet_output_names_only():
     lines = result.output.strip().splitlines()
     # Each line should be a single word (group name), no whitespace columns.
     for line in lines:
-        assert " " not in line.strip(), f"Unexpected whitespace in quiet output: {line!r}"
+        assert " " not in line.strip(), (
+            f"Unexpected whitespace in quiet output: {line!r}"
+        )
     assert len(lines) > 10, "Expected at least 10 tool groups"
 
 

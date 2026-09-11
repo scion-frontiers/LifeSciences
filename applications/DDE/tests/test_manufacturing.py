@@ -47,6 +47,10 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 
+from dde.core.evidence import (
+    EVIDENCE_STATUSES,
+    validate_assessment,
+)
 from dde.core.manufacturing import (
     MANUFACTURING_EVIDENCE_TYPES,
     PRODUCTION_PLATFORMS,
@@ -54,12 +58,6 @@ from dde.core.manufacturing import (
     STAGE_REQUIREMENTS,
     assess_stage0,
     compute_complexity_heuristics,
-)
-from dde.core.evidence import (
-    EVIDENCE_STATUSES,
-    EXECUTION_OUTCOMES,
-    EvidenceReference,
-    validate_assessment,
 )
 
 # ---------------------------------------------------------------------------
@@ -88,7 +86,10 @@ def _check(name: str, fn: Any) -> None:
 # Fixtures
 # ---------------------------------------------------------------------------
 
-def _small_molecule_concept(entity_ref: str | None = "c1ccc(CC(=O)O)cc1") -> dict[str, Any]:
+
+def _small_molecule_concept(
+    entity_ref: str | None = "c1ccc(CC(=O)O)cc1",
+) -> dict[str, Any]:
     """A small-molecule concept with a real SMILES structure."""
     return {
         "schema": "dde.intervention-concept.v1",
@@ -210,12 +211,12 @@ def test_sa_score_command_exists():
     assert "sa-score" in source or "sa_score" in source, (
         "compound.py does not contain an sa-score command"
     )
-    assert "def sa_score_cmd" in source, (
-        "compound.py does not define sa_score_cmd"
-    )
+    assert "def sa_score_cmd" in source, "compound.py does not define sa_score_cmd"
 
 
-_check("compound sa-score command exists (file inspection)", test_sa_score_command_exists)
+_check(
+    "compound sa-score command exists (file inspection)", test_sa_score_command_exists
+)
 
 
 def test_sa_score_helpers_present():
@@ -225,9 +226,7 @@ def test_sa_score_helpers_present():
     assert "_require_rdkit_sa_score" in source, (
         "compound.py does not define _require_rdkit_sa_score"
     )
-    assert "sascorer" in source, (
-        "compound.py does not reference the sascorer module"
-    )
+    assert "sascorer" in source, "compound.py does not reference the sascorer module"
 
 
 _check("SA-score helpers present in compound.py", test_sa_score_helpers_present)
@@ -237,16 +236,16 @@ def test_compound_analyze_exists():
     """The compound analyze command is defined in compound.py."""
     compound_py = REPO_ROOT / "tools" / "dde" / "commands" / "compound.py"
     source = compound_py.read_text(encoding="utf-8")
-    assert "def analyze_cmd" in source, (
-        "compound.py does not define analyze_cmd"
-    )
+    assert "def analyze_cmd" in source, "compound.py does not define analyze_cmd"
     # Verify it reads descriptors, alerts, and SA-score
     assert "descriptors" in source
     assert "alerts" in source
     assert "sa_score" in source or "sa-score" in source
 
 
-_check("compound analyze command exists (file inspection)", test_compound_analyze_exists)
+_check(
+    "compound analyze command exists (file inspection)", test_compound_analyze_exists
+)
 
 
 def test_compound_descriptors_exists():
@@ -262,7 +261,10 @@ def test_compound_descriptors_exists():
     assert "tpsa" in source
 
 
-_check("compound descriptors command exists (file inspection)", test_compound_descriptors_exists)
+_check(
+    "compound descriptors command exists (file inspection)",
+    test_compound_descriptors_exists,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -297,8 +299,10 @@ def test_small_molecule_with_sa_score():
         assert "complexity_heuristic" in aspects
 
 
-_check("small-molecule + SA-score => supported assessment",
-       test_small_molecule_with_sa_score)
+_check(
+    "small-molecule + SA-score => supported assessment",
+    test_small_molecule_with_sa_score,
+)
 
 
 def test_small_molecule_sa_score_distinction_preserved():
@@ -319,13 +323,16 @@ def test_small_molecule_sa_score_distinction_preserved():
     assert "NOT" in sa_finding["distinction"], (
         "SA-score distinction must explicitly state SA-score is NOT a synthesis route"
     )
-    assert "fragment" in sa_finding["distinction"].lower() or "heuristic" in sa_finding["detail"].lower(), (
-        "SA-score detail must mention it is a fragment-frequency heuristic"
-    )
+    assert (
+        "fragment" in sa_finding["distinction"].lower()
+        or "heuristic" in sa_finding["detail"].lower()
+    ), "SA-score detail must mention it is a fragment-frequency heuristic"
 
 
-_check("SA-score distinction (SA-score != synthesizability) preserved",
-       test_small_molecule_sa_score_distinction_preserved)
+_check(
+    "SA-score distinction (SA-score != synthesizability) preserved",
+    test_small_molecule_sa_score_distinction_preserved,
+)
 
 
 def test_small_molecule_without_sa_score():
@@ -346,8 +353,10 @@ def test_small_molecule_without_sa_score():
     )
 
 
-_check("small-molecule without SA-score => not_assessed for SA finding",
-       test_small_molecule_without_sa_score)
+_check(
+    "small-molecule without SA-score => not_assessed for SA finding",
+    test_small_molecule_without_sa_score,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -374,7 +383,9 @@ def test_biologic_concept_assessment():
     assert "biologic_manufacturing_qualitative" in aspects
 
     # Qualitative finding must NOT fabricate data
-    bio_finding = next(f for f in findings if f["aspect"] == "biologic_manufacturing_qualitative")
+    bio_finding = next(
+        f for f in findings if f["aspect"] == "biologic_manufacturing_qualitative"
+    )
     assert "limitations" in bio_finding
     limitations_text = " ".join(bio_finding["limitations"])
     assert "NOT" in limitations_text or "not" in limitations_text.lower(), (
@@ -382,8 +393,10 @@ def test_biologic_concept_assessment():
     )
 
 
-_check("biologic concept => qualitative assessment without fabrication",
-       test_biologic_concept_assessment)
+_check(
+    "biologic concept => qualitative assessment without fabrication",
+    test_biologic_concept_assessment,
+)
 
 
 def test_biologic_no_fabricated_data():
@@ -393,7 +406,12 @@ def test_biologic_no_fabricated_data():
     result = assess_stage0(concept)
 
     result_str = json.dumps(result)
-    fabrication_terms = ["yield", "cost_of_goods", "stability_data", "formulation_property"]
+    fabrication_terms = [
+        "yield",
+        "cost_of_goods",
+        "stability_data",
+        "formulation_property",
+    ]
     for term in fabrication_terms:
         # These terms should not appear as values (only as limitations/disclaimers)
         findings_str = json.dumps(result["findings"])
@@ -404,8 +422,10 @@ def test_biologic_no_fabricated_data():
             )
 
 
-_check("biologic assessment has no fabricated yield/cost/stability",
-       test_biologic_no_fabricated_data)
+_check(
+    "biologic assessment has no fabricated yield/cost/stability",
+    test_biologic_no_fabricated_data,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -442,8 +462,10 @@ def test_no_entity_produces_not_yet_applicable():
     )
 
 
-_check("no entity_ref => not_yet_applicable (not failure, not fabrication)",
-       test_no_entity_produces_not_yet_applicable)
+_check(
+    "no entity_ref => not_yet_applicable (not failure, not fabrication)",
+    test_no_entity_produces_not_yet_applicable,
+)
 
 
 def test_no_entity_is_not_a_failure():
@@ -459,8 +481,10 @@ def test_no_entity_is_not_a_failure():
     )
 
 
-_check("no entity_ref is not_yet_applicable, not a failure",
-       test_no_entity_is_not_a_failure)
+_check(
+    "no entity_ref is not_yet_applicable, not a failure",
+    test_no_entity_is_not_a_failure,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -491,7 +515,9 @@ def test_stereocenters_flagged_as_heuristic():
                 break
 
         assert complexity_finding is not None, "missing complexity_heuristic finding"
-        assert complexity_finding.get("requirement_type") == "prioritization_heuristic", (
+        assert (
+            complexity_finding.get("requirement_type") == "prioritization_heuristic"
+        ), (
             f"expected requirement_type 'prioritization_heuristic', "
             f"got {complexity_finding.get('requirement_type')!r}"
         )
@@ -505,14 +531,17 @@ def test_stereocenters_flagged_as_heuristic():
         # is defined as "prioritization_heuristic" — verify this from
         # the source code
         import inspect
+
         source = inspect.getsource(compute_complexity_heuristics)
         assert "prioritization_heuristic" in source
         assert "scientific_cutoff" not in source or "not" in source.lower()
         print("    (RDKit not available — verified from source definition)")
 
 
-_check("stereocenter count => prioritization_heuristic, not hard rejection",
-       test_stereocenters_flagged_as_heuristic)
+_check(
+    "stereocenter count => prioritization_heuristic, not hard rejection",
+    test_stereocenters_flagged_as_heuristic,
+)
 
 
 def test_high_stereocenters_not_automatic_rejection():
@@ -550,8 +579,10 @@ def test_high_stereocenters_not_automatic_rejection():
         print("    (RDKit not available — verified no auto-rejection)")
 
 
-_check("high stereocenters => still 'supported' (not rejected)",
-       test_high_stereocenters_not_automatic_rejection)
+_check(
+    "high stereocenters => still 'supported' (not rejected)",
+    test_high_stereocenters_not_automatic_rejection,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -577,7 +608,9 @@ def test_qualitative_finding_has_required_fields():
     # Required fields per task brief
     assert "assumptions" in bio_finding, "qualitative finding must cite assumptions"
     assert "limitations" in bio_finding, "qualitative finding must cite limitations"
-    assert "next_evidence" in bio_finding, "qualitative finding must name next required evidence"
+    assert "next_evidence" in bio_finding, (
+        "qualitative finding must name next required evidence"
+    )
     assert "owner" in bio_finding, "qualitative finding must name the owner"
 
     # Assumptions must be non-empty
@@ -585,8 +618,10 @@ def test_qualitative_finding_has_required_fields():
     assert len(bio_finding["limitations"]) > 0, "limitations must be non-empty"
 
 
-_check("qualitative finding has precedent, assumptions, limitations, owner, next_evidence",
-       test_qualitative_finding_has_required_fields)
+_check(
+    "qualitative finding has precedent, assumptions, limitations, owner, next_evidence",
+    test_qualitative_finding_has_required_fields,
+)
 
 
 def test_qualitative_finding_no_fabricated_numbers():
@@ -601,12 +636,16 @@ def test_qualitative_finding_no_fabricated_numbers():
         assert "yield_percent" not in f, "yield_percent is fabricated data"
         assert "cost_of_goods" not in f, "cost_of_goods is fabricated data"
         assert "stability_months" not in f, "stability_months is fabricated data"
-        assert "formulation_viscosity" not in f, "formulation_viscosity is fabricated data"
+        assert "formulation_viscosity" not in f, (
+            "formulation_viscosity is fabricated data"
+        )
         assert "titer" not in f, "titer is fabricated data"
 
 
-_check("qualitative finding has no fabricated yield/cost/stability numbers",
-       test_qualitative_finding_no_fabricated_numbers)
+_check(
+    "qualitative finding has no fabricated yield/cost/stability numbers",
+    test_qualitative_finding_no_fabricated_numbers,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -630,9 +669,17 @@ def test_supersedes_chain_supported():
     # Validate the initial assessment
     errors = validate_assessment(initial)
     # Filter out errors about extra fields (our findings/stage_requirements are extras)
-    schema_errors = [e for e in errors if "missing" in e or "schema" in e
-                     or "evidence_status" in e or "execution_outcome" in e]
-    assert len(schema_errors) == 0, f"initial assessment validation errors: {schema_errors}"
+    schema_errors = [
+        e
+        for e in errors
+        if "missing" in e
+        or "schema" in e
+        or "evidence_status" in e
+        or "execution_outcome" in e
+    ]
+    assert len(schema_errors) == 0, (
+        f"initial assessment validation errors: {schema_errors}"
+    )
 
     # Superseding assessment — new evidence shows a viable route
     superseding = assess_stage0(_small_molecule_concept(), _sa_score_data(3.0))
@@ -641,17 +688,24 @@ def test_supersedes_chain_supported():
 
     # Validate the superseding assessment
     errors2 = validate_assessment(superseding)
-    schema_errors2 = [e for e in errors2 if "missing" in e or "schema" in e
-                      or "evidence_status" in e or "execution_outcome" in e]
-    assert len(schema_errors2) == 0, f"superseding assessment validation errors: {schema_errors2}"
+    schema_errors2 = [
+        e
+        for e in errors2
+        if "missing" in e
+        or "schema" in e
+        or "evidence_status" in e
+        or "execution_outcome" in e
+    ]
+    assert len(schema_errors2) == 0, (
+        f"superseding assessment validation errors: {schema_errors2}"
+    )
 
     # Verify the supersedes chain
     assert superseding["supersedes"] == "AR-010"
     assert superseding["id"] != initial["id"]
 
 
-_check("assessment supersedes chain is representable",
-       test_supersedes_chain_supported)
+_check("assessment supersedes chain is representable", test_supersedes_chain_supported)
 
 
 def test_supersedes_format_validation():
@@ -667,8 +721,7 @@ def test_supersedes_format_validation():
     )
 
 
-_check("supersedes bad format => validation error",
-       test_supersedes_format_validation)
+_check("supersedes bad format => validation error", test_supersedes_format_validation)
 
 
 # ---------------------------------------------------------------------------
@@ -692,19 +745,15 @@ def test_stage_requirements_have_evidence_types():
     """Each stage definition has evidence_types that can be referenced
     by #11 policy requirements."""
     for stage, req in STAGE_REQUIREMENTS.items():
-        assert "evidence_types" in req, (
-            f"stage {stage} missing evidence_types"
-        )
-        assert len(req["evidence_types"]) > 0, (
-            f"stage {stage} has no evidence_types"
-        )
-        assert "description" in req, (
-            f"stage {stage} missing description"
-        )
+        assert "evidence_types" in req, f"stage {stage} missing evidence_types"
+        assert len(req["evidence_types"]) > 0, f"stage {stage} has no evidence_types"
+        assert "description" in req, f"stage {stage} missing description"
 
 
-_check("each stage has evidence_types referrable by policy",
-       test_stage_requirements_have_evidence_types)
+_check(
+    "each stage has evidence_types referrable by policy",
+    test_stage_requirements_have_evidence_types,
+)
 
 
 def test_stage_2_4_are_placeholders():
@@ -721,8 +770,7 @@ def test_stage_2_4_are_placeholders():
         )
 
 
-_check("stages 2-4 documented as placeholders",
-       test_stage_2_4_are_placeholders)
+_check("stages 2-4 documented as placeholders", test_stage_2_4_are_placeholders)
 
 
 def test_stage0_is_concrete():
@@ -745,8 +793,13 @@ print("\n--- Production platform fit ---")
 def test_known_modalities_have_platforms():
     """All known modalities have production platform mappings."""
     expected_modalities = {
-        "small_molecule", "biologic", "antibody", "molecular_glue",
-        "protac", "peptide", "oligonucleotide",
+        "small_molecule",
+        "biologic",
+        "antibody",
+        "molecular_glue",
+        "protac",
+        "peptide",
+        "oligonucleotide",
     }
     for mod in expected_modalities:
         assert mod in PRODUCTION_PLATFORMS, (
@@ -757,8 +810,10 @@ def test_known_modalities_have_platforms():
         )
 
 
-_check("known modalities have production platform mappings",
-       test_known_modalities_have_platforms)
+_check(
+    "known modalities have production platform mappings",
+    test_known_modalities_have_platforms,
+)
 
 
 def test_unknown_modality_produces_not_assessed():
@@ -779,8 +834,10 @@ def test_unknown_modality_produces_not_assessed():
     assert platform_finding["status"] == "not_assessed"
 
 
-_check("unknown modality => not_assessed for platform fit",
-       test_unknown_modality_produces_not_assessed)
+_check(
+    "unknown modality => not_assessed for platform fit",
+    test_unknown_modality_produces_not_assessed,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -805,8 +862,10 @@ def test_complexity_heuristics_simple_molecule():
     assert result["heuristic_type"] == "prioritization_heuristic"
 
 
-_check("complexity heuristics: simple molecule (aspirin)",
-       test_complexity_heuristics_simple_molecule)
+_check(
+    "complexity heuristics: simple molecule (aspirin)",
+    test_complexity_heuristics_simple_molecule,
+)
 
 
 def test_complexity_heuristics_chiral_molecule():
@@ -823,7 +882,9 @@ def test_complexity_heuristics_chiral_molecule():
     assert "scope" in result
 
 
-_check("complexity heuristics: chiral molecule", test_complexity_heuristics_chiral_molecule)
+_check(
+    "complexity heuristics: chiral molecule", test_complexity_heuristics_chiral_molecule
+)
 
 
 def test_complexity_heuristics_invalid_smiles():
@@ -834,8 +895,10 @@ def test_complexity_heuristics_invalid_smiles():
         pass  # Expected
 
 
-_check("complexity heuristics: invalid SMILES => None",
-       test_complexity_heuristics_invalid_smiles)
+_check(
+    "complexity heuristics: invalid SMILES => None",
+    test_complexity_heuristics_invalid_smiles,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -853,14 +916,22 @@ def test_assessment_validates_against_schema():
 
     errors = validate_assessment(result)
     # Filter to schema-level errors (not extra fields)
-    critical = [e for e in errors if "missing" in e or "schema" in e
-                or "evidence_status" in e or "execution_outcome" in e
-                or "id" in e]
+    critical = [
+        e
+        for e in errors
+        if "missing" in e
+        or "schema" in e
+        or "evidence_status" in e
+        or "execution_outcome" in e
+        or "id" in e
+    ]
     assert len(critical) == 0, f"assessment schema errors: {critical}"
 
 
-_check("manufacturing assessment validates against evidence schema",
-       test_assessment_validates_against_schema)
+_check(
+    "manufacturing assessment validates against evidence schema",
+    test_assessment_validates_against_schema,
+)
 
 
 def test_not_yet_applicable_is_valid_status():
@@ -868,8 +939,10 @@ def test_not_yet_applicable_is_valid_status():
     assert "not_yet_applicable" in EVIDENCE_STATUSES
 
 
-_check("not_yet_applicable is in EVIDENCE_STATUSES",
-       test_not_yet_applicable_is_valid_status)
+_check(
+    "not_yet_applicable is in EVIDENCE_STATUSES",
+    test_not_yet_applicable_is_valid_status,
+)
 
 
 def test_assessment_evidence_type_is_manufacturing():
@@ -881,8 +954,10 @@ def test_assessment_evidence_type_is_manufacturing():
     assert evidence.get("evidence_type") == "manufacturing_feasibility"
 
 
-_check("assessment evidence_type is manufacturing_feasibility",
-       test_assessment_evidence_type_is_manufacturing)
+_check(
+    "assessment evidence_type is manufacturing_feasibility",
+    test_assessment_evidence_type_is_manufacturing,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -900,8 +975,10 @@ def test_sa_score_only_for_chemical_synthesis_modalities():
     assert "biologic" not in SA_SCORE_MODALITIES
 
 
-_check("SA-score scoped to chemical synthesis modalities",
-       test_sa_score_only_for_chemical_synthesis_modalities)
+_check(
+    "SA-score scoped to chemical synthesis modalities",
+    test_sa_score_only_for_chemical_synthesis_modalities,
+)
 
 
 def test_biologic_does_not_get_sa_score():
@@ -915,8 +992,7 @@ def test_biologic_does_not_get_sa_score():
     )
 
 
-_check("biologic concept has no SA-score finding",
-       test_biologic_does_not_get_sa_score)
+_check("biologic concept has no SA-score finding", test_biologic_does_not_get_sa_score)
 
 
 # ---------------------------------------------------------------------------
@@ -930,7 +1006,11 @@ def test_disclaimer_present():
     imply GMP readiness or manufacturing clearance."""
     for concept_fn in [_small_molecule_concept, _biologic_concept, _no_entity_concept]:
         concept = concept_fn()
-        sa = _sa_score_data() if concept["modality"] in SA_SCORE_MODALITIES and concept["entity_ref"] else None
+        sa = (
+            _sa_score_data()
+            if concept["modality"] in SA_SCORE_MODALITIES and concept["entity_ref"]
+            else None
+        )
         result = assess_stage0(concept, sa)
 
         rationale = result.get("rationale", "")
@@ -942,8 +1022,7 @@ def test_disclaimer_present():
         )
 
 
-_check("all assessments disclaim GMP/manufacturing clearance",
-       test_disclaimer_present)
+_check("all assessments disclaim GMP/manufacturing clearance", test_disclaimer_present)
 
 
 # ---------------------------------------------------------------------------
@@ -960,8 +1039,7 @@ def test_evidence_types_documented():
     assert "production_platform_fit" in MANUFACTURING_EVIDENCE_TYPES
 
 
-_check("manufacturing evidence types documented",
-       test_evidence_types_documented)
+_check("manufacturing evidence types documented", test_evidence_types_documented)
 
 
 # ---------------------------------------------------------------------------
@@ -981,8 +1059,7 @@ def test_delivery_assumptions_assessed():
     assert "delivery_manufacturing_compatibility" in aspects
 
 
-_check("delivery assumptions produce a finding",
-       test_delivery_assumptions_assessed)
+_check("delivery assumptions produce a finding", test_delivery_assumptions_assessed)
 
 
 def test_null_delivery_no_finding():
@@ -996,8 +1073,9 @@ def test_null_delivery_no_finding():
     assert "delivery_manufacturing_compatibility" not in aspects
 
 
-_check("null delivery_assumptions => no delivery finding",
-       test_null_delivery_no_finding)
+_check(
+    "null delivery_assumptions => no delivery finding", test_null_delivery_no_finding
+)
 
 
 # ---------------------------------------------------------------------------
@@ -1022,8 +1100,10 @@ def test_artifact_dir_manufacturing_registered():
     )
 
 
-_check("ARTIFACT_DIRS contains 'manufacturing' entry",
-       test_artifact_dir_manufacturing_registered)
+_check(
+    "ARTIFACT_DIRS contains 'manufacturing' entry",
+    test_artifact_dir_manufacturing_registered,
+)
 
 
 def test_manufacturing_cli_default_output_path():
@@ -1042,6 +1122,7 @@ def test_manufacturing_cli_default_output_path():
     try:
         from click.testing import CliRunner
         from dde.cli import cli
+
         has_click = True
     except ImportError:
         has_click = False
@@ -1059,16 +1140,20 @@ def test_manufacturing_cli_default_output_path():
             concept_file = project / "concept.json"
             concept_file.write_text(json.dumps(concept, indent=2), encoding="utf-8")
 
-            result = runner.invoke(cli, [
-                "--project", str(project),
-                "manufacturing", "assess-stage0",
-                str(concept_file),
-                "--json",
-            ])
+            result = runner.invoke(
+                cli,
+                [
+                    "--project",
+                    str(project),
+                    "manufacturing",
+                    "assess-stage0",
+                    str(concept_file),
+                    "--json",
+                ],
+            )
 
             assert result.exit_code == 0, (
-                f"CLI exited with code {result.exit_code}; "
-                f"output:\n{result.output}"
+                f"CLI exited with code {result.exit_code}; output:\n{result.output}"
             )
 
             # Verify the output was written to the default location
@@ -1102,8 +1187,10 @@ def test_manufacturing_cli_default_output_path():
         print("    (click not available — verified via direct artifact_dir() call)")
 
 
-_check("CLI assess-stage0 succeeds via default output path (no --out)",
-       test_manufacturing_cli_default_output_path)
+_check(
+    "CLI assess-stage0 succeeds via default output path (no --out)",
+    test_manufacturing_cli_default_output_path,
+)
 
 
 # ===========================================================================

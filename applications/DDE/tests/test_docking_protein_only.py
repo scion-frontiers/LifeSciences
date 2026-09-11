@@ -27,7 +27,6 @@ from __future__ import annotations
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any
 
 # Ensure the tools package is importable.
 TOOLS_DIR = Path(__file__).resolve().parent.parent / "tools"
@@ -38,8 +37,6 @@ from dde.commands.docking import (
     _STANDARD_AMINO_ACIDS,
     _strip_non_protein,
 )
-from dde.core.errors import ArtifactError
-
 
 # ---------------------------------------------------------------------------
 # Sample PDB content for testing
@@ -321,8 +318,6 @@ def test_error_suggests_protein_only() -> None:
     # We test the error-path logic by importing _convert_receptor_to_pdbqt
     # and verifying the error message pattern.  Since mk_prepare_receptor.py
     # may not be installed, we test the detection logic directly.
-    from dde.commands.docking import _convert_receptor_to_pdbqt
-
     # The function raises ArtifactError on failure.  We can't easily run
     # mk_prepare_receptor.py without it being installed, so we verify
     # that the error detection hints are correctly defined by checking
@@ -333,9 +328,11 @@ def test_error_suggests_protein_only() -> None:
     # _require_mk_prepare_receptor DependencyError (different path),
     # or with a structure file that would fail.  The key assertion is
     # that the hint-detection code path exists and is reachable.
-
     # Verify the hint strings are defined in the function
     import inspect
+
+    from dde.commands.docking import _convert_receptor_to_pdbqt
+
     source = inspect.getsource(_convert_receptor_to_pdbqt)
     assert "unknown residue" in source
     assert "--protein-only" in source
@@ -352,10 +349,26 @@ def test_error_suggests_protein_only() -> None:
 def test_standard_amino_acids_complete() -> None:
     """The standard amino acid set contains the canonical 20."""
     canonical = {
-        "ALA", "ARG", "ASN", "ASP", "CYS",
-        "GLN", "GLU", "GLY", "HIS", "ILE",
-        "LEU", "LYS", "MET", "PHE", "PRO",
-        "SER", "THR", "TRP", "TYR", "VAL",
+        "ALA",
+        "ARG",
+        "ASN",
+        "ASP",
+        "CYS",
+        "GLN",
+        "GLU",
+        "GLY",
+        "HIS",
+        "ILE",
+        "LEU",
+        "LYS",
+        "MET",
+        "PHE",
+        "PRO",
+        "SER",
+        "THR",
+        "TRP",
+        "TYR",
+        "VAL",
     }
     assert canonical.issubset(_STANDARD_AMINO_ACIDS)
     # MSE (selenomethionine) is also included

@@ -51,7 +51,6 @@ from dde.commands.homology import (
 )
 from dde.core.errors import UsageError
 
-
 # ---------------------------------------------------------------------------
 # 1. _parse_range tests
 # ---------------------------------------------------------------------------
@@ -519,9 +518,7 @@ def test_manifest_schema() -> None:
         assert not missing, f"Hit {i} missing fields: {missing}"
 
     # Verify manifest is JSON-serialisable
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".json", delete=False
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         json.dump(manifest, f, indent=2)
         f.flush()
         # Read back and verify
@@ -548,13 +545,15 @@ class _FakeThresholds:
         return self._values[key]
 
 
-_DEFAULT_T = _FakeThresholds({
-    "identity_high": 0.5,
-    "identity_moderate": 0.3,
-    "resolution_high": 2.5,
-    "resolution_low": 3.5,
-    "coverage_minimum": 0.5,
-})
+_DEFAULT_T = _FakeThresholds(
+    {
+        "identity_high": 0.5,
+        "identity_moderate": 0.3,
+        "resolution_high": 2.5,
+        "resolution_low": 3.5,
+        "coverage_minimum": 0.5,
+    }
+)
 
 
 # --- Identity band classification ---
@@ -707,11 +706,13 @@ def test_relay_fires_for_non_direct() -> None:
     relays: list[dict[str, str]] = []
     if non_direct:
         sources = sorted({h.get("source_uniprot", "unknown") for h in non_direct})
-        relays.append(provenance.relay(
-            "homology.structure_is_not_target",
-            f"All {len(non_direct)} hit(s) are structures of homologous proteins "
-            f"({', '.join(sources[:5])}), not Q9HB29 itself.",
-        ))
+        relays.append(
+            provenance.relay(
+                "homology.structure_is_not_target",
+                f"All {len(non_direct)} hit(s) are structures of homologous proteins "
+                f"({', '.join(sources[:5])}), not Q9HB29 itself.",
+            )
+        )
 
     assert len(relays) == 1
     assert relays[0]["code"] == "homology.structure_is_not_target"
@@ -753,17 +754,31 @@ def test_assess_hit_fields() -> None:
 
     result = _assess_hit(hit, _DEFAULT_T)
 
-    assert result["identity_band"] == "moderate", f"Expected moderate, got {result['identity_band']}"
-    assert result["resolution_quality"] == "high", f"Expected high, got {result['resolution_quality']}"
-    assert result["coverage"] == "adequate", f"Expected adequate, got {result['coverage']}"
+    assert result["identity_band"] == "moderate", (
+        f"Expected moderate, got {result['identity_band']}"
+    )
+    assert result["resolution_quality"] == "high", (
+        f"Expected high, got {result['resolution_quality']}"
+    )
+    assert result["coverage"] == "adequate", (
+        f"Expected adequate, got {result['coverage']}"
+    )
     assert result["sequence_identity"] == 0.45
     assert result["resolution_angstrom"] == 2.1
     assert result["query_coverage_fraction"] == 0.77
 
     required_fields = {
-        "pdb_entity_id", "pdb_id", "sequence_identity", "resolution_angstrom",
-        "query_coverage_fraction", "identity_band", "resolution_quality",
-        "coverage", "source_uniprot", "is_direct_structure", "title",
+        "pdb_entity_id",
+        "pdb_id",
+        "sequence_identity",
+        "resolution_angstrom",
+        "query_coverage_fraction",
+        "identity_band",
+        "resolution_quality",
+        "coverage",
+        "source_uniprot",
+        "is_direct_structure",
+        "title",
     }
     missing = required_fields - set(result.keys())
     assert not missing, f"Missing fields: {missing}"
@@ -997,8 +1012,14 @@ def main() -> None:
         ("test_coverage_insufficient", test_coverage_insufficient),
         # Phase 2 — verdict
         ("test_verdict_strong_candidates", test_verdict_strong_candidates),
-        ("test_verdict_moderate_candidates_moderate_band", test_verdict_moderate_candidates_moderate_band),
-        ("test_verdict_moderate_candidates_high_inadequate", test_verdict_moderate_candidates_high_inadequate),
+        (
+            "test_verdict_moderate_candidates_moderate_band",
+            test_verdict_moderate_candidates_moderate_band,
+        ),
+        (
+            "test_verdict_moderate_candidates_high_inadequate",
+            test_verdict_moderate_candidates_high_inadequate,
+        ),
         ("test_verdict_remote_only", test_verdict_remote_only),
         ("test_verdict_no_coverage", test_verdict_no_coverage),
         ("test_verdict_no_hits", test_verdict_no_hits),
@@ -1011,7 +1032,10 @@ def main() -> None:
         ("test_parse_pdb_entity_id_with_entity", test_parse_pdb_entity_id_with_entity),
         ("test_parse_pdb_entity_id_bare", test_parse_pdb_entity_id_bare),
         ("test_parse_pdb_entity_id_lowercase", test_parse_pdb_entity_id_lowercase),
-        ("test_fetch_structure_download_and_sidecar", test_fetch_structure_download_and_sidecar),
+        (
+            "test_fetch_structure_download_and_sidecar",
+            test_fetch_structure_download_and_sidecar,
+        ),
         ("test_fetch_structure_pdb_format", test_fetch_structure_pdb_format),
         ("test_fetch_structure_sidecar_sha256", test_fetch_structure_sidecar_sha256),
     ]
@@ -1026,7 +1050,7 @@ def main() -> None:
             print(f"  FAIL: {name} — {exc}")
             failed += 1
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Results: {passed} passed, {failed} failed, {passed + failed} total")
     if failed:
         sys.exit(1)

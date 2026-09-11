@@ -41,7 +41,6 @@ Exit 0 = all tests passed, exit 1 = at least one failure.
 
 from __future__ import annotations
 
-import json
 import sys
 import tempfile
 import traceback
@@ -55,16 +54,13 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 
-from dde.core import controlstore
 from dde.core.concepts import (
     BIOMARKER_CATEGORIES,
-    BIOMARKER_STATUSES,
     CONCEPT_ID_RE,
     CONCEPT_RECORD_KEY_RE,
     CONCEPT_SCHEMA,
     CONCEPT_STATES,
     CONCEPT_TRANSITIONS,
-    KEY_FIELDS,
     TERMINAL_CONCEPT_STATES,
     check_charter_linkage,
     requires_new_revision,
@@ -72,9 +68,9 @@ from dde.core.concepts import (
     validate_concept,
 )
 from dde.core.controlstore import (
+    _VALIDATORS,
     CONTROL_DIR,
     RECORD_TYPES,
-    _VALIDATORS,
     ensure_control_dirs,
     list_records,
     next_id,
@@ -156,6 +152,7 @@ def _run(name: str, fn: Any) -> None:
 # Tests: Concept ID format
 # ---------------------------------------------------------------------------
 
+
 def test_concept_id_regex() -> None:
     assert CONCEPT_ID_RE.match("IC-001")
     assert CONCEPT_ID_RE.match("IC-042")
@@ -177,6 +174,7 @@ def test_concept_record_key_regex() -> None:
 # Tests: State machine transitions
 # ---------------------------------------------------------------------------
 
+
 def test_concept_transitions_initial() -> None:
     """Only 'draft' is reachable from None (initial state)."""
     assert CONCEPT_TRANSITIONS[None] == {"draft"}
@@ -188,7 +186,10 @@ def test_concept_transitions_draft() -> None:
 
 def test_concept_transitions_active() -> None:
     assert CONCEPT_TRANSITIONS["active"] == {
-        "under_review", "pivoting", "parked", "terminated",
+        "under_review",
+        "pivoting",
+        "parked",
+        "terminated",
     }
 
 
@@ -212,8 +213,13 @@ def test_terminal_concept_states() -> None:
 def test_all_states_derived() -> None:
     """CONCEPT_STATES should contain all states mentioned in transitions."""
     expected = {
-        "draft", "active", "under_review", "pivoting", "parked",
-        "terminated", "withdrawn",
+        "draft",
+        "active",
+        "under_review",
+        "pivoting",
+        "parked",
+        "terminated",
+        "withdrawn",
     }
     assert CONCEPT_STATES == expected
 
@@ -221,6 +227,7 @@ def test_all_states_derived() -> None:
 # ---------------------------------------------------------------------------
 # Tests: State machine registered in statemachine.py
 # ---------------------------------------------------------------------------
+
 
 def test_concept_registered_in_machines() -> None:
     assert "concept" in _MACHINES
@@ -260,6 +267,7 @@ def test_validate_transition_concept_illegal() -> None:
 # ---------------------------------------------------------------------------
 # Tests: Concept validation
 # ---------------------------------------------------------------------------
+
 
 def test_validate_minimal_concept() -> None:
     record = _make_minimal_concept()
@@ -348,8 +356,9 @@ def test_validate_termination_authority_enum() -> None:
     for val in ("human", "program_lead", None):
         record = _make_minimal_concept(termination_authority=val)
         errors = validate_concept(record)
-        assert not any("termination_authority" in e for e in errors), \
+        assert not any("termination_authority" in e for e in errors), (
             f"unexpected error for termination_authority={val!r}: {errors}"
+        )
 
     # Invalid value.
     record = _make_minimal_concept(termination_authority="auto")
@@ -360,6 +369,7 @@ def test_validate_termination_authority_enum() -> None:
 # ---------------------------------------------------------------------------
 # Tests: Biomarker validation
 # ---------------------------------------------------------------------------
+
 
 def test_biomarker_all_categories() -> None:
     """All 4 categories are accepted."""
@@ -469,6 +479,7 @@ def test_validate_concept_biomarkers_not_list() -> None:
 # Tests: Revision triggers
 # ---------------------------------------------------------------------------
 
+
 def test_key_field_change_triggers_revision() -> None:
     old = _make_minimal_concept()
     new = _make_minimal_concept()
@@ -544,6 +555,7 @@ def test_patient_population_change_triggers_revision() -> None:
 # Tests: Charter-linkage gate
 # ---------------------------------------------------------------------------
 
+
 def test_charter_linkage_blocks_activation() -> None:
     """Cannot go active without charter_ref."""
     data = _make_minimal_concept(charter_ref=None)
@@ -582,6 +594,7 @@ def test_charter_linkage_not_checked_for_other_states() -> None:
 # Tests: Charter-linkage gate wired into validate_concept (Refusal)
 # ---------------------------------------------------------------------------
 
+
 def test_validate_concept_active_without_charter_raises_refusal() -> None:
     """validate_concept() raises Refusal for active state without charter_ref.
 
@@ -613,6 +626,7 @@ def test_validate_concept_draft_without_charter_no_refusal() -> None:
 # ---------------------------------------------------------------------------
 # Tests: Charter-linkage through the REAL write_record() path
 # ---------------------------------------------------------------------------
+
 
 def test_write_record_active_concept_without_charter_raises_refusal() -> None:
     """write_record() must raise Refusal for active concept without charter_ref.
@@ -683,6 +697,7 @@ def test_write_record_draft_concept_without_charter_succeeds() -> None:
 # Tests: Migration-shaped record through real write_record() path
 # ---------------------------------------------------------------------------
 
+
 def test_write_record_migration_shaped_record() -> None:
     """A migration-shaped record (modality=None, gaps as null) must write
     successfully through the real write_record() path.
@@ -741,6 +756,7 @@ def test_write_record_migration_shaped_record() -> None:
 # Tests: Control store registration
 # ---------------------------------------------------------------------------
 
+
 def test_concept_in_record_types() -> None:
     assert "concept" in RECORD_TYPES
     assert RECORD_TYPES["concept"] == "concepts"
@@ -754,6 +770,7 @@ def test_concept_validator_registered() -> None:
 # ---------------------------------------------------------------------------
 # Tests: Control store round-trip (integration)
 # ---------------------------------------------------------------------------
+
 
 def test_write_and_read_concept() -> None:
     """Full write-read round-trip through the control store."""
@@ -799,7 +816,8 @@ def test_list_concepts() -> None:
 
         # Filter.
         filtered = list_records(
-            root, "concept",
+            root,
+            "concept",
             filter_fn=lambda r: r.get("id") == "IC-002",
         )
         assert len(filtered) == 1
@@ -829,6 +847,7 @@ def test_worked_example_round_trip() -> None:
 # Tests: next_id for concepts
 # ---------------------------------------------------------------------------
 
+
 def test_next_id_concept_empty() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -849,6 +868,7 @@ def test_next_id_concept_increments() -> None:
 # Tests: Backward compatibility
 # ---------------------------------------------------------------------------
 
+
 def test_empty_concepts_dir_no_breakage() -> None:
     """An empty concepts directory should not break existing operations."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -867,13 +887,22 @@ def test_empty_concepts_dir_no_breakage() -> None:
 
         # Existing work-order operations still work.
         wo = {
-            "id": "WO-001", "revision": 1, "state": "proposed",
-            "decision_question": "test", "requested_role": "test",
-            "stage": 1, "cycle": 1, "context": {},
-            "dependencies": [], "capabilities": [],
-            "deliverables": {}, "acceptance_criteria": ["test"],
-            "alert_policy": {}, "priority": "normal",
-            "resource_class": "standard", "report_to": "lead",
+            "id": "WO-001",
+            "revision": 1,
+            "state": "proposed",
+            "decision_question": "test",
+            "requested_role": "test",
+            "stage": 1,
+            "cycle": 1,
+            "context": {},
+            "dependencies": [],
+            "capabilities": [],
+            "deliverables": {},
+            "acceptance_criteria": ["test"],
+            "alert_policy": {},
+            "priority": "normal",
+            "resource_class": "standard",
+            "report_to": "lead",
             "created_at": _NOW,
         }
         write_record(root, "work-order", "WO-001-r1", wo)
@@ -901,6 +930,7 @@ def test_missing_concepts_dir_list_returns_empty() -> None:
 # ---------------------------------------------------------------------------
 # Tests: Two modalities for the same target (validation fixture)
 # ---------------------------------------------------------------------------
+
 
 def test_two_modalities_same_target() -> None:
     """Two concept records for the same gene with different modalities."""
@@ -933,6 +963,7 @@ def test_two_modalities_same_target() -> None:
 # Tests: Scoped rejection leaves alternative concept available
 # ---------------------------------------------------------------------------
 
+
 def test_scoped_rejection() -> None:
     """Terminating one concept leaves another for the same target available."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -947,7 +978,8 @@ def test_scoped_rejection() -> None:
         write_record(root, "concept", "IC-002-r1", ic2)
 
         active = list_records(
-            root, "concept",
+            root,
+            "concept",
             filter_fn=lambda r: r.get("state") == "active",
         )
         assert len(active) == 1
@@ -957,6 +989,7 @@ def test_scoped_rejection() -> None:
 # ---------------------------------------------------------------------------
 # Tests: Major concept revision (key field change)
 # ---------------------------------------------------------------------------
+
 
 def test_major_revision() -> None:
     """A key field change creates a new revision record."""
@@ -984,12 +1017,12 @@ def test_major_revision() -> None:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> int:
     tests = [
         # ID format
         ("concept_id_regex", test_concept_id_regex),
         ("concept_record_key_regex", test_concept_record_key_regex),
-
         # State machine transitions
         ("transitions_initial", test_concept_transitions_initial),
         ("transitions_draft", test_concept_transitions_draft),
@@ -998,12 +1031,10 @@ def main() -> int:
         ("transitions_terminal", test_concept_transitions_terminal),
         ("terminal_concept_states", test_terminal_concept_states),
         ("all_states_derived", test_all_states_derived),
-
         # State machine registration
         ("registered_in_machines", test_concept_registered_in_machines),
         ("validate_transition_legal", test_validate_transition_concept_legal),
         ("validate_transition_illegal", test_validate_transition_concept_illegal),
-
         # Concept validation
         ("validate_minimal", test_validate_minimal_concept),
         ("validate_worked_example", test_validate_worked_example),
@@ -1013,82 +1044,127 @@ def main() -> int:
         ("validate_bad_revision", test_validate_bad_revision),
         ("validate_bad_state", test_validate_bad_state),
         ("validate_disease_context_not_dict", test_validate_disease_context_not_dict),
-        ("validate_disease_context_missing_indication", test_validate_disease_context_missing_indication),
+        (
+            "validate_disease_context_missing_indication",
+            test_validate_disease_context_missing_indication,
+        ),
         ("validate_target_pathway_not_dict", test_validate_target_pathway_not_dict),
-        ("validate_target_pathway_missing_gene", test_validate_target_pathway_missing_gene),
+        (
+            "validate_target_pathway_missing_gene",
+            test_validate_target_pathway_missing_gene,
+        ),
         ("validate_modality_not_string", test_validate_modality_not_string),
         ("validate_modality_null_ok", test_validate_modality_null_ok),
-        ("validate_termination_authority_enum", test_validate_termination_authority_enum),
-
+        (
+            "validate_termination_authority_enum",
+            test_validate_termination_authority_enum,
+        ),
         # Biomarker validation
         ("biomarker_all_categories", test_biomarker_all_categories),
         ("biomarker_invalid_category", test_biomarker_invalid_category),
         ("biomarker_known_no_rationale", test_biomarker_known_no_rationale_needed),
-        ("biomarker_unknown_requires_rationale", test_biomarker_unknown_requires_rationale),
-        ("biomarker_not_applicable_requires_rationale", test_biomarker_not_applicable_requires_rationale),
-        ("biomarker_unknown_with_rationale", test_biomarker_unknown_with_rationale_passes),
-        ("biomarker_not_applicable_with_rationale", test_biomarker_not_applicable_with_rationale_passes),
+        (
+            "biomarker_unknown_requires_rationale",
+            test_biomarker_unknown_requires_rationale,
+        ),
+        (
+            "biomarker_not_applicable_requires_rationale",
+            test_biomarker_not_applicable_requires_rationale,
+        ),
+        (
+            "biomarker_unknown_with_rationale",
+            test_biomarker_unknown_with_rationale_passes,
+        ),
+        (
+            "biomarker_not_applicable_with_rationale",
+            test_biomarker_not_applicable_with_rationale_passes,
+        ),
         ("biomarker_empty_rationale", test_biomarker_empty_rationale_rejected),
         ("validate_concept_with_biomarkers", test_validate_concept_with_biomarkers),
         ("validate_concept_null_biomarkers", test_validate_concept_null_biomarkers_ok),
-        ("validate_concept_biomarkers_not_list", test_validate_concept_biomarkers_not_list),
-
+        (
+            "validate_concept_biomarkers_not_list",
+            test_validate_concept_biomarkers_not_list,
+        ),
         # Revision triggers
         ("key_field_change_triggers", test_key_field_change_triggers_revision),
         ("gene_change_triggers", test_gene_change_triggers_revision),
         ("modality_change_triggers", test_modality_change_triggers_revision),
-        ("mechanism_hypothesis_triggers", test_mechanism_hypothesis_change_triggers_revision),
-        ("delivery_non_null_triggers", test_delivery_assumptions_non_null_triggers_revision),
-        ("delivery_to_null_no_trigger", test_delivery_assumptions_to_null_does_not_trigger),
+        (
+            "mechanism_hypothesis_triggers",
+            test_mechanism_hypothesis_change_triggers_revision,
+        ),
+        (
+            "delivery_non_null_triggers",
+            test_delivery_assumptions_non_null_triggers_revision,
+        ),
+        (
+            "delivery_to_null_no_trigger",
+            test_delivery_assumptions_to_null_does_not_trigger,
+        ),
         ("non_key_no_revision", test_non_key_field_change_no_revision),
         ("work_order_refs_no_revision", test_work_order_refs_change_no_revision),
         ("decision_log_refs_no_revision", test_decision_log_refs_change_no_revision),
-        ("patient_population_triggers", test_patient_population_change_triggers_revision),
-
+        (
+            "patient_population_triggers",
+            test_patient_population_change_triggers_revision,
+        ),
         # Charter-linkage gate (isolated function)
         ("charter_blocks_activation", test_charter_linkage_blocks_activation),
         ("charter_empty_blocks", test_charter_linkage_empty_string_blocks),
         ("charter_whitespace_blocks", test_charter_linkage_whitespace_blocks),
         ("charter_set_allows", test_charter_linkage_set_allows_activation),
         ("charter_other_states_ok", test_charter_linkage_not_checked_for_other_states),
-
         # Charter-linkage wired into validate_concept (Refusal)
-        ("validate_active_no_charter_refusal", test_validate_concept_active_without_charter_raises_refusal),
-        ("validate_active_with_charter_ok", test_validate_concept_active_with_charter_no_refusal),
-        ("validate_draft_no_charter_ok", test_validate_concept_draft_without_charter_no_refusal),
-
+        (
+            "validate_active_no_charter_refusal",
+            test_validate_concept_active_without_charter_raises_refusal,
+        ),
+        (
+            "validate_active_with_charter_ok",
+            test_validate_concept_active_with_charter_no_refusal,
+        ),
+        (
+            "validate_draft_no_charter_ok",
+            test_validate_concept_draft_without_charter_no_refusal,
+        ),
         # Charter-linkage through real write_record() path
-        ("write_record_active_no_charter_refusal", test_write_record_active_concept_without_charter_raises_refusal),
-        ("write_record_active_with_charter_ok", test_write_record_active_concept_with_charter_succeeds),
-        ("write_record_active_empty_charter_refusal", test_write_record_active_concept_empty_charter_raises_refusal),
-        ("write_record_draft_no_charter_ok", test_write_record_draft_concept_without_charter_succeeds),
-
+        (
+            "write_record_active_no_charter_refusal",
+            test_write_record_active_concept_without_charter_raises_refusal,
+        ),
+        (
+            "write_record_active_with_charter_ok",
+            test_write_record_active_concept_with_charter_succeeds,
+        ),
+        (
+            "write_record_active_empty_charter_refusal",
+            test_write_record_active_concept_empty_charter_raises_refusal,
+        ),
+        (
+            "write_record_draft_no_charter_ok",
+            test_write_record_draft_concept_without_charter_succeeds,
+        ),
         # Migration-shaped record through real write_record() path
         ("write_record_migration_shaped", test_write_record_migration_shaped_record),
-
         # Control store registration
         ("concept_in_record_types", test_concept_in_record_types),
         ("concept_validator_registered", test_concept_validator_registered),
-
         # Integration: round-trip
         ("write_read_concept", test_write_and_read_concept),
         ("write_validation_failure", test_write_concept_validation_failure),
         ("list_concepts", test_list_concepts),
         ("worked_example_round_trip", test_worked_example_round_trip),
-
         # next_id
         ("next_id_empty", test_next_id_concept_empty),
         ("next_id_increments", test_next_id_concept_increments),
-
         # Backward compatibility
         ("empty_concepts_no_breakage", test_empty_concepts_dir_no_breakage),
         ("ensure_dirs_creates_concepts", test_ensure_control_dirs_creates_concepts),
         ("missing_dir_list_empty", test_missing_concepts_dir_list_returns_empty),
-
         # Multi-modality / scoped rejection
         ("two_modalities_same_target", test_two_modalities_same_target),
         ("scoped_rejection", test_scoped_rejection),
-
         # Major revision
         ("major_revision", test_major_revision),
     ]

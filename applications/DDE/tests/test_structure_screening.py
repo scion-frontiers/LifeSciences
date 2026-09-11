@@ -63,12 +63,10 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 
 from dde.commands.structure_screening import (
-    POCKET_RELEVANT_MODALITIES,
     PocketResult,
     ScreenBudget,
     StructureCandidate,
     build_assessment_record,
-    check_budget,
     check_modality_applicability,
     check_site_relevance,
     classify_structure_source,
@@ -100,6 +98,7 @@ def _check(name: str, fn: Any) -> None:
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 def _low_score_pocket_result() -> PocketResult:
     """A pocket result with a sub-cutoff score on one conformation.
@@ -189,8 +188,7 @@ def _irrelevant_site_pocket_result() -> PocketResult:
             {
                 "code": "fpocket.conformation_dependent",
                 "message": (
-                    "MDA5-AF2.cif is not established as an experimental "
-                    "structure."
+                    "MDA5-AF2.cif is not established as an experimental structure."
                 ),
             },
         ],
@@ -261,8 +259,7 @@ def test_low_score_scoped_assessment():
     # Relay preserved
     relay_codes = [r["code"] for r in assessment.get("relay_codes", [])]
     assert "fpocket.single_conformation" in relay_codes, (
-        f"fpocket.single_conformation relay not preserved; "
-        f"relay_codes: {relay_codes}"
+        f"fpocket.single_conformation relay not preserved; relay_codes: {relay_codes}"
     )
 
     # CDK2 calibration numbers in rationale
@@ -271,19 +268,21 @@ def test_low_score_scoped_assessment():
     )
 
     # Next conformation suggestion
-    assert "another conformation" in assessment["rationale"].lower() or \
-           "additional conformation" in assessment["rationale"].lower() or \
-           "next discriminating characterization" in assessment["rationale"].lower(), (
-        "next-conformation suggestion not in rationale"
-    )
+    assert (
+        "another conformation" in assessment["rationale"].lower()
+        or "additional conformation" in assessment["rationale"].lower()
+        or "next discriminating characterization" in assessment["rationale"].lower()
+    ), "next-conformation suggestion not in rationale"
 
     # Schema valid
     errors = validate_assessment(assessment)
     assert errors == [], f"assessment validation errors: {errors}"
 
 
-_check("low score -> insufficient, relay preserved, next-conformation suggested",
-       test_low_score_scoped_assessment)
+_check(
+    "low score -> insufficient, relay preserved, next-conformation suggested",
+    test_low_score_scoped_assessment,
+)
 
 
 def test_low_score_does_not_claim_undruggable():
@@ -308,13 +307,13 @@ def test_low_score_does_not_claim_undruggable():
     )
 
     # Must scope to "this conformation"
-    assert "conformation" in rationale_lower, (
-        "rationale does not scope to conformation"
-    )
+    assert "conformation" in rationale_lower, "rationale does not scope to conformation"
 
 
-_check("low score -> rationale does not claim 'undruggable'",
-       test_low_score_does_not_claim_undruggable)
+_check(
+    "low score -> rationale does not claim 'undruggable'",
+    test_low_score_does_not_claim_undruggable,
+)
 
 
 def test_borderline_score_scoped():
@@ -348,8 +347,7 @@ def test_borderline_score_scoped():
     assert "fpocket.single_conformation" in relay_codes
 
 
-_check("borderline score -> insufficient with relay",
-       test_borderline_score_scoped)
+_check("borderline score -> insufficient with relay", test_borderline_score_scoped)
 
 
 # ---------------------------------------------------------------------------
@@ -389,19 +387,21 @@ def test_favorable_model_score_does_not_overclaim():
 
     # Rationale must mention non-experimental / model constraint
     rationale_lower = assessment["rationale"].lower()
-    assert "not established as experimental" in rationale_lower or \
-           "non-experimental" in rationale_lower or \
-           "conformation_dependent" in rationale_lower, (
-        "rationale does not note non-experimental structure"
-    )
+    assert (
+        "not established as experimental" in rationale_lower
+        or "non-experimental" in rationale_lower
+        or "conformation_dependent" in rationale_lower
+    ), "rationale does not note non-experimental structure"
 
     # Schema valid
     errors = validate_assessment(assessment)
     assert errors == [], f"assessment validation errors: {errors}"
 
 
-_check("favorable model score -> relays preserved, does not overclaim",
-       test_favorable_model_score_does_not_overclaim)
+_check(
+    "favorable model score -> relays preserved, does not overclaim",
+    test_favorable_model_score_does_not_overclaim,
+)
 
 
 def test_model_score_both_directions():
@@ -417,15 +417,15 @@ def test_model_score_both_directions():
     )
     rationale_lower = assessment["rationale"].lower()
     assert "both directions" in rationale_lower or (
-        "not evidence" in rationale_lower and
-        ("against" in rationale_lower or "for it" in rationale_lower)
-    ), (
-        "rationale does not note both-directions constraint"
-    )
+        "not evidence" in rationale_lower
+        and ("against" in rationale_lower or "for it" in rationale_lower)
+    ), "rationale does not note both-directions constraint"
 
 
-_check("model score rationale notes both-directions constraint",
-       test_model_score_both_directions)
+_check(
+    "model score rationale notes both-directions constraint",
+    test_model_score_both_directions,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -461,8 +461,7 @@ def test_irrelevant_site_rejected():
     assert errors == [], f"assessment validation errors: {errors}"
 
 
-_check("irrelevant site -> not counted as pass",
-       test_irrelevant_site_rejected)
+_check("irrelevant site -> not counted as pass", test_irrelevant_site_rejected)
 
 
 def test_irrelevant_site_rationale():
@@ -476,15 +475,16 @@ def test_irrelevant_site_rationale():
         intended_site_residues=["A:145", "A:146", "B:12"],
     )
     rationale_lower = assessment["rationale"].lower()
-    assert "not at the intended" in rationale_lower or \
-           "no pocket" in rationale_lower or \
-           "no-pocket-at-site" in rationale_lower, (
-        "rationale does not explain site irrelevance"
-    )
+    assert (
+        "not at the intended" in rationale_lower
+        or "no pocket" in rationale_lower
+        or "no-pocket-at-site" in rationale_lower
+    ), "rationale does not explain site irrelevance"
 
 
-_check("irrelevant site -> rationale explains rejection",
-       test_irrelevant_site_rationale)
+_check(
+    "irrelevant site -> rationale explains rejection", test_irrelevant_site_rationale
+)
 
 
 def test_global_druggable_with_site_specified_is_insufficient():
@@ -507,8 +507,10 @@ def test_global_druggable_with_site_specified_is_insufficient():
     )
 
 
-_check("global druggable + site specified -> insufficient (unconfirmed relevance)",
-       test_global_druggable_with_site_specified_is_insufficient)
+_check(
+    "global druggable + site specified -> insufficient (unconfirmed relevance)",
+    test_global_druggable_with_site_specified_is_insufficient,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -536,8 +538,10 @@ def test_antibody_modality_not_applicable():
     )
 
 
-_check("antibody -> not_yet_applicable, no forced pocket score",
-       test_antibody_modality_not_applicable)
+_check(
+    "antibody -> not_yet_applicable, no forced pocket score",
+    test_antibody_modality_not_applicable,
+)
 
 
 def test_biologic_modality_not_applicable():
@@ -554,8 +558,7 @@ def test_biologic_modality_not_applicable():
     assert errors == [], f"assessment validation errors: {errors}"
 
 
-_check("biologic -> not_yet_applicable",
-       test_biologic_modality_not_applicable)
+_check("biologic -> not_yet_applicable", test_biologic_modality_not_applicable)
 
 
 def test_small_molecule_is_applicable():
@@ -612,8 +615,10 @@ def test_modality_check_via_screen_structures():
     assert assessments[0]["evidence_status"] == "not_yet_applicable"
 
 
-_check("screen_structures: antibody -> not_yet_applicable, no pocket run",
-       test_modality_check_via_screen_structures)
+_check(
+    "screen_structures: antibody -> not_yet_applicable, no pocket run",
+    test_modality_check_via_screen_structures,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -653,16 +658,12 @@ def test_budget_max_structures():
     assert call_count == 2, f"expected 2 calls, got {call_count}"
     # The 3rd record should note budget exhaustion
     budget_records = [
-        a for a in assessments
-        if "budget" in (a.get("rationale") or "").lower()
+        a for a in assessments if "budget" in (a.get("rationale") or "").lower()
     ]
-    assert len(budget_records) > 0, (
-        "no record noting budget exhaustion"
-    )
+    assert len(budget_records) > 0, "no record noting budget exhaustion"
 
 
-_check("budget: max_structures=2 -> stops after 2",
-       test_budget_max_structures)
+_check("budget: max_structures=2 -> stops after 2", test_budget_max_structures)
 
 
 def test_budget_wall_clock():
@@ -692,16 +693,14 @@ def test_budget_wall_clock():
 
     # Should not have evaluated all 10
     total_evaluated = sum(
-        1 for a in assessments
-        if a.get("execution_outcome") == "completed"
+        1 for a in assessments if a.get("execution_outcome") == "completed"
     )
     assert total_evaluated < 10, (
         f"expected fewer than 10 evaluated, got {total_evaluated}"
     )
 
 
-_check("budget: wall-clock exhausted -> stops early",
-       test_budget_wall_clock)
+_check("budget: wall-clock exhausted -> stops early", test_budget_wall_clock)
 
 
 # ---------------------------------------------------------------------------
@@ -718,8 +717,7 @@ def test_retrieval_in_scope():
         assert in_scope is True, f"{source} should be in scope"
 
 
-_check("retrieval sources -> in scope",
-       test_retrieval_in_scope)
+_check("retrieval sources -> in scope", test_retrieval_in_scope)
 
 
 def test_new_prediction_out_of_scope():
@@ -733,8 +731,7 @@ def test_new_prediction_out_of_scope():
         )
 
 
-_check("new prediction sources -> out of scope",
-       test_new_prediction_out_of_scope)
+_check("new prediction sources -> out of scope", test_new_prediction_out_of_scope)
 
 
 def test_no_structure_produces_not_assessed():
@@ -758,8 +755,10 @@ def test_no_structure_produces_not_assessed():
     assert errors == [], f"assessment validation errors: {errors}"
 
 
-_check("no structure -> not_assessed / data_unavailable",
-       test_no_structure_produces_not_assessed)
+_check(
+    "no structure -> not_assessed / data_unavailable",
+    test_no_structure_produces_not_assessed,
+)
 
 
 def test_new_prediction_blocked_in_screen():
@@ -781,13 +780,17 @@ def test_new_prediction_blocked_in_screen():
     )
     assert len(assessments) == 1
     assert assessments[0]["execution_outcome"] == "blocked"
-    assert "separate" in assessments[0].get("rationale", "").lower() or \
-           "justification" in assessments[0].get("rationale", "").lower() or \
-           "prediction" in assessments[0].get("rationale", "").lower()
+    assert (
+        "separate" in assessments[0].get("rationale", "").lower()
+        or "justification" in assessments[0].get("rationale", "").lower()
+        or "prediction" in assessments[0].get("rationale", "").lower()
+    )
 
 
-_check("new prediction in screen -> blocked with justification note",
-       test_new_prediction_blocked_in_screen)
+_check(
+    "new prediction in screen -> blocked with justification note",
+    test_new_prediction_blocked_in_screen,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -810,14 +813,15 @@ def test_single_conformation_relay_preserved():
 
     # The message is also preserved
     relay_messages = {
-        r["code"]: r["message"]
-        for r in assessment.get("relay_codes", [])
+        r["code"]: r["message"] for r in assessment.get("relay_codes", [])
     }
     assert "CDK2" in relay_messages.get("fpocket.single_conformation", "")
 
 
-_check("fpocket.single_conformation relay preserved with CDK2 message",
-       test_single_conformation_relay_preserved)
+_check(
+    "fpocket.single_conformation relay preserved with CDK2 message",
+    test_single_conformation_relay_preserved,
+)
 
 
 def test_conformation_dependent_relay_preserved():
@@ -833,8 +837,10 @@ def test_conformation_dependent_relay_preserved():
     assert "fpocket.conformation_dependent" in relay_codes
 
 
-_check("fpocket.conformation_dependent relay preserved",
-       test_conformation_dependent_relay_preserved)
+_check(
+    "fpocket.conformation_dependent relay preserved",
+    test_conformation_dependent_relay_preserved,
+)
 
 
 def test_druggability_not_affinity_relay_preserved():
@@ -851,8 +857,10 @@ def test_druggability_not_affinity_relay_preserved():
     assert "fpocket.druggability_is_not_affinity" in relay_codes
 
 
-_check("fpocket.druggability_is_not_affinity relay preserved",
-       test_druggability_not_affinity_relay_preserved)
+_check(
+    "fpocket.druggability_is_not_affinity relay preserved",
+    test_druggability_not_affinity_relay_preserved,
+)
 
 
 def test_no_relays_dropped_in_screening():
@@ -883,8 +891,7 @@ def test_no_relays_dropped_in_screening():
     )
 
 
-_check("all relay codes preserved without change",
-       test_no_relays_dropped_in_screening)
+_check("all relay codes preserved without change", test_no_relays_dropped_in_screening)
 
 
 # ---------------------------------------------------------------------------
@@ -906,8 +913,10 @@ def test_druggable_pocket_supported():
     assert assessment["evidence_status"] == "supported"
 
 
-_check("druggable pocket (experimental, global) -> supported",
-       test_druggable_pocket_supported)
+_check(
+    "druggable pocket (experimental, global) -> supported",
+    test_druggable_pocket_supported,
+)
 
 
 def test_site_druggable_supported():
@@ -919,8 +928,10 @@ def test_site_druggable_supported():
         structure_name="TARGET-1ABC.pdb",
         is_experimental=True,
         relays=[
-            {"code": "fpocket.druggability_is_not_affinity",
-             "message": "0.85 is cavity shape."},
+            {
+                "code": "fpocket.druggability_is_not_affinity",
+                "message": "0.85 is cavity shape.",
+            },
         ],
         site_query="A:100,A:101",
         site_relevant=True,
@@ -935,8 +946,7 @@ def test_site_druggable_supported():
     assert assessment["evidence_status"] == "supported"
 
 
-_check("site-druggable -> supported",
-       test_site_druggable_supported)
+_check("site-druggable -> supported", test_site_druggable_supported)
 
 
 def test_no_pockets_detected_insufficient():
@@ -958,8 +968,7 @@ def test_no_pockets_detected_insufficient():
     assert assessment["evidence_status"] == "insufficient"
 
 
-_check("no-pockets-detected -> insufficient",
-       test_no_pockets_detected_insufficient)
+_check("no-pockets-detected -> insufficient", test_no_pockets_detected_insufficient)
 
 
 # ---------------------------------------------------------------------------
@@ -1017,8 +1026,10 @@ def test_all_scenario_records_pass_validation():
         )
 
 
-_check("all scenario records pass evidence schema validation",
-       test_all_scenario_records_pass_validation)
+_check(
+    "all scenario records pass evidence schema validation",
+    test_all_scenario_records_pass_validation,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -1038,8 +1049,10 @@ def test_no_cross_target_ranking_structure():
         structure_name="TARGET_A.cif",
         is_experimental=True,
         relays=[
-            {"code": "fpocket.druggability_is_not_affinity",
-             "message": "0.7 is cavity shape."},
+            {
+                "code": "fpocket.druggability_is_not_affinity",
+                "message": "0.7 is cavity shape.",
+            },
         ],
     )
     result_b = PocketResult(
@@ -1049,8 +1062,10 @@ def test_no_cross_target_ranking_structure():
         structure_name="TARGET_B.cif",
         is_experimental=True,
         relays=[
-            {"code": "fpocket.druggability_is_not_affinity",
-             "message": "0.9 is cavity shape."},
+            {
+                "code": "fpocket.druggability_is_not_affinity",
+                "message": "0.9 is cavity shape.",
+            },
         ],
     )
 
@@ -1068,7 +1083,11 @@ def test_no_cross_target_ranking_structure():
     )
 
     # Both are "supported" — one is not ranked above the other
-    assert assessment_a["evidence_status"] == assessment_b["evidence_status"] == "supported"
+    assert (
+        assessment_a["evidence_status"]
+        == assessment_b["evidence_status"]
+        == "supported"
+    )
 
     # No "rank" or "priority" field in the assessment
     for assessment in (assessment_a, assessment_b):
@@ -1077,8 +1096,10 @@ def test_no_cross_target_ranking_structure():
         assert "comparative_score" not in assessment
 
 
-_check("no cross-target ranking field in assessment records",
-       test_no_cross_target_ranking_structure)
+_check(
+    "no cross-target ranking field in assessment records",
+    test_no_cross_target_ranking_structure,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -1108,8 +1129,7 @@ def test_budget_validation():
     assert budget.allow_new_predictions is False
 
 
-_check("ScreenBudget validates constraints",
-       test_budget_validation)
+_check("ScreenBudget validates constraints", test_budget_validation)
 
 
 # ---------------------------------------------------------------------------
@@ -1126,8 +1146,7 @@ def test_candidate_is_retrieval():
         assert c.is_new_prediction is False
 
 
-_check("retrieval candidates classified correctly",
-       test_candidate_is_retrieval)
+_check("retrieval candidates classified correctly", test_candidate_is_retrieval)
 
 
 def test_candidate_is_prediction():
@@ -1138,8 +1157,7 @@ def test_candidate_is_prediction():
         assert c.is_new_prediction is True, f"{source} should be prediction"
 
 
-_check("prediction candidates classified correctly",
-       test_candidate_is_prediction)
+_check("prediction candidates classified correctly", test_candidate_is_prediction)
 
 
 # ---------------------------------------------------------------------------
@@ -1153,12 +1171,14 @@ def test_site_relevance_no_site_specified():
     result = _druggable_pocket_result()
     relevant, reason = check_site_relevance(result, None)
     assert relevant is False
-    assert "global" in reason.lower() or "not specified" in reason.lower() or \
-           "no --near" in reason.lower()
+    assert (
+        "global" in reason.lower()
+        or "not specified" in reason.lower()
+        or "no --near" in reason.lower()
+    )
 
 
-_check("no site specified -> relevance unknown",
-       test_site_relevance_no_site_specified)
+_check("no site specified -> relevance unknown", test_site_relevance_no_site_specified)
 
 
 def test_site_relevance_druggable_at_site():
@@ -1177,8 +1197,7 @@ def test_site_relevance_druggable_at_site():
     assert relevant is True
 
 
-_check("site-druggable -> relevant",
-       test_site_relevance_druggable_at_site)
+_check("site-druggable -> relevant", test_site_relevance_druggable_at_site)
 
 
 def test_site_relevance_no_pocket_at_site():
@@ -1197,8 +1216,7 @@ def test_site_relevance_no_pocket_at_site():
     assert relevant is False
 
 
-_check("no pocket at site -> not relevant",
-       test_site_relevance_no_pocket_at_site)
+_check("no pocket at site -> not relevant", test_site_relevance_no_pocket_at_site)
 
 
 # ---------------------------------------------------------------------------
@@ -1257,16 +1275,17 @@ def test_screen_structures_mixed_candidates():
     assert assessments[2]["execution_outcome"] == "completed"
 
     # The AF3 prediction should NOT have called the runner
-    assert "af3_prediction" not in [c.source for c in candidates
-                                     if c.identifier in call_identifiers] or \
-           len(call_identifiers) == 2, (
-        f"AF3 prediction should not have called the runner; "
-        f"called: {call_identifiers}"
-    )
+    assert (
+        "af3_prediction"
+        not in [c.source for c in candidates if c.identifier in call_identifiers]
+        or len(call_identifiers) == 2
+    ), f"AF3 prediction should not have called the runner; called: {call_identifiers}"
 
 
-_check("screen_structures: mixed candidates handled correctly",
-       test_screen_structures_mixed_candidates)
+_check(
+    "screen_structures: mixed candidates handled correctly",
+    test_screen_structures_mixed_candidates,
+)
 
 
 def test_screen_structures_empty_candidates():
@@ -1283,8 +1302,10 @@ def test_screen_structures_empty_candidates():
     assert assessments[0]["execution_outcome"] == "data_unavailable"
 
 
-_check("screen_structures: empty candidates -> data_unavailable",
-       test_screen_structures_empty_candidates)
+_check(
+    "screen_structures: empty candidates -> data_unavailable",
+    test_screen_structures_empty_candidates,
+)
 
 
 def test_screen_structures_tool_failure():
@@ -1313,8 +1334,10 @@ def test_screen_structures_tool_failure():
     assert assessments[0]["evidence_status"] == "not_assessed"
 
 
-_check("screen_structures: tool failure -> tool_failed record",
-       test_screen_structures_tool_failure)
+_check(
+    "screen_structures: tool failure -> tool_failed record",
+    test_screen_structures_tool_failure,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -1328,6 +1351,7 @@ from dde.commands.structure_screening import _parse_pocket_analysis
 def test_parse_pocket_analysis_druggable():
     """_parse_pocket_analysis correctly parses a druggable analysis record."""
     import tempfile
+
     analysis_data = {
         "source": "raw/structures/CDK2-1HCK.pockets.json",
         "threshold_set": "pocket@1.0",
@@ -1363,7 +1387,9 @@ def test_parse_pocket_analysis_druggable():
 
     try:
         candidate = StructureCandidate(
-            source="pdb", identifier="CDK2-1HCK.pdb", is_experimental=True,
+            source="pdb",
+            identifier="CDK2-1HCK.pdb",
+            is_experimental=True,
         )
         result = _parse_pocket_analysis(analysis_path, candidate)
 
@@ -1378,13 +1404,16 @@ def test_parse_pocket_analysis_druggable():
         analysis_path.unlink(missing_ok=True)
 
 
-_check("_parse_pocket_analysis: druggable analysis parsed correctly",
-       test_parse_pocket_analysis_druggable)
+_check(
+    "_parse_pocket_analysis: druggable analysis parsed correctly",
+    test_parse_pocket_analysis_druggable,
+)
 
 
 def test_parse_pocket_analysis_site_query():
     """_parse_pocket_analysis handles --near site-specific results."""
     import tempfile
+
     analysis_data = {
         "source": "raw/structures/TARGET.pockets.json",
         "threshold_set": "pocket@1.0",
@@ -1425,7 +1454,9 @@ def test_parse_pocket_analysis_site_query():
 
     try:
         candidate = StructureCandidate(
-            source="pdb", identifier="TARGET.pdb", is_experimental=True,
+            source="pdb",
+            identifier="TARGET.pdb",
+            is_experimental=True,
         )
         result = _parse_pocket_analysis(analysis_path, candidate)
 
@@ -1439,13 +1470,16 @@ def test_parse_pocket_analysis_site_query():
         analysis_path.unlink(missing_ok=True)
 
 
-_check("_parse_pocket_analysis: site-specific results parsed correctly",
-       test_parse_pocket_analysis_site_query)
+_check(
+    "_parse_pocket_analysis: site-specific results parsed correctly",
+    test_parse_pocket_analysis_site_query,
+)
 
 
 def test_parse_pocket_analysis_no_site_hit():
     """_parse_pocket_analysis handles --near with no pocket at site."""
     import tempfile
+
     analysis_data = {
         "source": "raw/structures/TARGET.pockets.json",
         "threshold_set": "pocket@1.0",
@@ -1480,7 +1514,9 @@ def test_parse_pocket_analysis_no_site_hit():
 
     try:
         candidate = StructureCandidate(
-            source="pdb", identifier="TARGET.pdb", is_experimental=True,
+            source="pdb",
+            identifier="TARGET.pdb",
+            is_experimental=True,
         )
         result = _parse_pocket_analysis(analysis_path, candidate)
 
@@ -1491,8 +1527,10 @@ def test_parse_pocket_analysis_no_site_hit():
         analysis_path.unlink(missing_ok=True)
 
 
-_check("_parse_pocket_analysis: no-pocket-at-site parsed correctly",
-       test_parse_pocket_analysis_no_site_hit)
+_check(
+    "_parse_pocket_analysis: no-pocket-at-site parsed correctly",
+    test_parse_pocket_analysis_no_site_hit,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -1558,7 +1596,9 @@ def test_parsed_analysis_to_assessment_record():
 
     try:
         candidate = StructureCandidate(
-            source="pdb", identifier="CDK2-2W1D.cif", is_experimental=True,
+            source="pdb",
+            identifier="CDK2-2W1D.cif",
+            is_experimental=True,
         )
 
         # Step 1: Parse the analysis file (real parsing, not a mock)
@@ -1599,8 +1639,10 @@ def test_parsed_analysis_to_assessment_record():
         analysis_path.unlink(missing_ok=True)
 
 
-_check("integration: parsed analysis → assessment record end-to-end",
-       test_parsed_analysis_to_assessment_record)
+_check(
+    "integration: parsed analysis → assessment record end-to-end",
+    test_parsed_analysis_to_assessment_record,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -1613,10 +1655,12 @@ def test_make_pocket_runner_requires_click():
     """make_pocket_runner requires click to be installed.
     Tests the import path and validates the function signature."""
     from dde.commands.structure_screening import make_pocket_runner
+
     # The function itself is importable regardless of click.
     # Calling it requires click.testing.CliRunner.
     try:
         from click.testing import CliRunner
+
         # Click IS available — test that make_pocket_runner returns a callable
         runner = make_pocket_runner(project_dir="/tmp/nonexistent")
         assert callable(runner), "make_pocket_runner should return a callable"
@@ -1631,12 +1675,15 @@ def test_make_pocket_runner_requires_click():
             )
         except ImportError:
             pass
-        print("    (click not installed — skipped CliRunner test, "
-              "import path validated)")
+        print(
+            "    (click not installed — skipped CliRunner test, import path validated)"
+        )
 
 
-_check("make_pocket_runner: import path and callable validation",
-       test_make_pocket_runner_requires_click)
+_check(
+    "make_pocket_runner: import path and callable validation",
+    test_make_pocket_runner_requires_click,
+)
 
 
 def test_cli_command_registration():
@@ -1646,6 +1693,7 @@ def test_cli_command_registration():
     try:
         import click
         from dde.commands.structure_screening import structure_screen
+
         assert isinstance(structure_screen, click.Group), (
             f"structure_screen should be a click.Group, got {type(structure_screen)}"
         )
@@ -1657,12 +1705,15 @@ def test_cli_command_registration():
         # Without click, structure_screen is not defined — verify the
         # import of library functions still works
         from dde.commands.structure_screening import screen_structures
+
         assert callable(screen_structures)
         print("    (click not installed — library import verified)")
 
 
-_check("CLI command registration: structure-screen group with run subcommand",
-       test_cli_command_registration)
+_check(
+    "CLI command registration: structure-screen group with run subcommand",
+    test_cli_command_registration,
+)
 
 
 def test_screen_structures_with_parsed_analysis():
@@ -1745,8 +1796,10 @@ def test_screen_structures_with_parsed_analysis():
         analysis_path.unlink(missing_ok=True)
 
 
-_check("screen_structures with _parse_pocket_analysis pocket_runner (integration)",
-       test_screen_structures_with_parsed_analysis)
+_check(
+    "screen_structures with _parse_pocket_analysis pocket_runner (integration)",
+    test_screen_structures_with_parsed_analysis,
+)
 
 
 # ===========================================================================

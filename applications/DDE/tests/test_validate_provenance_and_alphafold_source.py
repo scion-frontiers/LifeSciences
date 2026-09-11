@@ -33,16 +33,12 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 from dde.commands.validate import (
-    _build_sidecar_index,
     _check_analysis_citations,
     _check_deliverables_exist,
     _check_provenance_valid,
     _check_relay_coverage,
-    _is_analysis,
-    _is_sidecar,
     _overall_verdict,
 )
-from dde.core.context import ARTIFACT_DIRS
 from dde.core.provenance import Sidecar, write_analysis
 
 
@@ -85,7 +81,11 @@ def test_gtex_layout() -> None:
             "tool": "gtex",
             "subcommand": "fetch",
             "outputs": [
-                {"path": "GENE.gtex.json", "sha256": art_sha, "bytes": len(artifact_content)},
+                {
+                    "path": "GENE.gtex.json",
+                    "sha256": art_sha,
+                    "bytes": len(artifact_content),
+                },
             ],
         }
         _write(gtex_dir / "GENE.meta.json", json.dumps(sidecar))
@@ -127,7 +127,11 @@ def test_expression_layout() -> None:
             "tool": "expression",
             "subcommand": "fetch",
             "outputs": [
-                {"path": "ENSG.single-cell.json", "sha256": sc_sha, "bytes": len(sc_content)},
+                {
+                    "path": "ENSG.single-cell.json",
+                    "sha256": sc_sha,
+                    "bytes": len(sc_content),
+                },
                 {"path": "ENSG.hpa.json", "sha256": hpa_sha, "bytes": len(hpa_content)},
             ],
         }
@@ -170,9 +174,21 @@ def test_structures_afdb_layout() -> None:
             "tool": "alphafold-db",
             "subcommand": "fetch",
             "outputs": [
-                {"path": "AF-P04637-F1.afdb.json", "sha256": afdb_sha, "bytes": len(afdb_content)},
-                {"path": "AF-P04637-F1.cif", "sha256": cif_sha, "bytes": len(cif_content)},
-                {"path": "AF-P04637-F1.pae.json", "sha256": pae_sha, "bytes": len(pae_content)},
+                {
+                    "path": "AF-P04637-F1.afdb.json",
+                    "sha256": afdb_sha,
+                    "bytes": len(afdb_content),
+                },
+                {
+                    "path": "AF-P04637-F1.cif",
+                    "sha256": cif_sha,
+                    "bytes": len(cif_content),
+                },
+                {
+                    "path": "AF-P04637-F1.pae.json",
+                    "sha256": pae_sha,
+                    "bytes": len(pae_content),
+                },
             ],
         }
         _write(struct_dir / "AF-P04637-F1.meta.json", json.dumps(sidecar))
@@ -215,7 +231,11 @@ def test_sc_meta_sidecar_layout() -> None:
             "tool": "expression",
             "subcommand": "fetch-single-cell",
             "outputs": [
-                {"path": "ENSG.single-cell.json", "sha256": sc_sha, "bytes": len(sc_content)},
+                {
+                    "path": "ENSG.single-cell.json",
+                    "sha256": sc_sha,
+                    "bytes": len(sc_content),
+                },
                 {"path": "ENSG.hpa.json", "sha256": hpa_sha, "bytes": len(hpa_content)},
             ],
         }
@@ -228,7 +248,9 @@ def test_sc_meta_sidecar_layout() -> None:
         assert result["status"] == "ok"
         assert result["kind"] == "DATA_INTEGRITY"
         assert result["detail"]["artifacts_checked"] == 2
-        print("  PASS: sc-meta.json sidecar layout — two artifacts, one .sc-meta.json sidecar")
+        print(
+            "  PASS: sc-meta.json sidecar layout — two artifacts, one .sc-meta.json sidecar"
+        )
 
 
 def test_missing_sidecar() -> None:
@@ -268,7 +290,11 @@ def test_sha256_mismatch() -> None:
             "tool": "gtex",
             "subcommand": "fetch",
             "outputs": [
-                {"path": "GENE.gtex.json", "sha256": "0000deadbeef" * 5 + "00", "bytes": 100},
+                {
+                    "path": "GENE.gtex.json",
+                    "sha256": "0000deadbeef" * 5 + "00",
+                    "bytes": 100,
+                },
             ],
         }
         _write(gtex_dir / "GENE.meta.json", json.dumps(sidecar))
@@ -308,7 +334,9 @@ def test_analysis_source_project_relative() -> None:
             "metrics": {},
             "assessment": {"verdict": "confident"},
         }
-        _write(struct_dir / "AF-P04637-F1.alphafold.analysis.json", json.dumps(analysis))
+        _write(
+            struct_dir / "AF-P04637-F1.alphafold.analysis.json", json.dumps(analysis)
+        )
 
         deliverables = {"layer_0_classes": ["structures"]}
         result = _check_analysis_citations(root, deliverables)
@@ -317,10 +345,13 @@ def test_analysis_source_project_relative() -> None:
         assert "kind" in result
         # With the fixed source path, the source file should resolve
         source_issues = [
-            i for i in result.get("detail", {}).get("issues", [])
+            i
+            for i in result.get("detail", {}).get("issues", [])
             if "source reference does not resolve" in i.get("issue", "")
         ]
-        assert not source_issues, f"Unexpected source resolution issues: {source_issues}"
+        assert not source_issues, (
+            f"Unexpected source resolution issues: {source_issues}"
+        )
         print("  PASS: project-relative source path resolves correctly")
 
 
@@ -342,7 +373,9 @@ def test_analysis_source_bare_name_fails() -> None:
             "metrics": {},
             "assessment": {"verdict": "confident"},
         }
-        _write(struct_dir / "AF-P04637-F1.alphafold.analysis.json", json.dumps(analysis))
+        _write(
+            struct_dir / "AF-P04637-F1.alphafold.analysis.json", json.dumps(analysis)
+        )
 
         deliverables = {"layer_0_classes": ["structures"]}
         result = _check_analysis_citations(root, deliverables)
@@ -352,7 +385,8 @@ def test_analysis_source_bare_name_fails() -> None:
         # A bare filename resolves relative to project root, so
         # root / "AF-P04637-F1.meta.json" won't exist → should fail
         source_issues = [
-            i for i in result.get("detail", {}).get("issues", [])
+            i
+            for i in result.get("detail", {}).get("issues", [])
             if "source reference does not resolve" in i.get("issue", "")
         ]
         assert source_issues, "Bare filename should fail to resolve from project root"
@@ -385,10 +419,13 @@ def test_analyze_prediction_source_project_relative() -> None:
         assert "status" in result
         assert "kind" in result
         source_issues = [
-            i for i in result.get("detail", {}).get("issues", [])
+            i
+            for i in result.get("detail", {}).get("issues", [])
             if "source reference does not resolve" in i.get("issue", "")
         ]
-        assert not source_issues, f"Unexpected source resolution issues: {source_issues}"
+        assert not source_issues, (
+            f"Unexpected source resolution issues: {source_issues}"
+        )
         print("  PASS: AF3 project-relative source path resolves correctly")
 
 
@@ -412,7 +449,11 @@ def test_provenance_two_wos_scoped() -> None:
             "subcommand": "fetch",
             "work_order_id": "WO-A",
             "outputs": [
-                {"path": "GENE-A.gtex.json", "sha256": art_a_sha, "bytes": len(art_a_content)},
+                {
+                    "path": "GENE-A.gtex.json",
+                    "sha256": art_a_sha,
+                    "bytes": len(art_a_content),
+                },
             ],
         }
         _write(gtex_dir / "GENE-A.meta.json", json.dumps(sidecar_a))
@@ -425,7 +466,11 @@ def test_provenance_two_wos_scoped() -> None:
             "subcommand": "fetch",
             "work_order_id": "WO-B",
             "outputs": [
-                {"path": "GENE-B.gtex.json", "sha256": art_b_sha, "bytes": len(art_b_content)},
+                {
+                    "path": "GENE-B.gtex.json",
+                    "sha256": art_b_sha,
+                    "bytes": len(art_b_content),
+                },
             ],
         }
         _write(gtex_dir / "GENE-B.meta.json", json.dumps(sidecar_b))
@@ -456,7 +501,11 @@ def test_provenance_backward_compat_untagged() -> None:
             "subcommand": "fetch",
             "work_order_id": "WO-A",
             "outputs": [
-                {"path": "GENE-A.gtex.json", "sha256": art_a_sha, "bytes": len(art_a_content)},
+                {
+                    "path": "GENE-A.gtex.json",
+                    "sha256": art_a_sha,
+                    "bytes": len(art_a_content),
+                },
             ],
         }
         _write(gtex_dir / "GENE-A.meta.json", json.dumps(sidecar_a))
@@ -468,7 +517,11 @@ def test_provenance_backward_compat_untagged() -> None:
             "tool": "gtex",
             "subcommand": "fetch",
             "outputs": [
-                {"path": "GENE-OLD.gtex.json", "sha256": art_old_sha, "bytes": len(art_old_content)},
+                {
+                    "path": "GENE-OLD.gtex.json",
+                    "sha256": art_old_sha,
+                    "bytes": len(art_old_content),
+                },
             ],
         }
         _write(gtex_dir / "GENE-OLD.meta.json", json.dumps(sidecar_old))
@@ -512,7 +565,10 @@ def test_relay_coverage_scoped() -> None:
             "work_order_id": "WO-B",
             "outputs": [],
             "mandatory_relays": [
-                {"code": "fpocket.single_conformation", "message": "single conformation"},
+                {
+                    "code": "fpocket.single_conformation",
+                    "message": "single conformation",
+                },
             ],
         }
         _write(struct_dir / "FP-B.meta.json", json.dumps(sidecar_b))
@@ -557,7 +613,10 @@ def test_analysis_citations_scoped_two_wos() -> None:
         }
         _write(struct_dir / "AF-A.alphafold.analysis.json", json.dumps(analysis_a))
         # Create the source so it resolves
-        _write(struct_dir / "AF-A.meta.json", json.dumps({"tool": "alphafold-db", "outputs": []}))
+        _write(
+            struct_dir / "AF-A.meta.json",
+            json.dumps({"tool": "alphafold-db", "outputs": []}),
+        )
 
         # WO-B: malformed analysis (missing source and threshold_set)
         analysis_b = {
@@ -600,7 +659,10 @@ def test_analysis_citations_backward_compat_untagged() -> None:
             "assessment": {"verdict": "confident"},
         }
         _write(struct_dir / "OLD.alphafold.analysis.json", json.dumps(analysis_old))
-        _write(struct_dir / "OLD.meta.json", json.dumps({"tool": "alphafold-db", "outputs": []}))
+        _write(
+            struct_dir / "OLD.meta.json",
+            json.dumps({"tool": "alphafold-db", "outputs": []}),
+        )
 
         deliverables = {"layer_0_classes": ["structures"]}
 
@@ -628,7 +690,10 @@ def test_analysis_citations_null_wo_checked() -> None:
             "work_order_id": None,
         }
         _write(struct_dir / "X.alphafold.analysis.json", json.dumps(analysis))
-        _write(struct_dir / "X.meta.json", json.dumps({"tool": "alphafold-db", "outputs": []}))
+        _write(
+            struct_dir / "X.meta.json",
+            json.dumps({"tool": "alphafold-db", "outputs": []}),
+        )
 
         deliverables = {"layer_0_classes": ["structures"]}
 
@@ -657,8 +722,13 @@ def test_analysis_citations_no_wo_id_checks_all() -> None:
                 "assessment": {"verdict": "confident"},
                 "work_order_id": label,
             }
-            _write(struct_dir / f"{label}.alphafold.analysis.json", json.dumps(analysis))
-            _write(struct_dir / f"{label}.meta.json", json.dumps({"tool": "alphafold-db", "outputs": []}))
+            _write(
+                struct_dir / f"{label}.alphafold.analysis.json", json.dumps(analysis)
+            )
+            _write(
+                struct_dir / f"{label}.meta.json",
+                json.dumps({"tool": "alphafold-db", "outputs": []}),
+            )
 
         deliverables = {"layer_0_classes": ["structures"]}
 
@@ -680,7 +750,9 @@ def test_sidecar_to_dict_work_order_id() -> None:
     try:
         sc = Sidecar(tool="test-tool", subcommand="fetch")
         d = sc.to_dict()
-        assert d["work_order_id"] == "WO-TEST", f"Expected WO-TEST, got: {d.get('work_order_id')}"
+        assert d["work_order_id"] == "WO-TEST", (
+            f"Expected WO-TEST, got: {d.get('work_order_id')}"
+        )
     finally:
         del os.environ["DDE_WORK_ORDER_ID"]
 
@@ -713,7 +785,9 @@ def test_write_analysis_work_order_id() -> None:
             del os.environ["DDE_WORK_ORDER_ID"]
 
         data = json.loads(analysis_path.read_text(encoding="utf-8"))
-        assert data["work_order_id"] == "WO-TEST", f"Expected WO-TEST, got: {data.get('work_order_id')}"
+        assert data["work_order_id"] == "WO-TEST", (
+            f"Expected WO-TEST, got: {data.get('work_order_id')}"
+        )
         print("  PASS: write_analysis() includes work_order_id")
 
 
@@ -743,7 +817,11 @@ def test_deliverables_exist_vacuous_pass_blocked() -> None:
             "subcommand": "fetch",
             "work_order_id": "WO-999",
             "outputs": [
-                {"path": "TP53.variant.json", "sha256": art_sha, "bytes": len(art_content)},
+                {
+                    "path": "TP53.variant.json",
+                    "sha256": art_sha,
+                    "bytes": len(art_content),
+                },
             ],
         }
         _write(genomics_dir / "TP53.meta.json", json.dumps(sidecar))
@@ -752,10 +830,14 @@ def test_deliverables_exist_vacuous_pass_blocked() -> None:
         deliverables = {"layer_0_classes": ["genomics"]}
         result = _check_deliverables_exist(root, deliverables, wo_id="WO-A")
 
-        assert result["result"] == "fail", f"Expected fail (vacuous pass blocked), got: {result}"
+        assert result["result"] == "fail", (
+            f"Expected fail (vacuous pass blocked), got: {result}"
+        )
         assert result["status"] == "fail"
         assert result["kind"] == "COMPLETENESS"
-        assert any("no artifacts attributed" in m for m in result["detail"]["missing"]), (
+        assert any(
+            "no artifacts attributed" in m for m in result["detail"]["missing"]
+        ), (
             f"Expected 'no artifacts attributed' in missing, got: {result['detail']['missing']}"
         )
         print("  PASS: #283 vacuous-pass repro correctly blocked")
@@ -781,7 +863,11 @@ def test_deliverables_exist_own_artifact_passes() -> None:
             "subcommand": "fetch",
             "work_order_id": "WO-A",
             "outputs": [
-                {"path": "BRCA1.variant.json", "sha256": art_a_sha, "bytes": len(art_a_content)},
+                {
+                    "path": "BRCA1.variant.json",
+                    "sha256": art_a_sha,
+                    "bytes": len(art_a_content),
+                },
             ],
         }
         _write(genomics_dir / "BRCA1.meta.json", json.dumps(sidecar_a))
@@ -795,7 +881,11 @@ def test_deliverables_exist_own_artifact_passes() -> None:
             "subcommand": "fetch",
             "work_order_id": "WO-B",
             "outputs": [
-                {"path": "TP53.variant.json", "sha256": art_b_sha, "bytes": len(art_b_content)},
+                {
+                    "path": "TP53.variant.json",
+                    "sha256": art_b_sha,
+                    "bytes": len(art_b_content),
+                },
             ],
         }
         _write(genomics_dir / "TP53.meta.json", json.dumps(sidecar_b))
@@ -803,7 +893,9 @@ def test_deliverables_exist_own_artifact_passes() -> None:
         deliverables = {"layer_0_classes": ["genomics"]}
         result = _check_deliverables_exist(root, deliverables, wo_id="WO-A")
 
-        assert result["result"] == "pass", f"Expected pass (own artifact present), got: {result}"
+        assert result["result"] == "pass", (
+            f"Expected pass (own artifact present), got: {result}"
+        )
         assert result["status"] == "ok"
         assert result["kind"] == "COMPLETENESS"
         print("  PASS: WO with own artifact in shared directory passes correctly")
@@ -828,7 +920,11 @@ def test_deliverables_exist_backward_compat_untagged() -> None:
             "tool": "gwas",
             "subcommand": "fetch",
             "outputs": [
-                {"path": "EGFR.variant.json", "sha256": art_sha, "bytes": len(art_content)},
+                {
+                    "path": "EGFR.variant.json",
+                    "sha256": art_sha,
+                    "bytes": len(art_content),
+                },
             ],
         }
         _write(genomics_dir / "EGFR.meta.json", json.dumps(sidecar))
@@ -836,10 +932,14 @@ def test_deliverables_exist_backward_compat_untagged() -> None:
         deliverables = {"layer_0_classes": ["genomics"]}
         result = _check_deliverables_exist(root, deliverables, wo_id="WO-A")
 
-        assert result["result"] == "pass", f"Expected pass (untagged artifact), got: {result}"
+        assert result["result"] == "pass", (
+            f"Expected pass (untagged artifact), got: {result}"
+        )
         assert result["status"] == "ok"
         assert result["kind"] == "COMPLETENESS"
-        print("  PASS: untagged artifact counts toward deliverables_exist (backward compat)")
+        print(
+            "  PASS: untagged artifact counts toward deliverables_exist (backward compat)"
+        )
 
 
 def test_deliverables_exist_single_wo_unaffected() -> None:
@@ -862,7 +962,11 @@ def test_deliverables_exist_single_wo_unaffected() -> None:
             "subcommand": "fetch",
             "work_order_id": "WO-ONLY",
             "outputs": [
-                {"path": "KRAS.variant.json", "sha256": art_sha, "bytes": len(art_content)},
+                {
+                    "path": "KRAS.variant.json",
+                    "sha256": art_sha,
+                    "bytes": len(art_content),
+                },
             ],
         }
         _write(genomics_dir / "KRAS.meta.json", json.dumps(sidecar))
@@ -892,7 +996,11 @@ def test_deliverables_exist_no_wo_id_checks_all() -> None:
             "subcommand": "fetch",
             "work_order_id": "WO-X",
             "outputs": [
-                {"path": "ALK.variant.json", "sha256": art_sha, "bytes": len(art_content)},
+                {
+                    "path": "ALK.variant.json",
+                    "sha256": art_sha,
+                    "bytes": len(art_content),
+                },
             ],
         }
         _write(genomics_dir / "ALK.meta.json", json.dumps(sidecar))
@@ -959,26 +1067,62 @@ def main() -> None:
         ("test_missing_sidecar", test_missing_sidecar),
         ("test_sha256_mismatch", test_sha256_mismatch),
         # #150 positive cases
-        ("test_analysis_source_project_relative", test_analysis_source_project_relative),
+        (
+            "test_analysis_source_project_relative",
+            test_analysis_source_project_relative,
+        ),
         ("test_analysis_source_bare_name_fails", test_analysis_source_bare_name_fails),
-        ("test_analyze_prediction_source_project_relative", test_analyze_prediction_source_project_relative),
+        (
+            "test_analyze_prediction_source_project_relative",
+            test_analyze_prediction_source_project_relative,
+        ),
         # #166 work-order scoping
         ("test_provenance_two_wos_scoped", test_provenance_two_wos_scoped),
-        ("test_provenance_backward_compat_untagged", test_provenance_backward_compat_untagged),
+        (
+            "test_provenance_backward_compat_untagged",
+            test_provenance_backward_compat_untagged,
+        ),
         ("test_relay_coverage_scoped", test_relay_coverage_scoped),
         ("test_sidecar_to_dict_work_order_id", test_sidecar_to_dict_work_order_id),
         ("test_write_analysis_work_order_id", test_write_analysis_work_order_id),
         # #253 analysis_citations WO scoping
-        ("test_analysis_citations_scoped_two_wos", test_analysis_citations_scoped_two_wos),
-        ("test_analysis_citations_backward_compat_untagged", test_analysis_citations_backward_compat_untagged),
-        ("test_analysis_citations_null_wo_checked", test_analysis_citations_null_wo_checked),
-        ("test_analysis_citations_no_wo_id_checks_all", test_analysis_citations_no_wo_id_checks_all),
+        (
+            "test_analysis_citations_scoped_two_wos",
+            test_analysis_citations_scoped_two_wos,
+        ),
+        (
+            "test_analysis_citations_backward_compat_untagged",
+            test_analysis_citations_backward_compat_untagged,
+        ),
+        (
+            "test_analysis_citations_null_wo_checked",
+            test_analysis_citations_null_wo_checked,
+        ),
+        (
+            "test_analysis_citations_no_wo_id_checks_all",
+            test_analysis_citations_no_wo_id_checks_all,
+        ),
         # #283 deliverables_exist WO scoping
-        ("test_deliverables_exist_vacuous_pass_blocked", test_deliverables_exist_vacuous_pass_blocked),
-        ("test_deliverables_exist_own_artifact_passes", test_deliverables_exist_own_artifact_passes),
-        ("test_deliverables_exist_backward_compat_untagged", test_deliverables_exist_backward_compat_untagged),
-        ("test_deliverables_exist_single_wo_unaffected", test_deliverables_exist_single_wo_unaffected),
-        ("test_deliverables_exist_no_wo_id_checks_all", test_deliverables_exist_no_wo_id_checks_all),
+        (
+            "test_deliverables_exist_vacuous_pass_blocked",
+            test_deliverables_exist_vacuous_pass_blocked,
+        ),
+        (
+            "test_deliverables_exist_own_artifact_passes",
+            test_deliverables_exist_own_artifact_passes,
+        ),
+        (
+            "test_deliverables_exist_backward_compat_untagged",
+            test_deliverables_exist_backward_compat_untagged,
+        ),
+        (
+            "test_deliverables_exist_single_wo_unaffected",
+            test_deliverables_exist_single_wo_unaffected,
+        ),
+        (
+            "test_deliverables_exist_no_wo_id_checks_all",
+            test_deliverables_exist_no_wo_id_checks_all,
+        ),
         # #105 severity model — _overall_verdict
         ("test_overall_verdict_all_pass", test_overall_verdict_all_pass),
         ("test_overall_verdict_any_fail", test_overall_verdict_any_fail),
@@ -996,7 +1140,7 @@ def main() -> None:
             print(f"  FAIL: {name} — {exc}")
             failed += 1
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Results: {passed} passed, {failed} failed, {passed + failed} total")
     if failed:
         sys.exit(1)

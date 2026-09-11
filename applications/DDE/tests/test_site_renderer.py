@@ -58,7 +58,7 @@ from dde.commands.site import (
 _RESULTS: list[tuple[str, bool, str]] = []
 
 
-def _run(name: str, fn):  # noqa: ANN001
+def _run(name: str, fn):
     try:
         fn()
         _RESULTS.append((name, True, ""))
@@ -70,9 +70,11 @@ def _run(name: str, fn):  # noqa: ANN001
 # Helper — render markdown through the same pipeline as site build
 # ---------------------------------------------------------------------------
 
+
 def _render_pipeline(text: str) -> str:
     """Render markdown through the full site build pipeline."""
     import mistune
+
     _md = mistune.create_markdown(escape=True, plugins=["table", "strikethrough"])
     text = _strip_leading_h1(text)
     text = _dedent_tables(text)
@@ -147,9 +149,7 @@ def test_every_heading_has_id():
     headings = re.findall(r"<(h[1-6])\b[^>]*>", html)
     assert len(headings) == 5, f"Expected 5 headings, found {len(headings)}: {html!r}"
     headings_without_id = re.findall(r"<h[1-6]>", html)
-    assert len(headings_without_id) == 0, (
-        f"Headings without id: {headings_without_id}"
-    )
+    assert len(headings_without_id) == 0, f"Headings without id: {headings_without_id}"
 
 
 def test_heading_id_slugified():
@@ -171,11 +171,7 @@ def test_heading_id_strips_special_chars():
 
 def test_duplicate_heading_ids_unique():
     """Duplicate heading text gets unique IDs with ``-1``, ``-2`` suffixes."""
-    html = (
-        "<h2>Overview</h2>"
-        "<h2>Overview</h2>"
-        "<h2>Overview</h2>"
-    )
+    html = "<h2>Overview</h2><h2>Overview</h2><h2>Overview</h2>"
     result = _add_heading_ids(html)
     assert 'id="overview"' in result, f"First id missing: {result!r}"
     assert 'id="overview-1"' in result, f"Second id missing: {result!r}"
@@ -196,7 +192,9 @@ def test_heading_id_with_inline_html():
     """Heading IDs are derived from plain text, stripping inline HTML."""
     html = "<h2><strong>Bold</strong> heading</h2>"
     result = _add_heading_ids(html)
-    assert 'id="bold-heading"' in result, f"Inline HTML not stripped for slug: {result!r}"
+    assert 'id="bold-heading"' in result, (
+        f"Inline HTML not stripped for slug: {result!r}"
+    )
 
 
 def test_slugify_heading_examples():
@@ -211,7 +209,9 @@ def test_slugify_heading_examples():
     ]
     for text, expected in cases:
         result = _slugify_heading(text)
-        assert result == expected, f"_slugify_heading({text!r}) = {result!r}, expected {expected!r}"
+        assert result == expected, (
+            f"_slugify_heading({text!r}) = {result!r}, expected {expected!r}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -228,10 +228,7 @@ def test_md_link_rewritten_to_html():
 
 def test_no_href_ending_in_md():
     """Full pipeline: no ``href`` ending in ``.md`` survives for internal links."""
-    md = (
-        "## Links\n\n"
-        "See [page](other.md) and [sub](dir/deep.md) for details.\n"
-    )
+    md = "## Links\n\nSee [page](other.md) and [sub](dir/deep.md) for details.\n"
     html = _render_pipeline(md)
     # Find all href values
     hrefs = re.findall(r'href="([^"]+)"', html)
@@ -273,7 +270,9 @@ def test_subdirectory_md_link_rewritten():
     """Subdirectory references like ``../other/page.md`` are rewritten."""
     html = '<a href="../other/page.md">link</a>'
     result = _rewrite_md_links(html)
-    assert 'href="../other/page.html"' in result, f"Subdir link not rewritten: {result!r}"
+    assert 'href="../other/page.html"' in result, (
+        f"Subdir link not rewritten: {result!r}"
+    )
 
 
 def test_subdirectory_md_link_with_fragment():
@@ -361,14 +360,14 @@ if __name__ == "__main__":
     failed = sum(1 for _, ok, _ in _RESULTS if not ok)
     total = len(_RESULTS)
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     for name, ok, err in _RESULTS:
         status = "PASS" if ok else "FAIL"
         print(f"  [{status}] {name}")
         if err:
             for line in err.strip().splitlines():
                 print(f"         {line}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"  {passed}/{total} passed, {failed} failed")
 
     sys.exit(0 if failed == 0 else 1)

@@ -38,7 +38,6 @@ import json
 import sys
 import tempfile
 import traceback
-import unittest.mock as mock
 from pathlib import Path
 from typing import Any
 
@@ -48,12 +47,10 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 from click.testing import CliRunner
-
 from dde.cli import cli
-from dde.commands.validate import _check_provenance_valid, _is_sidecar, _is_analysis
+from dde.commands.validate import _check_provenance_valid
 from dde.core import provenance
 from dde.core.thresholds import declared_sets
-
 
 # ---------------------------------------------------------------------------
 # Helper: project setup
@@ -110,12 +107,20 @@ def test_adopt_produces_valid_provenance() -> None:
         hyp_file = _write_hypothesis_file(project)
 
         # Adopt the hypothesis set
-        result = runner.invoke(cli, [
-            "--project", str(project),
-            "hypothesis", "adopt", str(hyp_file),
-            "--origin", "sponsor",
-            "--attest", "Provided by Dr. Smith on 2026-09-01",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--project",
+                str(project),
+                "hypothesis",
+                "adopt",
+                str(hyp_file),
+                "--origin",
+                "sponsor",
+                "--attest",
+                "Provided by Dr. Smith on 2026-09-01",
+            ],
+        )
         assert result.exit_code == 0, f"adopt failed: {result.output}"
 
         # Check that files were written
@@ -163,13 +168,19 @@ def test_hand_placed_fails_validation() -> None:
         # Hand-place a file directly (no adoption)
         hyp_dir = project / "raw" / "hypotheses"
         hand_placed = hyp_dir / "manual.adopted.json"
-        hand_placed.write_text(json.dumps({
-            "schema": "dde.hypothesis-set.v1",
-            "origin": "sponsor",
-            "candidates": [{"candidate_id": "1", "statement": "test"}],
-            "attestation": "test",
-            "source_sha256": "abc",
-        }, indent=2), encoding="utf-8")
+        hand_placed.write_text(
+            json.dumps(
+                {
+                    "schema": "dde.hypothesis-set.v1",
+                    "origin": "sponsor",
+                    "candidates": [{"candidate_id": "1", "statement": "test"}],
+                    "attestation": "test",
+                    "source_sha256": "abc",
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
 
         prov_result = _check_provenance_valid(
             project,
@@ -199,12 +210,19 @@ def test_adopt_without_attest_fails() -> None:
         project = _make_project(Path(td))
         hyp_file = _write_hypothesis_file(project)
 
-        result = runner.invoke(cli, [
-            "--project", str(project),
-            "hypothesis", "adopt", str(hyp_file),
-            "--origin", "sponsor",
-            # No --attest
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--project",
+                str(project),
+                "hypothesis",
+                "adopt",
+                str(hyp_file),
+                "--origin",
+                "sponsor",
+                # No --attest
+            ],
+        )
         assert result.exit_code == 2, (
             f"Expected usage error (exit 2), got {result.exit_code}"
         )
@@ -226,12 +244,20 @@ def test_adopted_not_generated_fires() -> None:
         project = _make_project(Path(td))
         hyp_file = _write_hypothesis_file(project)
 
-        result = runner.invoke(cli, [
-            "--project", str(project),
-            "hypothesis", "adopt", str(hyp_file),
-            "--origin", "sponsor",
-            "--attest", "Test attestation",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--project",
+                str(project),
+                "hypothesis",
+                "adopt",
+                str(hyp_file),
+                "--origin",
+                "sponsor",
+                "--attest",
+                "Test attestation",
+            ],
+        )
         assert result.exit_code == 0, f"adopt failed: {result.output}"
 
         # Check that the relay fired in the sidecar
@@ -260,12 +286,20 @@ def test_assessment_null_rank_and_score() -> None:
         hyp_file = _write_hypothesis_file(project)
 
         # Adopt
-        result = runner.invoke(cli, [
-            "--project", str(project),
-            "hypothesis", "adopt", str(hyp_file),
-            "--origin", "sponsor",
-            "--attest", "Test attestation",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--project",
+                str(project),
+                "hypothesis",
+                "adopt",
+                str(hyp_file),
+                "--origin",
+                "sponsor",
+                "--attest",
+                "Test attestation",
+            ],
+        )
         assert result.exit_code == 0, f"adopt failed: {result.output}"
 
         # Find the adopted artifact
@@ -274,10 +308,16 @@ def test_assessment_null_rank_and_score() -> None:
         assert adopted_files, "No adopted file found"
 
         # Analyze
-        result = runner.invoke(cli, [
-            "--project", str(project),
-            "hypothesis", "analyze", str(adopted_files[0]),
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--project",
+                str(project),
+                "hypothesis",
+                "analyze",
+                str(adopted_files[0]),
+            ],
+        )
         assert result.exit_code == 0, f"analyze failed: {result.output}"
 
         # Read the analysis
@@ -322,18 +362,32 @@ def test_score_not_bare_number() -> None:
         hyp_file = _write_hypothesis_file(project)
 
         # Adopt and analyze
-        runner.invoke(cli, [
-            "--project", str(project),
-            "hypothesis", "adopt", str(hyp_file),
-            "--origin", "sponsor",
-            "--attest", "Test attestation",
-        ])
+        runner.invoke(
+            cli,
+            [
+                "--project",
+                str(project),
+                "hypothesis",
+                "adopt",
+                str(hyp_file),
+                "--origin",
+                "sponsor",
+                "--attest",
+                "Test attestation",
+            ],
+        )
         hyp_dir = project / "raw" / "hypotheses"
         adopted_files = list(hyp_dir.glob("*.adopted.json"))
-        runner.invoke(cli, [
-            "--project", str(project),
-            "hypothesis", "analyze", str(adopted_files[0]),
-        ])
+        runner.invoke(
+            cli,
+            [
+                "--project",
+                str(project),
+                "hypothesis",
+                "analyze",
+                str(adopted_files[0]),
+            ],
+        )
 
         analysis_files = list(hyp_dir.glob("*.analysis.json"))
         analysis = json.loads(analysis_files[0].read_text())
@@ -345,7 +399,9 @@ def test_score_not_bare_number() -> None:
             )
             # score must be None or a dict with value and basis
             if score is not None:
-                assert isinstance(score, dict), f"score must be null or dict, got {type(score)}"
+                assert isinstance(score, dict), (
+                    f"score must be null or dict, got {type(score)}"
+                )
                 assert "value" in score, "score object must have 'value'"
                 assert "basis" in score, "score object must have 'basis'"
 
@@ -372,21 +428,37 @@ def test_charter_vs_sponsor_differ() -> None:
         charter_file.write_text(json.dumps(hypotheses, indent=2))
 
         # Adopt as sponsor
-        result = runner.invoke(cli, [
-            "--project", str(project),
-            "hypothesis", "adopt", str(sponsor_file),
-            "--origin", "sponsor",
-            "--attest", "Sponsor attestation",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--project",
+                str(project),
+                "hypothesis",
+                "adopt",
+                str(sponsor_file),
+                "--origin",
+                "sponsor",
+                "--attest",
+                "Sponsor attestation",
+            ],
+        )
         assert result.exit_code == 0, f"sponsor adopt failed: {result.output}"
 
         # Adopt as charter
-        result = runner.invoke(cli, [
-            "--project", str(project),
-            "hypothesis", "adopt", str(charter_file),
-            "--origin", "charter",
-            "--attest", "Charter attestation",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--project",
+                str(project),
+                "hypothesis",
+                "adopt",
+                str(charter_file),
+                "--origin",
+                "charter",
+                "--attest",
+                "Charter attestation",
+            ],
+        )
         assert result.exit_code == 0, f"charter adopt failed: {result.output}"
 
         hyp_dir = project / "raw" / "hypotheses"
@@ -458,12 +530,20 @@ def test_relay_adopted_fires_on_every_adoption() -> None:
         for origin in ("sponsor", "charter"):
             hyp_file = Path(td) / f"{origin}-hyps.json"
             hyp_file.write_text(json.dumps(_sample_hypotheses()))
-            result = runner.invoke(cli, [
-                "--project", str(project),
-                "hypothesis", "adopt", str(hyp_file),
-                "--origin", origin,
-                "--attest", f"{origin} attestation",
-            ])
+            result = runner.invoke(
+                cli,
+                [
+                    "--project",
+                    str(project),
+                    "hypothesis",
+                    "adopt",
+                    str(hyp_file),
+                    "--origin",
+                    origin,
+                    "--attest",
+                    f"{origin} attestation",
+                ],
+            )
             assert result.exit_code == 0, f"adopt {origin} failed: {result.output}"
 
         hyp_dir = project / "raw" / "hypotheses"
@@ -475,7 +555,9 @@ def test_relay_adopted_fires_on_every_adoption() -> None:
                 f"missing in {meta_file.name}"
             )
 
-    print("  PASS: adopted_not_generated fires on every adoption (criterion 27 exception)")
+    print(
+        "  PASS: adopted_not_generated fires on every adoption (criterion 27 exception)"
+    )
 
 
 def test_unranked_set_conditional() -> None:
@@ -500,18 +582,32 @@ def test_unranked_set_conditional() -> None:
         hyp_file = _write_hypothesis_file(project)
 
         # Adopt and analyze
-        runner.invoke(cli, [
-            "--project", str(project),
-            "hypothesis", "adopt", str(hyp_file),
-            "--origin", "sponsor",
-            "--attest", "Test attestation",
-        ])
+        runner.invoke(
+            cli,
+            [
+                "--project",
+                str(project),
+                "hypothesis",
+                "adopt",
+                str(hyp_file),
+                "--origin",
+                "sponsor",
+                "--attest",
+                "Test attestation",
+            ],
+        )
         hyp_dir = project / "raw" / "hypotheses"
         adopted_files = list(hyp_dir.glob("*.adopted.json"))
-        result = runner.invoke(cli, [
-            "--project", str(project),
-            "hypothesis", "analyze", str(adopted_files[0]),
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--project",
+                str(project),
+                "hypothesis",
+                "analyze",
+                str(adopted_files[0]),
+            ],
+        )
         assert result.exit_code == 0
 
         # Verify unranked_set fires for adopted sets
@@ -539,25 +635,40 @@ def test_cite_required_for_publication() -> None:
         hyp_file = _write_hypothesis_file(project)
 
         for origin in ("prior-program", "publication"):
-            result = runner.invoke(cli, [
-                "--project", str(project),
-                "hypothesis", "adopt", str(hyp_file),
-                "--origin", origin,
-                "--attest", "Test attestation",
-                # No --cite
-            ])
-            assert result.exit_code != 0, (
-                f"Should fail without --cite for {origin}"
+            result = runner.invoke(
+                cli,
+                [
+                    "--project",
+                    str(project),
+                    "hypothesis",
+                    "adopt",
+                    str(hyp_file),
+                    "--origin",
+                    origin,
+                    "--attest",
+                    "Test attestation",
+                    # No --cite
+                ],
             )
+            assert result.exit_code != 0, f"Should fail without --cite for {origin}"
 
         # Should succeed with --cite
-        result = runner.invoke(cli, [
-            "--project", str(project),
-            "hypothesis", "adopt", str(hyp_file),
-            "--origin", "publication",
-            "--attest", "Published hypothesis set",
-            "--cite", "DOI:10.1234/example",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--project",
+                str(project),
+                "hypothesis",
+                "adopt",
+                str(hyp_file),
+                "--origin",
+                "publication",
+                "--attest",
+                "Published hypothesis set",
+                "--cite",
+                "DOI:10.1234/example",
+            ],
+        )
         assert result.exit_code == 0, f"Should succeed with --cite: {result.output}"
 
     print("  PASS: --cite required for publication/prior-program")
@@ -578,12 +689,20 @@ def test_charter_analyze_relay_carryforward() -> None:
         hyp_file = _write_hypothesis_file(project)
 
         # Adopt as charter
-        result = runner.invoke(cli, [
-            "--project", str(project),
-            "hypothesis", "adopt", str(hyp_file),
-            "--origin", "charter",
-            "--attest", "Charter team attestation",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--project",
+                str(project),
+                "hypothesis",
+                "adopt",
+                str(hyp_file),
+                "--origin",
+                "charter",
+                "--attest",
+                "Charter team attestation",
+            ],
+        )
         assert result.exit_code == 0, f"adopt failed: {result.output}"
 
         # Find the charter artifact
@@ -592,10 +711,16 @@ def test_charter_analyze_relay_carryforward() -> None:
         assert charter_files, "No charter file found"
 
         # Analyze
-        result = runner.invoke(cli, [
-            "--project", str(project),
-            "hypothesis", "analyze", str(charter_files[0]),
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--project",
+                str(project),
+                "hypothesis",
+                "analyze",
+                str(charter_files[0]),
+            ],
+        )
         assert result.exit_code == 0, f"analyze failed: {result.output}"
 
         # Read the analysis
@@ -631,12 +756,20 @@ def test_source_sha256_integrity() -> None:
         expected_sha256 = hashlib.sha256(original_bytes).hexdigest()
 
         # Adopt
-        result = runner.invoke(cli, [
-            "--project", str(project),
-            "hypothesis", "adopt", str(hyp_file),
-            "--origin", "sponsor",
-            "--attest", "Integrity test attestation",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--project",
+                str(project),
+                "hypothesis",
+                "adopt",
+                str(hyp_file),
+                "--origin",
+                "sponsor",
+                "--attest",
+                "Integrity test attestation",
+            ],
+        )
         assert result.exit_code == 0, f"adopt failed: {result.output}"
 
         hyp_dir = project / "raw" / "hypotheses"
@@ -673,12 +806,20 @@ def test_empty_hypothesis_list() -> None:
         project = _make_project(Path(td))
         hyp_file = _write_hypothesis_file(project, [])
 
-        result = runner.invoke(cli, [
-            "--project", str(project),
-            "hypothesis", "adopt", str(hyp_file),
-            "--origin", "sponsor",
-            "--attest", "Empty test",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--project",
+                str(project),
+                "hypothesis",
+                "adopt",
+                str(hyp_file),
+                "--origin",
+                "sponsor",
+                "--attest",
+                "Empty test",
+            ],
+        )
         assert result.exit_code != 0, "Should fail on empty list"
         assert "empty" in result.output.lower(), (
             f"Error should mention 'empty', got: {result.output}"
@@ -694,12 +835,20 @@ def test_missing_statement_field() -> None:
         project = _make_project(Path(td))
         hyp_file = _write_hypothesis_file(project, [{"mechanism": "x"}])
 
-        result = runner.invoke(cli, [
-            "--project", str(project),
-            "hypothesis", "adopt", str(hyp_file),
-            "--origin", "sponsor",
-            "--attest", "Missing field test",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--project",
+                str(project),
+                "hypothesis",
+                "adopt",
+                str(hyp_file),
+                "--origin",
+                "sponsor",
+                "--attest",
+                "Missing field test",
+            ],
+        )
         assert result.exit_code != 0, "Should fail on missing statement"
         assert "statement" in result.output.lower(), (
             f"Error should mention 'statement', got: {result.output}"
@@ -716,12 +865,20 @@ def test_malformed_json_input() -> None:
         bad_file = Path(td) / "not-json.json"
         bad_file.write_text("this is not json {{{", encoding="utf-8")
 
-        result = runner.invoke(cli, [
-            "--project", str(project),
-            "hypothesis", "adopt", str(bad_file),
-            "--origin", "sponsor",
-            "--attest", "Malformed test",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--project",
+                str(project),
+                "hypothesis",
+                "adopt",
+                str(bad_file),
+                "--origin",
+                "sponsor",
+                "--attest",
+                "Malformed test",
+            ],
+        )
         assert result.exit_code != 0, "Should fail on malformed JSON"
         assert "json" in result.output.lower(), (
             f"Error should mention JSON, got: {result.output}"
@@ -744,12 +901,20 @@ def test_analyze_overwrite_refusal() -> None:
         hyp_file = _write_hypothesis_file(project)
 
         # Adopt
-        result = runner.invoke(cli, [
-            "--project", str(project),
-            "hypothesis", "adopt", str(hyp_file),
-            "--origin", "sponsor",
-            "--attest", "Overwrite test",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--project",
+                str(project),
+                "hypothesis",
+                "adopt",
+                str(hyp_file),
+                "--origin",
+                "sponsor",
+                "--attest",
+                "Overwrite test",
+            ],
+        )
         assert result.exit_code == 0, f"adopt failed: {result.output}"
 
         hyp_dir = project / "raw" / "hypotheses"
@@ -757,27 +922,41 @@ def test_analyze_overwrite_refusal() -> None:
         assert adopted_files
 
         # First analyze (succeeds)
-        result = runner.invoke(cli, [
-            "--project", str(project),
-            "hypothesis", "analyze", str(adopted_files[0]),
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--project",
+                str(project),
+                "hypothesis",
+                "analyze",
+                str(adopted_files[0]),
+            ],
+        )
         assert result.exit_code == 0, f"first analyze failed: {result.output}"
 
         # Modify the adopted artifact (add a candidate) so verdict differs
         adopted = json.loads(adopted_files[0].read_text())
-        adopted["candidates"].append({
-            "candidate_id": "99",
-            "statement": "Extra hypothesis added to force a different verdict",
-        })
+        adopted["candidates"].append(
+            {
+                "candidate_id": "99",
+                "statement": "Extra hypothesis added to force a different verdict",
+            }
+        )
         adopted_files[0].write_text(
             json.dumps(adopted, indent=2) + "\n", encoding="utf-8"
         )
 
         # Second analyze WITHOUT --overwrite should refuse
-        result = runner.invoke(cli, [
-            "--project", str(project),
-            "hypothesis", "analyze", str(adopted_files[0]),
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--project",
+                str(project),
+                "hypothesis",
+                "analyze",
+                str(adopted_files[0]),
+            ],
+        )
         assert result.exit_code != 0, (
             f"Second analyze should refuse without --overwrite, "
             f"got exit {result.exit_code}: {result.output}"
@@ -804,21 +983,37 @@ def test_same_source_different_origin_no_clobber() -> None:
         source_file.write_text(json.dumps(hypotheses, indent=2))
 
         # Adopt as sponsor
-        result = runner.invoke(cli, [
-            "--project", str(project),
-            "hypothesis", "adopt", str(source_file),
-            "--origin", "sponsor",
-            "--attest", "Sponsor attestation",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--project",
+                str(project),
+                "hypothesis",
+                "adopt",
+                str(source_file),
+                "--origin",
+                "sponsor",
+                "--attest",
+                "Sponsor attestation",
+            ],
+        )
         assert result.exit_code == 0, f"sponsor adopt failed: {result.output}"
 
         # Adopt as charter
-        result = runner.invoke(cli, [
-            "--project", str(project),
-            "hypothesis", "adopt", str(source_file),
-            "--origin", "charter",
-            "--attest", "Charter attestation",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--project",
+                str(project),
+                "hypothesis",
+                "adopt",
+                str(source_file),
+                "--origin",
+                "charter",
+                "--attest",
+                "Charter attestation",
+            ],
+        )
         assert result.exit_code == 0, f"charter adopt failed: {result.output}"
 
         hyp_dir = project / "raw" / "hypotheses"
@@ -871,13 +1066,19 @@ def main() -> None:
         ("test_relay_codes_registered", test_relay_codes_registered),
         ("test_threshold_set_registered", test_threshold_set_registered),
         # Relay guards (criterion 27)
-        ("test_relay_adopted_fires_on_every_adoption", test_relay_adopted_fires_on_every_adoption),
+        (
+            "test_relay_adopted_fires_on_every_adoption",
+            test_relay_adopted_fires_on_every_adoption,
+        ),
         ("test_unranked_set_conditional", test_unranked_set_conditional),
         # --cite validation
         ("test_cite_required_for_publication", test_cite_required_for_publication),
         # --- New tests (review fix-ups) ---
         # Fix 1 validation: charter relay carry-forward
-        ("test_charter_analyze_relay_carryforward", test_charter_analyze_relay_carryforward),
+        (
+            "test_charter_analyze_relay_carryforward",
+            test_charter_analyze_relay_carryforward,
+        ),
         # F3: source_sha256 integrity
         ("test_source_sha256_integrity", test_source_sha256_integrity),
         # F4: Edge cases
@@ -887,7 +1088,10 @@ def main() -> None:
         # F5: Overwrite guard
         ("test_analyze_overwrite_refusal", test_analyze_overwrite_refusal),
         # Fix 2 validation: sidecar collision
-        ("test_same_source_different_origin_no_clobber", test_same_source_different_origin_no_clobber),
+        (
+            "test_same_source_different_origin_no_clobber",
+            test_same_source_different_origin_no_clobber,
+        ),
     ]
 
     passed = 0
@@ -901,7 +1105,7 @@ def main() -> None:
             traceback.print_exc()
             failed += 1
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Results: {passed} passed, {failed} failed, {passed + failed} total")
     if failed:
         sys.exit(1)

@@ -92,12 +92,19 @@ def _sample_patents() -> list[dict[str, Any]]:
     ]
 
 
-def _create_trial_artifact(tmp_dir: Path, slug: str, source: str = "clinicaltrials") -> Path:
+def _create_trial_artifact(
+    tmp_dir: Path, slug: str, source: str = "clinicaltrials"
+) -> Path:
     """Create a minimal trial artifact file in *tmp_dir*."""
     artifact = {
         "schema": "dde.clinical-trials.v1",
         "query": {"term": slug, "search_by": "target", "source": "clinicaltrials.gov"},
-        "summary": {"n_studies": 3, "by_phase": {}, "by_status": {}, "top_sponsors": []},
+        "summary": {
+            "n_studies": 3,
+            "by_phase": {},
+            "by_status": {},
+            "top_sponsors": [],
+        },
         "studies": [],
     }
     name = f"{slug}.trials-{source}.artifact.json"
@@ -124,6 +131,7 @@ print("\n--- Unconsumed trial artifact detection ---")
 def test_scan_finds_trial_artifacts(tmp_path: Path | None = None):
     """_scan_unconsumed_trial_artifacts finds trial artifacts."""
     import tempfile
+
     with tempfile.TemporaryDirectory() as td:
         d = Path(td)
         _create_trial_artifact(d, "gene", "clinicaltrials")
@@ -143,6 +151,7 @@ _check("scan finds trial artifacts", test_scan_finds_trial_artifacts)
 def test_scan_returns_empty_when_no_trials():
     """_scan_unconsumed_trial_artifacts returns [] when no trials present."""
     import tempfile
+
     with tempfile.TemporaryDirectory() as td:
         d = Path(td)
         (d / "gene.patent-google-patents.artifact.json").write_text("{}\n")
@@ -157,6 +166,7 @@ _check("scan returns empty when no trials", test_scan_returns_empty_when_no_tria
 def test_scan_finds_multiple_trial_artifacts():
     """Multiple trial artifacts in the same directory are all found."""
     import tempfile
+
     with tempfile.TemporaryDirectory() as td:
         d = Path(td)
         _create_trial_artifact(d, "gene", "clinicaltrials")
@@ -200,7 +210,10 @@ def test_extract_trial_source_tags_deduplicates():
     assert tags == ["trials-clinicaltrials"], f"expected deduplicated, got {tags}"
 
 
-_check("extract trial source tags deduplicates", test_extract_trial_source_tags_deduplicates)
+_check(
+    "extract trial source tags deduplicates",
+    test_extract_trial_source_tags_deduplicates,
+)
 
 
 def test_extract_trial_source_tags_empty():
@@ -222,20 +235,22 @@ def test_assess_result_always_has_sources_used():
     sources_used — that is injected by assess_cmd.  This test confirms
     the core function's output is stable (no accidental collision)."""
     result = assess_competitive_differentiation(
-        _sample_patents(), "GENE",
+        _sample_patents(),
+        "GENE",
         modality="small_molecule",
     )
     # The core function should NOT set these fields; they are added by
     # the CLI command wrapper.
-    assert "sources_used" not in result, (
-        "core function should not set sources_used"
-    )
+    assert "sources_used" not in result, "core function should not set sources_used"
     assert "sources_available_but_unused" not in result, (
         "core function should not set sources_available_but_unused"
     )
 
 
-_check("core function does not set sources_used", test_assess_result_always_has_sources_used)
+_check(
+    "core function does not set sources_used",
+    test_assess_result_always_has_sources_used,
+)
 
 
 def test_source_patent_constant():
@@ -260,7 +275,8 @@ def test_patent_only_assessment_unchanged():
     """
     patents = _sample_patents()
     result = assess_competitive_differentiation(
-        patents, "GENE",
+        patents,
+        "GENE",
         modality="small_molecule",
         indication="solid_tumors",
     )
@@ -268,7 +284,9 @@ def test_patent_only_assessment_unchanged():
     # Three dimensions present.
     dims = result["dimensions"]
     assert set(dims.keys()) == {
-        "competitor_activity", "patentability", "freedom_to_operate",
+        "competitor_activity",
+        "patentability",
+        "freedom_to_operate",
     }
 
     # Dimensions are independent.
@@ -304,7 +322,8 @@ _check("empty patents still works", test_empty_patents_still_works)
 def test_schema_version_unchanged():
     """The assessment schema version is not changed by transparency work."""
     result = assess_competitive_differentiation(
-        _sample_patents(), "GENE",
+        _sample_patents(),
+        "GENE",
     )
     assert result["schema"] == "dde.competitive-differentiation.v1"
 
@@ -322,6 +341,7 @@ def test_sources_metadata_with_trials_present():
     """When trial artifacts exist alongside patents, the source tags
     should be extractable for injection into the output."""
     import tempfile
+
     with tempfile.TemporaryDirectory() as td:
         d = Path(td)
         _create_trial_artifact(d, "gene", "clinicaltrials")
@@ -342,12 +362,15 @@ def test_sources_metadata_with_trials_present():
         assert tags == ["trials-clinicaltrials"]
 
 
-_check("sources metadata with trials present", test_sources_metadata_with_trials_present)
+_check(
+    "sources metadata with trials present", test_sources_metadata_with_trials_present
+)
 
 
 def test_sources_metadata_without_trials():
     """When no trial artifacts exist, sources_available_but_unused is empty."""
     import tempfile
+
     with tempfile.TemporaryDirectory() as td:
         d = Path(td)
         (d / "gene.patent-google-patents.artifact.json").write_text("{}\n")

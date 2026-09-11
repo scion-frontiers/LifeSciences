@@ -41,13 +41,12 @@ TOOLS_DIR = Path(__file__).resolve().parent.parent / "tools"
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
-from dde.core.gene import GeneResolution, resolve_gene, _hgnc_search
-from dde.core.errors import Refusal
-
+from dde.core.gene import GeneResolution, resolve_gene
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_hgnc_response(docs: list[dict[str, Any]]) -> dict[str, Any]:
     """Build a canned HGNC REST API response."""
@@ -426,6 +425,7 @@ def test_echo_shows_mapping() -> None:
 def test_expression_imports_resolve_gene() -> None:
     """expression module imports and uses resolve_gene from core.gene."""
     import inspect
+
     from dde.commands import expression
 
     # Verify import
@@ -435,9 +435,7 @@ def test_expression_imports_resolve_gene() -> None:
 
     # Verify fetch_cmd source calls resolve_gene
     source = inspect.getsource(expression.fetch_cmd.callback)
-    assert "resolve_gene" in source, (
-        "fetch_cmd does not call resolve_gene"
-    )
+    assert "resolve_gene" in source, "fetch_cmd does not call resolve_gene"
     assert "gene_resolution" in source, (
         "fetch_cmd does not record gene_resolution in sidecar"
     )
@@ -455,6 +453,7 @@ def test_expression_imports_resolve_gene() -> None:
 def test_expression_sidecar_has_gene_resolution_key() -> None:
     """expression.fetch_cmd passes gene_resolution in sidecar parameters."""
     import inspect
+
     from dde.commands import expression
 
     source = inspect.getsource(expression.fetch_cmd.callback)
@@ -492,6 +491,7 @@ def test_expression_sidecar_has_gene_resolution_key() -> None:
 def test_genetics_imports_resolve_gene() -> None:
     """genetics module imports and uses resolve_gene from core.gene."""
     import inspect
+
     from dde.commands import genetics
 
     assert hasattr(genetics, "resolve_gene"), (
@@ -499,9 +499,7 @@ def test_genetics_imports_resolve_gene() -> None:
     )
 
     source = inspect.getsource(genetics.fetch_cmd.callback)
-    assert "resolve_gene" in source, (
-        "genetics.fetch_cmd does not call resolve_gene"
-    )
+    assert "resolve_gene" in source, "genetics.fetch_cmd does not call resolve_gene"
     assert "gene_resolution" in source, (
         "genetics.fetch_cmd does not record gene_resolution in sidecar"
     )
@@ -523,6 +521,7 @@ def test_genetics_imports_resolve_gene() -> None:
 def test_pathway_imports_resolve_gene() -> None:
     """pathway module imports and uses resolve_gene from core.gene."""
     import inspect
+
     from dde.commands import pathway
 
     assert hasattr(pathway, "resolve_gene"), (
@@ -530,9 +529,7 @@ def test_pathway_imports_resolve_gene() -> None:
     )
 
     source = inspect.getsource(pathway.search_cmd.callback)
-    assert "resolve_gene" in source, (
-        "pathway.search_cmd does not call resolve_gene"
-    )
+    assert "resolve_gene" in source, "pathway.search_cmd does not call resolve_gene"
     assert "gene_resolution" in source, (
         "pathway.search_cmd does not record gene_resolution in sidecar"
     )
@@ -553,12 +550,11 @@ def test_pathway_imports_resolve_gene() -> None:
 def test_expression_single_cell_imports_resolve_gene() -> None:
     """expression.fetch_single_cell_cmd also uses resolve_gene."""
     import inspect
+
     from dde.commands import expression
 
     source = inspect.getsource(expression.fetch_single_cell_cmd.callback)
-    assert "resolve_gene" in source, (
-        "fetch_single_cell_cmd does not call resolve_gene"
-    )
+    assert "resolve_gene" in source, "fetch_single_cell_cmd does not call resolve_gene"
     assert "gene_resolution" in source, (
         "fetch_single_cell_cmd does not record gene_resolution"
     )
@@ -607,14 +603,23 @@ def main() -> None:
         # Relay and provenance
         ("test_relay_fires_on_unresolved", test_relay_fires_on_unresolved),
         ("test_sidecar_records_resolution", test_sidecar_records_resolution),
-        ("test_resolved_no_data_distinct_from_unresolved", test_resolved_no_data_distinct_from_unresolved),
+        (
+            "test_resolved_no_data_distinct_from_unresolved",
+            test_resolved_no_data_distinct_from_unresolved,
+        ),
         ("test_echo_shows_mapping", test_echo_shows_mapping),
         # Command integrations (source inspection)
         ("test_expression_imports_resolve_gene", test_expression_imports_resolve_gene),
-        ("test_expression_sidecar_has_gene_resolution_key", test_expression_sidecar_has_gene_resolution_key),
+        (
+            "test_expression_sidecar_has_gene_resolution_key",
+            test_expression_sidecar_has_gene_resolution_key,
+        ),
         ("test_genetics_imports_resolve_gene", test_genetics_imports_resolve_gene),
         ("test_pathway_imports_resolve_gene", test_pathway_imports_resolve_gene),
-        ("test_expression_single_cell_imports_resolve_gene", test_expression_single_cell_imports_resolve_gene),
+        (
+            "test_expression_single_cell_imports_resolve_gene",
+            test_expression_single_cell_imports_resolve_gene,
+        ),
         ("test_to_dict_round_trip", test_to_dict_round_trip),
     ]
 
@@ -627,10 +632,11 @@ def main() -> None:
         except Exception as exc:
             print(f"  FAIL: {name} — {exc}")
             import traceback
+
             traceback.print_exc()
             failed += 1
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Results: {passed} passed, {failed} failed, {passed + failed} total")
     if failed:
         sys.exit(1)
