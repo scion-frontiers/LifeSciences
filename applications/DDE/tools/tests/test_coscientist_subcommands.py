@@ -35,6 +35,11 @@ from dde.commands.coscientist import (
     _find_report,
     _find_report_references,
     _normalise,
+    _render_knowledge_text,
+    _require_expanded_fields,
+    _require_nonempty_ideas,
+    _require_report_content,
+    _validate_schema_tag,
 )
 from dde.core.errors import SchemaError
 
@@ -273,10 +278,15 @@ class TestReferencesFailurePaths:
     def test_old_artifact_missing_references_detected(
         self, normalised: dict
     ) -> None:
-        """Backward-compat check catches old artifacts."""
+        """SchemaError raised when normalised artifact lacks expanded references.
+
+        The guard fires before any output is produced, so SchemaError
+        is proof that no output file was created.
+        """
         # Simulate an artifact from before the expansion.
         del normalised["knowledge_base"]["references"]
-        assert "references" not in normalised["knowledge_base"]
+        with pytest.raises(SchemaError, match="re-run dde coscientist ingest"):
+            _require_expanded_fields(normalised, "references")
 
     def test_schema_error_exit_code_is_3(self) -> None:
         """SchemaError carries exit code 3."""
@@ -313,12 +323,17 @@ class TestKnowledgeFailurePaths:
     def test_old_artifact_missing_connections_detected(
         self, normalised: dict
     ) -> None:
-        """Backward-compat check catches old artifacts missing connections."""
+        """SchemaError raised when normalised artifact lacks expanded connections.
+
+        The guard fires before any output is produced, so SchemaError
+        is proof that no output file was created.
+        """
         del normalised["knowledge_base"]["connections"]
-        assert "connections" not in normalised["knowledge_base"]
+        with pytest.raises(SchemaError, match="re-run dde coscientist ingest"):
+            _require_expanded_fields(normalised, "connections")
 
     def test_empty_kb_is_not_error(self) -> None:
-        """Empty KB is not an error — prints placeholder."""
+        """Empty KB passes the guard and renders placeholder text, not an error."""
         kb = {
             "summary": "",
             "references": [],
@@ -328,9 +343,13 @@ class TestKnowledgeFailurePaths:
             "n_connections": 0,
             "n_learned_claims": 0,
         }
-        # No error — empty string is valid, just means "no content".
-        assert kb["summary"] == ""
-        assert kb["connections"] == []
+        record = {"knowledge_base": kb}
+        # Guard does NOT raise — connections key is present (just empty).
+        _require_expanded_fields(record, "connections")
+        # Rendering produces placeholder text without raising.
+        text = _render_knowledge_text(kb, "full")
+        assert "(No knowledge summary available)" in text
+        assert "(No connections analysis available)" in text
 
 
 # ===================================================================
@@ -356,18 +375,19 @@ class TestReportLogic:
 
 class TestReportFailurePaths:
     def test_schema_error_when_report_entirely_empty(self) -> None:
-        """SchemaError raised when report has no content at all."""
+        """SchemaError raised when report has no content at all.
+
+        The guard fires before any output is produced, so SchemaError
+        is proof that no output file was created.
+        """
         rpt = {
             "overview": "",
             "top_ideas_summary": "",
             "reviews_overview": "",
             "references": [],
         }
-        # The check: all three text fields are empty.
-        all_empty = not any(
-            rpt[k] for k in ("overview", "top_ideas_summary", "reviews_overview")
-        )
-        assert all_empty
+        with pytest.raises(SchemaError, match="no executive report found"):
+            _require_report_content(rpt)
 
     def test_recommendation_absent_is_not_error(
         self, normalised_alt: dict
@@ -444,17 +464,27 @@ class TestCompareLogic:
 
 class TestCompareFailurePaths:
     def test_schema_error_on_raw_input(self) -> None:
-        """Non-normalised input lacks the schema tag."""
+        """SchemaError raised when record lacks the normalised schema tag.
+
+        The guard fires before any output is produced, so SchemaError
+        is proof that no output file was created.
+        """
         raw = {
             "title": "Raw export",
             "Xr": [{"eloRating": 1500, "ranking": 1}],
         }
-        assert raw.get("schema") != "dde.coscientist.v1"
+        with pytest.raises(SchemaError, match="not a normalised tournament artifact"):
+            _validate_schema_tag(raw, "raw_export.json")
 
     def test_schema_error_on_empty_ideas(self) -> None:
-        """Normalised artifact with no ideas triggers SchemaError."""
+        """SchemaError raised when normalised artifact has an empty ideas list.
+
+        The guard fires before any output is produced, so SchemaError
+        is proof that no output file was created.
+        """
         record = {"schema": "dde.coscientist.v1", "ideas": []}
-        assert len(record["ideas"]) == 0
+        with pytest.raises(SchemaError, match="contains no ideas"):
+            _require_nonempty_ideas(record["ideas"], "empty.tournament.json")
 
 
 # ===================================================================

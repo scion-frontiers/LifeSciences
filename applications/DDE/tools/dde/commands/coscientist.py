@@ -820,7 +820,7 @@ def analyze(
             "Review summary available but no structured recommendation section found."
         )
         emit.line(
-            "See eOa.topRankingIdeasSummary in the export for the full review."
+            "See the topRankingIdeasSummary section in the export for the full review."
         )
 
     emit.path(project.relative(analysis_path), "analysis")
@@ -938,6 +938,86 @@ def show(
 
 
 # ---------------------------------------------------------------------------
+# Guards — extracted so tests can call them directly
+# ---------------------------------------------------------------------------
+
+
+def _validate_schema_tag(record: dict, name: str) -> None:
+    """Raise ``SchemaError`` if *record* lacks the normalised schema tag."""
+    if record.get("schema") != "dde.coscientist.v1":
+        raise SchemaError(
+            f"{name} is not a normalised tournament artifact",
+            detail=f"expected schema dde.coscientist.v1, got {record.get('schema')!r}",
+            remedy="run `dde coscientist ingest` on the raw export first",
+        )
+
+
+def _require_expanded_fields(record: dict, field: str) -> None:
+    """Raise ``SchemaError`` if the normalised record's knowledge_base lacks *field*.
+
+    Old artifacts ingested before the normalisation expansion will be missing
+    the full-object lists (``references``, ``connections``).  This guard
+    catches them early with a clear remedy.
+    """
+    if field not in record.get("knowledge_base", {}):
+        raise SchemaError(
+            f"artifact was ingested before {field} data was carried; "
+            "re-run dde coscientist ingest",
+        )
+
+
+def _require_report_content(rpt: dict) -> None:
+    """Raise ``SchemaError`` if the report dict has no content at all."""
+    if not any(rpt.get(k) for k in ("overview", "top_ideas_summary", "reviews_overview")):
+        raise SchemaError(
+            "no executive report found in this tournament artifact",
+            remedy="confirm this tournament produced an executive report",
+        )
+
+
+def _require_nonempty_ideas(ideas: list[dict], name: str) -> None:
+    """Raise ``SchemaError`` if *ideas* is empty."""
+    if not ideas:
+        raise SchemaError(
+            f"tournament artifact {name} contains no ideas",
+        )
+
+
+def _render_knowledge_text(kb: dict, section: str) -> str:
+    """Render knowledge-base sections as markdown text.
+
+    Extracted from the ``knowledge`` Click command so that the rendering
+    logic is independently testable (in particular, that empty KB data
+    produces placeholder text rather than raising).
+    """
+    lines: list[str] = []
+    if section in ("summary", "full"):
+        lines.append("# Knowledge Base Summary\n")
+        summary = kb.get("summary", "")
+        lines.append(summary if summary else "(No knowledge summary available)")
+        lines.append("")
+
+    if section in ("connections", "full"):
+        lines.append("# Unexpected Connections Analysis\n")
+        conn_summary = kb.get("connections_summary", "")
+        lines.append(
+            conn_summary if conn_summary else "(No connections analysis available)"
+        )
+        lines.append("")
+        conns = kb.get("connections", [])
+        if conns:
+            lines.append(f"## Individual Connections ({len(conns)} total)\n")
+            for j, conn in enumerate(conns, 1):
+                lines.append(f"### {j}. {conn.get('title', f'Connection {j}')}")
+                desc = conn.get("description", "")
+                if desc:
+                    lines.append(desc)
+                lines.append("")
+
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # Shared loader for read-only subcommands operating on normalised artifacts
 # ---------------------------------------------------------------------------
 
@@ -951,12 +1031,7 @@ def _load_normalised(state: AppState, artifact: str) -> tuple[Path, dict]:
     """
     path = resolve_artifact(state, artifact, "normalised tournament")
     record = provenance.read_json(path, "normalised tournament")
-    if record.get("schema") != "dde.coscientist.v1":
-        raise SchemaError(
-            f"{path.name} is not a normalised tournament artifact",
-            detail=f"expected schema dde.coscientist.v1, got {record.get('schema')!r}",
-            remedy="run `dde coscientist ingest` on the raw export first",
-        )
+    _validate_schema_tag(record, path.name)
     return path, record
 
 
@@ -1001,11 +1076,7 @@ def references(
     path, record = _load_normalised(state, artifact)
 
     # Check for expanded normalisation fields (backward compat with old artifacts).
-    if "references" not in record.get("knowledge_base", {}):
-        raise SchemaError(
-            "artifact was ingested before reference data was carried; "
-            "re-run dde coscientist ingest",
-        )
+    _require_expanded_fields(record, "references")
 
     ideas = record.get("ideas", [])
 
@@ -1148,11 +1219,7 @@ def knowledge(
     kb = record.get("knowledge_base", {})
 
     # Check for expanded normalisation fields.
-    if "connections" not in kb:
-        raise SchemaError(
-            "artifact was ingested before connection data was carried; "
-            "re-run dde coscientist ingest",
-        )
+    _require_expanded_fields(record, "connections")
 
     stem = path.name.replace(".tournament.json", "")
     target_dir = project.artifact_dir(ARTIFACT_CLASS, out)
@@ -1167,32 +1234,9 @@ def knowledge(
         dest = target_dir / f"{stem}.knowledge.{section}.json"
         dest.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     else:
-        lines: list[str] = []
-        if section in ("summary", "full"):
-            lines.append("# Knowledge Base Summary\n")
-            summary = kb.get("summary", "")
-            lines.append(summary if summary else "(No knowledge summary available)")
-            lines.append("")
-
-        if section in ("connections", "full"):
-            lines.append("# Unexpected Connections Analysis\n")
-            conn_summary = kb.get("connections_summary", "")
-            lines.append(
-                conn_summary if conn_summary else "(No connections analysis available)"
-            )
-            lines.append("")
-            conns = kb.get("connections", [])
-            if conns:
-                lines.append(f"## Individual Connections ({len(conns)} total)\n")
-                for j, conn in enumerate(conns, 1):
-                    lines.append(f"### {j}. {conn.get('title', f'Connection {j}')}")
-                    desc = conn.get("description", "")
-                    if desc:
-                        lines.append(desc)
-                    lines.append("")
-
+        text = _render_knowledge_text(kb, section)
         dest = target_dir / f"{stem}.knowledge.{section}.md"
-        dest.write_text("\n".join(lines), encoding="utf-8")
+        dest.write_text(text, encoding="utf-8")
 
     n_conns = len(kb.get("connections", []))
     emit = Emitter(as_json=as_json, quiet=quiet)
@@ -1238,11 +1282,7 @@ def report(
     rpt = record.get("report", {})
 
     # Report entirely empty.
-    if not any(rpt.get(k) for k in ("overview", "top_ideas_summary", "reviews_overview")):
-        raise SchemaError(
-            "no executive report found in this tournament artifact",
-            remedy="confirm this tournament produced an executive report",
-        )
+    _require_report_content(rpt)
 
     stem = path.name.replace(".tournament.json", "")
     target_dir = project.artifact_dir(ARTIFACT_CLASS, out)
@@ -1350,14 +1390,8 @@ def compare(
     ideas_a = record_a.get("ideas", [])
     ideas_b = record_b.get("ideas", [])
 
-    if not ideas_a:
-        raise SchemaError(
-            f"tournament artifact {path_a.name} contains no ideas",
-        )
-    if not ideas_b:
-        raise SchemaError(
-            f"tournament artifact {path_b.name} contains no ideas",
-        )
+    _require_nonempty_ideas(ideas_a, path_a.name)
+    _require_nonempty_ideas(ideas_b, path_b.name)
 
     title_a = record_a.get("tournament", {}).get("title") or "Tournament A"
     title_b = record_b.get("tournament", {}).get("title") or "Tournament B"
@@ -1461,7 +1495,8 @@ def _compare_markdown(
         lines.append("|------|------|-----|-------|")
         for idea in ideas_a:
             g = idea.get("gene") or "N/A"
-            genes_a.add(g)
+            if idea.get("gene"):
+                genes_a.add(idea["gene"])
             elo = idea.get("elo_rating")
             elo_s = f"{elo:.0f}" if elo is not None else "N/A"
             lines.append(f"| {idea['ranking']} | {g} | {elo_s} | {(idea['title'] or '')[:60]} |")
@@ -1472,7 +1507,8 @@ def _compare_markdown(
         lines.append("|------|------|-----|-------|")
         for idea in ideas_b:
             g = idea.get("gene") or "N/A"
-            genes_b.add(g)
+            if idea.get("gene"):
+                genes_b.add(idea["gene"])
             elo = idea.get("elo_rating")
             elo_s = f"{elo:.0f}" if elo is not None else "N/A"
             lines.append(f"| {idea['ranking']} | {g} | {elo_s} | {(idea['title'] or '')[:60]} |")
