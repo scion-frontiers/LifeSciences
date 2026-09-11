@@ -59,10 +59,10 @@ from pathlib import Path
 #   "GATE": re.compile(r"\b(GATE-\d{3})\b"),
 
 CODE_PATTERNS: dict[str, re.Pattern[str]] = {
-    "WO":  re.compile(r"\b(WO-\d{3})\b"),
+    "WO": re.compile(r"\b(WO-\d{3})\b"),
     "DEC": re.compile(r"\b(DEC-\d{3})\b"),
     "LIA": re.compile(r"\b(LIA-\d{3})\b"),
-    "OQ":  re.compile(r"\b(OQ-\d{3})\b"),
+    "OQ": re.compile(r"\b(OQ-\d{3})\b"),
 }
 
 # Combined pattern matching any configured code (built automatically).
@@ -71,7 +71,7 @@ _ALL_CODES_RE: re.Pattern[str] | None = None
 
 def _all_codes_pattern() -> re.Pattern[str]:
     """Lazily build a combined regex from CODE_PATTERNS."""
-    global _ALL_CODES_RE  # noqa: PLW0603
+    global _ALL_CODES_RE
     if _ALL_CODES_RE is None:
         alternatives = "|".join(p.pattern.strip(r"\b") for p in CODE_PATTERNS.values())
         _ALL_CODES_RE = re.compile(rf"\b({alternatives})\b")
@@ -129,10 +129,10 @@ def discover_code_urls(site_dir: Path) -> dict[str, str]:
 #   - <pre>...</pre>     (preformatted blocks)
 #   - HTML tag attributes (anything between < and >)
 _PROTECTED_RE = re.compile(
-    r"<a\b[^>]*>.*?</a>"        # anchor tags (non-greedy)
-    r"|<code\b[^>]*>.*?</code>" # code elements
-    r"|<pre\b[^>]*>.*?</pre>"   # pre elements
-    r"|<[^>]+>",                 # any HTML tag (protects attributes)
+    r"<a\b[^>]*>.*?</a>"  # anchor tags (non-greedy)
+    r"|<code\b[^>]*>.*?</code>"  # code elements
+    r"|<pre\b[^>]*>.*?</pre>"  # pre elements
+    r"|<[^>]+>",  # any HTML tag (protects attributes)
     re.DOTALL | re.IGNORECASE,
 )
 

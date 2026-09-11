@@ -23,7 +23,6 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -109,11 +108,13 @@ class FixtureMetrics:
         if command in self._seen_commands:
             self.repeated_operations += 1
         self._seen_commands.add(command)
-        self.cli_invocations.append({
-            "command": command,
-            "exit_code": exit_code,
-            "output_length": len(output),
-        })
+        self.cli_invocations.append(
+            {
+                "command": command,
+                "exit_code": exit_code,
+                "output_length": len(output),
+            }
+        )
 
     def record_transition(self, from_state: str | None, to_state: str) -> None:
         self.state_transitions.append((from_state, to_state))
@@ -214,7 +215,8 @@ class BaselineReport:
                 "denominator": self.total_fixtures,
                 "rate": (
                     round(self.completed_fixtures / self.total_fixtures, 4)
-                    if self.total_fixtures > 0 else None
+                    if self.total_fixtures > 0
+                    else None
                 ),
             },
             "cli_success_rate": {
@@ -222,7 +224,8 @@ class BaselineReport:
                 "denominator": self.total_invocations,
                 "rate": (
                     round(self.total_successes / self.total_invocations, 4)
-                    if self.total_invocations > 0 else None
+                    if self.total_invocations > 0
+                    else None
                 ),
             },
             "cli_failure_rate": {
@@ -230,7 +233,8 @@ class BaselineReport:
                 "denominator": self.total_invocations,
                 "rate": (
                     round(self.total_failures / self.total_invocations, 4)
-                    if self.total_invocations > 0 else None
+                    if self.total_invocations > 0
+                    else None
                 ),
             },
             "total_state_transitions": self.total_transitions,
@@ -242,7 +246,8 @@ class BaselineReport:
                 "denominator": self.total_invocations,
                 "rate": (
                     round(self.total_repeated_operations / self.total_invocations, 4)
-                    if self.total_invocations > 0 else None
+                    if self.total_invocations > 0
+                    else None
                 ),
             },
             # Metrics that require full workflow instrumentation (LLM agents
@@ -333,7 +338,9 @@ class BaselineReport:
                 f"({result.success_count} ok, {result.failure_count} failed)"
             )
             lines.append(f"- **State transitions**: {result.transition_count}")
-            lines.append(f"- **Relay codes**: {', '.join(result.relay_codes_fired) or 'none'}")
+            lines.append(
+                f"- **Relay codes**: {', '.join(result.relay_codes_fired) or 'none'}"
+            )
             lines.append(f"- **Artifacts produced**: {len(result.artifacts_produced)}")
             lines.append(f"- **Repeated operations**: {result.repeated_operations}")
 
@@ -396,21 +403,17 @@ class BaselineReport:
         lines.append("")
         lines.append("| Resource | Budget | Baseline Actual |")
         lines.append("|----------|--------|-----------------|")
-        lines.append(
-            f"| Wall clock (all fixtures) | 60s | {self.total_wall_clock}s |"
-        )
-        lines.append(
-            f"| CLI invocations | 200 | {self.total_invocations} |"
-        )
-        lines.append(
-            f"| State transitions | 100 | {self.total_transitions} |"
-        )
+        lines.append(f"| Wall clock (all fixtures) | 60s | {self.total_wall_clock}s |")
+        lines.append(f"| CLI invocations | 200 | {self.total_invocations} |")
+        lines.append(f"| State transitions | 100 | {self.total_transitions} |")
         lines.append("")
 
         # Provenance
         lines.append("## Provenance")
         lines.append("")
-        lines.append("All fixtures are synthetic, clearly labeled as such in their definitions.")
+        lines.append(
+            "All fixtures are synthetic, clearly labeled as such in their definitions."
+        )
         lines.append("No real program data or patient data is used.")
         lines.append(
             "Fixture provenance is documented in "

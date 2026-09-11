@@ -47,9 +47,12 @@ if str(_TOOLS_DIR) not in sys.path:
 if str(_DDE_ROOT) not in sys.path:
     sys.path.insert(0, str(_DDE_ROOT))
 
-from eval.comparison import generate_comparison, load_baseline_report
-from eval.fixtures.definitions import ALL_FIXTURES, DECLINED_CANDIDATE_SAMPLE
-from eval.stage0_harness import run_all_fixtures_stage0
+from eval.comparison import generate_comparison, load_baseline_report  # noqa: E402
+from eval.fixtures.definitions import (  # noqa: E402
+    ALL_FIXTURES,
+    DECLINED_CANDIDATE_SAMPLE,
+)
+from eval.stage0_harness import run_all_fixtures_stage0  # noqa: E402
 
 
 def main() -> int:
@@ -60,41 +63,29 @@ def main() -> int:
     baseline_path = _DDE_ROOT / "eval" / "baseline" / "baseline-report.json"
     if not baseline_path.exists():
         print(f"ERROR: Baseline report not found at {baseline_path}")
-        print(
-            "Run the baseline first: "
-            "PYTHONPATH=tools python3 -m eval.run_baseline"
-        )
+        print("Run the baseline first: PYTHONPATH=tools python3 -m eval.run_baseline")
         return 1
 
     # Load baseline (frozen Phase 1 output — not regenerated).
     baseline_data = load_baseline_report(baseline_path)
     print(f"Loaded baseline from {baseline_path}")
-    print(
-        f"  Baseline timestamp: "
-        f"{baseline_data.get('run_timestamp', 'unknown')}"
-    )
+    print(f"  Baseline timestamp: {baseline_data.get('run_timestamp', 'unknown')}")
 
     # Run Stage 0 evaluation.
     stage0_report = run_all_fixtures_stage0()
 
     # Write Stage 0 report.
-    stage0_json = stage0_report.write_json(
-        comparison_dir / "stage0-report.json"
-    )
+    stage0_json = stage0_report.write_json(comparison_dir / "stage0-report.json")
     print(f"\nStage 0 report written to: {stage0_json}")
 
     # Generate comparison.
     comparison = generate_comparison(baseline_data, stage0_report)
 
     # Write comparison reports.
-    json_path = comparison.write_json(
-        comparison_dir / "comparison-report.json"
-    )
+    json_path = comparison.write_json(comparison_dir / "comparison-report.json")
     print(f"Comparison JSON written to: {json_path}")
 
-    md_path = comparison.write_markdown(
-        comparison_dir / "comparison-report.md"
-    )
+    md_path = comparison.write_markdown(comparison_dir / "comparison-report.md")
     print(f"Comparison markdown written to: {md_path}")
 
     # Write run manifest for reproducibility.
@@ -131,9 +122,7 @@ def main() -> int:
     print(f"Run manifest written to: {manifest_path}")
 
     if stage0_report.completed_fixtures < stage0_report.total_fixtures:
-        failed = (
-            stage0_report.total_fixtures - stage0_report.completed_fixtures
-        )
+        failed = stage0_report.total_fixtures - stage0_report.completed_fixtures
         print(f"\nWARNING: {failed} Stage 0 fixture(s) did not complete.")
         return 1
 

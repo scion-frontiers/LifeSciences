@@ -32,9 +32,7 @@ Outputs:
 from __future__ import annotations
 
 import json
-import os
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 # Ensure the tools package is importable from DDE root.
@@ -46,8 +44,11 @@ if str(_TOOLS_DIR) not in sys.path:
 if str(_DDE_ROOT) not in sys.path:
     sys.path.insert(0, str(_DDE_ROOT))
 
-from eval.harness import run_all_fixtures
-from eval.fixtures.definitions import ALL_FIXTURES, DECLINED_CANDIDATE_SAMPLE
+from eval.fixtures.definitions import (  # noqa: E402
+    ALL_FIXTURES,
+    DECLINED_CANDIDATE_SAMPLE,
+)
+from eval.harness import run_all_fixtures  # noqa: E402
 
 
 def main() -> int:
