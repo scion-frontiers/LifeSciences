@@ -1193,7 +1193,7 @@ def test_site_relevance_druggable_at_site():
         site_query="A:100",
         site_relevant=True,
     )
-    relevant, reason = check_site_relevance(result, ["A:100"])
+    relevant, _reason = check_site_relevance(result, ["A:100"])
     assert relevant is True
 
 
@@ -1212,7 +1212,7 @@ def test_site_relevance_no_pocket_at_site():
         site_query="A:100",
         site_relevant=False,
     )
-    relevant, reason = check_site_relevance(result, ["A:100"])
+    relevant, _reason = check_site_relevance(result, ["A:100"])
     assert relevant is False
 
 
@@ -1659,7 +1659,7 @@ def test_make_pocket_runner_requires_click():
     # The function itself is importable regardless of click.
     # Calling it requires click.testing.CliRunner.
     try:
-        from click.testing import CliRunner
+        from click.testing import CliRunner  # noqa: F401 — availability check
 
         # Click IS available — test that make_pocket_runner returns a callable
         runner = make_pocket_runner(project_dir="/tmp/nonexistent")

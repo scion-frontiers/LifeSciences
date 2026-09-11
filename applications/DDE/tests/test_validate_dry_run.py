@@ -152,7 +152,7 @@ def test_run_all_checks_in_non_submitted_state() -> None:
         record = _setup_passing_project(root)
         assert record["state"] == "proposed"  # not submitted
 
-        checks, overall_result, checks_failed = _run_all_checks(root, record)
+        checks, overall_result, _checks_failed = _run_all_checks(root, record)
 
         # Checks ran — we get results.
         assert isinstance(checks, list)
@@ -167,7 +167,7 @@ def test_run_all_checks_produces_check_results() -> None:
         root = Path(tmp)
         record = _setup_passing_project(root)
 
-        checks, overall_result, checks_failed = _run_all_checks(root, record)
+        checks, _overall_result, _checks_failed = _run_all_checks(root, record)
 
         # Each check has expected keys.
         for c in checks:
@@ -226,7 +226,7 @@ def test_run_all_checks_exit_zero_on_pass() -> None:
         root = Path(tmp)
         record = _setup_passing_project(root)
 
-        checks, overall_result, checks_failed = _run_all_checks(root, record)
+        _checks, overall_result, checks_failed = _run_all_checks(root, record)
 
         assert not checks_failed, f"unexpected failures: {checks_failed}"
         assert overall_result in ("pass", "pass_with_warnings")
@@ -239,7 +239,7 @@ def test_run_all_checks_reports_failures() -> None:
         root = Path(tmp)
         record = _setup_failing_project(root)
 
-        checks, overall_result, checks_failed = _run_all_checks(root, record)
+        _checks, overall_result, checks_failed = _run_all_checks(root, record)
 
         assert len(checks_failed) > 0, "expected at least one failure"
         assert overall_result == "fail"
@@ -269,7 +269,7 @@ def test_run_all_checks_works_in_any_state() -> None:
                 },
             )
             # Should not raise regardless of state.
-            checks, overall_result, checks_failed = _run_all_checks(root, record)
+            checks, _overall_result, _checks_failed = _run_all_checks(root, record)
             assert isinstance(checks, list)
     print("  PASS: _run_all_checks works in any WO state")
 
@@ -344,7 +344,7 @@ def test_dry_run_header_in_output() -> None:
         root = Path(tmp)
         record = _setup_passing_project(root)
 
-        checks, overall_result, checks_failed = _run_all_checks(root, record)
+        checks, overall_result, _checks_failed = _run_all_checks(root, record)
 
         # The dry-run path in check_cmd uses these values to build the
         # header "=== PREFLIGHT VALIDATION (dry run) ===" and footer

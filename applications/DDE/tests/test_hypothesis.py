@@ -161,7 +161,7 @@ def test_adopt_produces_valid_provenance() -> None:
 def test_hand_placed_fails_validation() -> None:
     """A file hand-placed in raw/hypotheses/ without adopt fails
     provenance validation."""
-    runner = CliRunner()
+    CliRunner()
     with tempfile.TemporaryDirectory() as td:
         project = _make_project(Path(td))
 

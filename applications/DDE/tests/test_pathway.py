@@ -130,7 +130,7 @@ def test_search_reactome_happy() -> None:
         mock_resp.content = raw_bytes
         mock_req.return_value = mock_resp
 
-        raw, entries = _search_reactome("BRCA1")
+        _raw, entries = _search_reactome("BRCA1")
 
     assert len(entries) == 2, f"Expected 2 entries, got {len(entries)}"
     assert entries[0]["source_db"] == "reactome"
@@ -150,7 +150,7 @@ def test_search_reactome_empty() -> None:
         mock_resp.content = raw_bytes
         mock_req.return_value = mock_resp
 
-        raw, entries = _search_reactome("NOTAGENE")
+        _raw, entries = _search_reactome("NOTAGENE")
 
     assert len(entries) == 0, f"Expected 0 entries, got {len(entries)}"
     print("  PASS: _search_reactome empty results")
@@ -220,7 +220,7 @@ def test_search_go_happy() -> None:
         mock_resp.content = quickgo_raw
         mock_req.return_value = mock_resp
 
-        raw, entries = _search_go("BRCA1")
+        _raw, entries = _search_go("BRCA1")
 
     assert len(entries) == 2, f"Expected 2 entries, got {len(entries)}"
     assert entries[0]["source_db"] == "go"
@@ -253,7 +253,7 @@ def test_search_go_empty() -> None:
         mock_resp.content = quickgo_raw
         mock_req.return_value = mock_resp
 
-        raw, entries = _search_go("NOTAGENE")
+        _raw, entries = _search_go("NOTAGENE")
 
     assert len(entries) == 0, f"Expected 0 entries, got {len(entries)}"
     print("  PASS: _search_go empty results")
@@ -301,7 +301,7 @@ def test_search_go_evidence_diversity() -> None:
         mock_resp.content = quickgo_raw
         mock_req.return_value = mock_resp
 
-        raw, entries = _search_go("BRCA1")
+        _raw, entries = _search_go("BRCA1")
 
     # Should deduplicate by term but keep all evidence codes
     assert len(entries) == 2, f"Expected 2 entries (deduplicated), got {len(entries)}"
@@ -344,7 +344,7 @@ def test_search_go_dedup_same_evidence() -> None:
         mock_resp.content = quickgo_raw
         mock_req.return_value = mock_resp
 
-        raw, entries = _search_go("BRCA1")
+        _raw, entries = _search_go("BRCA1")
 
     assert len(entries) == 1
     assert entries[0]["evidence_codes"] == ["IDA"], (
@@ -514,7 +514,7 @@ def _invoke_analyze(
         mock.patch(
             "dde.commands.pathway.provenance.write_analysis",
             return_value=analysis_out_path,
-        ) as mock_wa,
+        ),
     ):
         # Call the callback directly (unwrapped from Click decorators).
         analyze_cmd.callback(
@@ -528,7 +528,6 @@ def _invoke_analyze(
         )
 
     # Extract what was passed to write_analysis.
-    wa_kwargs = mock_wa.call_args
     return (
         captured.get("assessment", {}),
         captured.get("metrics", {}),
@@ -565,7 +564,7 @@ def test_analyze_reactome_happy() -> None:
 
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
-        assessment, metrics, relays = _invoke_analyze(
+        assessment, metrics, _relays = _invoke_analyze(
             tmp, "brca1", "reactome", artifact
         )
 
@@ -611,7 +610,7 @@ def test_analyze_go_happy() -> None:
 
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
-        assessment, metrics, relays = _invoke_analyze(tmp, "brca1", "go", artifact)
+        assessment, metrics, _relays = _invoke_analyze(tmp, "brca1", "go", artifact)
 
     assert assessment["gene"] == "BRCA1"
     assert assessment["source"] == "go"
@@ -746,7 +745,7 @@ def test_analyze_schema_key_consistency() -> None:
     assert "pathways" in reactome_artifact, "Reactome artifact missing 'pathways' key"
 
     with tempfile.TemporaryDirectory() as td:
-        assessment, metrics, _ = _invoke_analyze(
+        _assessment, metrics, _ = _invoke_analyze(
             Path(td), "brca1", "reactome", reactome_artifact
         )
     assert metrics["total_pathways"] == 1, (
@@ -767,7 +766,7 @@ def test_analyze_schema_key_consistency() -> None:
     assert "annotations" in go_artifact, "GO artifact missing 'annotations' key"
 
     with tempfile.TemporaryDirectory() as td:
-        assessment, metrics, _ = _invoke_analyze(Path(td), "brca1", "go", go_artifact)
+        _assessment, metrics, _ = _invoke_analyze(Path(td), "brca1", "go", go_artifact)
     assert metrics["total_annotations"] == 1, (
         "Schema mismatch: analyze_cmd could not read GO annotations"
     )
@@ -828,7 +827,7 @@ def test_search_go_pagination() -> None:
         mock_get.return_value = uniprot_response
         mock_req.side_effect = mock_request_side_effect
 
-        raw, entries = _search_go("TP53")
+        _raw, entries = _search_go("TP53")
 
     # Should have collected entries from both pages.
     assert len(entries) == 2, f"Expected 2 entries (2 pages), got {len(entries)}"
@@ -868,7 +867,7 @@ def test_search_go_single_page() -> None:
         mock_resp.content = quickgo_raw
         mock_req.return_value = mock_resp
 
-        raw, entries = _search_go("BRCA1")
+        _raw, entries = _search_go("BRCA1")
 
     assert len(entries) == 1
     assert mock_req.call_count == 1, (

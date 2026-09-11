@@ -125,7 +125,7 @@ def test_strip_pdb_removes_hetatm() -> None:
         dst = Path(tmpdir) / "output.pdb"
         src.write_text(SAMPLE_PDB_WITH_LIGAND)
 
-        info = _strip_non_protein(src, dst)
+        _strip_non_protein(src, dst)
 
         output_text = dst.read_text()
         output_lines = output_text.splitlines()
@@ -134,11 +134,11 @@ def test_strip_pdb_removes_hetatm() -> None:
         assert "ALA A   1" in output_text
         assert "GLY A   2" in output_text
         # No HETATM lines remain
-        hetatm_lines = [l for l in output_lines if l.startswith("HETATM")]
+        hetatm_lines = [line for line in output_lines if line.startswith("HETATM")]
         assert len(hetatm_lines) == 0, f"HETATM lines remain: {hetatm_lines}"
         # Header and TER/END preserved
         assert "HEADER" in output_text
-        assert any(l.startswith("END") for l in output_lines)
+        assert any(line.startswith("END") for line in output_lines)
 
     print("  PASS: PDB HETATM records stripped")
 
@@ -200,7 +200,7 @@ def test_strip_pdb_multi_chain() -> None:
         assert "ARG A   2" in output_text
         assert "VAL B   1" in output_text
         # No HETATM lines remain (UNL was only in HETATM records)
-        hetatm_lines = [l for l in output_lines if l.startswith("HETATM")]
+        hetatm_lines = [line for line in output_lines if line.startswith("HETATM")]
         assert len(hetatm_lines) == 0, f"HETATM lines remain: {hetatm_lines}"
 
         assert info["removed_atom_count"] == 3
@@ -222,16 +222,16 @@ def test_strip_cif_removes_hetatm() -> None:
         dst = Path(tmpdir) / "output.cif"
         src.write_text(SAMPLE_CIF_WITH_LIGAND)
 
-        info = _strip_non_protein(src, dst)
+        _strip_non_protein(src, dst)
 
         output_text = dst.read_text()
         output_lines = output_text.splitlines()
 
         # Protein atoms kept
-        atom_lines = [l for l in output_lines if l.startswith("ATOM")]
-        assert any("ALA" in l for l in atom_lines), "ALA atom missing"
+        atom_lines = [line for line in output_lines if line.startswith("ATOM")]
+        assert any("ALA" in line for line in atom_lines), "ALA atom missing"
         # HETATM lines removed
-        hetatm_lines = [l for l in output_lines if l.startswith("HETATM")]
+        hetatm_lines = [line for line in output_lines if line.startswith("HETATM")]
         assert len(hetatm_lines) == 0, f"HETATM lines remain: {hetatm_lines}"
 
     print("  PASS: CIF HETATM records stripped")

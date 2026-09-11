@@ -307,7 +307,7 @@ def test_merge_hits_dedup() -> None:
     merged = _merge_hits(hits, 10)
     assert len(merged) == 2
     # KEY-1 should prefer ChEMBL's exact score over PubChem's lower bound.
-    key1 = [h for h in merged if h["inchikey"] == "KEY-1"][0]
+    key1 = next(h for h in merged if h["inchikey"] == "KEY-1")
     assert key1["source_db"] == "chembl"
     assert key1["tanimoto"] == 0.95
     assert "tanimoto_is_lower_bound" not in key1 or not key1["tanimoto_is_lower_bound"]
@@ -427,7 +427,7 @@ def test_classify_exact_match() -> None:
             {"tanimoto": 1.0, "source_db": "pubchem", "inchikey": "KEY-1"},
         ]
     )
-    verdict, relays = _classify_results(artifact, 0.85, 1.0)
+    verdict, _relays = _classify_results(artifact, 0.85, 1.0)
     assert verdict == "exact-match", f"Expected exact-match, got {verdict}"
     print("  PASS: classify exact-match")
 
@@ -439,7 +439,7 @@ def test_classify_known_compound_found() -> None:
             {"tanimoto": 0.92, "source_db": "pubchem", "inchikey": "KEY-1"},
         ]
     )
-    verdict, relays = _classify_results(artifact, 0.85, 1.0)
+    verdict, _relays = _classify_results(artifact, 0.85, 1.0)
     assert verdict == "known-compound-found", (
         f"Expected known-compound-found, got {verdict}"
     )
@@ -453,7 +453,7 @@ def test_classify_novel() -> None:
             {"tanimoto": 0.60, "source_db": "pubchem", "inchikey": "KEY-1"},
         ]
     )
-    verdict, relays = _classify_results(artifact, 0.85, 1.0)
+    verdict, _relays = _classify_results(artifact, 0.85, 1.0)
     assert verdict == "novel", f"Expected novel, got {verdict}"
     print("  PASS: classify novel")
 
@@ -461,7 +461,7 @@ def test_classify_novel() -> None:
 def test_classify_novel_no_hits() -> None:
     """No hits at all -> novel."""
     artifact = _make_similar_artifact(hits=[])
-    verdict, relays = _classify_results(artifact, 0.85, 1.0)
+    verdict, _relays = _classify_results(artifact, 0.85, 1.0)
     assert verdict == "novel", f"Expected novel, got {verdict}"
     print("  PASS: classify novel (no hits)")
 
@@ -473,7 +473,7 @@ def test_classify_novel_none_tanimoto() -> None:
             {"tanimoto": None, "source_db": "pubchem", "inchikey": "KEY-1"},
         ]
     )
-    verdict, relays = _classify_results(artifact, 0.85, 1.0)
+    verdict, _relays = _classify_results(artifact, 0.85, 1.0)
     assert verdict == "novel", f"Expected novel, got {verdict}"
     print("  PASS: classify novel (None tanimoto)")
 
@@ -495,7 +495,7 @@ def test_classify_pubchem_lower_bound() -> None:
             },
         ]
     )
-    verdict, relays = _classify_results(artifact, 0.85, 1.0)
+    verdict, _relays = _classify_results(artifact, 0.85, 1.0)
     assert verdict == "known-compound-found", (
         f"Expected known-compound-found for server-filtered PubChem hit, got {verdict}"
     )
@@ -514,7 +514,7 @@ def test_relay_tanimoto_fires_with_hits() -> None:
             {"tanimoto": 0.95, "source_db": "pubchem", "inchikey": "KEY-1"},
         ]
     )
-    verdict, relays = _classify_results(artifact, 0.85, 1.0)
+    _verdict, relays = _classify_results(artifact, 0.85, 1.0)
     codes = {r["code"] for r in relays}
     assert "similar.tanimoto_is_2d_only" in codes, (
         "tanimoto_is_2d_only should fire when hits present"
@@ -525,7 +525,7 @@ def test_relay_tanimoto_fires_with_hits() -> None:
 def test_relay_tanimoto_silent_no_hits() -> None:
     """tanimoto_is_2d_only does NOT fire when no hits."""
     artifact = _make_similar_artifact(hits=[])
-    verdict, relays = _classify_results(artifact, 0.85, 1.0)
+    _verdict, relays = _classify_results(artifact, 0.85, 1.0)
     codes = {r["code"] for r in relays}
     assert "similar.tanimoto_is_2d_only" not in codes, (
         "tanimoto_is_2d_only should NOT fire when no hits"
