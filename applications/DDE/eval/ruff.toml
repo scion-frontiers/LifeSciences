@@ -12,10 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Allow running the eval package as ``python3 -m eval.run_baseline``."""
+line-length = 88
+target-version = "py310"
 
-import sys
-
-from .run_baseline import main
-
-sys.exit(main())
+[lint]
+select = ["E", "F", "W", "I", "C4", "B", "UP", "RUF"]
+ignore = ["E501", "C901", "B006"]

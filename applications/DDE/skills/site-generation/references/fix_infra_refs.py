@@ -44,15 +44,35 @@ INFRA_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("timeout", re.compile(r"\btimeout\b", re.IGNORECASE)),
     ("cold-start", re.compile(r"\bcold[\s-]?start\b", re.IGNORECASE)),
     ("retry", re.compile(r"\bretr(?:y|ies|ied|ying)\b", re.IGNORECASE)),
-    ("gateway-error", re.compile(r"\b(?:502|503|504)\s*(?:bad\s*gateway|service\s*unavailable|gateway\s*timeout)\b", re.IGNORECASE)),
-    ("endpoint-failure", re.compile(r"\bendpoint\s+(?:failure|failed|unavailable|error)\b", re.IGNORECASE)),
+    (
+        "gateway-error",
+        re.compile(
+            r"\b(?:502|503|504)\s*(?:bad\s*gateway|service\s*unavailable|gateway\s*timeout)\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "endpoint-failure",
+        re.compile(
+            r"\bendpoint\s+(?:failure|failed|unavailable|error)\b", re.IGNORECASE
+        ),
+    ),
     ("api-error", re.compile(r"\bAPI\s+error\b", re.IGNORECASE)),
     ("connection-refused", re.compile(r"\bconnection\s+refused\b", re.IGNORECASE)),
     ("rate-limit", re.compile(r"\brate[\s-]?limit(?:ed|ing|s)?\b", re.IGNORECASE)),
     ("connection-reset", re.compile(r"\bconnection\s+reset\b", re.IGNORECASE)),
     ("http-error-code", re.compile(r"\bHTTP\s+(?:4\d{2}|5\d{2})\b", re.IGNORECASE)),
-    ("stack-trace", re.compile(r"\bTraceback\s+\(most\s+recent\s+call\s+last\)", re.IGNORECASE)),
-    ("orchestration", re.compile(r"\b(?:agent\s+(?:stall|restart|crash)|scion(?:tool)?\s+(?:status|expose))\b", re.IGNORECASE)),
+    (
+        "stack-trace",
+        re.compile(r"\bTraceback\s+\(most\s+recent\s+call\s+last\)", re.IGNORECASE),
+    ),
+    (
+        "orchestration",
+        re.compile(
+            r"\b(?:agent\s+(?:stall|restart|crash)|scion(?:tool)?\s+(?:status|expose))\b",
+            re.IGNORECASE,
+        ),
+    ),
 ]
 
 # Tags whose content is considered intentional technical content.
@@ -182,8 +202,10 @@ def report(result: ScanResult) -> None:
         print(f"  [{f.severity}] line {f.line_num}: {f.pattern}")
         print(f"         {f.snippet}")
 
-    print(f"\nscan: {result.high_count} HIGH, {result.low_count} low "
-          f"across {len(result.findings)} match(es)")
+    print(
+        f"\nscan: {result.high_count} HIGH, {result.low_count} low "
+        f"across {len(result.findings)} match(es)"
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -38,7 +38,6 @@ from typing import Any
 from .fixtures.definitions import DECLINED_CANDIDATE_SAMPLE
 from .metrics import BaselineReport
 
-
 # ---------------------------------------------------------------------------
 # Comparison data structures
 # ---------------------------------------------------------------------------
@@ -153,9 +152,7 @@ class ComparisonReport:
     declined_comparisons: list[DeclinedCandidateComparison] = field(
         default_factory=list
     )
-    stage0_resource_characteristics: dict[str, Any] = field(
-        default_factory=dict
-    )
+    stage0_resource_characteristics: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -164,18 +161,12 @@ class ComparisonReport:
             "stage0_timestamp": self.stage0_timestamp,
             "comparison_timestamp": self.comparison_timestamp,
             "scope_and_limitations": self.scope_notes,
-            "metric_comparisons": [
-                m.to_dict() for m in self.metric_comparisons
-            ],
-            "fixture_comparisons": [
-                f.to_dict() for f in self.fixture_comparisons
-            ],
+            "metric_comparisons": [m.to_dict() for m in self.metric_comparisons],
+            "fixture_comparisons": [f.to_dict() for f in self.fixture_comparisons],
             "declined_candidate_comparisons": [
                 d.to_dict() for d in self.declined_comparisons
             ],
-            "stage0_resource_characteristics": (
-                self.stage0_resource_characteristics
-            ),
+            "stage0_resource_characteristics": (self.stage0_resource_characteristics),
         }
 
     def write_json(self, path: Path) -> Path:
@@ -192,17 +183,12 @@ class ComparisonReport:
         path.parent.mkdir(parents=True, exist_ok=True)
         lines: list[str] = []
 
-        lines.append(
-            "# DDE Evaluation Comparison Report "
-            "— Baseline vs. Stage 0"
-        )
+        lines.append("# DDE Evaluation Comparison Report — Baseline vs. Stage 0")
         lines.append("")
         lines.append(f"**Evaluation version**: {self.eval_version}")
         lines.append(f"**Baseline run**: {self.baseline_timestamp}")
         lines.append(f"**Stage 0 run**: {self.stage0_timestamp}")
-        lines.append(
-            f"**Comparison generated**: {self.comparison_timestamp}"
-        )
+        lines.append(f"**Comparison generated**: {self.comparison_timestamp}")
         lines.append("")
 
         # ---- Scope and limitations ----
@@ -219,12 +205,16 @@ class ComparisonReport:
         lines.append("|--------|----------|---------|------|")
         for mc in self.metric_comparisons:
             b_display = _format_metric_cell(
-                mc.baseline_value, mc.baseline_denominator,
-                mc.baseline_rate, mc.baseline_note,
+                mc.baseline_value,
+                mc.baseline_denominator,
+                mc.baseline_rate,
+                mc.baseline_note,
             )
             s_display = _format_metric_cell(
-                mc.stage0_value, mc.stage0_denominator,
-                mc.stage0_rate, mc.stage0_note,
+                mc.stage0_value,
+                mc.stage0_denominator,
+                mc.stage0_rate,
+                mc.stage0_note,
             )
             lines.append(
                 f"| {mc.metric_name} | {b_display} | "
@@ -284,13 +274,10 @@ class ComparisonReport:
         for dc in self.declined_comparisons:
             lines.append(f"### {dc.fixture_id}")
             lines.append("")
-            lines.append(
-                f"**Stage 0 disposition**: {dc.stage0_disposition}"
-            )
+            lines.append(f"**Stage 0 disposition**: {dc.stage0_disposition}")
             if dc.stage0_evidence_statuses:
                 lines.append(
-                    "**Evidence statuses**: "
-                    + ", ".join(dc.stage0_evidence_statuses)
+                    "**Evidence statuses**: " + ", ".join(dc.stage0_evidence_statuses)
                 )
             lines.append("")
             lines.append(f"**Comparison**: {dc.comparison_note}")
@@ -318,23 +305,14 @@ class ComparisonReport:
         lines.append("## Regression Criteria")
         lines.append("")
         lines.append(
-            "Stage 0 must not regress the baseline properties "
-            "established in Phase 1:"
+            "Stage 0 must not regress the baseline properties established in Phase 1:"
         )
         lines.append("")
         for mc in self.metric_comparisons:
-            if mc.comparison_note and "regression" in (
-                mc.comparison_note.lower()
-            ):
-                lines.append(
-                    f"- **{mc.metric_name}**: {mc.comparison_note}"
-                )
-        lines.append(
-            "- All evaluation fixtures complete without unexpected errors"
-        )
-        lines.append(
-            "- Stage 0 workstreams invoke real CLI commands, not mocks"
-        )
+            if mc.comparison_note and "regression" in (mc.comparison_note.lower()):
+                lines.append(f"- **{mc.metric_name}**: {mc.comparison_note}")
+        lines.append("- All evaluation fixtures complete without unexpected errors")
+        lines.append("- Stage 0 workstreams invoke real CLI commands, not mocks")
         lines.append("")
 
         # ---- Provenance ----
@@ -434,7 +412,9 @@ def _compare_metric(
 
 
 def _build_comparison_note(
-    name: str, b_val: Any, s_val: Any,
+    name: str,
+    b_val: Any,
+    s_val: Any,
 ) -> str:
     """Build a human-readable comparison note for a metric."""
     if b_val == "N/A" and s_val == "N/A":
@@ -538,8 +518,7 @@ def generate_comparison(
 
     # ---- Per-fixture comparisons ----
     baseline_fixtures = {
-        r["fixture_id"]: r
-        for r in baseline_data.get("fixture_results", [])
+        r["fixture_id"]: r for r in baseline_data.get("fixture_results", [])
     }
     for stage0_result in stage0_report.fixture_results:
         fid = stage0_result.fixture_id
@@ -571,9 +550,9 @@ def generate_comparison(
 
         # Stage 0 adds triage-specific behaviour.
         triage_obs = [
-            o for o in stage0_result.observations
-            if o.startswith("Stage 0 disposition:")
-            or o.startswith("[manufacturing]")
+            o
+            for o in stage0_result.observations
+            if o.startswith("Stage 0 disposition:") or o.startswith("[manufacturing]")
         ]
         if triage_obs:
             fc.behavioral_differences.append(
@@ -582,14 +561,12 @@ def generate_comparison(
             )
 
         # Note structural differences in approach.
-        if bl.get("invocation_count", 0) > 0 and (
-            stage0_result.invocation_count > 0
-        ):
+        if bl.get("invocation_count", 0) > 0 and (stage0_result.invocation_count > 0):
             fc.behavioral_differences.append(
-                f"Different CLI command paths: baseline uses "
-                f"control-plane commands (hypothesis adopt, validate "
-                f"check); Stage 0 uses triage workstream commands "
-                f"(manufacturing assess-stage0)"
+                "Different CLI command paths: baseline uses "
+                "control-plane commands (hypothesis adopt, validate "
+                "check); Stage 0 uses triage workstream commands "
+                "(manufacturing assess-stage0)"
             )
 
         report.fixture_comparisons.append(fc)
@@ -614,20 +591,17 @@ def generate_comparison(
             # Extract disposition and evidence statuses.
             for obs in stage0_match.observations:
                 if obs.startswith("Stage 0 disposition:"):
-                    dc.stage0_disposition = obs.replace(
-                        "Stage 0 disposition: ", ""
-                    )
+                    dc.stage0_disposition = obs.replace("Stage 0 disposition: ", "")
                 if "evidence_status=" in obs:
                     status = obs.split("evidence_status=")[1].split(",")[0]
                     dc.stage0_evidence_statuses.append(status)
 
             dc.comparison_note = _build_declined_note(
-                declined_id, dc.stage0_disposition,
+                declined_id,
+                dc.stage0_disposition,
             )
         else:
-            dc.comparison_note = (
-                f"No Stage 0 result found for {declined_id}."
-            )
+            dc.comparison_note = f"No Stage 0 result found for {declined_id}."
 
         report.declined_comparisons.append(dc)
 
@@ -651,7 +625,8 @@ def generate_comparison(
 
 
 def _build_declined_note(
-    fixture_id: str, disposition: str,
+    fixture_id: str,
+    disposition: str,
 ) -> str:
     """Build comparison note for a declined candidate."""
     if fixture_id == "EVAL-001":

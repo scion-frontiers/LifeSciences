@@ -43,29 +43,23 @@ _TOOLS_DIR = Path(__file__).resolve().parent.parent / "tools"
 if str(_TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(_TOOLS_DIR))
 
-from click.testing import CliRunner
-
-from dde.cli import cli
-from dde.core.controlstore import (
+from click.testing import CliRunner  # noqa: E402
+from dde.cli import cli  # noqa: E402
+from dde.core.controlstore import (  # noqa: E402
     ensure_control_dirs,
-    write_record,
     read_record,
-    list_records,
-    append_event,
+    write_record,
 )
-from dde.core.statemachine import (
-    WORK_ORDER_TRANSITIONS,
-    RUN_TRANSITIONS,
+from dde.core.statemachine import (  # noqa: E402
     validate_transition,
 )
 
-from .fixtures.definitions import (
+from .fixtures.definitions import (  # noqa: E402
     ALL_FIXTURES,
     DECLINED_CANDIDATE_SAMPLE,
     FixtureDefinition,
 )
-from .metrics import BaselineReport, FixtureMetrics
-
+from .metrics import BaselineReport, FixtureMetrics  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Project setup helpers
@@ -80,17 +74,40 @@ def _make_project(base: Path, name: str = "eval-project") -> Path:
     ensure_control_dirs(project)
     # Create standard raw/ subdirectories
     for subdir in [
-        "admet", "analogs", "assays", "bioactivity", "compounds",
-        "descriptors", "docking", "expression", "genomics", "gtex",
-        "hypotheses", "literature", "mmp", "mpo", "pk", "pocket",
-        "regulatory", "safety", "sar", "screening", "single-cell",
-        "structures", "tox", "transcriptomics",
+        "admet",
+        "analogs",
+        "assays",
+        "bioactivity",
+        "compounds",
+        "descriptors",
+        "docking",
+        "expression",
+        "genomics",
+        "gtex",
+        "hypotheses",
+        "literature",
+        "mmp",
+        "mpo",
+        "pk",
+        "pocket",
+        "regulatory",
+        "safety",
+        "sar",
+        "screening",
+        "single-cell",
+        "structures",
+        "tox",
+        "transcriptomics",
     ]:
         (project / "raw" / subdir).mkdir(parents=True, exist_ok=True)
     # Create findings subdirectories
     for subdir in [
-        "structural-biology", "computational-biology", "medicinal-chemistry",
-        "computational-chemistry", "admet-dmpk", "experimental-biology",
+        "structural-biology",
+        "computational-biology",
+        "medicinal-chemistry",
+        "computational-chemistry",
+        "admet-dmpk",
+        "experimental-biology",
         "regulatory",
     ]:
         (project / "findings" / subdir).mkdir(parents=True, exist_ok=True)
@@ -176,15 +193,18 @@ def _transition_work_order(
     for from_state, to_state in lifecycle:
         if current_state != from_state:
             continue
-        if to_state == target_state or lifecycle.index((from_state, to_state)) <= \
-                next((i for i, t in enumerate(lifecycle) if t[1] == target_state), len(lifecycle)):
+        if to_state == target_state or lifecycle.index((from_state, to_state)) <= next(
+            (i for i, t in enumerate(lifecycle) if t[1] == target_state), len(lifecycle)
+        ):
             try:
                 validate_transition("workorder", current_state, to_state)
                 wo_copy = dict(wo)
                 wo_copy["state"] = to_state
                 write_record(
-                    project, "work-order",
-                    f"{wo['id']}-r{wo['revision']}", wo_copy,
+                    project,
+                    "work-order",
+                    f"{wo['id']}-r{wo['revision']}",
+                    wo_copy,
                 )
                 metrics.record_transition(current_state, to_state)
                 current_state = to_state
@@ -215,12 +235,20 @@ def _run_no_genetic_support(
         hyp_file = project.parent / f"{fixture.fixture_id}-hypotheses.json"
         hyp_file.write_text(json.dumps(fixture.hypothesis_data, indent=2))
 
-        result = runner.invoke(cli, [
-            "--project", str(project),
-            "hypothesis", "adopt", str(hyp_file),
-            "--origin", "sponsor",
-            "--attest", f"Evaluation fixture {fixture.fixture_id} — synthetic",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--project",
+                str(project),
+                "hypothesis",
+                "adopt",
+                str(hyp_file),
+                "--origin",
+                "sponsor",
+                "--attest",
+                f"Evaluation fixture {fixture.fixture_id} — synthetic",
+            ],
+        )
         metrics.record_invocation(
             "hypothesis adopt",
             result.exit_code,
@@ -262,6 +290,7 @@ def _run_no_genetic_support(
         # Create a run record so validate check can find the submission
         _now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         from dde.core.controlstore import next_id
+
         run_id = next_id(project, "run")
         run_rec = {
             "run_id": run_id,
@@ -273,11 +302,17 @@ def _run_no_genetic_support(
         }
         write_record(project, "run", run_id, run_rec)
 
-        result = runner.invoke(cli, [
-            "--project", str(project),
-            "validate", "check", wo["id"],
-            "--json",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--project",
+                str(project),
+                "validate",
+                "check",
+                wo["id"],
+                "--json",
+            ],
+        )
         metrics.record_invocation(
             f"validate check {wo['id']}",
             result.exit_code,
@@ -295,7 +330,9 @@ def _run_no_genetic_support(
                 elif isinstance(checks, dict):
                     for name, check in checks.items():
                         if isinstance(check, dict):
-                            metrics.record_validation(name, check.get("result", "unknown"))
+                            metrics.record_validation(
+                                name, check.get("result", "unknown")
+                            )
                         else:
                             metrics.record_validation(name, str(check))
             except json.JSONDecodeError:
@@ -428,9 +465,7 @@ def _run_absent_entity(
     current_state = _transition_work_order(project, wo, "in_progress", metrics)
 
     # Verify that the context fields are indeed empty
-    stored_wo = read_record(
-        project, "work-order", f"{wo['id']}-r{wo['revision']}"
-    )
+    stored_wo = read_record(project, "work-order", f"{wo['id']}-r{wo['revision']}")
     ctx = stored_wo.get("context", {})
     empty_fields = [k for k, v in ctx.items() if v in ("", None)]
     metrics.observe(
@@ -516,16 +551,25 @@ def _run_disputed_citation(
         hyp_file = project.parent / f"{fixture.fixture_id}-hypotheses.json"
         hyp_file.write_text(json.dumps(fixture.hypothesis_data, indent=2))
 
-        result = runner.invoke(cli, [
-            "--project", str(project),
-            "hypothesis", "adopt", str(hyp_file),
-            "--origin", "publication",
-            "--attest", (
-                f"Evaluation fixture {fixture.fixture_id} — synthetic. "
-                "References a fabricated retracted DOI."
-            ),
-            "--cite", "DOI:10.xxxx/RETRACTED.2024.SYNTHETIC",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--project",
+                str(project),
+                "hypothesis",
+                "adopt",
+                str(hyp_file),
+                "--origin",
+                "publication",
+                "--attest",
+                (
+                    f"Evaluation fixture {fixture.fixture_id} — synthetic. "
+                    "References a fabricated retracted DOI."
+                ),
+                "--cite",
+                "DOI:10.xxxx/RETRACTED.2024.SYNTHETIC",
+            ],
+        )
         metrics.record_invocation(
             "hypothesis adopt --origin publication --cite ...",
             result.exit_code,
@@ -546,13 +590,20 @@ def _run_disputed_citation(
                 )
 
             # Run analysis
-            adopted_files = list(hyp_dir.glob("*.adopted.json")) + \
-                list(hyp_dir.glob("*.charter.json"))
+            adopted_files = list(hyp_dir.glob("*.adopted.json")) + list(
+                hyp_dir.glob("*.charter.json")
+            )
             if adopted_files:
-                result = runner.invoke(cli, [
-                    "--project", str(project),
-                    "hypothesis", "analyze", str(adopted_files[0]),
-                ])
+                result = runner.invoke(
+                    cli,
+                    [
+                        "--project",
+                        str(project),
+                        "hypothesis",
+                        "analyze",
+                        str(adopted_files[0]),
+                    ],
+                )
                 metrics.record_invocation(
                     "hypothesis analyze",
                     result.exit_code,
@@ -582,10 +633,10 @@ def _run_disputed_citation(
     write_record(project, "work-order", f"{wo['id']}-r{wo['revision']}", wo)
     metrics.record_transition(None, wo["state"])
     metrics.observe(
-        f"Disputed citation scenario: current workflow does not have "
-        f"a retraction-check gate.  The citation passes through "
-        f"unchanged.  Future workflow improvements may add citation "
-        f"verification."
+        "Disputed citation scenario: current workflow does not have "
+        "a retraction-check gate.  The citation passes through "
+        "unchanged.  Future workflow improvements may add citation "
+        "verification."
     )
 
 
@@ -669,9 +720,7 @@ def run_fixture(fixture: FixtureDefinition) -> FixtureMetrics:
 
     runner_fn = _RUNNERS.get(fixture.category)
     if runner_fn is None:
-        metrics.error_messages.append(
-            f"No runner for category '{fixture.category}'"
-        )
+        metrics.error_messages.append(f"No runner for category '{fixture.category}'")
         metrics.stop()
         return metrics
 
@@ -706,9 +755,11 @@ def run_all_fixtures() -> BaselineReport:
         report.add_result(metrics)
 
         status = "PASS" if metrics.completed else "FAIL"
-        print(f"  {status}: {metrics.wall_clock_seconds}s, "
-              f"{metrics.invocation_count} CLI calls, "
-              f"{metrics.transition_count} transitions")
+        print(
+            f"  {status}: {metrics.wall_clock_seconds}s, "
+            f"{metrics.invocation_count} CLI calls, "
+            f"{metrics.transition_count} transitions"
+        )
         if metrics.error_messages:
             for err in metrics.error_messages:
                 print(f"  ERROR: {err}")
@@ -720,7 +771,9 @@ def run_all_fixtures() -> BaselineReport:
     print(f"Total state transitions: {report.total_transitions}")
 
     # Declined candidate sample
-    print(f"\nDeclined candidate sample (selection-bias review): "
-          f"{DECLINED_CANDIDATE_SAMPLE}")
+    print(
+        f"\nDeclined candidate sample (selection-bias review): "
+        f"{DECLINED_CANDIDATE_SAMPLE}"
+    )
 
     return report

@@ -134,7 +134,11 @@ def fix_md_links(site_dir: Path) -> str:
 
         # --- detection guard ---
         matches = md_href.findall(text)
-        internal = [base for base, _suffix in matches if not base.startswith(("http://", "https://"))]
+        internal = [
+            base
+            for base, _suffix in matches
+            if not base.startswith(("http://", "https://"))
+        ]
         if not internal:
             continue
 
@@ -188,7 +192,7 @@ def run(site_dir: Path) -> None:
     for name, fn in FIXES:
         try:
             status = fn(site_dir)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             status = f"error: {exc}"
         results.append((name, status))
         print(f"  {name}: {status}")

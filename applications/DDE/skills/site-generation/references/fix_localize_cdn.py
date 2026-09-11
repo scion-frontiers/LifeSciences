@@ -109,7 +109,7 @@ def _download(url: str, dest: Path) -> bool:
 
     req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
+        with urllib.request.urlopen(req, timeout=30) as resp:
             dest.write_bytes(resp.read())
     except (urllib.error.URLError, OSError, TimeoutError) as exc:
         print(f"  WARNING: failed to download {url}: {exc}")

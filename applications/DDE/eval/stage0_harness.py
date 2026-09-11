@@ -29,7 +29,6 @@ Usage (from the DDE application root):
 
 from __future__ import annotations
 
-import json
 import sys
 import tempfile
 import traceback
@@ -42,22 +41,19 @@ _TOOLS_DIR = Path(__file__).resolve().parent.parent / "tools"
 if str(_TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(_TOOLS_DIR))
 
-from click.testing import CliRunner
-
-from dde.cli import cli
-from dde.core.triage import (
-    TriageBudget,
+from click.testing import CliRunner  # noqa: E402
+from dde.cli import cli  # noqa: E402
+from dde.core.triage import (  # noqa: E402
     run_triage,
 )
 
-from .fixtures.definitions import (
+from .fixtures.definitions import (  # noqa: E402
     ALL_FIXTURES,
     DECLINED_CANDIDATE_SAMPLE,
     FixtureDefinition,
 )
-from .harness import _make_project, _place_synthetic_artifacts
-from .metrics import BaselineReport, FixtureMetrics
-
+from .harness import _make_project, _place_synthetic_artifacts  # noqa: E402
+from .metrics import BaselineReport, FixtureMetrics  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Fixture-to-concept conversion
@@ -108,9 +104,7 @@ def fixture_to_concept(fixture: FixtureDefinition) -> dict[str, Any]:
         "entity_ref": entity_ref,
         "charter_ref": "DEC-EVAL",
         "termination_authority": "human",
-        "created_at": datetime.now(timezone.utc).strftime(
-            "%Y-%m-%dT%H:%M:%SZ"
-        ),
+        "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
 
 
@@ -146,7 +140,9 @@ def run_fixture_stage0(fixture: FixtureDefinition) -> FixtureMetrics:
             # project mirrors what the baseline harness set up.
             if fixture.synthetic_artifacts:
                 _place_synthetic_artifacts(
-                    project, fixture.synthetic_artifacts, metrics,
+                    project,
+                    fixture.synthetic_artifacts,
+                    metrics,
                 )
 
             # Run Stage 0 triage with the single concept.
@@ -180,12 +176,8 @@ def run_fixture_stage0(fixture: FixtureDefinition) -> FixtureMetrics:
 
                     # Record assessment observations.
                     for assessment in ws_result.assessments:
-                        status = assessment.get(
-                            "evidence_status", "unknown"
-                        )
-                        execution = assessment.get(
-                            "execution_outcome", "unknown"
-                        )
+                        status = assessment.get("evidence_status", "unknown")
+                        execution = assessment.get("execution_outcome", "unknown")
                         metrics.observe(
                             f"[{ws_name}] evidence_status={status}, "
                             f"execution_outcome={execution}"
@@ -198,17 +190,14 @@ def run_fixture_stage0(fixture: FixtureDefinition) -> FixtureMetrics:
                     # Record cancellations.
                     if ws_result.cancelled:
                         metrics.observe(
-                            f"[{ws_name}] cancelled: "
-                            f"{ws_result.cancel_reason}"
+                            f"[{ws_name}] cancelled: {ws_result.cancel_reason}"
                         )
 
                 # Record the triage disposition.
                 disposition = cr.disposition or "(pending lead review)"
                 metrics.observe(f"Stage 0 disposition: {disposition}")
                 if cr.disposition_reason:
-                    metrics.observe(
-                        f"Disposition reason: {cr.disposition_reason}"
-                    )
+                    metrics.observe(f"Disposition reason: {cr.disposition_reason}")
 
                 # Record disposition as a state transition.
                 metrics.record_transition("active", disposition)
@@ -233,21 +222,17 @@ def run_fixture_stage0(fixture: FixtureDefinition) -> FixtureMetrics:
                 # Record budget state.
                 if outcome.budget_exhausted:
                     metrics.observe(
-                        f"Budget exhausted: "
-                        f"{outcome.budget_exhaustion_reason}"
+                        f"Budget exhausted: {outcome.budget_exhaustion_reason}"
                     )
 
                 # Record shortlist status.
                 in_shortlist = concept_ref in outcome.shortlist
                 metrics.observe(
-                    f"Shortlisted: {in_shortlist} "
-                    f"(shortlist: {outcome.shortlist})"
+                    f"Shortlisted: {in_shortlist} (shortlist: {outcome.shortlist})"
                 )
 
     except Exception as exc:
-        metrics.error_messages.append(
-            f"Stage 0 fixture failed with exception: {exc}"
-        )
+        metrics.error_messages.append(f"Stage 0 fixture failed with exception: {exc}")
         traceback.print_exc()
 
     metrics.stop()
@@ -263,9 +248,7 @@ def run_all_fixtures_stage0() -> BaselineReport:
     """
     report = BaselineReport(
         eval_version="1.0-stage0",
-        run_timestamp=datetime.now(timezone.utc).strftime(
-            "%Y-%m-%dT%H:%M:%SZ"
-        ),
+        run_timestamp=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     )
 
     print(f"DDE Stage 0 Evaluation Harness v{report.eval_version}")
@@ -288,10 +271,7 @@ def run_all_fixtures_stage0() -> BaselineReport:
                 print(f"  ERROR: {err}")
 
     print("\n" + "=" * 60)
-    print(
-        f"Results: {report.completed_fixtures}/{report.total_fixtures} "
-        f"completed"
-    )
+    print(f"Results: {report.completed_fixtures}/{report.total_fixtures} completed")
     print(f"Total wall clock: {report.total_wall_clock}s")
     print(f"Total workstream invocations: {report.total_invocations}")
 
