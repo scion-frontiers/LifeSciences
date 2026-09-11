@@ -56,3 +56,27 @@ holder by default, matching this project's LICENSE file.
 A pre-installed copy of addlicense is available at
 `/scion-volumes/scratchpad/bin/addlicense` for agents operating within the
 Scion environment.
+
+### Linting and formatting
+
+This project uses [ruff](https://docs.astral.sh/ruff/) for code formatting
+and linting. CI runs ruff independently for each application directory that
+contains a `pyproject.toml` or `ruff.toml`, cd'ing into the directory and
+running both `ruff format --check` and `ruff check` scoped to that tree.
+
+To run the same checks locally:
+
+    cd applications/<your-app>
+    ruff format --check --exclude '*.md' .
+    ruff check --exclude '*.md' .
+
+If checks fail:
+
+- Run `ruff format --exclude '*.md' .` to auto-fix formatting.
+- Run `ruff check --fix --exclude '*.md' .` to auto-fix safe lint violations.
+- Remaining violations require manual fixes — see `ruff check` output for
+  details.
+
+Each app directory has its own ruff configuration (in `pyproject.toml` or
+`ruff.toml`). Check the config in your app's directory for the specific
+rules in effect.
