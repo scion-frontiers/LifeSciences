@@ -29,7 +29,6 @@ This is NOT a science tool and does NOT modify the registered file.
 
 from __future__ import annotations
 
-import importlib
 import json
 import os
 from pathlib import Path
@@ -41,7 +40,6 @@ from ..common import (
     AppState,
     DDEGroup,
     emitter,
-    out_option,
     output_options,
     pass_state,
 )
@@ -57,8 +55,14 @@ def artifact() -> None:
 
 @artifact.command("register")
 @click.argument("paths", nargs=-1, required=True)
-@click.option("--source", required=True, help="Source description (e.g. 'EBI ClustalO via WebFetch').")
-@click.option("--description", "description", default=None, help="Optional longer description.")
+@click.option(
+    "--source",
+    required=True,
+    help="Source description (e.g. 'EBI ClustalO via WebFetch').",
+)
+@click.option(
+    "--description", "description", default=None, help="Optional longer description."
+)
 @output_options
 @pass_state
 def register_cmd(
@@ -175,7 +179,9 @@ def _build_class_producer_map() -> dict[str, list[str]]:
 
 
 @artifact.command("classes")
-@click.option("--json", "as_json", is_flag=True, help="Emit machine-readable JSON array.")
+@click.option(
+    "--json", "as_json", is_flag=True, help="Emit machine-readable JSON array."
+)
 @click.option("--quiet", is_flag=True, help="Print class names only, one per line.")
 def classes_cmd(as_json: bool, quiet: bool) -> None:
     """List every registered artifact class, its directory, and producer(s).
@@ -187,11 +193,13 @@ def classes_cmd(as_json: bool, quiet: bool) -> None:
 
     rows: list[dict[str, Any]] = []
     for cls in sorted(ARTIFACT_DIRS):
-        rows.append({
-            "class": cls,
-            "directory": ARTIFACT_DIRS[cls],
-            "producers": sorted(producer_map.get(cls, [])),
-        })
+        rows.append(
+            {
+                "class": cls,
+                "directory": ARTIFACT_DIRS[cls],
+                "producers": sorted(producer_map.get(cls, [])),
+            }
+        )
 
     if as_json:
         click.echo(json.dumps(rows, indent=2))

@@ -70,15 +70,28 @@ DISIGNATLAS_BASE = "https://www.inbirg.com/disignatlas"
 
 # Field names for gene-search result arrays, in positional order.
 _GENE_FIELDS = (
-    "studyid", "disease", "tissue_celltype", "data_source",
-    "library_strategy", "organism", "regulation", "geneid",
-    "log2fc", "padj", "symbol",
+    "studyid",
+    "disease",
+    "tissue_celltype",
+    "data_source",
+    "library_strategy",
+    "organism",
+    "regulation",
+    "geneid",
+    "log2fc",
+    "padj",
+    "symbol",
 )
 
 # Field names for dataset/disease-search result arrays, in positional order.
 _DISEASE_FIELDS = (
-    "studyid", "disease", "tissue_celltype", "data_source",
-    "library_strategy", "organism", "diffall",
+    "studyid",
+    "disease",
+    "tissue_celltype",
+    "data_source",
+    "library_strategy",
+    "organism",
+    "diffall",
 )
 
 
@@ -90,9 +103,7 @@ def _slugify(query: str) -> str:
 
 def _parse_js_array(html: str) -> list[list[Any]]:
     """Extract the result_information JavaScript array from HTML."""
-    match = re.search(
-        r'var\s+result_information\s*=\s*(\[.*?\]);', html, re.DOTALL
-    )
+    match = re.search(r"var\s+result_information\s*=\s*(\[.*?\]);", html, re.DOTALL)
     if not match:
         return []
     raw_js = match.group(1)
@@ -131,26 +142,28 @@ def _build_gene_records(
     for row in rows:
         if len(row) < len(_GENE_FIELDS):
             continue
-        mapping = dict(zip(_GENE_FIELDS, row))
+        mapping = dict(zip(_GENE_FIELDS, row, strict=False))
 
         if organism:
             org_value = str(mapping.get("organism", ""))
             if organism.lower() not in org_value.lower():
                 continue
 
-        records.append({
-            "study_id": str(mapping.get("studyid", "")),
-            "disease": str(mapping.get("disease", "")),
-            "tissue_celltype": str(mapping.get("tissue_celltype", "")),
-            "data_source": str(mapping.get("data_source", "")),
-            "library_strategy": str(mapping.get("library_strategy", "")),
-            "organism": str(mapping.get("organism", "")),
-            "gene_symbol": str(mapping.get("symbol", "")),
-            "gene_id": str(mapping.get("geneid", "")),
-            "log2fc": _safe_float(mapping.get("log2fc")),
-            "padj": _safe_float(mapping.get("padj")),
-            "regulation": str(mapping.get("regulation", "")),
-        })
+        records.append(
+            {
+                "study_id": str(mapping.get("studyid", "")),
+                "disease": str(mapping.get("disease", "")),
+                "tissue_celltype": str(mapping.get("tissue_celltype", "")),
+                "data_source": str(mapping.get("data_source", "")),
+                "library_strategy": str(mapping.get("library_strategy", "")),
+                "organism": str(mapping.get("organism", "")),
+                "gene_symbol": str(mapping.get("symbol", "")),
+                "gene_id": str(mapping.get("geneid", "")),
+                "log2fc": _safe_float(mapping.get("log2fc")),
+                "padj": _safe_float(mapping.get("padj")),
+                "regulation": str(mapping.get("regulation", "")),
+            }
+        )
     return records
 
 
@@ -163,22 +176,24 @@ def _build_disease_records(
     for row in rows:
         if len(row) < len(_DISEASE_FIELDS):
             continue
-        mapping = dict(zip(_DISEASE_FIELDS, row))
+        mapping = dict(zip(_DISEASE_FIELDS, row, strict=False))
 
         if organism:
             org_value = str(mapping.get("organism", ""))
             if organism.lower() not in org_value.lower():
                 continue
 
-        records.append({
-            "study_id": str(mapping.get("studyid", "")),
-            "disease": str(mapping.get("disease", "")),
-            "tissue_celltype": str(mapping.get("tissue_celltype", "")),
-            "data_source": str(mapping.get("data_source", "")),
-            "library_strategy": str(mapping.get("library_strategy", "")),
-            "organism": str(mapping.get("organism", "")),
-            "n_degs": _safe_int(mapping.get("diffall")),
-        })
+        records.append(
+            {
+                "study_id": str(mapping.get("studyid", "")),
+                "disease": str(mapping.get("disease", "")),
+                "tissue_celltype": str(mapping.get("tissue_celltype", "")),
+                "data_source": str(mapping.get("data_source", "")),
+                "library_strategy": str(mapping.get("library_strategy", "")),
+                "organism": str(mapping.get("organism", "")),
+                "n_degs": _safe_int(mapping.get("diffall")),
+            }
+        )
     return records
 
 
@@ -196,7 +211,10 @@ def _fetch_disignatlas(
 
     try:
         response = http.request(
-            "GET", url, qps=qps_for_host("www.inbirg.com"), timeout=120.0,
+            "GET",
+            url,
+            qps=qps_for_host("www.inbirg.com"),
+            timeout=120.0,
             params={"search_method": search_method, "query_content": query},
         )
     except EndpointUnavailable as exc:
@@ -301,8 +319,7 @@ def search_cmd(
 
     search_method = "gene_search" if mode == "gene" else "dataset_search"
     endpoint = (
-        f"{DISIGNATLAS_BASE}/result"
-        f"?search_method={search_method}&query_content={query}"
+        f"{DISIGNATLAS_BASE}/result?search_method={search_method}&query_content={query}"
     )
 
     sidecar = provenance.Sidecar(
@@ -325,9 +342,7 @@ def search_cmd(
 
     # Write structured artifact.
     artifact_path = target_dir / f"{slug}.disignatlas.artifact.json"
-    artifact_path.write_text(
-        json.dumps(artifact, indent=2) + "\n", encoding="utf-8"
-    )
+    artifact_path.write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
     sidecar.add_output(artifact_path)
 
     # Write sidecar.
@@ -348,9 +363,7 @@ def search_cmd(
             f"{artifact['summary']['n_unique_tissues']} unique tissue(s)"
         )
     else:
-        emit.line(
-            f"  {artifact['summary']['n_unique_tissues']} unique tissue(s)"
-        )
+        emit.line(f"  {artifact['summary']['n_unique_tissues']} unique tissue(s)")
     if artifact["records"]:
         for r in artifact["records"][:5]:
             if mode == "gene":
@@ -362,13 +375,10 @@ def search_cmd(
                 )
             else:
                 emit.line(
-                    f"  {r['study_id']}: {r['disease'][:40]} "
-                    f"({r['n_degs']} DEGs)"
+                    f"  {r['study_id']}: {r['disease'][:40]} ({r['n_degs']} DEGs)"
                 )
         if len(artifact["records"]) > 5:
-            emit.line(
-                f"  ... {len(artifact['records']) - 5} more in the artifact"
-            )
+            emit.line(f"  ... {len(artifact['records']) - 5} more in the artifact")
     emit.flush()
 
 
@@ -455,7 +465,9 @@ def analyze_cmd(
 
         # Compute log2fc stats.
         log2fc_stats: dict[str, float | None] = {
-            "min": None, "max": None, "median": None,
+            "min": None,
+            "max": None,
+            "median": None,
         }
         if log2fc_values:
             log2fc_stats = {
@@ -465,9 +477,7 @@ def analyze_cmd(
             }
 
         # Top signatures by |log2fc|.
-        records_with_fc = [
-            r for r in records if r.get("log2fc") is not None
-        ]
+        records_with_fc = [r for r in records if r.get("log2fc") is not None]
         records_with_fc.sort(key=lambda r: abs(r["log2fc"]), reverse=True)
         top_signatures = [
             {
@@ -500,13 +510,11 @@ def analyze_cmd(
             "mode": search_mode,
             "n_records": len(records),
             "disease_distribution": [
-                {"disease": d, "count": c}
-                for d, c in disease_counts.most_common()
+                {"disease": d, "count": c} for d, c in disease_counts.most_common()
             ],
             "regulation_summary": {"up": up_count, "down": down_count},
             "tissue_distribution": [
-                {"tissue": t, "count": c}
-                for t, c in tissue_counts.most_common()
+                {"tissue": t, "count": c} for t, c in tissue_counts.most_common()
             ],
             "data_source_distribution": [
                 {"data_source": ds, "count": c}
@@ -563,8 +571,7 @@ def analyze_cmd(
             "n_records": len(records),
             "n_studies": len(study_counts),
             "tissue_distribution": [
-                {"tissue": t, "count": c}
-                for t, c in tissue_counts_d.most_common()
+                {"tissue": t, "count": c} for t, c in tissue_counts_d.most_common()
             ],
             "organism_breakdown": dict(organism_counts),
         }

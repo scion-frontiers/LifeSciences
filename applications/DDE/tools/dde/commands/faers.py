@@ -134,7 +134,9 @@ def _search_labels(drug: str, max_results: int) -> tuple[bytes, dict[str, Any]]:
     return raw, payload
 
 
-def _extract_events(payload: dict[str, Any], drug: str, max_results: int) -> dict[str, Any]:
+def _extract_events(
+    payload: dict[str, Any], drug: str, max_results: int
+) -> dict[str, Any]:
     """Build the structured dde.faers.v1 artifact from an events response."""
     results = payload.get("results") or []
     total_available = (payload.get("meta") or {}).get("results", {}).get("total", 0)
@@ -168,14 +170,18 @@ def _extract_events(payload: dict[str, Any], drug: str, max_results: int) -> dic
         for reaction in event.get("patient", {}).get("reaction", []):
             term = reaction.get("reactionmeddrapt", "")
             outcome = reaction.get("reactionoutcome")
-            outcome_label = {
-                "1": "recovered",
-                "2": "recovering",
-                "3": "not recovered",
-                "4": "recovered with sequelae",
-                "5": "fatal",
-                "6": "unknown",
-            }.get(str(outcome)) if outcome else None
+            outcome_label = (
+                {
+                    "1": "recovered",
+                    "2": "recovering",
+                    "3": "not recovered",
+                    "4": "recovered with sequelae",
+                    "5": "fatal",
+                    "6": "unknown",
+                }.get(str(outcome))
+                if outcome
+                else None
+            )
             reactions.append({"term": term, "outcome": outcome_label})
             if term:
                 reaction_counter[term] += 1
@@ -194,14 +200,16 @@ def _extract_events(payload: dict[str, Any], drug: str, max_results: int) -> dic
             indication = drug_entry.get("drugindication")
             drugs.append({"name": name, "role": role, "indication": indication})
 
-        reports.append({
-            "safety_report_id": event.get("safetyreportid", ""),
-            "report_date": event.get("receiptdate", ""),
-            "serious": serious,
-            "outcomes": outcomes,
-            "reactions": reactions,
-            "drugs": drugs,
-        })
+        reports.append(
+            {
+                "safety_report_id": event.get("safetyreportid", ""),
+                "report_date": event.get("receiptdate", ""),
+                "serious": serious,
+                "outcomes": outcomes,
+                "reactions": reactions,
+                "drugs": drugs,
+            }
+        )
 
     top_reactions = [term for term, _ in reaction_counter.most_common(10)]
 
@@ -230,13 +238,15 @@ def _extract_labels(payload: dict[str, Any], drug: str) -> dict[str, Any]:
     labels: list[dict[str, Any]] = []
     for label in results:
         openfda = label.get("openfda", {})
-        labels.append({
-            "brand_name": (openfda.get("brand_name") or [None])[0],
-            "generic_name": (openfda.get("generic_name") or [None])[0],
-            "warnings": (label.get("warnings") or [None])[0],
-            "adverse_reactions": (label.get("adverse_reactions") or [None])[0],
-            "boxed_warning": (label.get("boxed_warning") or [None])[0],
-        })
+        labels.append(
+            {
+                "brand_name": (openfda.get("brand_name") or [None])[0],
+                "generic_name": (openfda.get("generic_name") or [None])[0],
+                "warnings": (label.get("warnings") or [None])[0],
+                "adverse_reactions": (label.get("adverse_reactions") or [None])[0],
+                "boxed_warning": (label.get("boxed_warning") or [None])[0],
+            }
+        )
 
     return {
         "schema": "dde.faers.v1",
@@ -424,14 +434,16 @@ def analyze_cmd(
     verdict = "reports_found" if reports else "no_reports"
 
     relays: list[dict[str, str]] = []
-    relays.append(provenance.relay(
-        "faers.spontaneous_reports_not_incidence",
-        "FAERS reports are spontaneous (voluntary) adverse event reports. They "
-        "cannot establish incidence rates, causation, or comparative safety. "
-        "Reporting rates are affected by media attention, time on market, "
-        "indication severity, and reporter awareness. Do not interpret report "
-        "counts as incidence or compare raw counts between drugs.",
-    ))
+    relays.append(
+        provenance.relay(
+            "faers.spontaneous_reports_not_incidence",
+            "FAERS reports are spontaneous (voluntary) adverse event reports. They "
+            "cannot establish incidence rates, causation, or comparative safety. "
+            "Reporting rates are affected by media attention, time on market, "
+            "indication severity, and reporter awareness. Do not interpret report "
+            "counts as incidence or compare raw counts between drugs.",
+        )
+    )
 
     metrics = {
         "n_reports_fetched": len(reports),

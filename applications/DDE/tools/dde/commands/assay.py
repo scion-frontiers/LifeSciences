@@ -50,8 +50,8 @@ from ..common import (
 )
 from ..core import http, provenance
 from ..core.errors import ArtifactError, Refusal, SchemaError, ThresholdError
-from ..core.qps import qps_for_host
 from ..core.output import Emitter
+from ..core.qps import qps_for_host
 
 TOOL = "assay"
 ARTIFACT_CLASS = "assays"
@@ -139,10 +139,14 @@ def _validate_record(record: dict) -> list[str]:
                 problems.append("concentration dict missing 'unit' key")
             if "value" in conc and not isinstance(conc["value"], (int, float)):
                 problems.append("concentration value must be numeric")
-            elif "value" in conc and isinstance(conc["value"], float) and (
-                math.isnan(conc["value"]) or math.isinf(conc["value"])
+            elif (
+                "value" in conc
+                and isinstance(conc["value"], float)
+                and (math.isnan(conc["value"]) or math.isinf(conc["value"]))
             ):
-                problems.append("concentration value must be finite, got non-finite float")
+                problems.append(
+                    "concentration value must be finite, got non-finite float"
+                )
         elif not isinstance(conc, (int, float)):
             problems.append(
                 f"concentration must be numeric or a dict with value/unit, "
@@ -189,7 +193,9 @@ def _normalise(doc: dict, source: Path) -> dict:
 
     for i, point in enumerate(data_points):
         if not isinstance(point, dict):
-            all_problems.append(f"data[{i}]: expected a dict, got {type(point).__name__}")
+            all_problems.append(
+                f"data[{i}]: expected a dict, got {type(point).__name__}"
+            )
             continue
 
         problems = _validate_record(point)
@@ -216,16 +222,20 @@ def _normalise(doc: dict, source: Path) -> dict:
         raise SchemaError(
             f"{len(all_problems)} validation error(s) in assay data",
             detail="; ".join(all_problems[:10])
-            + (f" (and {len(all_problems) - 10} more)" if len(all_problems) > 10 else ""),
+            + (
+                f" (and {len(all_problems) - 10} more)"
+                if len(all_problems) > 10
+                else ""
+            ),
             remedy="fix the input data and re-run ingest",
         )
 
     # Collect unique values for the summary.
-    compounds = sorted(set(p["compound_id"] for p in normalised_points))
-    plates = sorted(set(p["plate_id"] for p in normalised_points))
-    runs = sorted(set(p["run_id"] for p in normalised_points))
-    readout_types = sorted(set(p["readout_type"] for p in normalised_points))
-    assay_types = sorted(set(p["assay_type"] for p in normalised_points))
+    compounds = sorted({p["compound_id"] for p in normalised_points})
+    plates = sorted({p["plate_id"] for p in normalised_points})
+    runs = sorted({p["run_id"] for p in normalised_points})
+    readout_types = sorted({p["readout_type"] for p in normalised_points})
+    assay_types = sorted({p["assay_type"] for p in normalised_points})
 
     return {
         "schema": "dde.assay.v1",
@@ -316,15 +326,13 @@ def _fit_dose_response(
             "ec50": float(ec50),
             "hill_slope": round(float(hill_slope), 4),
             "r_squared": round(r_squared, 4),
-            "n_points": int(len(conc_arr)),
+            "n_points": len(conc_arr),
         }
     except (RuntimeError, ValueError, TypeError):
         return None
 
 
-def _is_bell_shaped(
-    concentrations: list[float], responses: list[float]
-) -> bool:
+def _is_bell_shaped(concentrations: list[float], responses: list[float]) -> bool:
     """Detect a bell-shaped (non-monotonic) dose-response curve.
 
     A bell-shaped curve is one where activity increases then decreases
@@ -338,7 +346,7 @@ def _is_bell_shaped(
         return False
 
     # Sort by concentration.
-    paired = sorted(zip(concentrations, responses))
+    paired = sorted(zip(concentrations, responses, strict=False))
     sorted_responses = [r for _, r in paired]
 
     # Find the index of the maximum response.
@@ -363,25 +371,29 @@ def _is_bell_shaped(
     # Check for peak in the interior (activity goes up then down).
     if margin <= max_idx <= n - 1 - margin:
         left = sorted_responses[:max_idx]
-        right = sorted_responses[max_idx + 1:]
+        right = sorted_responses[max_idx + 1 :]
         if left and right:
             left_mean = sum(left) / len(left)
             right_mean = sum(right) / len(right)
             peak = sorted_responses[max_idx]
-            if left_mean < peak - threshold_fraction * data_range and \
-               right_mean < peak - threshold_fraction * data_range:
+            if (
+                left_mean < peak - threshold_fraction * data_range
+                and right_mean < peak - threshold_fraction * data_range
+            ):
                 return True
 
     # Check for trough in the interior (activity goes down then up).
     if margin <= min_idx <= n - 1 - margin:
         left = sorted_responses[:min_idx]
-        right = sorted_responses[min_idx + 1:]
+        right = sorted_responses[min_idx + 1 :]
         if left and right:
             left_mean = sum(left) / len(left)
             right_mean = sum(right) / len(right)
             trough = sorted_responses[min_idx]
-            if left_mean > trough + threshold_fraction * data_range and \
-               right_mean > trough + threshold_fraction * data_range:
+            if (
+                left_mean > trough + threshold_fraction * data_range
+                and right_mean > trough + threshold_fraction * data_range
+            ):
                 return True
 
     return False
@@ -422,8 +434,12 @@ def _compute_z_factor(
 
     # Zhang et al. 1999 defines Z' using population SD (N denominator),
     # not sample SD (N-1 denominator).
-    sd_p = (sum((x - mean_p) ** 2 for x in positive_controls) / len(positive_controls)) ** 0.5
-    sd_n = (sum((x - mean_n) ** 2 for x in negative_controls) / len(negative_controls)) ** 0.5
+    sd_p = (
+        sum((x - mean_p) ** 2 for x in positive_controls) / len(positive_controls)
+    ) ** 0.5
+    sd_n = (
+        sum((x - mean_n) ** 2 for x in negative_controls) / len(negative_controls)
+    ) ** 0.5
 
     window = abs(mean_p - mean_n)
     if window == 0:
@@ -486,7 +502,7 @@ def ingest(
         raise Refusal(
             "assay file does not match canonical schema dde.assay.v1",
             detail=f"got schema {doc.get('schema')!r}",
-            remedy="ensure the input file has '\"schema\": \"dde.assay.v1\"' at the top level",
+            remedy='ensure the input file has \'"schema": "dde.assay.v1"\' at the top level',
         )
 
     record = _normalise(doc, source)
@@ -498,7 +514,11 @@ def ingest(
         )
 
     run_id = record["summary"]["runs"][0] if record["summary"]["runs"] else None
-    assay_type = record["summary"]["assay_types"][0] if record["summary"]["assay_types"] else None
+    assay_type = (
+        record["summary"]["assay_types"][0]
+        if record["summary"]["assay_types"]
+        else None
+    )
     name_parts = [_slug(assay_type, "assay")]
     if run_id:
         name_parts.append(_slug(run_id, "run"))
@@ -806,9 +826,7 @@ def analyze(
         threshold_provenance=(
             f"{activity_thresholds.provenance}; {screen_thresholds.provenance}"
         ),
-        unresolved=(
-            activity_thresholds.unresolved() + screen_thresholds.unresolved()
-        ),
+        unresolved=(activity_thresholds.unresolved() + screen_thresholds.unresolved()),
         metrics=metrics,
         assessment=assessment,
         mandatory_relays=relays,
@@ -860,7 +878,9 @@ def _fetch_chembl(compound_id: str, target: str | None) -> list[dict[str, Any]]:
     page_url: str | None = url
 
     while page_url:
-        resp = http.request("GET", page_url, qps=qps_for_host("www.ebi.ac.uk"), tolerate_status=(404,))
+        resp = http.request(
+            "GET", page_url, qps=qps_for_host("www.ebi.ac.uk"), tolerate_status=(404,)
+        )
 
         # 404 means the compound was not found.
         if resp.status_code == 404:
@@ -898,22 +918,24 @@ def _fetch_chembl(compound_id: str, target: str | None) -> list[dict[str, Any]]:
                 except (ValueError, TypeError):
                     pchembl = None
 
-            activities.append({
-                "source_db": "chembl",
-                "source_id": record.get("assay_chembl_id"),
-                "compound_id": record.get("molecule_chembl_id"),
-                "compound_name": record.get("molecule_pref_name"),
-                "target_id": record.get("target_chembl_id"),
-                "target_name": record.get("target_pref_name"),
-                "target_organism": record.get("target_organism"),
-                "activity_type": record.get("standard_type"),
-                "value": value,
-                "units": record.get("standard_units"),
-                "relation": record.get("standard_relation"),
-                "pchembl_value": pchembl,
-                "assay_description": record.get("assay_description"),
-                "document_id": record.get("document_chembl_id"),
-            })
+            activities.append(
+                {
+                    "source_db": "chembl",
+                    "source_id": record.get("assay_chembl_id"),
+                    "compound_id": record.get("molecule_chembl_id"),
+                    "compound_name": record.get("molecule_pref_name"),
+                    "target_id": record.get("target_chembl_id"),
+                    "target_name": record.get("target_pref_name"),
+                    "target_organism": record.get("target_organism"),
+                    "activity_type": record.get("standard_type"),
+                    "value": value,
+                    "units": record.get("standard_units"),
+                    "relation": record.get("standard_relation"),
+                    "pchembl_value": pchembl,
+                    "assay_description": record.get("assay_description"),
+                    "document_id": record.get("document_chembl_id"),
+                }
+            )
 
         # Pagination: page_meta.next is a relative URL or None.
         page_meta = data.get("page_meta", {})
@@ -930,7 +952,9 @@ def _fetch_chembl(compound_id: str, target: str | None) -> list[dict[str, Any]]:
 def _fetch_pubchem(compound_id: str, target: str | None) -> list[dict[str, Any]]:
     """Fetch bioactivity records from PubChem assay summary."""
     url = f"{PUBCHEM_API}/compound/cid/{compound_id}/assaysummary/JSON"
-    raw_resp = http.request("GET", url, qps=qps_for_host("pubchem.ncbi.nlm.nih.gov"), tolerate_status=(404,))
+    raw_resp = http.request(
+        "GET", url, qps=qps_for_host("pubchem.ncbi.nlm.nih.gov"), tolerate_status=(404,)
+    )
 
     if raw_resp.status_code == 404:
         raise Refusal(
@@ -1001,33 +1025,44 @@ def _fetch_pubchem(compound_id: str, target: str | None) -> list[dict[str, Any]]
                 continue
 
         aid = _cell(cells, "AID")
-        activities.append({
-            "source_db": "pubchem",
-            "source_id": str(aid) if aid is not None else None,
-            "compound_id": str(_cell(cells, "CID") or compound_id),
-            "compound_name": None,
-            "target_id": str(target_accession) if target_accession else None,
-            "target_name": None,
-            "target_organism": None,
-            "activity_type": _cell(cells, "Activity Name"),
-            "value": value,
-            "units": "uM" if value is not None else None,
-            "relation": None,
-            "pchembl_value": None,
-            "assay_description": _cell(cells, "Assay Name"),
-            "document_id": str(_cell(cells, "PubMed ID")) if _cell(cells, "PubMed ID") else None,
-        })
+        activities.append(
+            {
+                "source_db": "pubchem",
+                "source_id": str(aid) if aid is not None else None,
+                "compound_id": str(_cell(cells, "CID") or compound_id),
+                "compound_name": None,
+                "target_id": str(target_accession) if target_accession else None,
+                "target_name": None,
+                "target_organism": None,
+                "activity_type": _cell(cells, "Activity Name"),
+                "value": value,
+                "units": "uM" if value is not None else None,
+                "relation": None,
+                "pchembl_value": None,
+                "assay_description": _cell(cells, "Assay Name"),
+                "document_id": str(_cell(cells, "PubMed ID"))
+                if _cell(cells, "PubMed ID")
+                else None,
+            }
+        )
 
     return activities
 
 
 @assay.command("bioactivity-fetch")
 @click.argument("compound_id")
-@click.option("--target", default=None,
-              help="Filter by target ID (ChEMBL target ID or PubChem accession/gene ID).")
-@click.option("--source", "source_db",
-              type=click.Choice(["chembl", "pubchem"]), default="chembl",
-              help="Source database (default: chembl).")
+@click.option(
+    "--target",
+    default=None,
+    help="Filter by target ID (ChEMBL target ID or PubChem accession/gene ID).",
+)
+@click.option(
+    "--source",
+    "source_db",
+    type=click.Choice(["chembl", "pubchem"]),
+    default="chembl",
+    help="Source database (default: chembl).",
+)
 @out_option
 @output_options
 @pass_state
@@ -1061,10 +1096,9 @@ def bioactivity_fetch(
         activities = _fetch_pubchem(compound_id, target)
 
     # Build activity type summary.
-    activity_types = sorted(set(
-        a["activity_type"] for a in activities
-        if a["activity_type"] is not None
-    ))
+    activity_types = sorted(
+        {a["activity_type"] for a in activities if a["activity_type"] is not None}
+    )
 
     # Build the artifact record.
     record = {

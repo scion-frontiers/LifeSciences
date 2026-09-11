@@ -83,7 +83,9 @@ def _fetch_gene(gene: str, organism: str | None) -> tuple[bytes, dict[str, Any]]
         f"{ALLEN_API}/data/Gene/query.json"
         f"?criteria=[acronym$eq'{gene_encoded}']&include=organism"
     )
-    gene_data = http.get_json(gene_url, qps=qps_for_host("api.brain-map.org"), timeout=120.0)
+    gene_data = http.get_json(
+        gene_url, qps=qps_for_host("api.brain-map.org"), timeout=120.0
+    )
 
     if not isinstance(gene_data, dict):
         raise SchemaError(
@@ -116,7 +118,9 @@ def _fetch_gene(gene: str, organism: str | None) -> tuple[bytes, dict[str, Any]]
         f"?criteria=[genes.acronym$eq'{gene_encoded}']"
         f"&include=genes,products&num_rows=50"
     )
-    dataset_data = http.get_json(dataset_url, qps=qps_for_host("api.brain-map.org"), timeout=120.0)
+    dataset_data = http.get_json(
+        dataset_url, qps=qps_for_host("api.brain-map.org"), timeout=120.0
+    )
 
     if not isinstance(dataset_data, dict):
         raise SchemaError(
@@ -137,13 +141,15 @@ def _fetch_gene(gene: str, organism: str | None) -> tuple[bytes, dict[str, Any]]
     gene_records = []
     for g in gene_results:
         org = g.get("organism", {})
-        gene_records.append({
-            "gene_id": g.get("id"),
-            "acronym": g.get("acronym", ""),
-            "name": g.get("name", ""),
-            "organism_id": org.get("id") if isinstance(org, dict) else None,
-            "organism_name": org.get("name", "") if isinstance(org, dict) else "",
-        })
+        gene_records.append(
+            {
+                "gene_id": g.get("id"),
+                "acronym": g.get("acronym", ""),
+                "name": g.get("name", ""),
+                "organism_id": org.get("id") if isinstance(org, dict) else None,
+                "organism_name": org.get("name", "") if isinstance(org, dict) else "",
+            }
+        )
 
     dataset_records = []
     for ds in datasets:
@@ -163,14 +169,16 @@ def _fetch_gene(gene: str, organism: str | None) -> tuple[bytes, dict[str, Any]]
                 if sym:
                     gene_symbols.append(sym)
 
-        dataset_records.append({
-            "dataset_id": ds.get("id"),
-            "specimen_id": ds.get("specimen_id"),
-            "plane_of_section_id": ds.get("plane_of_section_id"),
-            "products": product_names,
-            "genes": gene_symbols,
-            "failed": ds.get("failed", False),
-        })
+        dataset_records.append(
+            {
+                "dataset_id": ds.get("id"),
+                "specimen_id": ds.get("specimen_id"),
+                "plane_of_section_id": ds.get("plane_of_section_id"),
+                "products": product_names,
+                "genes": gene_symbols,
+                "failed": ds.get("failed", False),
+            }
+        )
 
     artifact: dict[str, Any] = {
         "schema": "dde.allen-search.v1",
@@ -209,8 +217,7 @@ def _fetch_donors(
     criteria = "".join(criteria_parts) if criteria_parts else ""
 
     url = (
-        f"{ALLEN_API}/data/ApiTbiDonorDetail/query.json"
-        f"?criteria={criteria}&num_rows=50"
+        f"{ALLEN_API}/data/ApiTbiDonorDetail/query.json?criteria={criteria}&num_rows=50"
     )
     raw_data = http.get_json(url, qps=qps_for_host("api.brain-map.org"), timeout=120.0)
 
@@ -242,20 +249,22 @@ def _fetch_donors(
     # Extract structured donor records.
     donor_records = []
     for d in donors:
-        donor_records.append({
-            "donor_id": d.get("donor_id") or d.get("id"),
-            "name": d.get("name", ""),
-            "age": d.get("age_at_death") or d.get("age"),
-            "sex": d.get("sex", ""),
-            "race": d.get("race", ""),
-            "act_demented": d.get("act_demented"),
-            "dsm_iv_clinical_diagnosis": d.get("dsm_iv_clinical_diagnosis", ""),
-            "nincds_arda_diagnosis": d.get("nincds_arda_diagnosis", ""),
-            "braak": d.get("braak"),
-            "cerad": d.get("cerad"),
-            "apoe4_status": d.get("apo_e4_allele") or d.get("apoe4_status"),
-            "education_years": d.get("education_years"),
-        })
+        donor_records.append(
+            {
+                "donor_id": d.get("donor_id") or d.get("id"),
+                "name": d.get("name", ""),
+                "age": d.get("age_at_death") or d.get("age"),
+                "sex": d.get("sex", ""),
+                "race": d.get("race", ""),
+                "act_demented": d.get("act_demented"),
+                "dsm_iv_clinical_diagnosis": d.get("dsm_iv_clinical_diagnosis", ""),
+                "nincds_arda_diagnosis": d.get("nincds_arda_diagnosis", ""),
+                "braak": d.get("braak"),
+                "cerad": d.get("cerad"),
+                "apoe4_status": d.get("apo_e4_allele") or d.get("apoe4_status"),
+                "education_years": d.get("education_years"),
+            }
+        )
 
     artifact: dict[str, Any] = {
         "schema": "dde.allen-donors.v1",
@@ -291,6 +300,7 @@ def allen() -> None:
 # Both verbs are accepted as aliases for discoverability.  The primary
 # verb for this group is ``search`` (Allen returns datasets matching a
 # gene query); ``fetch`` is the alias.
+
 
 @allen.command("search")
 @click.argument("query")
@@ -344,9 +354,7 @@ def search_cmd(
 
     # Write structured artifact.
     artifact_path = target_dir / f"{slug}.allen.artifact.json"
-    artifact_path.write_text(
-        json.dumps(artifact, indent=2) + "\n", encoding="utf-8"
-    )
+    artifact_path.write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
     sidecar.add_output(artifact_path)
 
     # Write sidecar.
@@ -375,9 +383,7 @@ def search_cmd(
             products_str = ", ".join(ds["products"]) if ds["products"] else "(none)"
             emit.line(f"  dataset {ds['dataset_id']}: {products_str}")
         if len(artifact["datasets"]) > 5:
-            emit.line(
-                f"  ... {len(artifact['datasets']) - 5} more in the artifact"
-            )
+            emit.line(f"  ... {len(artifact['datasets']) - 5} more in the artifact")
     emit.flush()
 
 
@@ -451,9 +457,7 @@ def donors_cmd(
 
     # Write structured artifact.
     artifact_path = target_dir / f"{slug}.allen-donors.artifact.json"
-    artifact_path.write_text(
-        json.dumps(artifact, indent=2) + "\n", encoding="utf-8"
-    )
+    artifact_path.write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
     sidecar.add_output(artifact_path)
 
     # Write sidecar.
@@ -463,7 +467,7 @@ def donors_cmd(
     emit.path(verbatim_path, role="verbatim")
     emit.path(artifact_path, role="artifact")
     emit.path(meta_path, role="sidecar")
-    emit.line(f"Allen Brain Map donors query")
+    emit.line("Allen Brain Map donors query")
     emit.line(f"  {artifact['summary']['n_donors']} donor(s) found")
     if artifact["donors"]:
         for d in artifact["donors"][:5]:
@@ -473,9 +477,7 @@ def donors_cmd(
                 f"age={d.get('age', '?')}, diagnosis={diag}"
             )
         if len(artifact["donors"]) > 5:
-            emit.line(
-                f"  ... {len(artifact['donors']) - 5} more in the artifact"
-            )
+            emit.line(f"  ... {len(artifact['donors']) - 5} more in the artifact")
     emit.flush()
 
 
@@ -559,9 +561,7 @@ def analyze_cmd(
         "n_gene_matches": len(genes),
         "n_datasets": len(datasets),
         "n_failed_datasets": n_failed,
-        "product_distribution": [
-            {"product": p, "count": c} for p, c in top_products
-        ],
+        "product_distribution": [{"product": p, "count": c} for p, c in top_products],
         "organism_breakdown": dict(organism_counts),
     }
 
@@ -588,9 +588,7 @@ def analyze_cmd(
     emit.data("relays", relays)
     emit.line(f"Allen Brain Map analysis: {query!r}")
     emit.line(f"  Outcome: {assessment['outcome']}")
-    emit.line(
-        f"  {len(genes)} gene match(es), {len(datasets)} dataset(s)"
-    )
+    emit.line(f"  {len(genes)} gene match(es), {len(datasets)} dataset(s)")
     if n_failed:
         emit.line(f"  {n_failed} failed dataset(s)")
     if top_products:
@@ -674,7 +672,9 @@ def analyze_donors_cmd(
         act_demented = d.get("act_demented")
         if act_demented is True or act_demented == "true" or act_demented == "True":
             n_demented += 1
-        elif act_demented is False or act_demented == "false" or act_demented == "False":
+        elif (
+            act_demented is False or act_demented == "false" or act_demented == "False"
+        ):
             n_control += 1
 
         # Diagnosis distribution.

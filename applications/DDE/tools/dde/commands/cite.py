@@ -109,10 +109,7 @@ def _slug(stem: str) -> str:
 def _extract_structured(data: dict[str, Any]) -> list[dict[str, Any]]:
     """Extract from a JSON document with a DDE or Hypex citation array."""
     citations = (
-        data.get("citations")
-        or data.get("references")
-        or data.get("evidence")
-        or []
+        data.get("citations") or data.get("references") or data.get("evidence") or []
     )
     if not isinstance(citations, list):
         return []
@@ -120,12 +117,14 @@ def _extract_structured(data: dict[str, Any]) -> list[dict[str, Any]]:
     for entry in citations:
         if isinstance(entry, str):
             kind, value = _classify(entry)
-            results.append({
-                "raw_id": entry,
-                "kind": kind,
-                "normalised": value,
-                "claimed_title": entry if kind == "title" else None,
-            })
+            results.append(
+                {
+                    "raw_id": entry,
+                    "kind": kind,
+                    "normalised": value,
+                    "claimed_title": entry if kind == "title" else None,
+                }
+            )
         elif isinstance(entry, dict):
             raw = (
                 entry.get("lit_id")
@@ -141,12 +140,14 @@ def _extract_structured(data: dict[str, Any]) -> list[dict[str, Any]]:
                 continue
             kind, value = _classify(str(raw))
             claimed_title = entry.get("title") or (raw if kind == "title" else None)
-            results.append({
-                "raw_id": str(raw),
-                "kind": kind,
-                "normalised": value,
-                "claimed_title": claimed_title,
-            })
+            results.append(
+                {
+                    "raw_id": str(raw),
+                    "kind": kind,
+                    "normalised": value,
+                    "claimed_title": claimed_title,
+                }
+            )
     return results
 
 
@@ -155,7 +156,7 @@ def _extract_regex(text: str) -> list[dict[str, Any]]:
     seen: set[str] = set()
     results: list[dict[str, Any]] = []
 
-    for pattern, kind_hint in [
+    for pattern, _kind_hint in [
         (DOI_RE, "doi"),
         (PMID_RE, "pmid"),
         (PMCID_RE, "pmcid"),
@@ -164,18 +165,20 @@ def _extract_regex(text: str) -> list[dict[str, Any]]:
         for match in pattern.finditer(text):
             # Use the full match for classification context (e.g.
             # "PMID:12345678" keeps the prefix so _classify sees it).
-            full = match.group(0).rstrip('.,;:"\' ')
+            full = match.group(0).rstrip(".,;:\"' ")
             kind, value = _classify(full)
             key = f"{kind}:{value}"
             if key in seen:
                 continue
             seen.add(key)
-            results.append({
-                "raw_id": full,
-                "kind": kind,
-                "normalised": value,
-                "claimed_title": None,
-            })
+            results.append(
+                {
+                    "raw_id": full,
+                    "kind": kind,
+                    "normalised": value,
+                    "claimed_title": None,
+                }
+            )
 
     return results
 
@@ -253,7 +256,8 @@ def _resolve_doi(doi: str) -> dict[str, Any]:
     url = f"{CROSSREF_BASE}/{quote(doi, safe='')}"
     try:
         response = http.request(
-            "GET", url,
+            "GET",
+            url,
             qps=qps_for_host("api.crossref.org"),
             timeout=60.0,
             tolerate_status=(404,),
@@ -284,7 +288,8 @@ def _resolve_epmc(query: str, source_label: str) -> dict[str, Any]:
     )
     try:
         response = http.request(
-            "GET", url,
+            "GET",
+            url,
             qps=qps_for_host("www.ebi.ac.uk"),
             timeout=60.0,
         )
@@ -311,7 +316,8 @@ def _resolve_ctgov(nct_id: str) -> dict[str, Any]:
     url = f"{CTGOV_BASE}/{quote(nct_id, safe='')}"
     try:
         response = http.request(
-            "GET", url,
+            "GET",
+            url,
             qps=qps_for_host("clinicaltrials.gov"),
             timeout=60.0,
             tolerate_status=(404,),
@@ -319,7 +325,7 @@ def _resolve_ctgov(nct_id: str) -> dict[str, Any]:
         if response.status_code == 404:
             return {"found": False, "source": "ctgov", "url": url}
         data = response.json()
-        section = (data.get("protocolSection") or {})
+        section = data.get("protocolSection") or {}
         ident = section.get("identificationModule") or {}
         title = ident.get("briefTitle") or ident.get("officialTitle")
         return {
@@ -491,10 +497,7 @@ def verify_cmd(
     n_unverified = sum(1 for r in resolved if r["status"] == "unverified")
     # §3.3 CRITICAL: all_verified requires suspect == 0 too
     all_verified = (
-        len(resolved) > 0
-        and n_suspect == 0
-        and n_phantom == 0
-        and n_unverified == 0
+        len(resolved) > 0 and n_suspect == 0 and n_phantom == 0 and n_unverified == 0
     )
 
     manifest = {
@@ -517,9 +520,7 @@ def verify_cmd(
     # Write outputs
     slug = _slug(file_path.stem)
     manifest_path = target_dir / f"{slug}.citations.json"
-    manifest_path.write_text(
-        json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
-    )
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
     # Build sidecar
     endpoints = set()
@@ -554,15 +555,19 @@ def verify_cmd(
             code="cite.phantom_citation",
         )
     if n_suspect > 0:
-        suspect_ids = [r["raw_id"] for r in resolved if r["status"] == "suspect-title-match"]
+        suspect_ids = [
+            r["raw_id"] for r in resolved if r["status"] == "suspect-title-match"
+        ]
         sidecar.warn(
             f"{n_suspect} suspect title match(es): {', '.join(suspect_ids[:5])}",
             code="cite.suspect_title_match",
         )
     if n_unverified > 0:
         unverified_with_network = [
-            r for r in resolved
-            if r["status"] == "unverified" and r.get("reason") in ("network_error", "timeout")
+            r
+            for r in resolved
+            if r["status"] == "unverified"
+            and r.get("reason") in ("network_error", "timeout")
         ]
         if unverified_with_network:
             sidecar.warn(
@@ -644,7 +649,10 @@ def analyze_cmd(
         manifest_path = candidates[0]
 
     manifest = provenance.read_json(manifest_path, "citation manifest")
-    if not isinstance(manifest, dict) or manifest.get("schema") != "dde.citation-manifest.v1":
+    if (
+        not isinstance(manifest, dict)
+        or manifest.get("schema") != "dde.citation-manifest.v1"
+    ):
         raise SchemaError(
             "file is not a dde.citation-manifest.v1 artifact",
             detail=f"schema: {manifest.get('schema') if isinstance(manifest, dict) else 'not a dict'}",
@@ -679,7 +687,9 @@ def analyze_cmd(
     # Fire relay codes
     relays: list[dict[str, str]] = []
     if n_phantom > 0:
-        phantom_ids = [c["raw_id"] for c in citations_list if c.get("status") == "phantom"]
+        phantom_ids = [
+            c["raw_id"] for c in citations_list if c.get("status") == "phantom"
+        ]
         relays.append(
             provenance.relay(
                 "cite.phantom_citation",
@@ -688,7 +698,9 @@ def analyze_cmd(
         )
     if n_suspect > 0:
         suspect_ids = [
-            c["raw_id"] for c in citations_list if c.get("status") == "suspect-title-match"
+            c["raw_id"]
+            for c in citations_list
+            if c.get("status") == "suspect-title-match"
         ]
         relays.append(
             provenance.relay(
@@ -698,7 +710,8 @@ def analyze_cmd(
         )
     if n_unverified > 0:
         unverified_net = [
-            c for c in citations_list
+            c
+            for c in citations_list
             if c.get("status") == "unverified"
             and c.get("reason") in ("network_error", "timeout")
         ]

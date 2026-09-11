@@ -194,12 +194,14 @@ def _parse_csv(raw: bytes, gene: str) -> list[dict[str, Any]]:
         cell_type_upper = cell_type.upper()
         category = CELL_TYPE_CATEGORIES.get(cell_type_upper, "Other")
 
-        expression.append({
-            "cell_type": cell_type,
-            "tpm": round(mean_tpm, 4),
-            "n_samples": len(tpm_values),
-            "category": category,
-        })
+        expression.append(
+            {
+                "cell_type": cell_type,
+                "tpm": round(mean_tpm, 4),
+                "n_samples": len(tpm_values),
+                "category": category,
+            }
+        )
 
     if not expression:
         raise SchemaError(
@@ -210,9 +212,7 @@ def _parse_csv(raw: bytes, gene: str) -> list[dict[str, Any]]:
     return expression
 
 
-def _build_artifact(
-    gene: str, expression: list[dict[str, Any]]
-) -> dict[str, Any]:
+def _build_artifact(gene: str, expression: list[dict[str, Any]]) -> dict[str, Any]:
     """Build the structured dde.dice.v1 artifact."""
     # Find the top cell type by mean TPM.
     sorted_expr = sorted(expression, key=lambda e: e["tpm"], reverse=True)
@@ -249,6 +249,7 @@ def dice() -> None:
 # verb for this group is ``search`` (DICE returns expression across cell
 # types for a gene query); ``fetch`` is the alias.
 
+
 @dice.command("search")
 @click.argument("gene")
 @out_option
@@ -271,7 +272,7 @@ def search_cmd(
     target_dir = state.project().artifact_dir(ARTIFACT_CLASS, out)
     slug = gene.upper()
 
-    raw, content_type = _fetch_dice(gene)
+    raw, _content_type = _fetch_dice(gene)
     expression = _parse_csv(raw, gene)
     artifact = _build_artifact(gene, expression)
 
@@ -284,7 +285,10 @@ def search_cmd(
             "resolved_gene": slug,
         },
     )
-    sidecar.note("source", "DICE (Database of Immune Cell Expression, La Jolla Institute for Immunology)")
+    sidecar.note(
+        "source",
+        "DICE (Database of Immune Cell Expression, La Jolla Institute for Immunology)",
+    )
     sidecar.note("licence", "CC BY 4.0 (summary data, publicly accessible)")
     sidecar.note("data_type", "bulk RNA-seq TPM, individual donor replicates")
     sidecar.note("n_cell_types", artifact["summary"]["n_cell_types"])
@@ -306,15 +310,11 @@ def search_cmd(
 
     # Write structured artifact.
     artifact_path = target_dir / f"{slug}.dice-expression.artifact.json"
-    artifact_path.write_text(
-        json.dumps(artifact, indent=2) + "\n", encoding="utf-8"
-    )
+    artifact_path.write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
     sidecar.add_output(artifact_path)
 
     # Write sidecar.
-    meta_path = sidecar.write(
-        target_dir / f"{slug}.dice-expression.meta.json"
-    )
+    meta_path = sidecar.write(target_dir / f"{slug}.dice-expression.meta.json")
 
     emit.data("gene", slug)
     emit.data("n_cell_types", artifact["summary"]["n_cell_types"])
@@ -389,12 +389,14 @@ def analyze_cmd(
     category_summaries = []
     for cat, entries in sorted(categories.items()):
         tpm_values = [e["tpm"] for e in entries]
-        category_summaries.append({
-            "category": cat,
-            "n_cell_types": len(entries),
-            "max_tpm": max(tpm_values),
-            "mean_tpm": round(sum(tpm_values) / len(tpm_values), 4),
-        })
+        category_summaries.append(
+            {
+                "category": cat,
+                "n_cell_types": len(entries),
+                "max_tpm": max(tpm_values),
+                "mean_tpm": round(sum(tpm_values) / len(tpm_values), 4),
+            }
+        )
 
     sorted_expr = sorted(expression, key=lambda e: e["tpm"], reverse=True)
     top_cell_types = [
@@ -438,10 +440,7 @@ def analyze_cmd(
     emit.data("assessment", assessment)
     emit.data("metrics", metrics)
     emit.data("relays", relays)
-    emit.line(
-        f"{slug} -> {verdict.upper()} "
-        f"({len(expression)} cell type(s) from DICE)"
-    )
+    emit.line(f"{slug} -> {verdict.upper()} ({len(expression)} cell type(s) from DICE)")
     if top_cell_types:
         top_lines = [
             f"  {t['cell_type']} ({t['category']}): {t['tpm']} TPM"

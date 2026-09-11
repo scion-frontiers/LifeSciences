@@ -35,15 +35,23 @@ from tempfile import TemporaryDirectory
 SCRIPT = Path(__file__).resolve().parents[1] / "bootstrap-preflight.sh"
 
 
-def _run(args: list[str] | None = None, *, env_override: dict | None = None,
-         timeout: int = 120):
+def _run(
+    args: list[str] | None = None,
+    *,
+    env_override: dict | None = None,
+    timeout: int = 120,
+):
     """Run bootstrap-preflight.sh and return the CompletedProcess."""
     cmd = ["bash", str(SCRIPT)] + (args or [])
     env = dict(os.environ)
     if env_override:
         env.update(env_override)
     return subprocess.run(
-        cmd, capture_output=True, text=True, env=env, timeout=timeout,
+        cmd,
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=timeout,
     )
 
 
@@ -93,8 +101,7 @@ class TestDetectPython3Dev(unittest.TestCase):
         r = _run(["--no-remediate"])
         combined = r.stdout + r.stderr
         for tool in ("gcc", "g++", "make"):
-            self.assertIn(tool, combined,
-                          f"Expected preflight to check for {tool}")
+            self.assertIn(tool, combined, f"Expected preflight to check for {tool}")
 
     def test_checks_hypex_go_toolchain(self):
         """The bootstrapper must verify the Go version used for Hypex builds."""
@@ -134,11 +141,13 @@ class TestRemediationWithSudo(unittest.TestCase):
         """Create a mock apt-get that logs its invocations."""
         log = self.mockbin / "apt-get.log"
         script = self.mockbin / "apt-get"
-        script.write_text(textwrap.dedent(f"""\
+        script.write_text(
+            textwrap.dedent(f"""\
             #!/bin/bash
             echo "$@" >> "{log}"
             exit 0
-        """))
+        """)
+        )
         script.chmod(script.stat().st_mode | stat.S_IEXEC)
 
     def test_remediation_section_appears(self):
@@ -169,10 +178,14 @@ class TestFailStopWithoutSudo(unittest.TestCase):
         # false, the verdict section mentions 'BLOCKED'.
         # Read the script and verify the blocked-task text is present.
         script_text = SCRIPT.read_text()
-        self.assertIn("BLOCKED", script_text,
-                       "Script must contain BLOCKED task language")
-        self.assertIn("cannot install", script_text.lower(),
-                       "Script must explain why packages cannot be installed")
+        self.assertIn(
+            "BLOCKED", script_text, "Script must contain BLOCKED task language"
+        )
+        self.assertIn(
+            "cannot install",
+            script_text.lower(),
+            "Script must explain why packages cannot be installed",
+        )
 
 
 class TestPreflightPassesCleanSystem(unittest.TestCase):
@@ -188,16 +201,22 @@ class TestPreflightPassesCleanSystem(unittest.TestCase):
         checks = [
             # Python.h
             subprocess.run(
-                ["python3", "-c",
-                 "import sysconfig; import os; "
-                 "print(os.path.isfile(sysconfig.get_paths()['include']+'/Python.h'))"],
-                capture_output=True, text=True,
-            ).stdout.strip() == "True",
+                [
+                    "python3",
+                    "-c",
+                    "import sysconfig; import os; "
+                    "print(os.path.isfile(sysconfig.get_paths()['include']+'/Python.h'))",
+                ],
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            == "True",
             # gcc
             subprocess.run(
                 ["bash", "-c", "command -v gcc"],
                 capture_output=True,
-            ).returncode == 0,
+            ).returncode
+            == 0,
         ]
         return all(checks)
 
@@ -206,9 +225,12 @@ class TestPreflightPassesCleanSystem(unittest.TestCase):
         if not self._all_prerequisites_present():
             self.skipTest("Prerequisites not fully present on this system")
         r = _run(["--no-remediate"])
-        self.assertIn(r.returncode, (0, 2),
-                      f"Expected exit 0 or 2, got {r.returncode}.\n"
-                      f"stdout:\n{r.stdout}\nstderr:\n{r.stderr}")
+        self.assertIn(
+            r.returncode,
+            (0, 2),
+            f"Expected exit 0 or 2, got {r.returncode}.\n"
+            f"stdout:\n{r.stdout}\nstderr:\n{r.stderr}",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -226,7 +248,7 @@ class TestReCheckAfterRemediation(unittest.TestCase):
         # Look for the exec line that re-runs with --no-remediate
         self.assertRegex(
             script_text,
-            r'exec\b.*--no-remediate',
+            r"exec\b.*--no-remediate",
             "Expected 'exec ... --no-remediate' for post-remediation re-check",
         )
 
@@ -242,8 +264,9 @@ class TestReCheckAfterRemediation(unittest.TestCase):
                 remediate_init = stripped
                 break
         self.assertIsNotNone(remediate_init, "REMEDIATE variable not found")
-        self.assertEqual(remediate_init, "REMEDIATE=true",
-                         "REMEDIATE should default to true")
+        self.assertEqual(
+            remediate_init, "REMEDIATE=true", "REMEDIATE should default to true"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -266,8 +289,9 @@ class TestKnownPrerequisites(unittest.TestCase):
         """Known packages for the science stack are documented."""
         script_text = SCRIPT.read_text()
         for pkg in ("prody", "numpy", "scipy"):
-            self.assertIn(pkg, script_text,
-                          f"Expected {pkg} mentioned in prerequisites")
+            self.assertIn(
+                pkg, script_text, f"Expected {pkg} mentioned in prerequisites"
+            )
 
 
 if __name__ == "__main__":

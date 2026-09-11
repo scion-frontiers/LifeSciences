@@ -212,7 +212,7 @@ def _assess_patentability(
     Checks for white space — areas where new IP could be filed.
     """
     current_year = datetime.date.today().year
-    cutoff_year = current_year - 5
+    current_year - 5
 
     # Analyze claim scope from patent titles/snippets.
     modality_patents: list[dict[str, Any]] = []
@@ -367,9 +367,7 @@ def _assess_fto(
         "Unpublished patent applications (typically 18 months from "
         "priority date) are not visible in public searches."
     )
-    unresolved.append(
-        "Non-English filings may be underrepresented in this search."
-    )
+    unresolved.append("Non-English filings may be underrepresented in this search.")
 
     return {
         "dimension": "freedom_to_operate",
@@ -434,13 +432,11 @@ def assess_competitive_differentiation(
     dict
         Structured assessment with three separate dimension findings.
     """
-    now = search_date or datetime.datetime.now(
-        datetime.timezone.utc
-    ).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    scope = search_scope or (
-        f"Google Patents public search for {query_term!r}"
+    now = search_date or datetime.datetime.now(datetime.timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
     )
+
+    scope = search_scope or (f"Google Patents public search for {query_term!r}")
 
     limits = coverage_limits or (
         "Non-English filings may be underrepresented; "
@@ -532,138 +528,138 @@ def build_assessment_records(
     list[dict]
         Assessment records ready for ``controlstore.write_record()``.
     """
-    now = datetime.datetime.now(datetime.timezone.utc).strftime(
-        "%Y-%m-%dT%H:%M:%SZ"
-    )
+    now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     dims = differentiation.get("dimensions", {})
     query = differentiation.get("query_term", "")
     records: list[dict[str, Any]] = []
 
     # --- Competitor activity assessment ---
     comp = dims.get("competitor_activity", {})
-    records.append({
-        "schema": "dde.evidence-assessment.v1",
-        "id": "AR-PENDING",  # Caller assigns final ID.
-        "concept_ref": concept_ref,
-        "claim": (
-            f"Competitive landscape for {query!r}: "
-            f"{comp.get('density', 'unknown')} competitor activity"
-        ),
-        "evidence_status": "supported",
-        "execution_outcome": "completed",
-        "evidence": {
-            "artifact_path": f"raw/ip/{_slug(query)}.differentiation.json",
-            "evidence_type": EVIDENCE_TYPE_COMPETITOR,
-            "metric_name": "recent_patents",
-            "metric_value": comp.get("recent_patents", 0),
-            "method": "google_patents_xhr",
-            "context": comp.get("summary", ""),
-        },
-        "confidence": "moderate",
-        "rationale": (
-            f"{comp.get('summary', '')} "
-            f"Search scope: {comp.get('search_scope', 'unspecified')}. "
-            f"Coverage limits: {comp.get('coverage_limits', 'unspecified')}."
-        ),
-        "assessed_at": now,
-        "assessed_by": assessed_by,
-    })
-
-    # --- Patentability assessment ---
-    pat = dims.get("patentability", {})
-    records.append({
-        "schema": "dde.evidence-assessment.v1",
-        "id": "AR-PENDING",
-        "concept_ref": concept_ref,
-        "claim": (
-            f"Patentability for {query!r}: "
-            f"{pat.get('novelty_assessment', 'unknown')}"
-        ),
-        "evidence_status": _patentability_to_evidence_status(
-            pat.get("novelty_assessment", "")
-        ),
-        "execution_outcome": "completed",
-        "evidence": {
-            "artifact_path": f"raw/ip/{_slug(query)}.differentiation.json",
-            "evidence_type": EVIDENCE_TYPE_PATENT,
-            "metric_name": "modality_overlap_count",
-            "metric_value": pat.get("modality_overlap_count", 0),
-            "method": "google_patents_xhr",
-            "context": pat.get("summary", ""),
-        },
-        "confidence": "low",
-        "rationale": (
-            f"{pat.get('summary', '')} "
-            f"Search scope: {pat.get('search_scope', 'unspecified')}. "
-            f"Coverage limits: {pat.get('coverage_limits', 'unspecified')}. "
-            f"{FTO_DISCLAIMER}"
-        ),
-        "assessed_at": now,
-        "assessed_by": assessed_by,
-    })
-
-    # --- FTO assessment ---
-    fto = dims.get("freedom_to_operate", {})
-    records.append({
-        "schema": "dde.evidence-assessment.v1",
-        "id": "AR-PENDING",
-        "concept_ref": concept_ref,
-        "claim": (
-            f"Freedom to operate for {query!r}: "
-            f"{fto.get('risk_level', 'unknown')}"
-        ),
-        "evidence_status": _fto_to_evidence_status(
-            fto.get("risk_level", "")
-        ),
-        "execution_outcome": "completed",
-        "evidence": {
-            "artifact_path": f"raw/ip/{_slug(query)}.differentiation.json",
-            "evidence_type": EVIDENCE_TYPE_PATENT,
-            "metric_name": "recent_filings",
-            "metric_value": fto.get("recent_filings", 0),
-            "method": "google_patents_xhr",
-            "context": (
-                f"{fto.get('summary', '')} "
-                f"DISCLAIMER: {FTO_DISCLAIMER}"
-            ),
-        },
-        "confidence": "low",
-        "rationale": (
-            f"{fto.get('summary', '')} "
-            f"Unresolved: {'; '.join(fto.get('unresolved_questions', []))}. "
-            f"{FTO_DISCLAIMER}"
-        ),
-        "assessed_at": now,
-        "assessed_by": assessed_by,
-    })
-
-    # --- Charter constraints (if any) ---
-    constraints = differentiation.get("charter_constraints", [])
-    for constraint in constraints:
-        records.append({
+    records.append(
+        {
             "schema": "dde.evidence-assessment.v1",
-            "id": "AR-PENDING",
+            "id": "AR-PENDING",  # Caller assigns final ID.
             "concept_ref": concept_ref,
-            "claim": f"Charter constraint: {constraint}",
+            "claim": (
+                f"Competitive landscape for {query!r}: "
+                f"{comp.get('density', 'unknown')} competitor activity"
+            ),
             "evidence_status": "supported",
             "execution_outcome": "completed",
             "evidence": {
                 "artifact_path": f"raw/ip/{_slug(query)}.differentiation.json",
                 "evidence_type": EVIDENCE_TYPE_COMPETITOR,
-                "method": "charter_review",
-                "context": (
-                    f"Program-specific constraint from charter: {constraint}"
-                ),
+                "metric_name": "recent_patents",
+                "metric_value": comp.get("recent_patents", 0),
+                "method": "google_patents_xhr",
+                "context": comp.get("summary", ""),
             },
-            "confidence": "high",
+            "confidence": "moderate",
             "rationale": (
-                f"This is a program-specific constraint (charter-level "
-                f"exclusion), not a scientific rejection. Constraint: "
-                f"{constraint}"
+                f"{comp.get('summary', '')} "
+                f"Search scope: {comp.get('search_scope', 'unspecified')}. "
+                f"Coverage limits: {comp.get('coverage_limits', 'unspecified')}."
             ),
             "assessed_at": now,
             "assessed_by": assessed_by,
-        })
+        }
+    )
+
+    # --- Patentability assessment ---
+    pat = dims.get("patentability", {})
+    records.append(
+        {
+            "schema": "dde.evidence-assessment.v1",
+            "id": "AR-PENDING",
+            "concept_ref": concept_ref,
+            "claim": (
+                f"Patentability for {query!r}: "
+                f"{pat.get('novelty_assessment', 'unknown')}"
+            ),
+            "evidence_status": _patentability_to_evidence_status(
+                pat.get("novelty_assessment", "")
+            ),
+            "execution_outcome": "completed",
+            "evidence": {
+                "artifact_path": f"raw/ip/{_slug(query)}.differentiation.json",
+                "evidence_type": EVIDENCE_TYPE_PATENT,
+                "metric_name": "modality_overlap_count",
+                "metric_value": pat.get("modality_overlap_count", 0),
+                "method": "google_patents_xhr",
+                "context": pat.get("summary", ""),
+            },
+            "confidence": "low",
+            "rationale": (
+                f"{pat.get('summary', '')} "
+                f"Search scope: {pat.get('search_scope', 'unspecified')}. "
+                f"Coverage limits: {pat.get('coverage_limits', 'unspecified')}. "
+                f"{FTO_DISCLAIMER}"
+            ),
+            "assessed_at": now,
+            "assessed_by": assessed_by,
+        }
+    )
+
+    # --- FTO assessment ---
+    fto = dims.get("freedom_to_operate", {})
+    records.append(
+        {
+            "schema": "dde.evidence-assessment.v1",
+            "id": "AR-PENDING",
+            "concept_ref": concept_ref,
+            "claim": (
+                f"Freedom to operate for {query!r}: {fto.get('risk_level', 'unknown')}"
+            ),
+            "evidence_status": _fto_to_evidence_status(fto.get("risk_level", "")),
+            "execution_outcome": "completed",
+            "evidence": {
+                "artifact_path": f"raw/ip/{_slug(query)}.differentiation.json",
+                "evidence_type": EVIDENCE_TYPE_PATENT,
+                "metric_name": "recent_filings",
+                "metric_value": fto.get("recent_filings", 0),
+                "method": "google_patents_xhr",
+                "context": (f"{fto.get('summary', '')} DISCLAIMER: {FTO_DISCLAIMER}"),
+            },
+            "confidence": "low",
+            "rationale": (
+                f"{fto.get('summary', '')} "
+                f"Unresolved: {'; '.join(fto.get('unresolved_questions', []))}. "
+                f"{FTO_DISCLAIMER}"
+            ),
+            "assessed_at": now,
+            "assessed_by": assessed_by,
+        }
+    )
+
+    # --- Charter constraints (if any) ---
+    constraints = differentiation.get("charter_constraints", [])
+    for constraint in constraints:
+        records.append(
+            {
+                "schema": "dde.evidence-assessment.v1",
+                "id": "AR-PENDING",
+                "concept_ref": concept_ref,
+                "claim": f"Charter constraint: {constraint}",
+                "evidence_status": "supported",
+                "execution_outcome": "completed",
+                "evidence": {
+                    "artifact_path": f"raw/ip/{_slug(query)}.differentiation.json",
+                    "evidence_type": EVIDENCE_TYPE_COMPETITOR,
+                    "method": "charter_review",
+                    "context": (
+                        f"Program-specific constraint from charter: {constraint}"
+                    ),
+                },
+                "confidence": "high",
+                "rationale": (
+                    f"This is a program-specific constraint (charter-level "
+                    f"exclusion), not a scientific rejection. Constraint: "
+                    f"{constraint}"
+                ),
+                "assessed_at": now,
+                "assessed_by": assessed_by,
+            }
+        )
 
     return records
 
@@ -754,8 +750,12 @@ def differentiation() -> None:
 @differentiation.command("assess")
 @click.argument("query_term")
 @click.option("--concept", default=None, help="Concept ID (e.g. IC-001).")
-@click.option("--modality", default=None, help="Concept modality (e.g. small_molecule).")
-@click.option("--indication", default=None, help="Concept indication (e.g. solid_tumors).")
+@click.option(
+    "--modality", default=None, help="Concept modality (e.g. small_molecule)."
+)
+@click.option(
+    "--indication", default=None, help="Concept indication (e.g. solid_tumors)."
+)
 @click.option("--entity", default=None, help="Proposed entity identifier.")
 @click.option(
     "--charter-constraint",
@@ -829,9 +829,7 @@ def assess_cmd(
         ]
         for name in unconsumed_trial_files:
             lines.append(f"  - {name}")
-        lines.append(
-            "Run `dde trials analyze` separately for clinical trial evidence."
-        )
+        lines.append("Run `dde trials analyze` separately for clinical trial evidence.")
         for ln in lines:
             warn(ln)
 
@@ -881,9 +879,7 @@ def assess_cmd(
 
     # Write assessment.
     out_path = target_dir / f"{slug}.differentiation.json"
-    out_path.write_text(
-        json.dumps(result, indent=2) + "\n", encoding="utf-8"
-    )
+    out_path.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
 
     # Write analysis record.
     analysis_path = provenance.write_analysis(
@@ -895,7 +891,9 @@ def assess_cmd(
         },
         metrics={
             "competitor_density": comp["density"],
-            "patentability": result["dimensions"]["patentability"]["novelty_assessment"],
+            "patentability": result["dimensions"]["patentability"][
+                "novelty_assessment"
+            ],
             "fto_risk": fto["risk_level"],
             "total_patents": comp["total_patents"],
             "recent_patents": comp["recent_patents"],
@@ -903,7 +901,9 @@ def assess_cmd(
         assessment={
             "dimensions": {
                 "competitor_activity": comp["density"],
-                "patentability": result["dimensions"]["patentability"]["novelty_assessment"],
+                "patentability": result["dimensions"]["patentability"][
+                    "novelty_assessment"
+                ],
                 "freedom_to_operate": fto["risk_level"],
             },
             "dimensions_are_independent": True,
@@ -926,9 +926,11 @@ def assess_cmd(
     if not as_json:
         emit.line(f"Competitive differentiation assessment for {query_term!r}")
         emit.line(f"  Competitor activity: {dims['competitor_activity']['density']}")
-        emit.line(f"  Patentability:       {dims['patentability']['novelty_assessment']}")
+        emit.line(
+            f"  Patentability:       {dims['patentability']['novelty_assessment']}"
+        )
         emit.line(f"  FTO risk:            {dims['freedom_to_operate']['risk_level']}")
-        emit.line(f"  Dimensions independent: YES (never blended)")
+        emit.line("  Dimensions independent: YES (never blended)")
         emit.line(f"  FTO disclaimer: {FTO_DISCLAIMER}")
 
     for record in relays:
@@ -989,9 +991,7 @@ def report_cmd(
 
     # Write records as a batch file (caller assigns final IDs via controlstore).
     batch_path = target_dir / f"{slug}.differentiation-assessments.json"
-    batch_path.write_text(
-        json.dumps(records, indent=2) + "\n", encoding="utf-8"
-    )
+    batch_path.write_text(json.dumps(records, indent=2) + "\n", encoding="utf-8")
 
     emit.data("concept_ref", concept)
     emit.data("n_records", len(records))

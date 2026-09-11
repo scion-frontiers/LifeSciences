@@ -109,7 +109,9 @@ class ThresholdSet:
 
     def unresolved(self) -> list[str]:
         return sorted(
-            k for k, v in self.values.items() if v is UNRESOLVED and k not in self.overrides
+            k
+            for k, v in self.values.items()
+            if v is UNRESOLVED and k not in self.overrides
         )
 
     def sources(self) -> dict[str, str]:
@@ -776,8 +778,8 @@ _declare(
         "Brenk et al., ChemMedChem 2008;3:435–44"
     ),
     values={
-        "max_pains_hits": 0,       # any PAINS hit is a concern
-        "max_brenk_hits": 2,       # a few Brenk features are tolerated
+        "max_pains_hits": 0,  # any PAINS hit is a concern
+        "max_brenk_hits": 2,  # a few Brenk features are tolerated
         "max_aggregator_hits": 0,  # any aggregator pattern is a concern
     },
 )
@@ -1083,8 +1085,8 @@ _declare(
         "rate4site normalized evolutionary rates."
     ),
     values={
-        "conserved_grade_min": 7,   # grades 7-9 = conserved
-        "variable_grade_max": 3,    # grades 1-3 = variable
+        "conserved_grade_min": 7,  # grades 7-9 = conserved
+        "variable_grade_max": 3,  # grades 1-3 = variable
     },
 )
 
@@ -1106,7 +1108,7 @@ _declare(
         # These are LOWER bounds (i.e., score must be MORE negative to qualify).
         # Quiroga & Villarreal 2016 benchmark: -6.0 kcal/mol corresponds to
         # roughly low-micromolar predicted affinity.
-        "strong_binding_energy": -8.0,    # strong predicted binding
+        "strong_binding_energy": -8.0,  # strong predicted binding
         "moderate_binding_energy": -6.0,  # moderate predicted binding
         # No cited source for a "weak" cutoff exists — marked UNRESOLVED
         # per the project's unresolved threshold pattern.
@@ -1167,9 +1169,7 @@ _declare(
 _declare(
     "preprint-search",
     "1.0",
-    provenance=(
-        "Default parameters for preprint search; configurable per program."
-    ),
+    provenance=("Default parameters for preprint search; configurable per program."),
     values={
         "max_results_default": 20,
     },
@@ -1270,9 +1270,7 @@ def _load_program_file(project_root: Path) -> dict[str, Any]:
     try:
         data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     except Exception as exc:
-        raise ThresholdError(
-            f"could not parse {path}", detail=str(exc)
-        )
+        raise ThresholdError(f"could not parse {path}", detail=str(exc))
     if not isinstance(data, dict):
         raise ThresholdError(
             f"{path} must contain a mapping of threshold-set name to values"

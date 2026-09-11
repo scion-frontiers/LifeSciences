@@ -27,7 +27,6 @@ Covers:
 
 from __future__ import annotations
 
-import json
 import unittest
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -58,8 +57,7 @@ from dde.commands.similar import (
     _pubchem_similarity,
 )
 from dde.core import http
-from dde.core.errors import ArtifactError, EndpointUnavailable
-
+from dde.core.errors import ArtifactError
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -84,13 +82,15 @@ def _property_response(cids: list[int] | None = None) -> dict[str, Any]:
         cids = [2244, 5090, 3672]
     props = []
     for cid in cids:
-        props.append({
-            "CID": cid,
-            "CanonicalSMILES": f"SMILES_{cid}",
-            "IUPACName": f"compound_{cid}",
-            "MolecularWeight": 180.0 + cid % 100,
-            "InChIKey": f"INCHIKEY_{cid}",
-        })
+        props.append(
+            {
+                "CID": cid,
+                "CanonicalSMILES": f"SMILES_{cid}",
+                "IUPACName": f"compound_{cid}",
+                "MolecularWeight": 180.0 + cid % 100,
+                "InChIKey": f"INCHIKEY_{cid}",
+            }
+        )
     return {"PropertyTable": {"Properties": props}}
 
 
@@ -131,16 +131,18 @@ def _completed_artifact_no_hits() -> dict[str, Any]:
 
 def _completed_artifact_with_hits() -> dict[str, Any]:
     """Build a completed artifact with one hit above threshold."""
-    hits = [{
-        "source_db": "pubchem",
-        "cid": 2244,
-        "canonical_smiles": "CC(=O)OC1=CC=CC=C1C(=O)O",
-        "iupac_name": "aspirin",
-        "tanimoto": 0.92,
-        "tanimoto_is_lower_bound": True,
-        "molecular_weight": 180.16,
-        "inchikey": "BSYNRYMUTXBXSQ-UHFFFAOYSA-N",
-    }]
+    hits = [
+        {
+            "source_db": "pubchem",
+            "cid": 2244,
+            "canonical_smiles": "CC(=O)OC1=CC=CC=C1C(=O)O",
+            "iupac_name": "aspirin",
+            "tanimoto": 0.92,
+            "tanimoto_is_lower_bound": True,
+            "molecular_weight": 180.16,
+            "inchikey": "BSYNRYMUTXBXSQ-UHFFFAOYSA-N",
+        }
+    ]
     return _build_artifact(
         smiles="CCO",
         search_type="similarity",
@@ -157,15 +159,17 @@ def _completed_artifact_with_hits() -> dict[str, Any]:
 
 def _partial_artifact() -> dict[str, Any]:
     """Build a partial artifact (one backend succeeded, one failed)."""
-    hits = [{
-        "source_db": "chembl",
-        "chembl_id": "CHEMBL25",
-        "canonical_smiles": "CC(=O)OC1=CC=CC=C1C(=O)O",
-        "pref_name": "ASPIRIN",
-        "tanimoto": 0.90,
-        "molecular_weight": None,
-        "inchikey": "BSYNRYMUTXBXSQ-UHFFFAOYSA-N",
-    }]
+    hits = [
+        {
+            "source_db": "chembl",
+            "chembl_id": "CHEMBL25",
+            "canonical_smiles": "CC(=O)OC1=CC=CC=C1C(=O)O",
+            "pref_name": "ASPIRIN",
+            "tanimoto": 0.90,
+            "molecular_weight": None,
+            "inchikey": "BSYNRYMUTXBXSQ-UHFFFAOYSA-N",
+        }
+    ]
     return _build_artifact(
         smiles="CCO",
         search_type="similarity",
@@ -176,8 +180,11 @@ def _partial_artifact() -> dict[str, Any]:
         search_status="partial",
         failure_reason="pubchem: PubChem async search timed out",
         backend_results=[
-            {"backend": "pubchem", "status": "failed",
-             "failure_reason": "PubChem async search timed out"},
+            {
+                "backend": "pubchem",
+                "status": "failed",
+                "failure_reason": "PubChem async search timed out",
+            },
             {"backend": "chembl", "status": "completed", "hit_count": 1},
         ],
     )
@@ -203,9 +210,11 @@ class TestPubChemAsyncPolling(unittest.TestCase):
             call_count += 1
             return responses[min(call_count - 1, len(responses) - 1)]
 
-        with patch("dde.commands.similar.http.get_json", side_effect=mock_get_json), \
-             patch("time.sleep"), \
-             patch("time.monotonic", side_effect=[0.0, 1.0, 2.0, 3.0]):
+        with (
+            patch("dde.commands.similar.http.get_json", side_effect=mock_get_json),
+            patch("time.sleep"),
+            patch("time.monotonic", side_effect=[0.0, 1.0, 2.0, 3.0]),
+        ):
             result = _poll_pubchem_listkey("test-key", qps=5.0, timeout=120)
 
         self.assertEqual(result, cids)
@@ -215,7 +224,7 @@ class TestPubChemAsyncPolling(unittest.TestCase):
         responses = [
             {"Waiting": {"ListKey": "test-key"}},  # still waiting
             {"Waiting": {"ListKey": "test-key"}},  # still waiting
-            _cid_list_response([2244]),              # ready
+            _cid_list_response([2244]),  # ready
         ]
 
         call_count = 0
@@ -226,9 +235,11 @@ class TestPubChemAsyncPolling(unittest.TestCase):
             call_count += 1
             return result
 
-        with patch("dde.commands.similar.http.get_json", side_effect=mock_get_json), \
-             patch("time.sleep"), \
-             patch("time.monotonic", side_effect=[0.0, 1.0, 2.0, 3.0, 4.0]):
+        with (
+            patch("dde.commands.similar.http.get_json", side_effect=mock_get_json),
+            patch("time.sleep"),
+            patch("time.monotonic", side_effect=[0.0, 1.0, 2.0, 3.0, 4.0]),
+        ):
             result = _poll_pubchem_listkey("test-key", qps=5.0, timeout=120)
 
         self.assertEqual(result, [2244])
@@ -236,15 +247,18 @@ class TestPubChemAsyncPolling(unittest.TestCase):
 
     def test_poll_raises_on_timeout(self):
         """_poll_pubchem_listkey raises ArtifactError on timeout."""
+
         def mock_get_json(url, **kwargs):
             return {"Waiting": {"ListKey": "test-key"}}
 
         # Simulate time advancing past the timeout
         times = [0.0] + [float(i) for i in range(1, 200)]
 
-        with patch("dde.commands.similar.http.get_json", side_effect=mock_get_json), \
-             patch("time.sleep"), \
-             patch("time.monotonic", side_effect=times):
+        with (
+            patch("dde.commands.similar.http.get_json", side_effect=mock_get_json),
+            patch("time.sleep"),
+            patch("time.monotonic", side_effect=times),
+        ):
             with self.assertRaises(ArtifactError) as ctx:
                 _poll_pubchem_listkey("test-key", qps=5.0, timeout=5)
 
@@ -252,12 +266,15 @@ class TestPubChemAsyncPolling(unittest.TestCase):
 
     def test_poll_raises_on_unexpected_response(self):
         """_poll_pubchem_listkey raises ArtifactError on unexpected response."""
+
         def mock_get_json(url, **kwargs):
             return {"Fault": {"Message": "Server Error"}}
 
-        with patch("dde.commands.similar.http.get_json", side_effect=mock_get_json), \
-             patch("time.sleep"), \
-             patch("time.monotonic", side_effect=[0.0, 1.0]):
+        with (
+            patch("dde.commands.similar.http.get_json", side_effect=mock_get_json),
+            patch("time.sleep"),
+            patch("time.monotonic", side_effect=[0.0, 1.0]),
+        ):
             with self.assertRaises(ArtifactError) as ctx:
                 _poll_pubchem_listkey("test-key", qps=5.0, timeout=120)
 
@@ -290,9 +307,11 @@ class TestPubChemSimilarityAsync(unittest.TestCase):
                 return props
             return {}
 
-        with patch("dde.commands.similar.http.get_json", side_effect=mock_get_json), \
-             patch("time.sleep"), \
-             patch("time.monotonic", side_effect=[0.0, 1.0, 2.0]):
+        with (
+            patch("dde.commands.similar.http.get_json", side_effect=mock_get_json),
+            patch("time.sleep"),
+            patch("time.monotonic", side_effect=[0.0, 1.0, 2.0]),
+        ):
             hits = _pubchem_similarity("CCO", threshold=0.85, max_results=20)
 
         self.assertEqual(len(hits), 1)
@@ -394,7 +413,7 @@ class TestClassifyFailedSearch(unittest.TestCase):
     def test_failed_search_returns_indeterminate(self):
         """Failed search → verdict is 'indeterminate', not 'novel'."""
         artifact = _failed_artifact("all backends down")
-        verdict, relays = _classify_results(artifact, 0.85, 0.99)
+        verdict, _relays = _classify_results(artifact, 0.85, 0.99)
 
         self.assertEqual(verdict, "indeterminate")
         # Must NOT be "novel" — that would violate #84.
@@ -403,7 +422,7 @@ class TestClassifyFailedSearch(unittest.TestCase):
     def test_failed_search_fires_all_backends_failed_relay(self):
         """Failed search fires similar.all_backends_failed relay."""
         artifact = _failed_artifact("timeout on all backends")
-        verdict, relays = _classify_results(artifact, 0.85, 0.99)
+        _verdict, relays = _classify_results(artifact, 0.85, 0.99)
 
         relay_codes = [r["code"] for r in relays]
         self.assertIn("similar.all_backends_failed", relay_codes)
@@ -414,7 +433,9 @@ class TestClassifyFailedSearch(unittest.TestCase):
         artifact = _failed_artifact(reason)
         _, relays = _classify_results(artifact, 0.85, 0.99)
 
-        abf_relay = next(r for r in relays if r["code"] == "similar.all_backends_failed")
+        abf_relay = next(
+            r for r in relays if r["code"] == "similar.all_backends_failed"
+        )
         self.assertIn(reason, abf_relay["message"])
 
     def test_failed_search_still_fires_coverage_relay(self):
@@ -443,15 +464,22 @@ class TestClassifyCompletedSearch(unittest.TestCase):
 
     def test_completed_with_exact_match(self):
         """Hit with tanimoto >= exact_match_cutoff → exact-match."""
-        hits = [{
-            "source_db": "pubchem",
-            "cid": 2244,
-            "canonical_smiles": "CC(=O)OC1=CC=CC=C1C(=O)O",
-            "tanimoto": 1.0,
-            "inchikey": "TEST",
-        }]
+        hits = [
+            {
+                "source_db": "pubchem",
+                "cid": 2244,
+                "canonical_smiles": "CC(=O)OC1=CC=CC=C1C(=O)O",
+                "tanimoto": 1.0,
+                "inchikey": "TEST",
+            }
+        ]
         artifact = _build_artifact(
-            "CCO", "similarity", "pubchem", 0.85, 20, hits,
+            "CCO",
+            "similarity",
+            "pubchem",
+            0.85,
+            20,
+            hits,
             search_status="completed",
         )
         verdict, _ = _classify_results(artifact, 0.85, 0.99)
@@ -493,12 +521,16 @@ class TestClassifyPartialSearch(unittest.TestCase):
     def test_partial_search_no_hits_is_novel(self):
         """Partial search with no hits from the surviving backend → novel."""
         artifact = _build_artifact(
-            "CCO", "similarity", "both", 0.85, 20, [],
+            "CCO",
+            "similarity",
+            "both",
+            0.85,
+            20,
+            [],
             search_status="partial",
             failure_reason="pubchem: timeout",
             backend_results=[
-                {"backend": "pubchem", "status": "failed",
-                 "failure_reason": "timeout"},
+                {"backend": "pubchem", "status": "failed", "failure_reason": "timeout"},
                 {"backend": "chembl", "status": "completed", "hit_count": 0},
             ],
         )
@@ -547,6 +579,7 @@ class TestHttpRetryStatus(unittest.TestCase):
         # We verify by reading the source — the retry logic is in
         # http.request() and respects retry_after header.
         import inspect
+
         source = inspect.getsource(http.request)
         self.assertIn("Retry-After", source)
         self.assertIn("retry_after", source)
@@ -563,11 +596,13 @@ class TestRelayRegistration(unittest.TestCase):
     def test_search_incomplete_registered(self):
         """similar.search_incomplete is a registered relay code."""
         from dde.core.provenance import RELAY_CODES
+
         self.assertIn("similar.search_incomplete", RELAY_CODES)
 
     def test_all_backends_failed_registered(self):
         """similar.all_backends_failed is a registered relay code."""
         from dde.core.provenance import RELAY_CODES
+
         self.assertIn("similar.all_backends_failed", RELAY_CODES)
 
     def test_relay_function_accepts_new_codes(self):

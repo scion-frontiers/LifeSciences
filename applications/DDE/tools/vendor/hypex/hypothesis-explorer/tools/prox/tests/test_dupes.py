@@ -25,7 +25,6 @@ from prox.dupes import find_dupes, run_dupes
 
 from .conftest import make_graph_data
 
-
 # --- find_dupes ---
 
 
@@ -59,11 +58,13 @@ def test_find_dupes_no_duplicate_pairs() -> None:
 
 
 def test_find_dupes_multiple_pairs() -> None:
-    data = make_graph_data([
-        ("H-0001", "H-0002", 0.95),
-        ("H-0003", "H-0004", 0.85),
-        ("H-0001", "H-0003", 0.40),
-    ])
+    data = make_graph_data(
+        [
+            ("H-0001", "H-0002", 0.95),
+            ("H-0003", "H-0004", 0.85),
+            ("H-0001", "H-0003", 0.40),
+        ]
+    )
     dupes = find_dupes(data, threshold=0.80)
     assert len(dupes) == 2
     # Sorted by descending similarity
@@ -91,10 +92,12 @@ def test_find_dupes_pair_ordering() -> None:
 def dupes_dir(tmp_path: Path) -> Path:
     prox = tmp_path / "proximity"
     prox.mkdir()
-    data = make_graph_data([
-        ("H-0001", "H-0002", 0.92),
-        ("H-0003", "H-0004", 0.50),
-    ])
+    data = make_graph_data(
+        [
+            ("H-0001", "H-0002", 0.92),
+            ("H-0003", "H-0004", 0.50),
+        ]
+    )
     with open(prox / "graph.json", "w") as fh:
         json.dump(data, fh)
     return tmp_path

@@ -47,7 +47,6 @@ from typing import Literal
 
 from .errors import ArtifactError
 
-
 #: File extensions that signal PDB format (case-insensitive).
 _PDB_EXTENSIONS = frozenset({".pdb", ".ent"})
 
@@ -59,7 +58,15 @@ _CIF_EXTENSIONS = frozenset({".cif", ".mmcif"})
 _CIF_TOKENS = ("data_", "loop_", "_atom_site.", "_entry.id", "_cell.", "_audit.")
 
 #: Record types that appear at column 0 in PDB fixed-format files.
-_PDB_RECORD_TYPES = ("ATOM  ", "HETATM", "HEADER", "REMARK", "CRYST1", "SEQRES", "END   ")
+_PDB_RECORD_TYPES = (
+    "ATOM  ",
+    "HETATM",
+    "HEADER",
+    "REMARK",
+    "CRYST1",
+    "SEQRES",
+    "END   ",
+)
 
 #: How many bytes of the file head to read for content sniffing.  200 kB
 #: is enough to reach the coordinate block in any structure this project

@@ -35,15 +35,14 @@ from dde.commands.structure import (
     MAX_ASA_TIEN,
     _compute_rsa,
     _compute_sasa,
+    _format_residue_ranges,
     _generate_sphere_points,
     _parse_atoms_cif,
     _parse_atoms_pdb,
     _parse_glycosylation_sites,
     _parse_near_residues,
-    _format_residue_ranges,
 )
 from dde.core import provenance, thresholds
-
 
 # ---------------------------------------------------------------------------
 # Minimal test fixtures
@@ -149,7 +148,7 @@ class TestSpherePointGeneration(unittest.TestCase):
 
     def test_unit_sphere(self):
         pts = _generate_sphere_points(100)
-        norms = (pts ** 2).sum(axis=1) ** 0.5
+        norms = (pts**2).sum(axis=1) ** 0.5
         for n in norms:
             self.assertAlmostEqual(n, 1.0, places=10)
 
@@ -221,8 +220,18 @@ class TestRSAComputation(unittest.TestCase):
     def test_rsa_clamped_to_unit_interval(self):
         """RSA should be clamped to [0, 1]."""
         # Create an atom with huge SASA — RSA should still be <= 1.0.
-        atoms = [{"chain": "A", "resnum": 1, "resname": "ALA",
-                  "x": 0, "y": 0, "z": 0, "element": "C", "bfactor": 50}]
+        atoms = [
+            {
+                "chain": "A",
+                "resnum": 1,
+                "resname": "ALA",
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "element": "C",
+                "bfactor": 50,
+            }
+        ]
         # Give it a SASA larger than MAX_ASA for ALA (129.0).
         per_atom_sasa = [999.0]
         result = _compute_rsa(atoms, per_atom_sasa)
@@ -230,16 +239,36 @@ class TestRSAComputation(unittest.TestCase):
         self.assertLessEqual(result[0]["rsa"], 1.0)
 
     def test_rsa_zero_when_no_sasa(self):
-        atoms = [{"chain": "A", "resnum": 1, "resname": "ALA",
-                  "x": 0, "y": 0, "z": 0, "element": "C", "bfactor": 50}]
+        atoms = [
+            {
+                "chain": "A",
+                "resnum": 1,
+                "resname": "ALA",
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "element": "C",
+                "bfactor": 50,
+            }
+        ]
         per_atom_sasa = [0.0]
         result = _compute_rsa(atoms, per_atom_sasa)
         self.assertEqual(result[0]["rsa"], 0.0)
 
     def test_rsa_known_value(self):
         """RSA = SASA / MAX_ASA for ALA = 129.0."""
-        atoms = [{"chain": "A", "resnum": 1, "resname": "ALA",
-                  "x": 0, "y": 0, "z": 0, "element": "C", "bfactor": 50}]
+        atoms = [
+            {
+                "chain": "A",
+                "resnum": 1,
+                "resname": "ALA",
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "element": "C",
+                "bfactor": 50,
+            }
+        ]
         per_atom_sasa = [64.5]  # Half of 129.0
         result = _compute_rsa(atoms, per_atom_sasa)
         self.assertAlmostEqual(result[0]["rsa"], 0.5, places=2)
@@ -247,10 +276,26 @@ class TestRSAComputation(unittest.TestCase):
     def test_multiple_atoms_same_residue(self):
         """SASA is summed across atoms in the same residue."""
         atoms = [
-            {"chain": "A", "resnum": 1, "resname": "ALA",
-             "x": 0, "y": 0, "z": 0, "element": "C", "bfactor": 80},
-            {"chain": "A", "resnum": 1, "resname": "ALA",
-             "x": 1, "y": 0, "z": 0, "element": "C", "bfactor": 80},
+            {
+                "chain": "A",
+                "resnum": 1,
+                "resname": "ALA",
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "element": "C",
+                "bfactor": 80,
+            },
+            {
+                "chain": "A",
+                "resnum": 1,
+                "resname": "ALA",
+                "x": 1,
+                "y": 0,
+                "z": 0,
+                "element": "C",
+                "bfactor": 80,
+            },
         ]
         per_atom_sasa = [30.0, 30.0]
         result = _compute_rsa(atoms, per_atom_sasa)
@@ -259,8 +304,18 @@ class TestRSAComputation(unittest.TestCase):
 
     def test_nonstandard_residue_rsa_is_none(self):
         """Non-standard residues get RSA = None."""
-        atoms = [{"chain": "A", "resnum": 1, "resname": "UNK",
-                  "x": 0, "y": 0, "z": 0, "element": "C", "bfactor": 50}]
+        atoms = [
+            {
+                "chain": "A",
+                "resnum": 1,
+                "resname": "UNK",
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "element": "C",
+                "bfactor": 50,
+            }
+        ]
         per_atom_sasa = [50.0]
         result = _compute_rsa(atoms, per_atom_sasa)
         self.assertIsNone(result[0]["rsa"])
@@ -268,10 +323,26 @@ class TestRSAComputation(unittest.TestCase):
     def test_plddt_extracted(self):
         """Mean pLDDT (B-factor) is correctly computed per residue."""
         atoms = [
-            {"chain": "A", "resnum": 1, "resname": "ALA",
-             "x": 0, "y": 0, "z": 0, "element": "C", "bfactor": 80.0},
-            {"chain": "A", "resnum": 1, "resname": "ALA",
-             "x": 1, "y": 0, "z": 0, "element": "C", "bfactor": 90.0},
+            {
+                "chain": "A",
+                "resnum": 1,
+                "resname": "ALA",
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "element": "C",
+                "bfactor": 80.0,
+            },
+            {
+                "chain": "A",
+                "resnum": 1,
+                "resname": "ALA",
+                "x": 1,
+                "y": 0,
+                "z": 0,
+                "element": "C",
+                "bfactor": 90.0,
+            },
         ]
         per_atom_sasa = [30.0, 30.0]
         result = _compute_rsa(atoms, per_atom_sasa)
@@ -289,7 +360,7 @@ class TestExposureClassification(unittest.TestCase):
     def test_classification_thresholds(self):
         """Residues are classified by RSA thresholds."""
         ts = thresholds.load("surface")
-        rsa_exposed = ts.get("rsa_exposed")       # 0.25
+        rsa_exposed = ts.get("rsa_exposed")  # 0.25
         rsa_highly = ts.get("rsa_highly_exposed")  # 0.50
 
         # Buried: RSA <= 0.25
@@ -308,8 +379,9 @@ class TestExposureClassification(unittest.TestCase):
         # RSA ≈ 120/129 ≈ 0.93 → highly exposed.
         for res in per_residue:
             if res["rsa"] is not None:
-                self.assertGreater(res["rsa"], 0.5,
-                                   f"Residue {res['resnum']} should be highly exposed")
+                self.assertGreater(
+                    res["rsa"], 0.5, f"Residue {res['resnum']} should be highly exposed"
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -324,17 +396,11 @@ class TestBFactorPDB(unittest.TestCase):
         atoms = _parse_atoms_pdb(MULTI_RESIDUE_PDB)
         bfactors = [(a["resnum"], a["bfactor"]) for a in atoms]
         # Residue 1: bfactor 92.30
-        self.assertAlmostEqual(
-            next(b for rn, b in bfactors if rn == 1), 92.30
-        )
+        self.assertAlmostEqual(next(b for rn, b in bfactors if rn == 1), 92.30)
         # Residue 2 (GLY): bfactor 35.10
-        self.assertAlmostEqual(
-            next(b for rn, b in bfactors if rn == 2), 35.10
-        )
+        self.assertAlmostEqual(next(b for rn, b in bfactors if rn == 2), 35.10)
         # Residue 3 (LYS): bfactor 75.50
-        self.assertAlmostEqual(
-            next(b for rn, b in bfactors if rn == 3), 75.50
-        )
+        self.assertAlmostEqual(next(b for rn, b in bfactors if rn == 3), 75.50)
 
     def test_element_extracted(self):
         atoms = _parse_atoms_pdb(MULTI_RESIDUE_PDB)
@@ -515,9 +581,26 @@ class TestMaxASATable(unittest.TestCase):
     """Tien et al. 2013 maxASA table is complete for standard amino acids."""
 
     STANDARD_AA = [
-        "ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "GLY",
-        "HIS", "ILE", "LEU", "LYS", "MET", "PHE", "PRO", "SER",
-        "THR", "TRP", "TYR", "VAL",
+        "ALA",
+        "ARG",
+        "ASN",
+        "ASP",
+        "CYS",
+        "GLN",
+        "GLU",
+        "GLY",
+        "HIS",
+        "ILE",
+        "LEU",
+        "LYS",
+        "MET",
+        "PHE",
+        "PRO",
+        "SER",
+        "THR",
+        "TRP",
+        "TYR",
+        "VAL",
     ]
 
     def test_all_standard_aa_present(self):

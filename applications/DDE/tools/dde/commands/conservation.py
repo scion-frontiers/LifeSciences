@@ -33,7 +33,6 @@ by equal-frequency binning of rate4site normalized evolutionary rates.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import shutil
 import subprocess
@@ -113,14 +112,16 @@ def _parse_rate4site_output(text: str) -> list[dict[str, Any]]:
             coverage = parts[5]
         except (ValueError, IndexError):
             continue
-        residues.append({
-            "position": position,
-            "amino_acid": amino_acid,
-            "score": score,
-            "confidence_interval": ci,
-            "std": std,
-            "msa_coverage": coverage,
-        })
+        residues.append(
+            {
+                "position": position,
+                "amino_acid": amino_acid,
+                "score": score,
+                "confidence_interval": ci,
+                "std": std,
+                "msa_coverage": coverage,
+            }
+        )
     return residues
 
 
@@ -138,9 +139,7 @@ def _assign_grades(residues: list[dict[str, Any]]) -> None:
     if n == 0:
         return
     # Sort indices by score descending (highest score = most variable = grade 1)
-    sorted_indices = sorted(
-        range(n), key=lambda i: residues[i]["score"], reverse=True
-    )
+    sorted_indices = sorted(range(n), key=lambda i: residues[i]["score"], reverse=True)
     bin_size = n / 9
     for rank, idx in enumerate(sorted_indices):
         grade = min(int(rank / bin_size) + 1, 9)
@@ -228,8 +227,9 @@ def conservation() -> None:
 )
 @click.option(
     "--method",
-    type=click.Choice(["empirical_bayesian", "maximum_likelihood"],
-                       case_sensitive=False),
+    type=click.Choice(
+        ["empirical_bayesian", "maximum_likelihood"], case_sensitive=False
+    ),
     default="empirical_bayesian",
     show_default=True,
     help="Rate inference method.",
@@ -286,8 +286,10 @@ def compute_cmd(
         output_file = Path(tmpdir) / "r4s_output.txt"
         cmd = [
             r4s_path,
-            "-s", str(msa_path),
-            "-o", str(output_file),
+            "-s",
+            str(msa_path),
+            "-o",
+            str(output_file),
         ]
 
         # Substitution model
@@ -312,9 +314,9 @@ def compute_cmd(
         if completed.returncode != 0:
             raise ArtifactError(
                 f"rate4site failed for {msa_path.name}",
-                detail=(
-                    completed.stderr or completed.stdout or "no output"
-                ).strip()[:500],
+                detail=(completed.stderr or completed.stdout or "no output").strip()[
+                    :500
+                ],
                 remedy="check that the MSA file is a valid alignment and that "
                 "rate4site is correctly installed",
             )
@@ -356,9 +358,7 @@ def compute_cmd(
         "residues": residues,
     }
     result_path = target_dir / f"{query_name}.conservation.json"
-    result_path.write_text(
-        json.dumps(record, indent=2) + "\n", encoding="utf-8"
-    )
+    result_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
 
     # --- provenance sidecar ---
     msa_sha256 = provenance.sha256_file(msa_path)
@@ -380,9 +380,7 @@ def compute_cmd(
     sidecar.note("rate4site_binary", r4s_path)
     sidecar.add_output(result_path)
 
-    meta_path = sidecar.write(
-        target_dir / f"{query_name}.conservation.meta.json"
-    )
+    meta_path = sidecar.write(target_dir / f"{query_name}.conservation.meta.json")
 
     emit.data("query_name", query_name)
     emit.data("n_sequences", n_sequences)
@@ -440,8 +438,10 @@ def _run_alignment(
     if aligner_name == "muscle":
         cmd = [
             aligner_path,
-            "-align", str(input_fasta),
-            "-output", str(output_fasta),
+            "-align",
+            str(input_fasta),
+            "-output",
+            str(output_fasta),
         ]
     else:  # mafft
         cmd = [
@@ -463,7 +463,9 @@ def _run_alignment(
         if completed.returncode != 0:
             raise ArtifactError(
                 f"mafft failed on {input_fasta.name}",
-                detail=(completed.stderr or completed.stdout or "no output").strip()[:500],
+                detail=(completed.stderr or completed.stdout or "no output").strip()[
+                    :500
+                ],
                 remedy="check that the input file is a valid FASTA",
             )
         output_fasta.write_text(completed.stdout, encoding="utf-8")
@@ -471,7 +473,9 @@ def _run_alignment(
         if completed.returncode != 0:
             raise ArtifactError(
                 f"muscle failed on {input_fasta.name}",
-                detail=(completed.stderr or completed.stdout or "no output").strip()[:500],
+                detail=(completed.stderr or completed.stdout or "no output").strip()[
+                    :500
+                ],
                 remedy="check that the input file is a valid FASTA",
             )
         if not output_fasta.is_file():
@@ -566,16 +570,12 @@ def align_cmd(
     sidecar.note("aligner_binary", aligner_path)
     sidecar.add_output(aligned_path)
 
-    meta_path = sidecar.write(
-        target_dir / f"{query_name}.aligned.meta.json"
-    )
+    meta_path = sidecar.write(target_dir / f"{query_name}.aligned.meta.json")
 
     emit.data("query_name", query_name)
     emit.data("aligner", aligner_name)
     emit.data("n_sequences", n_aligned)
-    emit.line(
-        f"{query_name}: {n_aligned} sequences aligned with {aligner_name}"
-    )
+    emit.line(f"{query_name}: {n_aligned} sequences aligned with {aligner_name}")
     emit.path(project.relative(aligned_path), role="aligned_fasta")
     emit.path(project.relative(meta_path), role="sidecar")
     emit.flush()
@@ -676,7 +676,9 @@ def analyze_cmd(
         if pos not in scored_set:
             unscored_positions.append(pos)
 
-    coverage = round(scored_positions / canonical_length, 3) if canonical_length > 0 else 1.0
+    coverage = (
+        round(scored_positions / canonical_length, 3) if canonical_length > 0 else 1.0
+    )
 
     # --- most conserved region ---
     most_conserved_region = _find_most_conserved_region(residues)

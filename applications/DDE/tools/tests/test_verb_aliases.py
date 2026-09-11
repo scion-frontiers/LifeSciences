@@ -36,14 +36,20 @@ import unittest
 
 from click.testing import CliRunner
 
-from dde.commands.dice import dice, search_cmd as dice_search
-from dde.commands.allen import allen, search_cmd as allen_search
-from dde.commands.trials import trials, search_cmd as trials_search
-from dde.commands.patent import patent, search_cmd as patent_search
-from dde.commands.genetics import genetics, fetch_cmd as genetics_fetch
-from dde.commands.expression import expression, fetch_cmd as expression_fetch
-from dde.commands.alphafold import alphafold, fetch as alphafold_fetch
-
+from dde.commands.allen import allen
+from dde.commands.allen import search_cmd as allen_search
+from dde.commands.alphafold import alphafold
+from dde.commands.alphafold import fetch as alphafold_fetch
+from dde.commands.dice import dice
+from dde.commands.dice import search_cmd as dice_search
+from dde.commands.expression import expression
+from dde.commands.expression import fetch_cmd as expression_fetch
+from dde.commands.genetics import fetch_cmd as genetics_fetch
+from dde.commands.genetics import genetics
+from dde.commands.patent import patent
+from dde.commands.patent import search_cmd as patent_search
+from dde.commands.trials import search_cmd as trials_search
+from dde.commands.trials import trials
 
 # (group, primary_name, alias_name, primary_function)
 ALIAS_TABLE = [
@@ -63,7 +69,7 @@ class TestAliasResolution(unittest.TestCase):
     """Each alias resolves to a valid command in its group."""
 
     def test_alias_registered(self):
-        for group, primary, alias, _ in ALIAS_TABLE:
+        for group, _primary, alias, _ in ALIAS_TABLE:
             with self.subTest(group=group.name, alias=alias):
                 commands = group.list_commands(ctx=None)
                 self.assertIn(
@@ -73,7 +79,7 @@ class TestAliasResolution(unittest.TestCase):
                 )
 
     def test_primary_still_registered(self):
-        for group, primary, alias, _ in ALIAS_TABLE:
+        for group, primary, _alias, _ in ALIAS_TABLE:
             with self.subTest(group=group.name, primary=primary):
                 commands = group.list_commands(ctx=None)
                 self.assertIn(
@@ -87,7 +93,7 @@ class TestAliasCallback(unittest.TestCase):
     """The alias points to the same Click callback as the primary."""
 
     def test_same_callback(self):
-        for group, primary, alias, primary_fn in ALIAS_TABLE:
+        for group, primary, alias, _primary_fn in ALIAS_TABLE:
             with self.subTest(group=group.name, alias=alias):
                 primary_cmd = group.get_command(ctx=None, cmd_name=primary)
                 alias_cmd = group.get_command(ctx=None, cmd_name=alias)

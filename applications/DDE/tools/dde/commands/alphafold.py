@@ -111,7 +111,8 @@ def _canonical_length(accession: str) -> tuple[int | None, str | None]:
     """
     try:
         record = http.get_json(
-            f"{UNIPROT_API}/{accession}.json?fields=length,gene_primary", qps=qps_for_host("rest.uniprot.org")
+            f"{UNIPROT_API}/{accession}.json?fields=length,gene_primary",
+            qps=qps_for_host("rest.uniprot.org"),
         )
     except Exception:
         return None, None
@@ -123,7 +124,9 @@ def _canonical_length(accession: str) -> tuple[int | None, str | None]:
     return (length if isinstance(length, int) else None), symbol
 
 
-_UNIPROT_RE = re.compile(r"^[A-NR-Z][0-9][A-Z0-9]{3}[0-9]$|^[OPQ][0-9][A-Z0-9]{3}[0-9]$|^[A-Z0-9]{10}$")
+_UNIPROT_RE = re.compile(
+    r"^[A-NR-Z][0-9][A-Z0-9]{3}[0-9]$|^[OPQ][0-9][A-Z0-9]{3}[0-9]$|^[A-Z0-9]{10}$"
+)
 
 
 @click.group()
@@ -145,12 +148,15 @@ def alphafold() -> None:
 # verb for this group is ``fetch`` (AFDB resolves one UniProt accession
 # to one structure); ``search`` is the alias.
 
+
 @alphafold.command()
 @click.argument("uniprot_id")
 @out_option
 @output_options
 @pass_state
-def fetch(state: AppState, uniprot_id: str, out: str | None, as_json: bool, quiet: bool) -> None:
+def fetch(
+    state: AppState, uniprot_id: str, out: str | None, as_json: bool, quiet: bool
+) -> None:
     """Fetch an AlphaFold DB structure by UniProt accession.
 
     Writes the mmCIF, the PAE matrix, the AFDB API record, and a
@@ -251,7 +257,9 @@ def fetch(state: AppState, uniprot_id: str, out: str | None, as_json: bool, quie
     cif_url = entry.get("cifUrl")
     if cif_url:
         cif_path = target_dir / f"{stem}.cif"
-        cif_path.write_bytes(http.get_bytes(cif_url, qps=qps_for_host("alphafold.ebi.ac.uk")))
+        cif_path.write_bytes(
+            http.get_bytes(cif_url, qps=qps_for_host("alphafold.ebi.ac.uk"))
+        )
         sidecar.add_output(cif_path)
         outputs["structure"] = cif_path
     else:
@@ -260,11 +268,15 @@ def fetch(state: AppState, uniprot_id: str, out: str | None, as_json: bool, quie
     pae_url = entry.get("paeDocUrl")
     if pae_url:
         pae_path = target_dir / f"{stem}.pae.json"
-        pae_path.write_bytes(http.get_bytes(pae_url, qps=qps_for_host("alphafold.ebi.ac.uk")))
+        pae_path.write_bytes(
+            http.get_bytes(pae_url, qps=qps_for_host("alphafold.ebi.ac.uk"))
+        )
         sidecar.add_output(pae_path)
         outputs["pae"] = pae_path
     else:
-        sidecar.warn("AFDB record carries no paeDocUrl; domain analysis is unavailable.")
+        sidecar.warn(
+            "AFDB record carries no paeDocUrl; domain analysis is unavailable."
+        )
 
     if "structure" not in outputs:
         raise EndpointError(
@@ -307,9 +319,7 @@ def _plddt_assessment(entry: dict, t) -> tuple[dict, dict]:
     if confident_total >= conf_cut:
         if frac_vlow > notable:
             verdict = "confident-with-disorder"
-            statement = (
-                "Mostly confidently predicted, with notable disordered regions."
-            )
+            statement = "Mostly confidently predicted, with notable disordered regions."
         else:
             verdict = "confident"
             statement = "Confidently predicted and likely fully ordered."
@@ -370,7 +380,9 @@ def _find_sub_domains(pae, cutoff: float, min_size: int) -> list[list[int]]:
     return [[c[0] + 1, c[-1] + 1] for c in domains]
 
 
-def _merge_domains(bounds, pae, merge_cutoff: float, min_global: int) -> list[list[int]]:
+def _merge_domains(
+    bounds, pae, merge_cutoff: float, min_global: int
+) -> list[list[int]]:
     if not bounds:
         return []
     if len(bounds) == 1:
@@ -417,8 +429,12 @@ def _pae_assessment(pae_doc: Any, t) -> tuple[dict, dict]:
 
     flat = list(itertools.chain.from_iterable(pae))
     confident_cut = t.get("pae_confident_pair")
-    sub = _find_sub_domains(pae, t.get("pae_domain_cutoff"), t.get("pae_min_domain_size"))
-    domains = _merge_domains(sub, pae, t.get("pae_merge_cutoff"), t.get("pae_min_global_domain"))
+    sub = _find_sub_domains(
+        pae, t.get("pae_domain_cutoff"), t.get("pae_min_domain_size")
+    )
+    domains = _merge_domains(
+        sub, pae, t.get("pae_merge_cutoff"), t.get("pae_min_global_domain")
+    )
 
     if len(domains) == 1:
         verdict = "single-domain"
@@ -454,7 +470,9 @@ def _pae_assessment(pae_doc: Any, t) -> tuple[dict, dict]:
 @click.argument("uniprot_or_path")
 @click.option("--plddt-confident", type=float, default=None, help="Override threshold.")
 @click.option("--plddt-moderate", type=float, default=None, help="Override threshold.")
-@click.option("--pae-domain-cutoff", type=float, default=None, help="Override threshold.")
+@click.option(
+    "--pae-domain-cutoff", type=float, default=None, help="Override threshold."
+)
 @from_option
 @out_option
 @output_options
@@ -579,7 +597,9 @@ def analyze(
             "(docking, structural search) is not supported by this prediction. "
             "Restrict any further analysis to ordered domain boundaries."
         )
-    elif plddt_assessment["verdict"] == "mixed" and pae_assessment.get("ordered_domains"):
+    elif plddt_assessment["verdict"] == "mixed" and pae_assessment.get(
+        "ordered_domains"
+    ):
         advisories.append(
             "Mixed order/disorder: restrict downstream structural work to the "
             "listed ordered domains."
@@ -641,7 +661,9 @@ def analyze(
     analysis_path = target_dir / f"{stem}.alphafold.analysis.json"
     provenance.write_analysis(
         analysis_path,
-        source=project.relative(meta_path) if meta_path.is_file() else project.relative(record_path),
+        source=project.relative(meta_path)
+        if meta_path.is_file()
+        else project.relative(record_path),
         threshold_set=thresholds.tag,
         thresholds_applied=thresholds.applied(),
         threshold_sources=thresholds.sources(),
@@ -950,9 +972,14 @@ def _validate_af3_input(payload: dict) -> None:
 )
 @click.option("--deadline", type=float, default=1800.0, help="Total time cap, seconds.")
 @click.option(
-    "--cold-start-wait", type=float, default=25.0, help="Seconds between cold-start polls."
+    "--cold-start-wait",
+    type=float,
+    default=25.0,
+    help="Seconds between cold-start polls.",
 )
-@click.option("--busy-wait", type=float, default=15.0, help="Seconds between busy polls.")
+@click.option(
+    "--busy-wait", type=float, default=15.0, help="Seconds between busy polls."
+)
 @click.option(
     "--gateway-timeout-wait",
     type=float,
@@ -1106,9 +1133,13 @@ def predict(
             if status == 429:
                 wait = cold_start_wait if _COLD_START_RE.search(detail) else busy_wait
                 if _COLD_START_RE.search(detail):
-                    sidecar.warn("Endpoint was scaling from zero; cold-start delay incurred.")
+                    sidecar.warn(
+                        "Endpoint was scaling from zero; cold-start delay incurred."
+                    )
                 elif _BUSY_RE.search(detail):
-                    sidecar.warn("Endpoint was busy with another prediction; call was queued.")
+                    sidecar.warn(
+                        "Endpoint was busy with another prediction; call was queued."
+                    )
                 elapsed = round(time.time() - started)
                 click.echo(
                     f"waiting for AF3 endpoint (attempt {attempts}, "
@@ -1133,7 +1164,9 @@ def predict(
                 time.sleep(gateway_timeout_wait)
                 continue
 
-            raise EndpointError(f"AF3 endpoint returned HTTP {status}", detail=detail[:500])
+            raise EndpointError(
+                f"AF3 endpoint returned HTTP {status}", detail=detail[:500]
+            )
     finally:
         fcntl.flock(fd, fcntl.LOCK_UN)
         os.close(fd)
@@ -1154,7 +1187,9 @@ def predict(
     sidecar.add_output(raw_path)
 
     request_path = target_dir / f"{stem}.request.json"
-    request_path.write_text(json.dumps({"instances": [payload]}, indent=2), encoding="utf-8")
+    request_path.write_text(
+        json.dumps({"instances": [payload]}, indent=2), encoding="utf-8"
+    )
     sidecar.add_output(request_path)
 
     outputs = {"response": raw_path, "request": request_path}
@@ -1230,7 +1265,11 @@ def analyze_prediction(
         )
         verdict = "monomer"
         if ptm is not None:
-            verdict = "confident" if ptm >= thresholds.get("ptm_confident") else "low-confidence"
+            verdict = (
+                "confident"
+                if ptm >= thresholds.get("ptm_confident")
+                else "low-confidence"
+            )
     else:
         if iptm >= thresholds.get("iptm_confident"):
             verdict = "confident-interface"
@@ -1249,7 +1288,9 @@ def analyze_prediction(
 
     if has_clash:
         advisories.append("Prediction contains a steric clash (has_clash set).")
-    if disordered is not None and disordered > thresholds.get("fraction_disordered_notable"):
+    if disordered is not None and disordered > thresholds.get(
+        "fraction_disordered_notable"
+    ):
         advisories.append(
             f"{disordered:.0%} of the model is disordered; restrict downstream "
             "work to ordered regions."
@@ -1344,9 +1385,7 @@ def analyze_plddt(
 
     target_dir = project.artifact_dir(ARTIFACT_CLASS, out)
     analysis_path = target_dir / f"{stem}.plddt_analysis.json"
-    analysis_path.write_text(
-        json.dumps(result, indent=2) + "\n", encoding="utf-8"
-    )
+    analysis_path.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
 
     emit = Emitter(as_json=as_json, quiet=quiet)
     emit.data("per_residue_plddt", per_residue)

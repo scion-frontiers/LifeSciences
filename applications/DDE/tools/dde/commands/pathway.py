@@ -140,14 +140,16 @@ def _search_reactome(gene: str) -> tuple[bytes, list[dict[str, Any]]]:
     results = payload.get("results", [])
     for group in results:
         for entry in group.get("entries", []):
-            entries.append({
-                "source_db": "reactome",
-                "pathway_id": entry.get("stId", ""),
-                "name": entry.get("name", ""),
-                "species": entry.get("species", ["Homo sapiens"])[0]
-                if isinstance(entry.get("species"), list)
-                else entry.get("species", "Homo sapiens"),
-            })
+            entries.append(
+                {
+                    "source_db": "reactome",
+                    "pathway_id": entry.get("stId", ""),
+                    "name": entry.get("name", ""),
+                    "species": entry.get("species", ["Homo sapiens"])[0]
+                    if isinstance(entry.get("species"), list)
+                    else entry.get("species", "Homo sapiens"),
+                }
+            )
 
     return raw, entries
 
@@ -215,13 +217,15 @@ def _search_go(gene: str) -> tuple[bytes, list[dict[str, Any]]]:
                 existing["evidence_codes"].append(evidence)
             continue
         term_index[go_id] = len(entries)
-        entries.append({
-            "source_db": "go",
-            "term_id": go_id,
-            "name": annotation.get("goName", ""),
-            "aspect": annotation.get("goAspect", ""),
-            "evidence_codes": [evidence] if evidence else [],
-        })
+        entries.append(
+            {
+                "source_db": "go",
+                "term_id": go_id,
+                "name": annotation.get("goName", ""),
+                "aspect": annotation.get("goAspect", ""),
+                "evidence_codes": [evidence] if evidence else [],
+            }
+        )
 
     return raw, entries
 
@@ -305,7 +309,9 @@ def search_cmd(
         )
         raise Refusal(
             f"could not resolve {gene!r} to a known gene via HGNC",
-            detail=f"suggestions: {suggestions}" if suggestions else "no near matches found",
+            detail=f"suggestions: {suggestions}"
+            if suggestions
+            else "no near matches found",
             remedy="check the gene symbol or pass an Ensembl gene ID (ENSG...)",
         )
     echo = gene_res.echo_line()
@@ -331,8 +337,7 @@ def search_cmd(
         raise Refusal(
             f"no {source} results for {resolved!r}",
             detail=(
-                f"HGNC resolved {gene!r} to {resolved} "
-                f"(source: {gene_res.source})"
+                f"HGNC resolved {gene!r} to {resolved} (source: {gene_res.source})"
             ),
             remedy=(
                 "check the gene symbol; if querying GO, try the UniProt "
@@ -379,9 +384,7 @@ def search_cmd(
 
     # Write structured artifact
     artifact_path = target_dir / f"{resolved}.{suffix}.json"
-    artifact_path.write_text(
-        json.dumps(artifact, indent=2) + "\n", encoding="utf-8"
-    )
+    artifact_path.write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
     sidecar.add_output(artifact_path)
 
     meta_path = sidecar.write(target_dir / f"{resolved}.{suffix}.meta.json")
@@ -390,22 +393,16 @@ def search_cmd(
     emit.data("source", source)
     if source == "reactome":
         emit.data("n_pathways", len(entries))
-        emit.line(
-            f"{resolved}: {len(entries)} Reactome pathway(s) found"
-        )
+        emit.line(f"{resolved}: {len(entries)} Reactome pathway(s) found")
         for entry in entries[:5]:
             emit.line(f"  {entry['pathway_id']} — {entry['name']}")
         if len(entries) > 5:
             emit.line(f"  ... and {len(entries) - 5} more")
     else:
         emit.data("n_terms", len(entries))
-        emit.line(
-            f"{resolved}: {len(entries)} GO annotation(s) found"
-        )
+        emit.line(f"{resolved}: {len(entries)} GO annotation(s) found")
         for entry in entries[:5]:
-            emit.line(
-                f"  {entry['term_id']} [{entry['aspect']}] — {entry['name']}"
-            )
+            emit.line(f"  {entry['term_id']} [{entry['aspect']}] — {entry['name']}")
         if len(entries) > 5:
             emit.line(f"  ... and {len(entries) - 5} more")
 
@@ -505,15 +502,9 @@ def analyze_cmd(
         metrics = {
             "total_annotations": len(annotations),
             "aspects": list(aspects.keys()),
-            "molecular_function_count": len(
-                aspects.get("molecular_function", [])
-            ),
-            "biological_process_count": len(
-                aspects.get("biological_process", [])
-            ),
-            "cellular_component_count": len(
-                aspects.get("cellular_component", [])
-            ),
+            "molecular_function_count": len(aspects.get("molecular_function", [])),
+            "biological_process_count": len(aspects.get("biological_process", [])),
+            "cellular_component_count": len(aspects.get("cellular_component", [])),
         }
 
     analysis_path = provenance.write_analysis(

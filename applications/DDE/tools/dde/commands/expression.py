@@ -393,7 +393,9 @@ def _normalise_tissue(name: str) -> str:
 def _hpa_release() -> tuple[str | None, str | None]:
     """Scrape the HPA release label. Returns (version, failure_reason)."""
     try:
-        response = http.request("GET", DOWNLOAD_PAGE, qps=qps_for_host("www.proteinatlas.org"), timeout=45.0)
+        response = http.request(
+            "GET", DOWNLOAD_PAGE, qps=qps_for_host("www.proteinatlas.org"), timeout=45.0
+        )
     except Exception as exc:  # any transport or status failure
         return None, f"{type(exc).__name__}: {exc}"
     match = VERSION_RE.search(response.text or "")
@@ -450,7 +452,12 @@ def _resolve_gene(query: str) -> tuple[str, str, str]:
 
 def _search(term: str, columns: list[str]) -> list[dict[str, Any]]:
     url = f"{SEARCH_URL}?" + urlencode(
-        {"search": term, "format": "json", "columns": ",".join(columns), "compress": "no"}
+        {
+            "search": term,
+            "format": "json",
+            "columns": ",".join(columns),
+            "compress": "no",
+        }
     )
     payload = http.get_json(url, qps=qps_for_host("www.proteinatlas.org"), timeout=90.0)
     if not isinstance(payload, list):
@@ -468,7 +475,9 @@ def _fetch_bytes(url: str, what: str) -> bytes:
     through `json.loads`/`json.dumps` would change the digest for
     formatting reasons and break the provenance anchor.
     """
-    response = http.request("GET", url, qps=qps_for_host("www.proteinatlas.org"), timeout=90.0)
+    response = http.request(
+        "GET", url, qps=qps_for_host("www.proteinatlas.org"), timeout=90.0
+    )
     body = response.content
     try:
         json.loads(body.decode("utf-8"))
@@ -580,7 +589,11 @@ def _normalise_cell_type(name: str) -> str:
         if ct.lower() == key.lower():
             return ct
     # Substring match for suggestions
-    close = sorted(ct for ct in CELL_TYPES if key.lower() in ct.lower() or ct.lower() in key.lower())
+    close = sorted(
+        ct
+        for ct in CELL_TYPES
+        if key.lower() in ct.lower() or ct.lower() in key.lower()
+    )
     raise UsageError(
         f"{name!r} is not an HPA single-cell type",
         detail=(f"did you mean: {', '.join(close)}" if close else None),
@@ -626,6 +639,7 @@ def cell_types_cmd() -> None:
 # verb for this group is ``fetch`` (HPA resolves one gene to one
 # expression profile); ``search`` is the alias.
 
+
 @expression.command("fetch")
 @click.argument("gene")
 @out_option
@@ -655,7 +669,9 @@ def fetch_cmd(
         )
         raise Refusal(
             f"could not resolve {gene!r} to a known gene via HGNC",
-            detail=f"suggestions: {suggestions}" if suggestions else "no near matches found",
+            detail=f"suggestions: {suggestions}"
+            if suggestions
+            else "no near matches found",
             remedy="check the gene symbol or pass an Ensembl gene ID (ENSG...)",
         )
     echo = gene_res.echo_line()
@@ -679,8 +695,7 @@ def fetch_cmd(
         raise Refusal(
             f"gene {canonical!r} resolved via HGNC but HPA has no record",
             detail=(
-                f"HGNC resolved {gene!r} to {canonical} "
-                f"(source: {gene_res.source})"
+                f"HGNC resolved {gene!r} to {canonical} (source: {gene_res.source})"
             ),
             remedy=(
                 "HPA may not index this gene. This is a data gap, not "
@@ -936,7 +951,9 @@ def _locate(state: AppState, gene: str, target_dir: Path) -> tuple[Path, Path, s
     """Find the fetched artifacts for GENE, which may be a path or an ID."""
     candidate = Path(gene)
     if candidate.suffix or "/" in gene:
-        profile_path = candidate if candidate.is_absolute() else state.project().root / candidate
+        profile_path = (
+            candidate if candidate.is_absolute() else state.project().root / candidate
+        )
         if not profile_path.is_file():
             raise ArtifactError(f"tissue profile not found: {profile_path}")
         ensembl = profile_path.name.split(".")[0]
@@ -951,9 +968,9 @@ def _locate(state: AppState, gene: str, target_dir: Path) -> tuple[Path, Path, s
         matches = [
             meta
             for meta in sorted(target_dir.glob("ENSG*.meta.json"))
-            if (json.loads(meta.read_text(encoding="utf-8")).get("parameters") or {}).get(
-                "resolved_symbol", ""
-            ).upper()
+            if (json.loads(meta.read_text(encoding="utf-8")).get("parameters") or {})
+            .get("resolved_symbol", "")
+            .upper()
             == gene.upper()
         ]
         if not matches:
@@ -984,7 +1001,9 @@ def _locate_single_cell(
     """Find the fetched single-cell artifacts for GENE."""
     candidate = Path(gene)
     if candidate.suffix or "/" in gene:
-        profile_path = candidate if candidate.is_absolute() else state.project().root / candidate
+        profile_path = (
+            candidate if candidate.is_absolute() else state.project().root / candidate
+        )
         if not profile_path.is_file():
             raise ArtifactError(f"single-cell profile not found: {profile_path}")
         ensembl = profile_path.name.split(".")[0]
@@ -996,9 +1015,9 @@ def _locate_single_cell(
         matches = [
             meta
             for meta in sorted(target_dir.glob("ENSG*.sc-meta.json"))
-            if (json.loads(meta.read_text(encoding="utf-8")).get("parameters") or {}).get(
-                "resolved_symbol", ""
-            ).upper()
+            if (json.loads(meta.read_text(encoding="utf-8")).get("parameters") or {})
+            .get("resolved_symbol", "")
+            .upper()
             == gene.upper()
         ]
         if not matches:
@@ -1058,7 +1077,9 @@ def fetch_single_cell_cmd(
         )
         raise Refusal(
             f"could not resolve {gene!r} to a known gene via HGNC",
-            detail=f"suggestions: {suggestions}" if suggestions else "no near matches found",
+            detail=f"suggestions: {suggestions}"
+            if suggestions
+            else "no near matches found",
             remedy="check the gene symbol or pass an Ensembl gene ID (ENSG...)",
         )
     echo = gene_res.echo_line()
@@ -1081,8 +1102,7 @@ def fetch_single_cell_cmd(
         raise Refusal(
             f"gene {canonical!r} resolved via HGNC but HPA has no record",
             detail=(
-                f"HGNC resolved {gene!r} to {canonical} "
-                f"(source: {gene_res.source})"
+                f"HGNC resolved {gene!r} to {canonical} (source: {gene_res.source})"
             ),
             remedy=(
                 "HPA may not index this gene. This is a data gap, not "
@@ -1332,7 +1352,9 @@ def analyze_single_cell_cmd(
     emit.line(f"highest: {top_cell_type} {top_value} nCPM")
     if query_cell_types:
         for cell_type in wanted:
-            emit.line(f"  {cell_type}: {measured[cell_type]} nCPM -> {verdicts[cell_type]}")
+            emit.line(
+                f"  {cell_type}: {measured[cell_type]} nCPM -> {verdicts[cell_type]}"
+            )
     for warning in warnings:
         emit.line(f"warning: {warning}")
     for record_relay in relays:

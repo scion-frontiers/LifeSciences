@@ -107,16 +107,14 @@ def validate_assessment_core(core: Any) -> list[str]:
     # Validate schema tag
     if core.get("schema") != SCHEMA_TAG:
         errors.append(
-            f"assessment_core.schema must be {SCHEMA_TAG!r}, "
-            f"got {core.get('schema')!r}"
+            f"assessment_core.schema must be {SCHEMA_TAG!r}, got {core.get('schema')!r}"
         )
 
     # Validate strategy is a string
     strategy = core.get("strategy")
     if strategy is not None and not isinstance(strategy, str):
         errors.append(
-            f"assessment_core.strategy must be a string, "
-            f"got {type(strategy).__name__}"
+            f"assessment_core.strategy must be a string, got {type(strategy).__name__}"
         )
 
     # Validate source_artifact is a string
@@ -139,15 +137,12 @@ def validate_assessment_core(core: Any) -> list[str]:
             for i, candidate in enumerate(candidates):
                 if not isinstance(candidate, dict):
                     errors.append(
-                        f"candidate[{i}] must be a dict, "
-                        f"got {type(candidate).__name__}"
+                        f"candidate[{i}] must be a dict, got {type(candidate).__name__}"
                     )
                     continue
                 for key in REQUIRED_CANDIDATE_KEYS:
                     if key not in candidate:
-                        errors.append(
-                            f"candidate[{i}] missing required key '{key}'"
-                        )
+                        errors.append(f"candidate[{i}] missing required key '{key}'")
                 # Validate score shape
                 if "score" in candidate:
                     score_errors = validate_score(candidate["score"])

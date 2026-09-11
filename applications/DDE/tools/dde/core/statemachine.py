@@ -57,23 +57,30 @@ from .errors import Refusal
 # ---------------------------------------------------------------------------
 
 WORK_ORDER_TRANSITIONS: dict[str | None, set[str]] = {
-    None:                      {"proposed"},
-    "proposed":                {"committed"},
-    "committed":               {"queued"},
-    "queued":                  {"in_progress", "blocked", "cancelled"},
-    "in_progress":             {"submitted", "blocked", "cancelled"},
-    "submitted":               {"validation_failed", "mechanically_validated"},
-    "validation_failed":       {"in_progress", "mechanically_validated"},
-    "mechanically_validated":  {"scientifically_accepted", "under_scientific_review",
-                                "revision_requested", "scientifically_rejected"},
-    "under_scientific_review": {"scientifically_accepted", "revision_requested",
-                                "scientifically_rejected"},
+    None: {"proposed"},
+    "proposed": {"committed"},
+    "committed": {"queued"},
+    "queued": {"in_progress", "blocked", "cancelled"},
+    "in_progress": {"submitted", "blocked", "cancelled"},
+    "submitted": {"validation_failed", "mechanically_validated"},
+    "validation_failed": {"in_progress", "mechanically_validated"},
+    "mechanically_validated": {
+        "scientifically_accepted",
+        "under_scientific_review",
+        "revision_requested",
+        "scientifically_rejected",
+    },
+    "under_scientific_review": {
+        "scientifically_accepted",
+        "revision_requested",
+        "scientifically_rejected",
+    },
     # Terminal states — no outgoing transitions.
     "scientifically_accepted": set(),
-    "revision_requested":      set(),
+    "revision_requested": set(),
     "scientifically_rejected": set(),
-    "blocked":                 set(),
-    "cancelled":               set(),
+    "blocked": set(),
+    "cancelled": set(),
 }
 
 # ---------------------------------------------------------------------------
@@ -81,14 +88,14 @@ WORK_ORDER_TRANSITIONS: dict[str | None, set[str]] = {
 # ---------------------------------------------------------------------------
 
 RUN_TRANSITIONS: dict[str | None, set[str]] = {
-    None:        {"queued"},
-    "queued":    {"starting"},
-    "starting":  {"running"},
-    "running":   {"succeeded", "failed", "blocked", "cancelled"},
+    None: {"queued"},
+    "queued": {"starting"},
+    "starting": {"running"},
+    "running": {"succeeded", "failed", "blocked", "cancelled"},
     # Terminal states.
     "succeeded": set(),
-    "failed":    set(),
-    "blocked":   set(),
+    "failed": set(),
+    "blocked": set(),
     "cancelled": set(),
 }
 
@@ -109,12 +116,14 @@ for _src, _targets in RUN_TRANSITIONS.items():
     RUN_STATES.update(_targets)
 
 TERMINAL_WO_STATES: set[str] = {
-    state for state, targets in WORK_ORDER_TRANSITIONS.items()
+    state
+    for state, targets in WORK_ORDER_TRANSITIONS.items()
     if state is not None and not targets
 }
 
 TERMINAL_RUN_STATES: set[str] = {
-    state for state, targets in RUN_TRANSITIONS.items()
+    state
+    for state, targets in RUN_TRANSITIONS.items()
     if state is not None and not targets
 }
 

@@ -177,8 +177,7 @@ def run_cmd(
     for spec in structure_specs:
         if ":" not in spec:
             raise click.UsageError(
-                f"Structure spec must be CONCEPT_REF:STRUCTURE_ID, "
-                f"got {spec!r}"
+                f"Structure spec must be CONCEPT_REF:STRUCTURE_ID, got {spec!r}"
             )
         cref, struct_id = spec.split(":", 1)
         structures_by_concept.setdefault(cref, []).append(struct_id)
@@ -190,6 +189,7 @@ def run_cmd(
 
     # --- Run triage ---
     from click.testing import CliRunner
+
     from ..cli import cli as dde_cli
 
     outcome = run_triage(
@@ -224,8 +224,7 @@ def run_cmd(
             n_err = len(ws_result.errors)
             cancelled = " [CANCELLED]" if ws_result.cancelled else ""
             emit.line(
-                f"    {ws_name}: {n_assess} assessment(s), "
-                f"{n_err} error(s){cancelled}"
+                f"    {ws_name}: {n_assess} assessment(s), {n_err} error(s){cancelled}"
             )
             for a in ws_result.assessments:
                 status = a.get("evidence_status", "?")
@@ -299,21 +298,24 @@ def run_cmd(
         emit.path(output_path, role="triage-outcome")
 
     if as_json:
-        emit.data("concept_results", [
-            {
-                "concept_ref": cr.concept_ref,
-                "disposition": cr.disposition,
-                "workstreams": {
-                    ws: {
-                        "n_assessments": len(r.assessments),
-                        "evidence_statuses": r.evidence_statuses,
-                        "cancelled": r.cancelled,
-                    }
-                    for ws, r in cr.workstream_results.items()
-                },
-            }
-            for cr in outcome.concept_results
-        ])
+        emit.data(
+            "concept_results",
+            [
+                {
+                    "concept_ref": cr.concept_ref,
+                    "disposition": cr.disposition,
+                    "workstreams": {
+                        ws: {
+                            "n_assessments": len(r.assessments),
+                            "evidence_statuses": r.evidence_statuses,
+                            "cancelled": r.cancelled,
+                        }
+                        for ws, r in cr.workstream_results.items()
+                    },
+                }
+                for cr in outcome.concept_results
+            ],
+        )
         if outcome.persistence_errors:
             emit.data("persistence_errors", outcome.persistence_errors)
 

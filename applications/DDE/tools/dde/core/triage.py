@@ -48,14 +48,10 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
+from dde.core.errors import Refusal
 from dde.core.evidence import (
     ACTIONS,
-    EVIDENCE_STATUSES,
-    validate_assessment,
-    validate_decision,
 )
-from dde.core.errors import Refusal
-
 
 # ---------------------------------------------------------------------------
 # Budget
@@ -136,10 +132,7 @@ class WorkstreamResult:
     @property
     def evidence_statuses(self) -> list[str]:
         """Extract evidence statuses from all assessments."""
-        return [
-            a.get("evidence_status", "not_assessed")
-            for a in self.assessments
-        ]
+        return [a.get("evidence_status", "not_assessed") for a in self.assessments]
 
     @property
     def has_contradicted(self) -> bool:
@@ -202,7 +195,6 @@ def run_manufacturing_workstream(
     """
     import json
     import tempfile
-    from pathlib import Path
 
     result = WorkstreamResult(
         workstream="manufacturing",
@@ -211,23 +203,23 @@ def run_manufacturing_workstream(
 
     if runner is None:
         from click.testing import CliRunner
+
         runner = CliRunner()
 
     if cli is None:
         from dde.cli import cli as dde_cli
+
         cli = dde_cli
 
     # Write concept to a temp file for the CLI
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".json", delete=False
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         json.dump(concept, f, indent=2)
         concept_path = f.name
 
     try:
         args = ["manufacturing", "assess-stage0", concept_path, "--json"]
         if project_root:
-            args = ["--project", str(project_root)] + args
+            args = ["--project", str(project_root), *args]
 
         cli_result = runner.invoke(cli, args)
 
@@ -260,6 +252,7 @@ def run_manufacturing_workstream(
             )
     finally:
         import os
+
         os.unlink(concept_path)
 
     return result
@@ -289,45 +282,50 @@ def run_structure_screening_workstream(
 
     if not structures:
         # No structures available — record as not_assessed
-        result.assessments.append({
-            "schema": "dde.evidence-assessment.v1",
-            "id": "AR-PENDING",
-            "concept_ref": concept_ref,
-            "claim": (
-                f"Structural tractability for concept {concept_ref}"
-            ),
-            "evidence_status": "not_assessed",
-            "execution_outcome": "data_unavailable",
-            "rationale": (
-                "No structures provided for screening. "
-                "Structure screening requires at least one structure "
-                "identifier."
-            ),
-            "assessed_at": datetime.now(timezone.utc).strftime(
-                "%Y-%m-%dT%H:%M:%SZ"
-            ),
-            "assessed_by": "stage0-triage",
-        })
+        result.assessments.append(
+            {
+                "schema": "dde.evidence-assessment.v1",
+                "id": "AR-PENDING",
+                "concept_ref": concept_ref,
+                "claim": (f"Structural tractability for concept {concept_ref}"),
+                "evidence_status": "not_assessed",
+                "execution_outcome": "data_unavailable",
+                "rationale": (
+                    "No structures provided for screening. "
+                    "Structure screening requires at least one structure "
+                    "identifier."
+                ),
+                "assessed_at": datetime.now(timezone.utc).strftime(
+                    "%Y-%m-%dT%H:%M:%SZ"
+                ),
+                "assessed_by": "stage0-triage",
+            }
+        )
         return result
 
     if runner is None:
         from click.testing import CliRunner
+
         runner = CliRunner()
 
     if cli is None:
         from dde.cli import cli as dde_cli
+
         cli = dde_cli
 
     mod = modality or concept.get("modality", "small_molecule")
 
     args = [
-        "structure-screen", "run",
-        "--concept-ref", concept_ref,
-        "--modality", mod,
+        "structure-screen",
+        "run",
+        "--concept-ref",
+        concept_ref,
+        "--modality",
+        mod,
         "--json",
     ]
     if project_root:
-        args = ["--project", str(project_root)] + args
+        args = ["--project", str(project_root), *args]
 
     args.extend(structures)
 
@@ -392,10 +390,12 @@ def run_differentiation_workstream(
 
     if runner is None:
         from click.testing import CliRunner
+
         runner = CliRunner()
 
     if cli is None:
         from dde.cli import cli as dde_cli
+
         cli = dde_cli
 
     mod = modality or concept.get("modality")
@@ -409,7 +409,7 @@ def run_differentiation_workstream(
     if concept_ref:
         args.extend(["--concept", concept_ref])
     if project_root:
-        args = ["--project", str(project_root)] + args
+        args = ["--project", str(project_root), *args]
 
     cli_result = runner.invoke(cli, args)
 
@@ -435,8 +435,7 @@ def run_differentiation_workstream(
                         continue
             if not result.assessments:
                 result.errors.append(
-                    f"Differentiation output not parseable: "
-                    f"{cli_result.output[:200]}"
+                    f"Differentiation output not parseable: {cli_result.output[:200]}"
                 )
     else:
         result.errors.append(
@@ -590,7 +589,7 @@ def cancel_competing_alternatives(
             continue  # Already terminated/withdrawn — don't override
 
         # Mark remaining competing concepts as cancelled
-        for ws_name, ws_result in cr.workstream_results.items():
+        for _ws_name, ws_result in cr.workstream_results.items():
             if not ws_result.cancelled:
                 ws_result.cancelled = True
                 ws_result.cancel_reason = (
@@ -747,7 +746,8 @@ def run_triage(
 
         # Workstream 3: Manufacturing feasibility (cheapest, always runs)
         mfg_result = run_manufacturing_workstream(
-            concept, concept_ref,
+            concept,
+            concept_ref,
             project_root=project_root,
             runner=runner,
             cli=cli,
@@ -760,7 +760,9 @@ def run_triage(
         query_term = query_terms_by_concept.get(concept_ref)
         if query_term:
             diff_result = run_differentiation_workstream(
-                concept, concept_ref, query_term,
+                concept,
+                concept_ref,
+                query_term,
                 project_root=project_root,
                 runner=runner,
                 cli=cli,
@@ -773,7 +775,9 @@ def run_triage(
         structures = structures_by_concept.get(concept_ref, [])
         if structures:
             struct_result = run_structure_screening_workstream(
-                concept, concept_ref, structures,
+                concept,
+                concept_ref,
+                structures,
                 project_root=project_root,
                 runner=runner,
                 cli=cli,
@@ -786,9 +790,7 @@ def run_triage(
         budget.record_concept()
 
     # Portfolio-level evaluation (annotates, does not decide)
-    outcome.concept_results = evaluate_concept_portfolio(
-        outcome.concept_results
-    )
+    outcome.concept_results = evaluate_concept_portfolio(outcome.concept_results)
 
     # Cancel competing alternatives when a concept is accepted
     if accepted_concept_ref:
@@ -801,9 +803,7 @@ def run_triage(
                 continue
             if cr.is_terminal:
                 continue
-            any_cancelled = any(
-                ws.cancelled for ws in cr.workstream_results.values()
-            )
+            any_cancelled = any(ws.cancelled for ws in cr.workstream_results.values())
             if any_cancelled and cr.decision_record is None:
                 cr.disposition = "parked"
                 cr.disposition_reason = (
@@ -845,19 +845,23 @@ def run_triage(
                         aid = next_id(project_root, "assessment")
                         write_triage_assessment(project_root, assessment, aid)
                     except Refusal as exc:
-                        outcome.persistence_errors.append({
-                            "concept_ref": cr.concept_ref,
-                            "record_type": "assessment",
-                            "type": "refusal",
-                            "message": str(exc),
-                        })
+                        outcome.persistence_errors.append(
+                            {
+                                "concept_ref": cr.concept_ref,
+                                "record_type": "assessment",
+                                "type": "refusal",
+                                "message": str(exc),
+                            }
+                        )
                     except Exception as exc:
-                        outcome.persistence_errors.append({
-                            "concept_ref": cr.concept_ref,
-                            "record_type": "assessment",
-                            "type": "validation_error",
-                            "message": str(exc),
-                        })
+                        outcome.persistence_errors.append(
+                            {
+                                "concept_ref": cr.concept_ref,
+                                "record_type": "assessment",
+                                "type": "validation_error",
+                                "message": str(exc),
+                            }
+                        )
 
         # Persist decision records
         for cr in outcome.concept_results:
@@ -869,19 +873,23 @@ def run_triage(
             except Refusal as exc:
                 # Terminate without human approval — the gate works.
                 # The decision needs human approval before persistence.
-                outcome.persistence_errors.append({
-                    "concept_ref": cr.concept_ref,
-                    "record_type": "decision",
-                    "type": "refusal",
-                    "message": str(exc),
-                })
+                outcome.persistence_errors.append(
+                    {
+                        "concept_ref": cr.concept_ref,
+                        "record_type": "decision",
+                        "type": "refusal",
+                        "message": str(exc),
+                    }
+                )
             except Exception as exc:
-                outcome.persistence_errors.append({
-                    "concept_ref": cr.concept_ref,
-                    "record_type": "decision",
-                    "type": "validation_error",
-                    "message": str(exc),
-                })
+                outcome.persistence_errors.append(
+                    {
+                        "concept_ref": cr.concept_ref,
+                        "record_type": "decision",
+                        "type": "validation_error",
+                        "message": str(exc),
+                    }
+                )
 
     return outcome
 

@@ -79,14 +79,16 @@ def _parse_studies(data: dict[str, Any]) -> list[dict[str, Any]]:
         if not accession:
             continue
 
-        studies.append({
-            "accession": accession,
-            "name": study.get("name"),
-            "description": study.get("description"),
-            "cell_count": study.get("cell_count"),
-            "gene_count": study.get("gene_count"),
-            "study_url": f"{SCP_PORTAL}/study/{accession}",
-        })
+        studies.append(
+            {
+                "accession": accession,
+                "name": study.get("name"),
+                "description": study.get("description"),
+                "cell_count": study.get("cell_count"),
+                "gene_count": study.get("gene_count"),
+                "study_url": f"{SCP_PORTAL}/study/{accession}",
+            }
+        )
 
     return studies
 
@@ -137,9 +139,7 @@ def search_cmd(
 
     while len(all_studies) < max_results:
         search_url = (
-            f"{SCP_BASE}/search?type=study"
-            f"&terms={quote_plus(query)}"
-            f"&page={page}"
+            f"{SCP_BASE}/search?type=study&terms={quote_plus(query)}&page={page}"
         )
         response_data = http.get_json(search_url, timeout=60.0)
 
@@ -153,9 +153,7 @@ def search_cmd(
         if page == 1:
             matching = response_data.get("matching_results")
             if isinstance(matching, dict):
-                total_found = sum(
-                    v for v in matching.values() if isinstance(v, int)
-                )
+                total_found = sum(v for v in matching.values() if isinstance(v, int))
             elif isinstance(matching, int):
                 total_found = matching
 
@@ -185,9 +183,7 @@ def search_cmd(
     }
 
     artifact_path = target_dir / f"{slug}.scp.json"
-    artifact_path.write_text(
-        json.dumps(artifact, indent=2) + "\n", encoding="utf-8"
-    )
+    artifact_path.write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
 
     # Sidecar.
     sidecar = provenance.Sidecar(
@@ -219,8 +215,7 @@ def search_cmd(
         for s in studies[:5]:
             cell_info = f" ({s['cell_count']} cells)" if s.get("cell_count") else ""
             emit.line(
-                f"  {s['accession']}: "
-                f"{(s.get('name') or '(no name)')[:60]}{cell_info}"
+                f"  {s['accession']}: {(s.get('name') or '(no name)')[:60]}{cell_info}"
             )
         if len(studies) > 5:
             emit.line(f"  ... {len(studies) - 5} more in the artifact")
@@ -282,7 +277,9 @@ def analyze_cmd(
 
     # Top studies by cell count (descending).
     studies_with_cells = [
-        s for s in results if s.get("cell_count") and isinstance(s["cell_count"], (int, float))
+        s
+        for s in results
+        if s.get("cell_count") and isinstance(s["cell_count"], (int, float))
     ]
     studies_with_cells.sort(key=lambda s: s["cell_count"], reverse=True)
     top_by_cells = studies_with_cells[:10]

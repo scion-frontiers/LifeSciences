@@ -42,9 +42,8 @@ from ..common import (
     pass_state,
 )
 from ..core import controlstore
-from ..core.concepts import CONCEPT_SCHEMA, validate_concept
+from ..core.concepts import CONCEPT_SCHEMA
 from ..core.errors import ArtifactError, Refusal, SchemaError
-
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -194,9 +193,17 @@ _WO_NUM_PATTERN = re.compile(r"^WO-(\d{3,})")
 
 # Frontmatter fields that map directly to work-order record fields.
 _FRONTMATTER_FIELDS = [
-    "id", "state", "decision_question", "requested_role",
-    "stage", "cycle", "priority", "resource_class", "report_to",
-    "dependencies", "capabilities",
+    "id",
+    "state",
+    "decision_question",
+    "requested_role",
+    "stage",
+    "cycle",
+    "priority",
+    "resource_class",
+    "report_to",
+    "dependencies",
+    "capabilities",
 ]
 
 # Body sections (H2 headings) that map to work-order record fields.
@@ -241,7 +248,7 @@ def _parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
             detail="expected a closing '---' line after the frontmatter block",
         )
     frontmatter_text = rest[:end]
-    body = rest[end + 4:]  # skip \n---
+    body = rest[end + 4 :]  # skip \n---
 
     try:
         frontmatter = yaml.safe_load(frontmatter_text)
@@ -292,7 +299,7 @@ def _parse_bullet_list(text: str) -> list[str]:
         stripped = line.strip()
         for prefix in ("- ", "* ", "+ "):
             if stripped.startswith(prefix):
-                items.append(stripped[len(prefix):].strip())
+                items.append(stripped[len(prefix) :].strip())
                 break
     return items
 
@@ -316,7 +323,9 @@ def _parse_deliverables_section(text: str) -> dict[str, Any] | str:
             name, desc = item.split(": ", 1)
         else:
             name, desc = item, item
-        key = re.sub(r"[^a-z0-9_]", "", name.strip().lower().replace(" ", "_").replace("-", "_"))
+        key = re.sub(
+            r"[^a-z0-9_]", "", name.strip().lower().replace(" ", "_").replace("-", "_")
+        )
         if not key:
             return f"cannot derive a key from deliverable item: {item!r}"
         deliverables[key] = {"description": desc.strip()}
@@ -336,14 +345,16 @@ def _parse_alert_policy_section(text: str) -> dict[str, Any]:
             if ": " in item:
                 name, cond = item.split(": ", 1)
                 key = re.sub(
-                    r"[^a-z0-9_]", "",
+                    r"[^a-z0-9_]",
+                    "",
                     name.strip().lower().replace(" ", "_").replace("-", "_"),
                 )
                 if key:
                     policy[key] = {"condition": cond.strip()}
             else:
                 key = re.sub(
-                    r"[^a-z0-9_]", "",
+                    r"[^a-z0-9_]",
+                    "",
                     item.strip().lower().replace(" ", "_"),
                 )[:30]
                 if key:
@@ -379,9 +390,7 @@ def _build_markdown_record(
         if heading not in sections or not sections[heading].strip():
             missing_sections.append(heading)
     if missing_sections:
-        errors.append(
-            f"missing or empty body sections: {', '.join(missing_sections)}"
-        )
+        errors.append(f"missing or empty body sections: {', '.join(missing_sections)}")
 
     if errors:
         return "; ".join(errors)
@@ -538,7 +547,8 @@ def _check_prior_markdown_imports(
     # Only non-canonical IDs need this check; canonical ones are caught
     # by _conflict_exists downstream.
     non_canonical = [
-        (ident, data) for ident, data in md_records
+        (ident, data)
+        for ident, data in md_records
         if not _WO_ID_PATTERN.match(str(data.get("id", "")))
     ]
     if not non_canonical:
@@ -562,8 +572,7 @@ def _check_prior_markdown_imports(
                 f"(as {wo.get('id', '?')})",
                 detail="re-running resume against the same source is not "
                 "permitted once records have been imported",
-                remedy="the records from this source have already been "
-                "imported",
+                remedy="the records from this source have already been imported",
             )
 
 
@@ -631,7 +640,10 @@ def program() -> None:
 @output_options
 @pass_state
 def resume_cmd(
-    state: AppState, source: str, as_json: bool, quiet: bool,
+    state: AppState,
+    source: str,
+    as_json: bool,
+    quiet: bool,
 ) -> None:
     """Import accepted work orders from a prior phase's control plane.
 
@@ -697,7 +709,8 @@ def resume_cmd(
 
     # 1b. Markdown records.
     md_records, md_refused = _read_markdown_work_orders(
-        source_root, control_plane=has_control_plane,
+        source_root,
+        control_plane=has_control_plane,
     )
 
     # 1c. Guard against duplicate IDs across formats.
@@ -708,10 +721,8 @@ def resume_cmd(
         raise Refusal(
             f"work-order IDs found in both JSON and markdown sources: "
             f"{', '.join(sorted(overlap))}",
-            detail="each work order must exist in only one format "
-            "within the source",
-            remedy="remove the duplicate from either the JSON or "
-            "markdown source",
+            detail="each work order must exist in only one format within the source",
+            remedy="remove the duplicate from either the JSON or markdown source",
         )
 
     # 1d. Check for prior imports of non-canonical markdown WOs.
@@ -735,7 +746,8 @@ def resume_cmd(
                 existing_wo_nums.add(int(m.group(1)))
 
     md_records, id_remapping = _reconcile_markdown_ids(
-        md_records, existing_wo_nums,
+        md_records,
+        existing_wo_nums,
     )
 
     # 1f. Merge all source WOs.
@@ -864,9 +876,7 @@ def resume_cmd(
     if id_remapping:
         event_data["id_remapping"] = id_remapping
     if md_refused:
-        event_data["refused_markdown_files"] = {
-            name: reason for name, reason in md_refused
-        }
+        event_data["refused_markdown_files"] = dict(md_refused)
     controlstore.append_event(dest_root, event_data)
 
     # ------------------------------------------------------------------
@@ -881,16 +891,18 @@ def resume_cmd(
     if id_remapping:
         emit.data("id_remapping", id_remapping)
     if md_refused:
-        emit.data("refused_markdown_files", {
-            name: reason for name, reason in md_refused
-        })
+        emit.data(
+            "refused_markdown_files", dict(md_refused)
+        )
 
     if not quiet:
         emit.line(f"Source: {source_str}")
         emit.line("")
 
         if not imported_wo_ids:
-            emit.line("No work orders in scientifically_accepted state found in source.")
+            emit.line(
+                "No work orders in scientifically_accepted state found in source."
+            )
 
         if imported_wo_ids:
             emit.line("Imported:")
@@ -898,7 +910,10 @@ def resume_cmd(
                 format_note = ""
                 # Check if this was from markdown.
                 for _ident, d in accepted_wos:
-                    if d.get("id") == wo_id and d.get("imported_from_format") == "markdown":
+                    if (
+                        d.get("id") == wo_id
+                        and d.get("imported_from_format") == "markdown"
+                    ):
                         original = d.get("imported_original_id")
                         if original:
                             format_note = f" (from markdown, original ID: {original})"
@@ -926,9 +941,7 @@ def resume_cmd(
             f"{len(import_validations)} validations",
         ]
         if md_refused:
-            summary_parts.append(
-                f"{len(md_refused)} markdown file(s) refused"
-            )
+            summary_parts.append(f"{len(md_refused)} markdown file(s) refused")
         emit.line(f"Summary: {', '.join(summary_parts)}")
 
     emit.flush()
@@ -940,10 +953,12 @@ def resume_cmd(
 
 _SERIES_HEADING_RE = re.compile(r"^##\s+(.+)$")
 _CONCEPT_ID_RE_FIELD = re.compile(
-    r"\*\*Concept ID\*\*:\s*(.+?)(?:\s*$)", re.MULTILINE,
+    r"\*\*Concept ID\*\*:\s*(.+?)(?:\s*$)",
+    re.MULTILINE,
 )
 _STATUS_RE = re.compile(
-    r"\*\*Status\*\*:\s*(.+?)(?:\s*$)", re.MULTILINE,
+    r"\*\*Status\*\*:\s*(.+?)(?:\s*$)",
+    re.MULTILINE,
 )
 
 
@@ -973,7 +988,10 @@ def _parse_active_series(text: str) -> list[dict[str, Any]]:
         if cid_match:
             cid_val = cid_match.group(1).strip()
             if cid_val and cid_val.lower() not in (
-                "not yet assigned", "n/a", "none", "",
+                "not yet assigned",
+                "n/a",
+                "none",
+                "",
             ):
                 entry["concept_id"] = cid_val
 
@@ -1142,9 +1160,9 @@ def migrate_concepts_cmd(
         for identifier, record in proposed:
             emit.line(f"  {identifier}: {record['target_pathway']['gene']}")
 
-    emit.data("proposed", [
-        {"identifier": ident, "record": rec} for ident, rec in proposed
-    ])
+    emit.data(
+        "proposed", [{"identifier": ident, "record": rec} for ident, rec in proposed]
+    )
     emit.data("already_linked", [e["name"] for e in already_linked])
 
     if dry_run:
@@ -1161,12 +1179,15 @@ def migrate_concepts_cmd(
         written.append(identifier)
 
     # Log event.
-    controlstore.append_event(dest_root, {
-        "type": "concept.migrated",
-        "source": str(resolved),
-        "records": written,
-        "actor": None,
-    })
+    controlstore.append_event(
+        dest_root,
+        {
+            "type": "concept.migrated",
+            "source": str(resolved),
+            "records": written,
+            "actor": None,
+        },
+    )
 
     if not quiet:
         emit.line("")

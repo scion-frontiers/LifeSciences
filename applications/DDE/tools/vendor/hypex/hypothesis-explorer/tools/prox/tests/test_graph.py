@@ -23,10 +23,12 @@ import numpy as np
 import pytest
 import scipy.sparse
 
-from prox.graph import build_graph, load_embeddings, run_graph
+from prox.graph import build_graph, run_graph
 
 
-def _write_embeddings(run_dir: Path, matrix: scipy.sparse.csr_matrix, ids: list[str]) -> None:
+def _write_embeddings(
+    run_dir: Path, matrix: scipy.sparse.csr_matrix, ids: list[str]
+) -> None:
     """Helper: persist embeddings so graph commands can read them."""
     prox = run_dir / "proximity"
     prox.mkdir(parents=True, exist_ok=True)
@@ -117,7 +119,9 @@ def test_build_graph_threshold_stored() -> None:
 
 
 def test_run_graph_writes_file(tmp_path: Path) -> None:
-    mat = scipy.sparse.csr_matrix(np.array([[1, 0, 1], [1, 0, 1], [0, 1, 0]], dtype=float))
+    mat = scipy.sparse.csr_matrix(
+        np.array([[1, 0, 1], [1, 0, 1], [0, 1, 0]], dtype=float)
+    )
     _write_embeddings(tmp_path, mat, ["H-0001", "H-0002", "H-0003"])
 
     run_graph(tmp_path, threshold=0.3)

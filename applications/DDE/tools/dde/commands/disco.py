@@ -101,7 +101,9 @@ def _fetch_samples(
         body["disease"] = [disease]
 
     url = f"{DISCO_API}/repository/get_all_metadata"
-    resp = http.request("POST", url, json=body, qps=qps_for_host("immunesinglecell.com"), timeout=120.0)
+    resp = http.request(
+        "POST", url, json=body, qps=qps_for_host("immunesinglecell.com"), timeout=120.0
+    )
 
     try:
         raw_data = resp.json()
@@ -259,9 +261,7 @@ def search_cmd(
 
     # Write structured artifact.
     artifact_path = target_dir / f"{slug}.disco.artifact.json"
-    artifact_path.write_text(
-        json.dumps(artifact, indent=2) + "\n", encoding="utf-8"
-    )
+    artifact_path.write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
     sidecar.add_output(artifact_path)
 
     # Write sidecar.
@@ -285,9 +285,7 @@ def search_cmd(
                 f"  {s['sample_id']}: {s.get('project', '(no project)')[:60]}{cell_info}"
             )
         if len(artifact["samples"]) > 5:
-            emit.line(
-                f"  ... {len(artifact['samples']) - 5} more in the artifact"
-            )
+            emit.line(f"  ... {len(artifact['samples']) - 5} more in the artifact")
     emit.flush()
 
 
@@ -456,7 +454,9 @@ def analyze_cmd(
         for p, c in platform_counts.most_common(5):
             emit.line(f"    {p}: {c}")
     if min_cells is not None and max_cells is not None:
-        emit.line(f"  Cell counts: min={min_cells:,}, max={max_cells:,}, total={total_cells:,}")
+        emit.line(
+            f"  Cell counts: min={min_cells:,}, max={max_cells:,}, total={total_cells:,}"
+        )
     for record in relays:
         emit.line(f"relay {record['code']}: {record['message']}")
     emit.path(analysis_path, role="analysis")

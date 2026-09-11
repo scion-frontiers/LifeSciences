@@ -27,7 +27,6 @@ Covers:
 
 from __future__ import annotations
 
-import subprocess
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -49,10 +48,10 @@ from dde.commands.conservation import (
 from dde.core.errors import ArtifactError, DependencyError
 from dde.core.provenance import RELAY_CODES
 
-
 # ---------------------------------------------------------------------------
 # Coverage computation tests
 # ---------------------------------------------------------------------------
+
 
 def _make_residues(positions: list[int]) -> list[dict]:
     """Build minimal residue records for testing coverage."""
@@ -79,12 +78,11 @@ def _compute_coverage(
     scored_positions = n_positions
     scored_set = {r["position"] for r in residues}
     unscored_positions = [
-        pos for pos in range(1, canonical_length + 1)
-        if pos not in scored_set
+        pos for pos in range(1, canonical_length + 1) if pos not in scored_set
     ]
-    coverage = round(
-        scored_positions / canonical_length, 3
-    ) if canonical_length > 0 else 1.0
+    coverage = (
+        round(scored_positions / canonical_length, 3) if canonical_length > 0 else 1.0
+    )
     return coverage, scored_positions, canonical_length, unscored_positions
 
 
@@ -111,20 +109,20 @@ class TestCoverageComputation(unittest.TestCase):
     def test_unscored_positions_list(self):
         # Positions 1-3 scored, 4-5 unscored
         residues = _make_residues([1, 2, 3])
-        coverage, scored, total, unscored = _compute_coverage(residues, 5)
+        coverage, _scored, _total, unscored = _compute_coverage(residues, 5)
         self.assertEqual(unscored, [4, 5])
         self.assertAlmostEqual(coverage, 0.6, places=1)
 
     def test_non_contiguous_scored(self):
         # Gaps in the middle
         residues = _make_residues([1, 3, 5, 7, 9])
-        coverage, scored, total, unscored = _compute_coverage(residues, 10)
+        coverage, scored, _total, unscored = _compute_coverage(residues, 10)
         self.assertEqual(scored, 5)
         self.assertEqual(unscored, [2, 4, 6, 8, 10])
         self.assertEqual(coverage, 0.5)
 
     def test_zero_length_canonical(self):
-        coverage, scored, total, unscored = _compute_coverage([], 0)
+        coverage, _scored, _total, _unscored = _compute_coverage([], 0)
         self.assertEqual(coverage, 1.0)
 
 
@@ -202,14 +200,18 @@ class TestFindAligner(unittest.TestCase):
 
     @patch("shutil.which")
     def test_finds_muscle(self, mock_which):
-        mock_which.side_effect = lambda name: "/usr/local/bin/muscle" if name == "muscle" else None
+        mock_which.side_effect = lambda name: (
+            "/usr/local/bin/muscle" if name == "muscle" else None
+        )
         path, name = _find_aligner(None)
         self.assertEqual(name, "muscle")
         self.assertEqual(path, "/usr/local/bin/muscle")
 
     @patch("shutil.which")
     def test_finds_mafft(self, mock_which):
-        mock_which.side_effect = lambda name: "/usr/bin/mafft" if name == "mafft" else None
+        mock_which.side_effect = lambda name: (
+            "/usr/bin/mafft" if name == "mafft" else None
+        )
         path, name = _find_aligner(None)
         self.assertEqual(name, "mafft")
         self.assertEqual(path, "/usr/bin/mafft")
@@ -222,8 +224,9 @@ class TestFindAligner(unittest.TestCase):
             if name == "mafft":
                 return "/usr/bin/mafft"
             return None
+
         mock_which.side_effect = which_fn
-        path, name = _find_aligner("mafft")
+        _path, name = _find_aligner("mafft")
         self.assertEqual(name, "mafft")
 
     @patch("shutil.which")
@@ -237,8 +240,10 @@ class TestFindAligner(unittest.TestCase):
     @patch("shutil.which")
     def test_falls_back_to_other(self, mock_which):
         """When preferred aligner is missing, uses the other."""
-        mock_which.side_effect = lambda name: "/usr/bin/mafft" if name == "mafft" else None
-        path, name = _find_aligner("muscle")
+        mock_which.side_effect = lambda name: (
+            "/usr/bin/mafft" if name == "mafft" else None
+        )
+        _path, name = _find_aligner("muscle")
         self.assertEqual(name, "mafft")
 
 
@@ -294,8 +299,10 @@ class TestRunAlignment(unittest.TestCase):
         )
         with self.assertRaises(ArtifactError) as ctx:
             _run_alignment(
-                "/usr/local/bin/muscle", "muscle",
-                Path("/tmp/input.fasta"), Path("/tmp/output.fasta"),
+                "/usr/local/bin/muscle",
+                "muscle",
+                Path("/tmp/input.fasta"),
+                Path("/tmp/output.fasta"),
             )
         self.assertIn("muscle failed", str(ctx.exception))
 
@@ -308,8 +315,10 @@ class TestRunAlignment(unittest.TestCase):
         )
         with self.assertRaises(ArtifactError) as ctx:
             _run_alignment(
-                "/usr/bin/mafft", "mafft",
-                Path("/tmp/input.fasta"), Path("/tmp/output.fasta"),
+                "/usr/bin/mafft",
+                "mafft",
+                Path("/tmp/input.fasta"),
+                Path("/tmp/output.fasta"),
             )
         self.assertIn("mafft failed", str(ctx.exception))
 

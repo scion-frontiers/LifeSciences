@@ -145,9 +145,7 @@ def json_or_quiet_options(func):
     func = click.option(
         "--json", "as_json", is_flag=True, help="Emit a machine-readable JSON record."
     )(func)
-    func = click.option(
-        "--quiet", is_flag=True, help="Emit output paths only."
-    )(func)
+    func = click.option("--quiet", is_flag=True, help="Emit output paths only.")(func)
     return func
 
 

@@ -51,7 +51,7 @@ from ..common import (
     pass_state,
 )
 from ..core import http, provenance
-from ..core.errors import ArtifactError, Refusal, SchemaError
+from ..core.errors import ArtifactError, SchemaError
 from ..core.qps import qps_for_host
 
 TOOL = "spatialdb"
@@ -79,17 +79,19 @@ def _parse_records(data: list[list[str]]) -> list[dict[str, Any]]:
     for row in data:
         if len(row) < 9:
             continue
-        records.append({
-            "ensembl_id": _strip_html(row[0]),
-            "gene": _strip_html(row[1]),
-            "species": _strip_html(row[2]),
-            "tissue": _strip_html(row[3]),
-            "sample": _strip_html(row[4]),
-            "replication": _strip_html(row[5]),
-            "platform": _strip_html(row[6]),
-            "technique": _strip_html(row[7]),
-            "pmid": _strip_html(row[8]),
-        })
+        records.append(
+            {
+                "ensembl_id": _strip_html(row[0]),
+                "gene": _strip_html(row[1]),
+                "species": _strip_html(row[2]),
+                "tissue": _strip_html(row[3]),
+                "sample": _strip_html(row[4]),
+                "replication": _strip_html(row[5]),
+                "platform": _strip_html(row[6]),
+                "technique": _strip_html(row[7]),
+                "pmid": _strip_html(row[8]),
+            }
+        )
     return records
 
 
@@ -212,9 +214,7 @@ def search_cmd(
 
     # Write structured artifact.
     artifact_path = target_dir / f"{slug}.spatialdb.artifact.json"
-    artifact_path.write_text(
-        json.dumps(artifact, indent=2) + "\n", encoding="utf-8"
-    )
+    artifact_path.write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
     sidecar.add_output(artifact_path)
 
     # Write sidecar.

@@ -69,8 +69,7 @@ PUBCHEM_API = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
 CHEMBL_API = "https://www.ebi.ac.uk/chembl/api/data"
 
 PUBCHEM_PROPERTIES = (
-    "CanonicalSMILES,IUPACName,MolecularFormula,"
-    "MolecularWeight,InChI,InChIKey"
+    "CanonicalSMILES,IUPACName,MolecularFormula,MolecularWeight,InChI,InChIKey"
 )
 
 CHEMBL_RE = re.compile(r"^CHEMBL\d+$", re.IGNORECASE)
@@ -126,11 +125,16 @@ def _pubchem_by_cid(cid: str) -> tuple[str, bytes]:
         f"/property/{PUBCHEM_PROPERTIES}/JSON"
     )
     response = http.request(
-        "GET", url, qps=qps_for_host("pubchem.ncbi.nlm.nih.gov"), timeout=60.0, tolerate_status=(404,),
+        "GET",
+        url,
+        qps=qps_for_host("pubchem.ncbi.nlm.nih.gov"),
+        timeout=60.0,
+        tolerate_status=(404,),
     )
     if response.status_code == 404:
         return url, json.dumps(
-            {"_not_found": True, "cid": cid, "http_status": 404}, indent=2,
+            {"_not_found": True, "cid": cid, "http_status": 404},
+            indent=2,
         ).encode("utf-8")
     body = response.content
     try:
@@ -150,11 +154,16 @@ def _pubchem_by_name(name: str) -> tuple[str, bytes]:
         f"/property/{PUBCHEM_PROPERTIES}/JSON"
     )
     response = http.request(
-        "GET", url, qps=qps_for_host("pubchem.ncbi.nlm.nih.gov"), timeout=60.0, tolerate_status=(404,),
+        "GET",
+        url,
+        qps=qps_for_host("pubchem.ncbi.nlm.nih.gov"),
+        timeout=60.0,
+        tolerate_status=(404,),
     )
     if response.status_code == 404:
         return url, json.dumps(
-            {"_not_found": True, "name": name, "http_status": 404}, indent=2,
+            {"_not_found": True, "name": name, "http_status": 404},
+            indent=2,
         ).encode("utf-8")
     body = response.content
     try:
@@ -172,7 +181,11 @@ def _chembl_by_id(chembl_id: str) -> tuple[str, bytes]:
     """
     url = f"{CHEMBL_API}/molecule/{quote(chembl_id, safe='')}.json"
     response = http.request(
-        "GET", url, qps=qps_for_host("www.ebi.ac.uk"), timeout=60.0, tolerate_status=(404,),
+        "GET",
+        url,
+        qps=qps_for_host("www.ebi.ac.uk"),
+        timeout=60.0,
+        tolerate_status=(404,),
     )
     if response.status_code == 404:
         return url, json.dumps(
@@ -194,11 +207,16 @@ def _chembl_by_name(name: str) -> tuple[str, bytes]:
     """
     url = f"{CHEMBL_API}/molecule/search.json?" + urlencode({"q": name})
     response = http.request(
-        "GET", url, qps=qps_for_host("www.ebi.ac.uk"), timeout=60.0, tolerate_status=(404,),
+        "GET",
+        url,
+        qps=qps_for_host("www.ebi.ac.uk"),
+        timeout=60.0,
+        tolerate_status=(404,),
     )
     if response.status_code == 404:
         return url, json.dumps(
-            {"_not_found": True, "name": name, "http_status": 404}, indent=2,
+            {"_not_found": True, "name": name, "http_status": 404},
+            indent=2,
         ).encode("utf-8")
     body = response.content
     try:
@@ -224,20 +242,22 @@ def _pubchem_matches(payload: Any) -> list[dict[str, Any]]:
     for p in props_list:
         if not isinstance(p, dict):
             continue
-        records.append({
-            "source": "pubchem",
-            "cid": p.get("CID"),
-            "canonical_name": p.get("IUPACName"),
-            # PubChem returns ConnectivitySMILES, not CanonicalSMILES,
-            # despite the URL parameter name.
-            "canonical_smiles": (
-                p.get("ConnectivitySMILES") or p.get("CanonicalSMILES")
-            ),
-            "molecular_formula": p.get("MolecularFormula"),
-            "molecular_weight": p.get("MolecularWeight"),
-            "inchi": p.get("InChI"),
-            "inchi_key": p.get("InChIKey"),
-        })
+        records.append(
+            {
+                "source": "pubchem",
+                "cid": p.get("CID"),
+                "canonical_name": p.get("IUPACName"),
+                # PubChem returns ConnectivitySMILES, not CanonicalSMILES,
+                # despite the URL parameter name.
+                "canonical_smiles": (
+                    p.get("ConnectivitySMILES") or p.get("CanonicalSMILES")
+                ),
+                "molecular_formula": p.get("MolecularFormula"),
+                "molecular_weight": p.get("MolecularWeight"),
+                "inchi": p.get("InChI"),
+                "inchi_key": p.get("InChIKey"),
+            }
+        )
     return records
 
 
@@ -268,16 +288,18 @@ def _chembl_matches(payload: Any) -> list[dict[str, Any]]:
             continue
         structures = mol.get("molecule_structures") or {}
         properties = mol.get("molecule_properties") or {}
-        records.append({
-            "source": "chembl",
-            "chembl_id": mol.get("molecule_chembl_id"),
-            "canonical_name": mol.get("pref_name"),
-            "canonical_smiles": structures.get("canonical_smiles"),
-            "molecular_formula": properties.get("full_molformula"),
-            "molecular_weight": properties.get("full_mwt"),
-            "molecule_type": mol.get("molecule_type"),
-            "max_phase": mol.get("max_phase"),
-        })
+        records.append(
+            {
+                "source": "chembl",
+                "chembl_id": mol.get("molecule_chembl_id"),
+                "canonical_name": mol.get("pref_name"),
+                "canonical_smiles": structures.get("canonical_smiles"),
+                "molecular_formula": properties.get("full_molformula"),
+                "molecular_weight": properties.get("full_mwt"),
+                "molecule_type": mol.get("molecule_type"),
+                "max_phase": mol.get("max_phase"),
+            }
+        )
     return records
 
 
@@ -528,13 +550,9 @@ def analyze_cmd(
     elif outcome == "ambiguous":
         for m in matches[:5]:
             label = m.get("cid") or m.get("chembl_id") or "?"
-            emit.line(
-                f"  {m.get('source')} {label}: {m.get('canonical_name')}"
-            )
+            emit.line(f"  {m.get('source')} {label}: {m.get('canonical_name')}")
         if len(matches) > 5:
-            emit.line(
-                f"  … {len(matches) - 5} more in the analysis artifact"
-            )
+            emit.line(f"  … {len(matches) - 5} more in the analysis artifact")
     for record in relays:
         emit.line(f"relay {record['code']}: {record['message']}")
     emit.path(analysis_path, role="analysis")

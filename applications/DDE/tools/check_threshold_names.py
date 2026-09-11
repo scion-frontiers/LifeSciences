@@ -68,7 +68,7 @@ from pathlib import Path
 #: both mean the same thing here — this checker never reached an opinion.
 try:
     from dde.core import thresholds as th
-except Exception as exc:  # noqa: BLE001 — any import-time failure is cannot-run
+except Exception as exc:
     th = None  # type: ignore[assignment]
     _IMPORT_FAILURE: Exception | None = exc
 else:
@@ -130,17 +130,24 @@ def relay_codes_from_source() -> list[str]:
     a module solely to read a constant, it inherits every dependency that
     module has, for none of the benefit.
     """
-    source = (ROOT / "tools" / "dde" / "core" / "provenance.py").read_text(encoding="utf-8")
+    source = (ROOT / "tools" / "dde" / "core" / "provenance.py").read_text(
+        encoding="utf-8"
+    )
     tree = ast.parse(source)
     for node in ast.walk(tree):
         target = None
         if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
             target = node.target.id
-        elif isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+        elif (
+            isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+        ):
             target = node.targets[0].id
         if target == "RELAY_CODES" and isinstance(node.value, ast.Dict):
             return [
-                k.value for k in node.value.keys
+                k.value
+                for k in node.value.keys
                 if isinstance(k, ast.Constant) and isinstance(k.value, str)
             ]
     return []
@@ -181,7 +188,10 @@ def sets_loaded_by_module(known_sets: set[str]) -> dict[str, set[str]]:
         for node in tree.body:
             if not isinstance(node, ast.Assign):
                 continue
-            if not (isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)):
+            if not (
+                isinstance(node.value, ast.Constant)
+                and isinstance(node.value.value, str)
+            ):
                 continue
             for target in node.targets:
                 if isinstance(target, ast.Name):
@@ -191,7 +201,11 @@ def sets_loaded_by_module(known_sets: set[str]) -> dict[str, set[str]]:
             if not isinstance(node, ast.Call):
                 continue
             func = node.func
-            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+            name = (
+                func.attr
+                if isinstance(func, ast.Attribute)
+                else getattr(func, "id", "")
+            )
             # `thresholds.load(...)` and the `load_thresholds(...)` wrapper in
             # common.py. Matching only the first found nothing at all, and the
             # tool reported success on a check that had never run.
@@ -316,7 +330,7 @@ def main() -> int:
     no_tools: list[str] = []
     cited: set[str] = set()
     skill_files = sorted(SKILLS.glob("*/SKILL.md")) + sorted(SKILLS.glob("*/*.md"))
-    skill_files = sorted({p for p in skill_files})
+    skill_files = sorted(set(skill_files))
 
     # Nothing to compare against is not agreement. Each of these three would
     # otherwise leave the tool comparing citations against an empty pool,
@@ -424,7 +438,9 @@ def main() -> int:
         )
     print(f"{len(cited)} of {len(all_names)} declared thresholds are cited by a skill")
     if uncited:
-        print("\nDeclared but never cited (not an error; a number nobody was told about):")
+        print(
+            "\nDeclared but never cited (not an error; a number nobody was told about):"
+        )
         for name in uncited:
             print(f"  {name}  [{owner[name]}]")
 

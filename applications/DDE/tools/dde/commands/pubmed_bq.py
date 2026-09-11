@@ -67,20 +67,111 @@ DEFAULT_TABLE = "publications"
 EXPECTED_COLUMNS = ("pmid", "title", "abstract", "journal", "year", "authors", "doi")
 
 # Common English stop words excluded from abstract keyword analysis.
-_STOP_WORDS = frozenset({
-    "a", "an", "the", "and", "or", "but", "in", "on", "at", "to", "for",
-    "of", "with", "by", "from", "is", "are", "was", "were", "be", "been",
-    "being", "have", "has", "had", "do", "does", "did", "will", "would",
-    "could", "should", "may", "might", "shall", "can", "it", "its",
-    "this", "that", "these", "those", "not", "no", "nor", "as", "if",
-    "then", "than", "so", "up", "out", "about", "into", "over", "after",
-    "we", "our", "they", "their", "them", "he", "she", "his", "her",
-    "which", "who", "whom", "what", "when", "where", "how", "all",
-    "each", "both", "more", "most", "other", "some", "such", "only",
-    "also", "very", "just", "because", "through", "between", "before",
-    "during", "without", "within", "among", "however", "while",
-    "there", "here", "using", "used", "one", "two", "new",
-})
+_STOP_WORDS = frozenset(
+    {
+        "a",
+        "an",
+        "the",
+        "and",
+        "or",
+        "but",
+        "in",
+        "on",
+        "at",
+        "to",
+        "for",
+        "of",
+        "with",
+        "by",
+        "from",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "do",
+        "does",
+        "did",
+        "will",
+        "would",
+        "could",
+        "should",
+        "may",
+        "might",
+        "shall",
+        "can",
+        "it",
+        "its",
+        "this",
+        "that",
+        "these",
+        "those",
+        "not",
+        "no",
+        "nor",
+        "as",
+        "if",
+        "then",
+        "than",
+        "so",
+        "up",
+        "out",
+        "about",
+        "into",
+        "over",
+        "after",
+        "we",
+        "our",
+        "they",
+        "their",
+        "them",
+        "he",
+        "she",
+        "his",
+        "her",
+        "which",
+        "who",
+        "whom",
+        "what",
+        "when",
+        "where",
+        "how",
+        "all",
+        "each",
+        "both",
+        "more",
+        "most",
+        "other",
+        "some",
+        "such",
+        "only",
+        "also",
+        "very",
+        "just",
+        "because",
+        "through",
+        "between",
+        "before",
+        "during",
+        "without",
+        "within",
+        "among",
+        "however",
+        "while",
+        "there",
+        "here",
+        "using",
+        "used",
+        "one",
+        "two",
+        "new",
+    }
+)
 
 
 def _slugify(query: str) -> str:
@@ -128,21 +219,23 @@ def _rows_to_articles(rows: Any) -> list[dict[str, Any]]:
         else:
             authors = []
 
-        articles.append({
-            "pmid": pmid,
-            "title": _extract_field(row, "title"),
-            "abstract": _extract_field(row, "abstract"),
-            "journal": _extract_field(row, "journal"),
-            "year": year,
-            "authors": authors,
-            "doi": _extract_field(row, "doi"),
-        })
+        articles.append(
+            {
+                "pmid": pmid,
+                "title": _extract_field(row, "title"),
+                "abstract": _extract_field(row, "abstract"),
+                "journal": _extract_field(row, "journal"),
+                "year": year,
+                "authors": authors,
+                "doi": _extract_field(row, "doi"),
+            }
+        )
     return articles
 
 
 def _validate_identifier(value: str, label: str) -> None:
     """Validate a BigQuery identifier (dataset or table name) against injection."""
-    if not re.match(r'^[a-zA-Z0-9_.-]+$', value):
+    if not re.match(r"^[a-zA-Z0-9_.-]+$", value):
         raise SchemaError(
             f"invalid BigQuery {label} name",
             detail=f"{label} name contains invalid characters: {value!r}",
@@ -201,16 +294,12 @@ def _execute_search(
         params.append(bigquery.ScalarQueryParameter("year_to", "INT64", year_to))
 
     if journal is not None:
-        where_parts.append(
-            "CONTAINS_SUBSTR(COALESCE(journal, ''), @journal_filter)"
-        )
+        where_parts.append("CONTAINS_SUBSTR(COALESCE(journal, ''), @journal_filter)")
         params.append(
             bigquery.ScalarQueryParameter("journal_filter", "STRING", journal)
         )
 
-    params.append(
-        bigquery.ScalarQueryParameter("max_results", "INT64", max_results)
-    )
+    params.append(bigquery.ScalarQueryParameter("max_results", "INT64", max_results))
 
     where_sql = " AND ".join(where_parts)
     table_ref = f"`{dataset}.{DEFAULT_TABLE}`"
@@ -247,9 +336,7 @@ def _execute_search(
         exc_str = str(exc)
         exc_lower = exc_str.lower()
         # Detect schema mismatches vs other errors.
-        if "not found" in exc_lower and (
-            "column" in exc_lower or "field" in exc_lower
-        ):
+        if "not found" in exc_lower and ("column" in exc_lower or "field" in exc_lower):
             raise SchemaError(
                 "BigQuery PubMed table schema does not match expected columns",
                 detail=(
@@ -382,9 +469,7 @@ def search_cmd(
     }
 
     artifact_path = target_dir / f"{slug}.pubmed-bq.json"
-    artifact_path.write_text(
-        json.dumps(artifact, indent=2) + "\n", encoding="utf-8"
-    )
+    artifact_path.write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
 
     # Sidecar.
     sidecar = provenance.Sidecar(
@@ -422,9 +507,7 @@ def search_cmd(
     emit.line(f"  {len(articles)} results retrieved from {dataset}.{DEFAULT_TABLE}")
     if articles:
         for a in articles[:5]:
-            emit.line(
-                f"  PMID {a['pmid']}: {(a.get('title') or '(no title)')[:70]}"
-            )
+            emit.line(f"  PMID {a['pmid']}: {(a.get('title') or '(no title)')[:70]}")
         if len(articles) > 5:
             emit.line(f"  ... {len(articles) - 5} more in the artifact")
     emit.flush()
@@ -478,7 +561,7 @@ def analyze_cmd(
         )
 
     results = artifact["results"]
-    query_meta = artifact.get("query", {})
+    artifact.get("query", {})
 
     # Compute distributions.
     year_counts: Counter[str] = Counter()
@@ -524,9 +607,7 @@ def analyze_cmd(
         "n_retrieved": len(results),
         "year_distribution": year_distribution,
         "top_journals": [{"journal": j, "count": c} for j, c in top_journals],
-        "top_abstract_keywords": [
-            {"term": t, "count": c} for t, c in top_keywords
-        ],
+        "top_abstract_keywords": [{"term": t, "count": c} for t, c in top_keywords],
     }
 
     metrics: dict[str, Any] = {

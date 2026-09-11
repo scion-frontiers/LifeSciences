@@ -66,6 +66,7 @@ USER_AGENT = "dde-cli/1.0 (+https://github.com/scion-frontiers/LifeSciences)"
 
 _RETRY_STATUS = {429, 500, 502, 503, 504}
 
+
 def _resolve_pace_dir() -> tuple[Path, str]:
     """Resolve the pacing directory with a three-tier fallback.
 
@@ -309,10 +310,13 @@ def request(
                     detail=last_detail,
                     remedy="check network access and endpoint health, then retry",
                 )
-            time.sleep(backoff ** attempt)
+            time.sleep(backoff**attempt)
             continue
 
-        if response.status_code == expect_status or response.status_code in tolerate_status:
+        if (
+            response.status_code == expect_status
+            or response.status_code in tolerate_status
+        ):
             # Layer 1: Content-Length pre-check
             content_length = response.headers.get("Content-Length")
             if content_length is not None:
@@ -363,12 +367,17 @@ def request(
                     detail=last_detail,
                     remedy=(
                         f"endpoint is rate-limited or unhealthy; retry after "
-                        f"{retry_after}s" if retry_after else
-                        "endpoint is rate-limited or unhealthy; retry later or "
+                        f"{retry_after}s"
+                        if retry_after
+                        else "endpoint is rate-limited or unhealthy; retry later or "
                         "run `dde doctor`"
                     ),
                 )
-            delay = float(retry_after) if retry_after and retry_after.isdigit() else backoff ** attempt
+            delay = (
+                float(retry_after)
+                if retry_after and retry_after.isdigit()
+                else backoff**attempt
+            )
             time.sleep(delay)
             continue
 

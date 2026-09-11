@@ -51,32 +51,33 @@ from ..core.controlstore import normalize_deliverables
 from ..core.env import CLI_VERSION
 from ..core.errors import ArtifactError, UsageError
 
-
 # ---------------------------------------------------------------------------
 # Viewer mapping — file extension to viewer HTML file
 # ---------------------------------------------------------------------------
 
 # Ordered most-specific suffix first. Matching stops at the first hit.
 VIEWER_MAP: list[tuple[str, str]] = [
-    (".afdb.json",              "plddt-viewer.html"),
-    (".pae.json",               "pae-viewer.html"),
+    (".afdb.json", "plddt-viewer.html"),
+    (".pae.json", "pae-viewer.html"),
     (".gnomad-constraint.json", "constraint-viewer.html"),
-    (".tissue.json",            "expression-viewer.html"),
-    (".tournament.json",        "tournament-viewer.html"),
-    (".pockets.json",           "pockets-viewer.html"),
-    (".predict.json",           "admet-viewer.html"),
-    (".docking_result.json",    "docking-scores-viewer.html"),
-    (".3d.sdf",                 "sdf-viewer.html"),
-    (".cif",                    "structure-viewer.html"),
-    (".poses.pdbqt",            "docking-viewer.html"),
-    (".receptor.pdbqt",         "docking-viewer.html"),
-    (".brics.json",             "brics-viewer.html"),
-    (".json",                   "json-viewer.html"),  # fallback for any .json
+    (".tissue.json", "expression-viewer.html"),
+    (".tournament.json", "tournament-viewer.html"),
+    (".pockets.json", "pockets-viewer.html"),
+    (".predict.json", "admet-viewer.html"),
+    (".docking_result.json", "docking-scores-viewer.html"),
+    (".3d.sdf", "sdf-viewer.html"),
+    (".cif", "structure-viewer.html"),
+    (".poses.pdbqt", "docking-viewer.html"),
+    (".receptor.pdbqt", "docking-viewer.html"),
+    (".brics.json", "brics-viewer.html"),
+    (".json", "json-viewer.html"),  # fallback for any .json
 ]
 
 
 def viewer_url_for(
-    filename: str, artifact_dir: str, bundled: bool = True,
+    filename: str,
+    artifact_dir: str,
+    bundled: bool = True,
 ) -> str | None:
     """Return viewer URL with ?file= param, or None if no viewer matches.
 
@@ -175,7 +176,10 @@ def _collect_findings(
             layer_0_classes = []
 
         ac_links = [
-            {"name": ac, "html_filename": f"artifact_{re.sub(r'[^a-zA-Z0-9_-]', '_', ac)}.html"}
+            {
+                "name": ac,
+                "html_filename": f"artifact_{re.sub(r'[^a-zA-Z0-9_-]', '_', ac)}.html",
+            }
             for ac in sorted(layer_0_classes)
         ]
 
@@ -202,19 +206,21 @@ def _collect_findings(
             safe_name = re.sub(r"[^a-zA-Z0-9_-]", "_", str(Path(rel_path)))
             html_filename = f"finding_{safe_name}.html"
 
-            findings.append({
-                "title": title,
-                "source_path": rel_path,
-                "html_filename": html_filename,
-                "content": content,
-                "work_order_id": wo.get("id", ""),
-                "revision": wo.get("revision", 0),
-                "requested_role": wo.get("requested_role", ""),
-                "state": wo.get("state", ""),
-                "stage": wo.get("stage", ""),
-                "cycle": wo.get("cycle", ""),
-                "artifact_classes": ac_links,
-            })
+            findings.append(
+                {
+                    "title": title,
+                    "source_path": rel_path,
+                    "html_filename": html_filename,
+                    "content": content,
+                    "work_order_id": wo.get("id", ""),
+                    "revision": wo.get("revision", 0),
+                    "requested_role": wo.get("requested_role", ""),
+                    "state": wo.get("state", ""),
+                    "stage": wo.get("stage", ""),
+                    "cycle": wo.get("cycle", ""),
+                    "artifact_classes": ac_links,
+                }
+            )
 
     return findings
 
@@ -256,26 +262,34 @@ def _collect_artifact_classes(
             for child in sorted(art_dir.iterdir()):
                 if not child.is_file():
                     continue
-                if child.name.endswith(".meta.json") or child.name.endswith(".analysis.json"):
+                if child.name.endswith(".meta.json") or child.name.endswith(
+                    ".analysis.json"
+                ):
                     continue
                 # Confine symlinks
                 if not child.resolve().is_relative_to(root_resolved):
                     continue
-                artifacts.append({
-                    "name": child.name,
-                    "rel_path": str(child.relative_to(project_root)),
-                    "viewer_url": viewer_url_for(child.name, rel_dir, bundled=bundled),
-                })
+                artifacts.append(
+                    {
+                        "name": child.name,
+                        "rel_path": str(child.relative_to(project_root)),
+                        "viewer_url": viewer_url_for(
+                            child.name, rel_dir, bundled=bundled
+                        ),
+                    }
+                )
 
         safe_ac_name = re.sub(r"[^a-zA-Z0-9_-]", "_", ac_name)
-        result.append({
-            "name": ac_name,
-            "html_filename": f"artifact_{safe_ac_name}.html",
-            "artifact_dir": rel_dir,
-            "count": len(artifacts),
-            "artifacts": artifacts,
-            "work_orders": class_to_wos[ac_name],
-        })
+        result.append(
+            {
+                "name": ac_name,
+                "html_filename": f"artifact_{safe_ac_name}.html",
+                "artifact_dir": rel_dir,
+                "count": len(artifacts),
+                "artifacts": artifacts,
+                "work_orders": class_to_wos[ac_name],
+            }
+        )
 
     return result
 
@@ -315,12 +329,14 @@ def _collect_program_state(project_root: Path) -> list[dict[str, Any]]:
         safe_stem = re.sub(r"[^a-zA-Z0-9_-]", "_", md_file.stem)
         html_filename = f"program_state_{safe_stem}.html"
 
-        docs.append({
-            "title": title,
-            "source_file": source_file,
-            "content": content,
-            "html_filename": html_filename,
-        })
+        docs.append(
+            {
+                "title": title,
+                "source_file": source_file,
+                "content": content,
+                "html_filename": html_filename,
+            }
+        )
 
     return docs
 
@@ -381,12 +397,14 @@ def _collect_retrospectives(retro_dir: Path) -> list[dict[str, Any]]:
         safe_stem = re.sub(r"[^a-zA-Z0-9_-]", "_", md_file.stem)
         html_filename = f"retrospective_{safe_stem}.html"
 
-        docs.append({
-            "title": title,
-            "content": content,
-            "source_file": source_file,
-            "html_filename": html_filename,
-        })
+        docs.append(
+            {
+                "title": title,
+                "content": content,
+                "source_file": source_file,
+                "html_filename": html_filename,
+            }
+        )
 
     # Sort by source_file for determinism
     docs.sort(key=lambda d: d["source_file"])
@@ -433,18 +451,21 @@ def _collect_gates(project_root: Path) -> list[dict[str, Any]]:
 
             source_path = f"gates/{stage_name}/{md_file.name}"
             safe_name = re.sub(
-                r"[^a-zA-Z0-9_-]", "_",
+                r"[^a-zA-Z0-9_-]",
+                "_",
                 f"{stage_name}_{md_file.stem}",
             )
             html_filename = f"gate_{safe_name}.html"
 
-            gates.append({
-                "stage_name": stage_name,
-                "title": title,
-                "content": content,
-                "source_path": source_path,
-                "html_filename": html_filename,
-            })
+            gates.append(
+                {
+                    "stage_name": stage_name,
+                    "title": title,
+                    "content": content,
+                    "source_path": source_path,
+                    "html_filename": html_filename,
+                }
+            )
 
     # Sort by stage_name then source_path for determinism
     gates.sort(key=lambda g: (g["stage_name"], g["source_path"]))
@@ -479,20 +500,26 @@ def _validate_links(
         for rel_path in sorted(layer_1):
             resolved = _confine_path(project_root, Path(rel_path))
             if resolved is None:
-                issues.append({
-                    "file": str(rel_path),
-                    "issue": "path escapes project root",
-                })
+                issues.append(
+                    {
+                        "file": str(rel_path),
+                        "issue": "path escapes project root",
+                    }
+                )
                 continue
             if not resolved.is_file():
-                issues.append({
-                    "file": str(rel_path),
-                    "issue": "file does not exist",
-                })
+                issues.append(
+                    {
+                        "file": str(rel_path),
+                        "issue": "file does not exist",
+                    }
+                )
                 continue
 
             content = resolved.read_text(encoding="utf-8", errors="replace")
-            content_no_code = _strip_code(content)  # Strip code to avoid SMILES false positives
+            content_no_code = _strip_code(
+                content
+            )  # Strip code to avoid SMILES false positives
             for m in _MARKDOWN_LINK_RE.finditer(content_no_code):
                 target = m.group(1).strip()
                 # Skip external URLs
@@ -505,17 +532,21 @@ def _validate_links(
                 # Resolve relative to the file's directory
                 link_resolved = (resolved.parent / target_no_fragment).resolve()
                 if not link_resolved.is_relative_to(root_resolved):
-                    issues.append({
-                        "file": str(rel_path),
-                        "link": target,
-                        "issue": "link escapes project root",
-                    })
+                    issues.append(
+                        {
+                            "file": str(rel_path),
+                            "link": target,
+                            "issue": "link escapes project root",
+                        }
+                    )
                 elif not link_resolved.exists():
-                    issues.append({
-                        "file": str(rel_path),
-                        "link": target,
-                        "issue": "broken link — target does not exist",
-                    })
+                    issues.append(
+                        {
+                            "file": str(rel_path),
+                            "link": target,
+                            "issue": "broken link — target does not exist",
+                        }
+                    )
 
         # Also validate that declared layer_0_classes have artifacts
         layer_0_classes = deliverables.get("layer_0_classes", [])
@@ -524,17 +555,21 @@ def _validate_links(
                 normalized = normalize_artifact_class(ac)
                 rel_dir = ARTIFACT_DIRS.get(normalized)
                 if rel_dir is None:
-                    issues.append({
-                        "artifact_class": ac,
-                        "issue": f"unknown artifact class: {ac!r}",
-                    })
+                    issues.append(
+                        {
+                            "artifact_class": ac,
+                            "issue": f"unknown artifact class: {ac!r}",
+                        }
+                    )
                     continue
                 art_dir = project_root / rel_dir
                 if not art_dir.is_dir():
-                    issues.append({
-                        "artifact_class": ac,
-                        "issue": f"artifact directory does not exist: {rel_dir}",
-                    })
+                    issues.append(
+                        {
+                            "artifact_class": ac,
+                            "issue": f"artifact directory does not exist: {rel_dir}",
+                        }
+                    )
 
     return issues
 
@@ -559,29 +594,33 @@ def _build_nav_sections(
 
     # Executive Summary at the top
     if executive is not None:
-        sections.append({
-            "title": "Executive Summary",
-            "links": [
-                {
-                    "label": executive.get("title", "Executive Summary"),
-                    "url": "executive.html",
-                    "active": "executive.html" == active_filename,
-                },
-            ],
-        })
+        sections.append(
+            {
+                "title": "Executive Summary",
+                "links": [
+                    {
+                        "label": executive.get("title", "Executive Summary"),
+                        "url": "executive.html",
+                        "active": "executive.html" == active_filename,
+                    },
+                ],
+            }
+        )
 
     if program_state_docs:
-        sections.append({
-            "title": "Program State",
-            "links": [
-                {
-                    "label": doc["title"],
-                    "url": doc["html_filename"],
-                    "active": doc["html_filename"] == active_filename,
-                }
-                for doc in program_state_docs
-            ],
-        })
+        sections.append(
+            {
+                "title": "Program State",
+                "links": [
+                    {
+                        "label": doc["title"],
+                        "url": doc["html_filename"],
+                        "active": doc["html_filename"] == active_filename,
+                    }
+                    for doc in program_state_docs
+                ],
+            }
+        )
 
     # Findings grouped by discipline subdirectory
     if findings:
@@ -601,84 +640,100 @@ def _build_nav_sections(
         # Build findings links: ungrouped first, then each discipline
         findings_links: list[dict[str, Any]] = []
         for f in ungrouped:
-            findings_links.append({
-                "label": f["title"],
-                "url": f["html_filename"],
-                "active": f["html_filename"] == active_filename,
-            })
-        for discipline in sorted(grouped):
-            display_name = discipline.replace("-", " ").replace("_", " ").title()
-            findings_links.append({
-                "label": f"— {display_name} —",
-                "url": "",
-                "active": False,
-                "is_group_header": True,
-            })
-            for f in grouped[discipline]:
-                findings_links.append({
+            findings_links.append(
+                {
                     "label": f["title"],
                     "url": f["html_filename"],
                     "active": f["html_filename"] == active_filename,
-                })
+                }
+            )
+        for discipline in sorted(grouped):
+            display_name = discipline.replace("-", " ").replace("_", " ").title()
+            findings_links.append(
+                {
+                    "label": f"— {display_name} —",
+                    "url": "",
+                    "active": False,
+                    "is_group_header": True,
+                }
+            )
+            for f in grouped[discipline]:
+                findings_links.append(
+                    {
+                        "label": f["title"],
+                        "url": f["html_filename"],
+                        "active": f["html_filename"] == active_filename,
+                    }
+                )
 
-        sections.append({
-            "title": "Findings",
-            "links": findings_links,
-        })
+        sections.append(
+            {
+                "title": "Findings",
+                "links": findings_links,
+            }
+        )
 
     # Operations section — per-work-order pages
     if work_orders_with_pages:
-        sections.append({
-            "title": "Operations",
-            "links": [
-                {
-                    "label": f"{wo['id']}-r{wo['revision']}",
-                    "url": wo["html_filename"],
-                    "active": wo["html_filename"] == active_filename,
-                }
-                for wo in work_orders_with_pages
-            ],
-        })
+        sections.append(
+            {
+                "title": "Operations",
+                "links": [
+                    {
+                        "label": f"{wo['id']}-r{wo['revision']}",
+                        "url": wo["html_filename"],
+                        "active": wo["html_filename"] == active_filename,
+                    }
+                    for wo in work_orders_with_pages
+                ],
+            }
+        )
 
     # Gates section
     if gates:
-        sections.append({
-            "title": "Gates",
-            "links": [
-                {
-                    "label": g["title"],
-                    "url": g["html_filename"],
-                    "active": g["html_filename"] == active_filename,
-                }
-                for g in gates
-            ],
-        })
+        sections.append(
+            {
+                "title": "Gates",
+                "links": [
+                    {
+                        "label": g["title"],
+                        "url": g["html_filename"],
+                        "active": g["html_filename"] == active_filename,
+                    }
+                    for g in gates
+                ],
+            }
+        )
 
     if artifact_classes:
-        sections.append({
-            "title": "Raw Data",
-            "links": [
-                {
-                    "label": ac["name"],
-                    "url": ac["html_filename"],
-                    "active": ac["html_filename"] == active_filename,
-                }
-                for ac in artifact_classes
-            ],
-        })
+        sections.append(
+            {
+                "title": "Raw Data",
+                "links": [
+                    {
+                        "label": ac["name"],
+                        "url": ac["html_filename"],
+                        "active": ac["html_filename"] == active_filename,
+                    }
+                    for ac in artifact_classes
+                ],
+            }
+        )
 
     # Retrospectives section — only if retrospectives exist
     if has_retrospectives:
-        sections.append({
-            "title": "Retrospectives",
-            "links": [
-                {
-                    "label": "Retrospectives",
-                    "url": "retrospectives.html",
-                    "active": "retrospectives.html" == active_filename,
-                },
-            ],
-        })
+        sections.append(
+            {
+                "title": "Retrospectives",
+                "links": [
+                    {
+                        "label": "Retrospectives",
+                        "url": "retrospectives.html",
+                        "active": "retrospectives.html" == active_filename,
+                    },
+                ],
+            }
+        )
 
     return sections
 
@@ -693,9 +748,7 @@ def _enrich_findings_with_viewers(
     artifacts (with viewer URLs) from each matching artifact class.
     Mutates the finding dicts in place.
     """
-    ac_by_name: dict[str, dict[str, Any]] = {
-        ac["name"]: ac for ac in artifact_classes
-    }
+    ac_by_name: dict[str, dict[str, Any]] = {ac["name"]: ac for ac in artifact_classes}
     for finding in findings:
         viewer_artifacts: list[dict[str, Any]] = []
         for ac_link in finding.get("artifact_classes", []):
@@ -704,11 +757,13 @@ def _enrich_findings_with_viewers(
                 continue
             for artifact in ac_data.get("artifacts", []):
                 if artifact.get("viewer_url"):
-                    viewer_artifacts.append({
-                        "name": artifact["name"],
-                        "viewer_url": artifact["viewer_url"],
-                        "artifact_class": ac_link["name"],
-                    })
+                    viewer_artifacts.append(
+                        {
+                            "name": artifact["name"],
+                            "viewer_url": artifact["viewer_url"],
+                            "artifact_class": ac_link["name"],
+                        }
+                    )
         finding["viewer_artifacts"] = viewer_artifacts
 
 
@@ -767,9 +822,9 @@ def _add_heading_ids(html: str) -> str:
     seen: dict[str, int] = {}
 
     def _replace(match: re.Match) -> str:  # type: ignore[type-arg]
-        tag = match.group(1)       # e.g. "h2"
-        attrs = match.group(2)     # existing attributes or None
-        content = match.group(3)   # inner HTML
+        tag = match.group(1)  # e.g. "h2"
+        attrs = match.group(2)  # existing attributes or None
+        content = match.group(3)  # inner HTML
 
         # Don't overwrite an existing id
         if attrs and "id=" in attrs:
@@ -855,9 +910,7 @@ def _dedent_tables(text: str) -> str:
             # Only dedent if it looks like a table (has separator row)
             if len(block) >= 2 and re.search(r"[-:]+\s*\|", block[1]):
                 # Find common leading whitespace
-                leading = min(
-                    len(line) - len(line.lstrip()) for line in block
-                )
+                leading = min(len(line) - len(line.lstrip()) for line in block)
                 result.extend(line[leading:] for line in block)
             else:
                 result.extend(block)
@@ -905,7 +958,10 @@ def _render_site(
         autoescape=select_autoescape(["html"]),
     )
     from markupsafe import Markup
-    _md = mistune.create_markdown(escape=True, plugins=['table', 'strikethrough', 'math'])
+
+    _md = mistune.create_markdown(
+        escape=True, plugins=["table", "strikethrough", "math"]
+    )
 
     def _render_markdown(text: str) -> Markup:
         """Render markdown with H1 de-dup, heading IDs, and .md link rewriting."""
@@ -953,8 +1009,12 @@ def _render_site(
     # Helper for nav_sections kwargs shared across all pages
     def _nav(active: str | None = None) -> list[dict[str, Any]]:
         return _build_nav_sections(
-            program_state_docs, findings, artifact_classes,
-            active_filename=active, executive=executive, gates=gates,
+            program_state_docs,
+            findings,
+            artifact_classes,
+            active_filename=active,
+            executive=executive,
+            gates=gates,
             work_orders_with_pages=work_orders_with_pages,
             has_retrospectives=has_retrospectives,
         )
@@ -996,9 +1056,7 @@ def _render_site(
         gates=gates,
         work_order_pages=work_orders_with_pages,
         has_retrospectives=has_retrospectives,
-        accepted_revisions=[
-            f"{wo['id']}-r{wo['revision']}" for wo in work_orders
-        ],
+        accepted_revisions=[f"{wo['id']}-r{wo['revision']}" for wo in work_orders],
         pages_rendered=0,  # placeholder, updated after all rendering
         nav_sections=_nav("index.html"),
     )
@@ -1033,7 +1091,8 @@ def _render_site(
     finding_tmpl = env.get_template("finding.html")
     for finding in findings:
         html = finding_tmpl.render(
-            cli_version=CLI_VERSION, nav_sections=_nav(finding["html_filename"]),
+            cli_version=CLI_VERSION,
+            nav_sections=_nav(finding["html_filename"]),
             **finding,
         )
         (output_dir / finding["html_filename"]).write_text(html, encoding="utf-8")
@@ -1071,16 +1130,13 @@ def _render_site(
     for wo_page in work_orders_with_pages:
         # Cross-reference: findings produced by this WO
         linked_findings = [
-            f for f in findings
-            if f.get("work_order_id") == wo_page.get("id")
+            f for f in findings if f.get("work_order_id") == wo_page.get("id")
         ]
         # Cross-reference: artifact classes referencing this WO
         linked_artifact_classes = [
-            ac for ac in artifact_classes
-            if any(
-                w.get("id") == wo_page.get("id")
-                for w in ac.get("work_orders", [])
-            )
+            ac
+            for ac in artifact_classes
+            if any(w.get("id") == wo_page.get("id") for w in ac.get("work_orders", []))
         ]
         html = wo_tmpl.render(
             cli_version=CLI_VERSION,
@@ -1115,9 +1171,7 @@ def _render_site(
         gates=gates,
         work_order_pages=work_orders_with_pages,
         has_retrospectives=has_retrospectives,
-        accepted_revisions=[
-            f"{wo['id']}-r{wo['revision']}" for wo in work_orders
-        ],
+        accepted_revisions=[f"{wo['id']}-r{wo['revision']}" for wo in work_orders],
         pages_rendered=pages_rendered,
         nav_sections=_nav("index.html"),
     )
@@ -1270,7 +1324,9 @@ def build_cmd(
     # 2. Collect findings, artifact classes, program state, executive, gates, and retrospectives
     bundled = not no_bundle_raw
     findings = _collect_findings(project.root, work_orders)
-    artifact_classes = _collect_artifact_classes(project.root, work_orders, bundled=bundled)
+    artifact_classes = _collect_artifact_classes(
+        project.root, work_orders, bundled=bundled
+    )
     program_state_docs = _collect_program_state(project.root)
     executive = _collect_executive(project.root)
     gates = _collect_gates(project.root)
@@ -1316,7 +1372,11 @@ def build_cmd(
 
     try:
         pages_rendered = _render_site(
-            project.root, tmp_dir, work_orders, findings, artifact_classes,
+            project.root,
+            tmp_dir,
+            work_orders,
+            findings,
+            artifact_classes,
             program_state_docs=program_state_docs,
             executive=executive,
             gates=gates,
@@ -1355,14 +1415,15 @@ def build_cmd(
                 raw_src,
                 raw_dst,
                 ignore=shutil.ignore_patterns(
-                    ".*", "__pycache__", "*.pyc", ".DS_Store",
+                    ".*",
+                    "__pycache__",
+                    "*.pyc",
+                    ".DS_Store",
                 ),
             )
 
     # 6. Record build in publish-state.json
-    accepted_revisions = [
-        f"{wo['id']}-r{wo['revision']}" for wo in work_orders
-    ]
+    accepted_revisions = [f"{wo['id']}-r{wo['revision']}" for wo in work_orders]
     publish_state = {
         "last_build_at": _deterministic_build_id(work_orders),
         "accepted_revisions": accepted_revisions,
@@ -1373,18 +1434,21 @@ def build_cmd(
     controlstore.write_publish_state(project.root, publish_state)
 
     # 7. Append event
-    controlstore.append_event(project.root, {
-        "type": "site.published",
-        "subject_id": None,
-        "revision": None,
-        "from_state": None,
-        "to_state": None,
-        "detail": {
-            "pages_rendered": pages_rendered,
-            "output_dir": str(output_dir),
-            "accepted_revisions": accepted_revisions,
+    controlstore.append_event(
+        project.root,
+        {
+            "type": "site.published",
+            "subject_id": None,
+            "revision": None,
+            "from_state": None,
+            "to_state": None,
+            "detail": {
+                "pages_rendered": pages_rendered,
+                "output_dir": str(output_dir),
+                "accepted_revisions": accepted_revisions,
+            },
         },
-    })
+    )
 
     # 8. Output
     if as_json:
@@ -1459,9 +1523,7 @@ def validate_cmd(
     # 3. Validate links
     issues = _validate_links(project.root, work_orders)
 
-    accepted_revisions = [
-        f"{wo['id']}-r{wo['revision']}" for wo in work_orders
-    ]
+    accepted_revisions = [f"{wo['id']}-r{wo['revision']}" for wo in work_orders]
 
     # 4. Output
     if as_json:
@@ -1511,7 +1573,8 @@ def validate_cmd(
 
 @site.command("export")
 @click.option(
-    "--output", "-o",
+    "--output",
+    "-o",
     default=None,
     help="Output zip file path (default: <project-slug>-site.zip).",
 )
@@ -1548,8 +1611,7 @@ def export_cmd(state: AppState, output: str | None, site_dir: str) -> None:
     # Validate raw/ is bundled
     if not (site_path / "raw").is_dir():
         click.echo(
-            "Warning: raw/ not bundled in site. "
-            "Viewers may not work standalone.",
+            "Warning: raw/ not bundled in site. Viewers may not work standalone.",
             err=True,
         )
 

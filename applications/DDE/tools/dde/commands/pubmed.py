@@ -98,9 +98,18 @@ def _parse_articles(xml_bytes: bytes) -> list[dict[str, Any]]:
 
         article = citation.find("Article")
         if article is None:
-            results.append({"pmid": pmid, "title": None, "authors": [],
-                            "journal": None, "year": None, "abstract": None,
-                            "doi": None, "mesh_terms": []})
+            results.append(
+                {
+                    "pmid": pmid,
+                    "title": None,
+                    "authors": [],
+                    "journal": None,
+                    "year": None,
+                    "abstract": None,
+                    "doi": None,
+                    "mesh_terms": [],
+                }
+            )
             continue
 
         # Title
@@ -190,16 +199,18 @@ def _parse_articles(xml_bytes: bytes) -> list[dict[str, Any]]:
                 if descriptor is not None and descriptor.text:
                     mesh_terms.append(descriptor.text)
 
-        results.append({
-            "pmid": pmid,
-            "title": title,
-            "authors": authors,
-            "journal": journal,
-            "year": year,
-            "abstract": abstract,
-            "doi": doi,
-            "mesh_terms": mesh_terms,
-        })
+        results.append(
+            {
+                "pmid": pmid,
+                "title": title,
+                "authors": authors,
+                "journal": journal,
+                "year": year,
+                "abstract": abstract,
+                "doi": doi,
+                "mesh_terms": mesh_terms,
+            }
+        )
 
     return results
 
@@ -213,10 +224,7 @@ def _per_term_hit_counts(query: str) -> list[dict[str, Any]]:
     the caller see which term(s) collapsed the combined result set.
     """
     # Split on whitespace; skip PubMed Boolean operators.
-    tokens = [
-        t for t in query.split()
-        if t.upper() not in ("AND", "OR", "NOT")
-    ]
+    tokens = [t for t in query.split() if t.upper() not in ("AND", "OR", "NOT")]
     if not tokens:
         return []
 
@@ -227,14 +235,11 @@ def _per_term_hit_counts(query: str) -> list[dict[str, Any]]:
             f"{EUTILS_BASE}/esearch.fcgi?db=pubmed"
             f"&term={quote_plus(token)}"
             f"&rettype=count"
-            f"&retmode=json"
-            + api_key_suffix()
+            f"&retmode=json" + api_key_suffix()
         )
         try:
             data = http.get_json(count_url, qps=qps, timeout=30.0)
-            count = int(
-                (data.get("esearchresult") or {}).get("count", 0)
-            )
+            count = int((data.get("esearchresult") or {}).get("count", 0))
         except Exception:
             count = -1  # failed to retrieve
         results.append({"term": token, "count": count})
@@ -294,10 +299,11 @@ def search_cmd(
         f"&term={quote_plus(query)}"
         f"&retmax={max_results}"
         f"&sort={sort}"
-        f"&retmode=json"
-        + api_key_suffix()
+        f"&retmode=json" + api_key_suffix()
     )
-    esearch_data = http.get_json(esearch_url, qps=qps_for_host("eutils.ncbi.nlm.nih.gov"), timeout=60.0)
+    esearch_data = http.get_json(
+        esearch_url, qps=qps_for_host("eutils.ncbi.nlm.nih.gov"), timeout=60.0
+    )
 
     esearch_result = esearch_data.get("esearchresult")
     if not isinstance(esearch_result, dict):
@@ -330,9 +336,7 @@ def search_cmd(
 
     # Save verbatim esearch response
     esearch_path = target_dir / f"{slug}.esearch.json"
-    esearch_path.write_text(
-        json.dumps(esearch_data, indent=2) + "\n", encoding="utf-8"
-    )
+    esearch_path.write_text(json.dumps(esearch_data, indent=2) + "\n", encoding="utf-8")
 
     # Step 2: efetch -- get full records for the PMIDs
     articles: list[dict[str, Any]] = []
@@ -347,10 +351,11 @@ def search_cmd(
             f"{EUTILS_BASE}/efetch.fcgi?db=pubmed"
             f"&id={pmid_list}"
             f"&retmode=xml"
-            f"&rettype=abstract"
-            + api_key_suffix()
+            f"&rettype=abstract" + api_key_suffix()
         )
-        efetch_bytes = http.get_bytes(efetch_url, qps=qps_for_host("eutils.ncbi.nlm.nih.gov"), timeout=60.0)
+        efetch_bytes = http.get_bytes(
+            efetch_url, qps=qps_for_host("eutils.ncbi.nlm.nih.gov"), timeout=60.0
+        )
         efetch_path.write_bytes(efetch_bytes)
         articles = _parse_articles(efetch_bytes)
     else:
@@ -379,9 +384,7 @@ def search_cmd(
         artifact["per_term_counts"] = per_term_counts
         # Distinguish genuinely empty from overconstrained: if any
         # individual term has hits, the combination was overconstrained.
-        any_term_has_hits = any(
-            t["count"] > 0 for t in per_term_counts
-        )
+        any_term_has_hits = any(t["count"] > 0 for t in per_term_counts)
         artifact["zero_result_reason"] = (
             "no_results_query_may_be_overconstrained"
             if any_term_has_hits
@@ -389,9 +392,7 @@ def search_cmd(
         )
 
     artifact_path = target_dir / f"{slug}.pubmed-search.json"
-    artifact_path.write_text(
-        json.dumps(artifact, indent=2) + "\n", encoding="utf-8"
-    )
+    artifact_path.write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
 
     # Step 4: Sidecar
     sidecar = provenance.Sidecar(
@@ -538,8 +539,10 @@ def analyze_cmd(
         "n_retrieved": len(results),
         "n_unique_journals": len(journal_counts),
         "n_unique_mesh_terms": len(mesh_counts),
-        "year_range": [min(year_counts) if year_counts else None,
-                       max(year_counts) if year_counts else None],
+        "year_range": [
+            min(year_counts) if year_counts else None,
+            max(year_counts) if year_counts else None,
+        ],
     }
 
     # Locate the meta file written by search for the source reference
@@ -708,10 +711,12 @@ def _parse_fulltext_xml(xml_bytes: bytes) -> dict[str, Any]:
                 if text:
                     paragraphs.append(text)
             if paragraphs:
-                sections.append({
-                    "heading": "",
-                    "text": "\n\n".join(paragraphs),
-                })
+                sections.append(
+                    {
+                        "heading": "",
+                        "text": "\n\n".join(paragraphs),
+                    }
+                )
 
     # References
     references: list[str] = []
@@ -781,8 +786,7 @@ def fulltext_cmd(
         f"{EUTILS_BASE}/efetch.fcgi?db=pmc"
         f"&id={pmcid}"
         f"&rettype=full"
-        f"&retmode=xml"
-        + api_key_suffix()
+        f"&retmode=xml" + api_key_suffix()
     )
     efetch_bytes = http.get_bytes(
         efetch_url,
@@ -839,9 +843,7 @@ def fulltext_cmd(
     }
 
     artifact_path = target_dir / f"{pmcid_lower}.fulltext.json"
-    artifact_path.write_text(
-        json.dumps(artifact, indent=2) + "\n", encoding="utf-8"
-    )
+    artifact_path.write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
 
     # Sidecar
     sidecar = provenance.Sidecar(

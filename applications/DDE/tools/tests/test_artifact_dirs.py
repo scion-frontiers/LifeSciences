@@ -38,7 +38,6 @@ from dde.core.context import (
 )
 from dde.core.errors import SchemaError
 
-
 # ---------------------------------------------------------------------------
 # Locate the commands directory relative to this test file.
 # ---------------------------------------------------------------------------
@@ -73,16 +72,20 @@ class TestAllArtifactClassesRegistered:
     def test_commands_dir_exists(self) -> None:
         assert _COMMANDS_DIR.is_dir(), f"commands dir not found: {_COMMANDS_DIR}"
 
-    def test_at_least_one_class_found(self, declared_classes: list[tuple[str, str]]) -> None:
+    def test_at_least_one_class_found(
+        self, declared_classes: list[tuple[str, str]]
+    ) -> None:
         assert len(declared_classes) > 0, "no ARTIFACT_CLASS declarations found"
 
-    def test_all_classes_registered(self, declared_classes: list[tuple[str, str]]) -> None:
+    def test_all_classes_registered(
+        self, declared_classes: list[tuple[str, str]]
+    ) -> None:
         unregistered: list[str] = []
         for filename, cls in declared_classes:
             if cls not in ARTIFACT_DIRS:
                 unregistered.append(f"{filename}: {cls}")
         assert not unregistered, (
-            f"ARTIFACT_CLASS values not registered in ARTIFACT_DIRS:\n"
+            "ARTIFACT_CLASS values not registered in ARTIFACT_DIRS:\n"
             + "\n".join(f"  {u}" for u in unregistered)
         )
 
@@ -103,7 +106,9 @@ class TestDdePrefixNormalization:
     def test_resolve_subdir_with_prefix(self) -> None:
         """``resolve_artifact_subdir("dde.genetics")`` returns the same
         path as ``resolve_artifact_subdir("genetics")``."""
-        assert resolve_artifact_subdir("dde.genetics") == resolve_artifact_subdir("genetics")
+        assert resolve_artifact_subdir("dde.genetics") == resolve_artifact_subdir(
+            "genetics"
+        )
 
     def test_artifact_dir_with_prefix(self, tmp_path: Path) -> None:
         """``artifact_dir("dde.genetics")`` returns the same path as

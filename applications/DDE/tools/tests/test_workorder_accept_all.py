@@ -26,7 +26,6 @@ Covers:
 
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -36,14 +35,13 @@ TOOLS_DIR = Path(__file__).resolve().parent.parent
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
+from dde.commands.site import _check_all_accepted
 from dde.commands.workorder import (
     _list_latest_work_orders,
     _try_accept_single,
 )
-from dde.commands.site import _check_all_accepted
 from dde.core import controlstore
 from dde.core.errors import ArtifactError
-
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
@@ -192,13 +190,13 @@ def test_accept_single_committed_with_passing_validation(tmp_path):
     ]
     mock_wo_record = _make_wo_record("WO-001", state="mechanically_validated")
     mock_return = (
-        mock_wo_record,           # wo_record
-        Path("/fake/val.json"),   # val_path
-        "pass",                   # overall_result
-        mock_checks,              # checks
-        [],                       # checks_failed
-        "submitted",              # val_from
-        "mechanically_validated", # val_to
+        mock_wo_record,  # wo_record
+        Path("/fake/val.json"),  # val_path
+        "pass",  # overall_result
+        mock_checks,  # checks
+        [],  # checks_failed
+        "submitted",  # val_from
+        "mechanically_validated",  # val_to
     )
 
     with mock.patch(
@@ -229,13 +227,13 @@ def test_accept_single_committed_with_failing_validation(tmp_path):
     ]
     mock_wo_record = _make_wo_record("WO-001", state="validation_failed")
     mock_return = (
-        mock_wo_record,           # wo_record
-        Path("/fake/val.json"),   # val_path
-        "fail",                   # overall_result
-        mock_checks,              # checks
-        ["deliverables_exist"],   # checks_failed
-        "submitted",              # val_from
-        "validation_failed",      # val_to
+        mock_wo_record,  # wo_record
+        Path("/fake/val.json"),  # val_path
+        "fail",  # overall_result
+        mock_checks,  # checks
+        ["deliverables_exist"],  # checks_failed
+        "submitted",  # val_from
+        "validation_failed",  # val_to
     )
 
     with mock.patch(

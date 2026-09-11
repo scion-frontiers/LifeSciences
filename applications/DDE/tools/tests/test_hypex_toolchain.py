@@ -22,18 +22,17 @@ from pathlib import Path
 from unittest import mock
 
 from dde.commands.doctor import (
+    _CAPABILITY_VALIDATED,
+    _HELP_MARKERS,
+    _PROVISIONED_BINARIES,
     CAPABILITY,
     OK,
     WARN,
     Report,
-    _CAPABILITY_VALIDATED,
-    _HELP_MARKERS,
-    _PROVISIONED_BINARIES,
     _check_binaries,
     _check_hypothesis_strategies,
     get_capability_snapshot,
 )
-
 
 HYPEX_TOOLS = ("hypex", "elo", "prox")
 
@@ -81,20 +80,26 @@ class TestHypexDoctorChecks(unittest.TestCase):
         def run(command, **_kwargs):
             tool = Path(command[0]).name
             return subprocess.CompletedProcess(
-                command, 0, _HELP_MARKERS[tool], "",
+                command,
+                0,
+                _HELP_MARKERS[tool],
+                "",
             )
 
         with (
             mock.patch(
                 "dde.commands.doctor.shutil.which",
-                side_effect=lambda name: f"/tools/{name}" if name in HYPEX_TOOLS else None,
+                side_effect=lambda name: (
+                    f"/tools/{name}" if name in HYPEX_TOOLS else None
+                ),
             ),
             mock.patch("dde.commands.doctor.subprocess.run", side_effect=run),
         ):
             _check_hypothesis_strategies(report)
 
         strategy = next(
-            check for check in report.checks
+            check
+            for check in report.checks
             if check.name == "hypothesis strategy: hypex"
         )
         self.assertEqual(strategy.status, OK)
@@ -114,14 +119,17 @@ class TestHypexDoctorChecks(unittest.TestCase):
         with (
             mock.patch(
                 "dde.commands.doctor.shutil.which",
-                side_effect=lambda name: f"/tools/{name}" if name in HYPEX_TOOLS else None,
+                side_effect=lambda name: (
+                    f"/tools/{name}" if name in HYPEX_TOOLS else None
+                ),
             ),
             mock.patch("dde.commands.doctor.subprocess.run", side_effect=run),
         ):
             _check_hypothesis_strategies(report)
 
         strategy = next(
-            check for check in report.checks
+            check
+            for check in report.checks
             if check.name == "hypothesis strategy: hypex"
         )
         self.assertEqual(strategy.status, WARN)
@@ -147,7 +155,8 @@ class TestHypexDoctorChecks(unittest.TestCase):
             _check_hypothesis_strategies(report)
 
         strategy = next(
-            check for check in report.checks
+            check
+            for check in report.checks
             if check.name == "hypothesis strategy: hypex"
         )
         self.assertEqual(strategy.status, WARN)

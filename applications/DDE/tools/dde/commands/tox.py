@@ -50,9 +50,9 @@ from ..common import (
     resolve_artifact,
 )
 from ..core import provenance
-from ..core.errors import ArtifactError, Refusal, SchemaError
-from ..core.schema_registry import suggest_match
+from ..core.errors import Refusal, SchemaError
 from ..core.output import Emitter
+from ..core.schema_registry import suggest_match
 
 ARTIFACT_CLASS = "tox"
 
@@ -63,22 +63,40 @@ ARTIFACT_CLASS = "tox"
 VALID_ROUTES = {"iv", "oral", "sc", "im", "ip", "dermal", "inhalation"}
 VALID_SPECIES = {"rat", "mouse", "dog", "monkey", "rabbit", "minipig"}
 VALID_ORGAN_SYSTEMS = {
-    "liver", "kidney", "heart", "lung", "brain", "gi",
-    "hematologic", "endocrine", "reproductive", "skin",
-    "musculoskeletal", "immune", "other",
+    "liver",
+    "kidney",
+    "heart",
+    "lung",
+    "brain",
+    "gi",
+    "hematologic",
+    "endocrine",
+    "reproductive",
+    "skin",
+    "musculoskeletal",
+    "immune",
+    "other",
 }
 VALID_SEVERITIES = {"minimal", "mild", "moderate", "marked", "severe"}
 VALID_GENOTOX_ASSAY_TYPES = {
-    "ames", "chromosomal_aberration",
-    "micronucleus_in_vitro", "micronucleus_in_vivo",
+    "ames",
+    "chromosomal_aberration",
+    "micronucleus_in_vitro",
+    "micronucleus_in_vivo",
 }
 VALID_GENOTOX_RESULTS = {"negative", "positive", "equivocal"}
 VALID_CONC_UNITS = {"nM", "uM", "ng/mL", "ug/mL", "mg/mL"}
 VALID_GLP_STATUS = {"compliant", "non-compliant", "not_stated"}
 VALID_AUC_UNITS = {
-    "ng*h/mL", "ug*h/mL", "nM*h", "uM*h",
+    "ng*h/mL",
+    "ug*h/mL",
+    "nM*h",
+    "uM*h",
     # pk.py writes "conc_units * time_units" — accept that convention too
-    "ng/mL * h", "ug/mL * h", "nM * h", "uM * h",
+    "ng/mL * h",
+    "ug/mL * h",
+    "nM * h",
+    "uM * h",
 }
 
 
@@ -133,7 +151,7 @@ def _validate_repeat_dose(doc: dict[str, Any]) -> None:
         raise Refusal(
             "unsupported or missing schema tag",
             detail=f"expected 'dde.tox-repeat-dose.v1', got {doc.get('schema')!r}",
-            remedy="ensure the input JSON contains '\"schema\": \"dde.tox-repeat-dose.v1\"'",
+            remedy='ensure the input JSON contains \'"schema": "dde.tox-repeat-dose.v1"\'',
         )
 
     # --- Required scalar fields ---
@@ -285,8 +303,7 @@ def _validate_repeat_dose(doc: dict[str, Any]) -> None:
                 )
             if mortality < 0:
                 raise SchemaError(
-                    f"dose_groups[{i}].mortality must be non-negative, "
-                    f"got {mortality}",
+                    f"dose_groups[{i}].mortality must be non-negative, got {mortality}",
                 )
 
     # --- Cross-field: at least one dose group with dose_mg_kg > 0 ---
@@ -353,8 +370,7 @@ def _validate_repeat_dose(doc: dict[str, Any]) -> None:
     if bw is not None:
         if not isinstance(bw, (int, float)) or isinstance(bw, bool):
             raise SchemaError(
-                f"'body_weight_kg' must be a number, "
-                f"got {type(bw).__name__}: {bw!r}",
+                f"'body_weight_kg' must be a number, got {type(bw).__name__}: {bw!r}",
             )
         if bw <= 0:
             raise SchemaError(
@@ -545,8 +561,7 @@ def _validate_sub_object(
 
     if not isinstance(obj, dict):
         raise SchemaError(
-            f"'{field_name}' must be an object when present, "
-            f"got {type(obj).__name__}",
+            f"'{field_name}' must be an object when present, got {type(obj).__name__}",
         )
 
     unknown = set(obj) - set(allowed_fields)
@@ -582,7 +597,7 @@ def _validate_safety_pharm(doc: dict[str, Any]) -> None:
             "unsupported or missing schema tag",
             detail=f"expected 'dde.tox-safety-pharm.v1', got {doc.get('schema')!r}",
             remedy="ensure the input JSON contains "
-            "'\"schema\": \"dde.tox-safety-pharm.v1\"'",
+            '\'"schema": "dde.tox-safety-pharm.v1"\'',
         )
 
     # compound_id — required, non-empty string
@@ -729,8 +744,7 @@ def _validate_genotox(doc: dict[str, Any]) -> None:
         raise Refusal(
             "unsupported or missing schema tag",
             detail=f"expected 'dde.tox-genotox.v1', got {doc.get('schema')!r}",
-            remedy="ensure the input JSON contains "
-            "'\"schema\": \"dde.tox-genotox.v1\"'",
+            remedy='ensure the input JSON contains \'"schema": "dde.tox-genotox.v1"\'',
         )
 
     # compound_id — required, non-empty string
@@ -778,7 +792,9 @@ def _validate_genotox(doc: dict[str, Any]) -> None:
         if not has_ames:
             missing.append("ames")
         if not has_in_vitro_clasto:
-            missing.append("in vitro clastogenicity (chromosomal_aberration or micronucleus_in_vitro)")
+            missing.append(
+                "in vitro clastogenicity (chromosomal_aberration or micronucleus_in_vitro)"
+            )
         if not has_in_vivo_mn:
             missing.append("micronucleus_in_vivo")
 
@@ -944,15 +960,11 @@ def _classify_genotox_battery(assays: list[dict]) -> tuple[str, bool]:
 
     # Mixed results — weight of evidence needed
     in_vivo_positive = any(
-        a["result"] == "positive"
-        and a["type"] == "micronucleus_in_vivo"
+        a["result"] == "positive" and a["type"] == "micronucleus_in_vivo"
         for a in assays
     )
 
-    in_vitro_positive_only = (
-        n_positive >= 1
-        and not in_vivo_positive
-    )
+    in_vitro_positive_only = n_positive >= 1 and not in_vivo_positive
 
     if n_positive >= 2:
         return "positive_concern", True
@@ -1041,9 +1053,7 @@ def ingest_cmd(
 
     # --- write normalised artifact ---
     artifact_path = target_dir / f"{record_id}.{suffix}.json"
-    artifact_path.write_text(
-        json.dumps(normalised, indent=2) + "\n", encoding="utf-8"
-    )
+    artifact_path.write_text(json.dumps(normalised, indent=2) + "\n", encoding="utf-8")
 
     sidecar.add_output(artifact_path)
     meta_path = sidecar.write(target_dir / f"{record_id}.{suffix}.meta.json")
@@ -1086,7 +1096,9 @@ def _build_weight_of_evidence_basis(assays: list[dict]) -> str:
             if is_in_vivo:
                 parts.append(f"{prefix} {atype} positive")
             else:
-                parts.append(f"{prefix} {atype} positive with and without S9 activation")
+                parts.append(
+                    f"{prefix} {atype} positive with and without S9 activation"
+                )
         elif ma in ("+S9", "-S9"):
             parts.append(f"{prefix} {atype} positive with {ma} activation")
         else:
@@ -1108,15 +1120,13 @@ def _build_weight_of_evidence_basis(assays: list[dict]) -> str:
     )
     if has_in_vitro_pos and has_in_vivo_neg:
         parts.append(
-            "In vitro positive may reflect conditions not achieved "
-            "in vivo (ICH S2(R1))"
+            "In vitro positive may reflect conditions not achieved in vivo (ICH S2(R1))"
         )
 
     # If no specific ICH pattern but still mixed, reference ICH S2(R1) generally
     if not (has_in_vitro_pos and has_in_vivo_neg):
         parts.append(
-            "Weight-of-evidence assessment per ICH S2(R1) due to mixed "
-            "battery results"
+            "Weight-of-evidence assessment per ICH S2(R1) due to mixed battery results"
         )
 
     return "; ".join(parts) + "."
@@ -1217,9 +1227,7 @@ def genotox_cmd(
     # --- write assessment artifact ---
     safe_id = _sanitize_id(compound_id)
     artifact_path = target_dir / f"{safe_id}.tox-genotox-assessment.json"
-    artifact_path.write_text(
-        json.dumps(assessment, indent=2) + "\n", encoding="utf-8"
-    )
+    artifact_path.write_text(json.dumps(assessment, indent=2) + "\n", encoding="utf-8")
 
     sidecar.add_output(artifact_path)
     meta_path = sidecar.write(
@@ -1296,10 +1304,7 @@ def _detect_same_study(
         and pk_dose is not None
         and float(tox_noael) == float(pk_dose)
     ):
-        return (
-            f"species={tox_species}, route={tox_route}, "
-            f"dose={tox_noael} mg/kg"
-        )
+        return f"species={tox_species}, route={tox_route}, dose={tox_noael} mg/kg"
 
     return None
 
@@ -1451,8 +1456,7 @@ def margins_cmd(
         raise Refusal(
             "unsupported or missing schema tag on tox file",
             detail=(
-                f"expected 'dde.tox-repeat-dose.v1', "
-                f"got {tox_doc.get('schema')!r}"
+                f"expected 'dde.tox-repeat-dose.v1', got {tox_doc.get('schema')!r}"
             ),
             remedy="use a file produced by `dde tox ingest`",
         )
@@ -1473,10 +1477,7 @@ def margins_cmd(
     if pk_doc.get("schema") != "dde.pk-nca.v1":
         raise Refusal(
             "unsupported or missing schema tag on PK file",
-            detail=(
-                f"expected 'dde.pk-nca.v1', "
-                f"got {pk_doc.get('schema')!r}"
-            ),
+            detail=(f"expected 'dde.pk-nca.v1', got {pk_doc.get('schema')!r}"),
             remedy="use a file produced by `dde pk nca`",
         )
 
@@ -1507,23 +1508,18 @@ def margins_cmd(
             clinical_pk_path, "clinical PK NCA artifact"
         )
         if not isinstance(clinical_pk_doc, dict):
-            raise SchemaError(
-                "clinical PK NCA artifact must be a JSON object"
-            )
+            raise SchemaError("clinical PK NCA artifact must be a JSON object")
         if clinical_pk_doc.get("schema") != "dde.pk-nca.v1":
             raise Refusal(
                 "unsupported or missing schema tag on clinical PK file",
                 detail=(
-                    f"expected 'dde.pk-nca.v1', "
-                    f"got {clinical_pk_doc.get('schema')!r}"
+                    f"expected 'dde.pk-nca.v1', got {clinical_pk_doc.get('schema')!r}"
                 ),
                 remedy="use a file produced by `dde pk nca`",
             )
 
     # --- 3. Same-study detection (Item 2) ---
-    same_study_reason = _detect_same_study(
-        tox_doc, pk_doc, tox_path, pk_path
-    )
+    same_study_reason = _detect_same_study(tox_doc, pk_doc, tox_path, pk_path)
     is_indeterminate = False
     indeterminate_reason: str | None = None
 
@@ -1549,8 +1545,10 @@ def margins_cmd(
     if noael_exposure is not None and not is_indeterminate:
         ti_values = _compute_ti_values(
             noael_exposure,
-            pk_cmax, pk_cmax_units,
-            pk_auc, pk_auc_units,
+            pk_cmax,
+            pk_cmax_units,
+            pk_auc,
+            pk_auc_units,
             margin_notes,
         )
 
@@ -1565,23 +1563,22 @@ def margins_cmd(
             clin_auc_0_inf = clin_params.get("auc_0_inf")
             clin_auc_0_t = clin_params.get("auc_0_t")
             clin_auc_units = clin_params.get("auc_units")
-            clin_auc = (
-                clin_auc_0_inf
-                if clin_auc_0_inf is not None
-                else clin_auc_0_t
-            )
+            clin_auc = clin_auc_0_inf if clin_auc_0_inf is not None else clin_auc_0_t
 
             clinical_margin_notes: list[str] = []
-            clinical_ti = _compute_ti_values(
-                noael_exposure,
-                clin_cmax, clin_cmax_units,
-                clin_auc, clin_auc_units,
-                clinical_margin_notes,
-            ) or None
-            if clinical_margin_notes:
-                margin_notes.extend(
-                    f"clinical: {n}" for n in clinical_margin_notes
+            clinical_ti = (
+                _compute_ti_values(
+                    noael_exposure,
+                    clin_cmax,
+                    clin_cmax_units,
+                    clin_auc,
+                    clin_auc_units,
+                    clinical_margin_notes,
                 )
+                or None
+            )
+            if clinical_margin_notes:
+                margin_notes.extend(f"clinical: {n}" for n in clinical_margin_notes)
 
             # For backward compat, margins contains clinical_ti values
             margins = clinical_ti
@@ -1665,15 +1662,11 @@ def margins_cmd(
 
     # --- 5. hERG margin (optional) ---
     if herg_file is not None:
-        herg_path = resolve_artifact(
-            state, herg_file, "safety-pharm artifact"
-        )
+        herg_path = resolve_artifact(state, herg_file, "safety-pharm artifact")
         herg_doc = provenance.read_json(herg_path, "safety-pharm artifact")
 
         if not isinstance(herg_doc, dict):
-            raise SchemaError(
-                "safety-pharm artifact must be a JSON object"
-            )
+            raise SchemaError("safety-pharm artifact must be a JSON object")
 
         if herg_doc.get("schema") != "dde.tox-safety-pharm.v1":
             raise Refusal(
@@ -1683,8 +1676,7 @@ def margins_cmd(
                     f"got {herg_doc.get('schema')!r}"
                 ),
                 remedy=(
-                    "use a file produced by `dde tox ingest` "
-                    "with a safety-pharm schema"
+                    "use a file produced by `dde tox ingest` with a safety-pharm schema"
                 ),
             )
 
@@ -1735,9 +1727,7 @@ def margins_cmd(
 
     # --- 7. Write output artifact ---
     artifact_path = target_dir / f"{study_id}.tox-margins.json"
-    artifact_path.write_text(
-        json.dumps(record, indent=2) + "\n", encoding="utf-8"
-    )
+    artifact_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
 
     # --- Provenance sidecar ---
     sidecar_params: dict[str, Any] = {
@@ -1800,9 +1790,7 @@ def margins_cmd(
     )
     if pk_meta_path.exists():
         try:
-            pk_meta = json.loads(
-                pk_meta_path.read_text(encoding="utf-8")
-            )
+            pk_meta = json.loads(pk_meta_path.read_text(encoding="utf-8"))
             for r in pk_meta.get("mandatory_relays", []):
                 code = r.get("code", "")
                 message = r.get("message", "")
@@ -1812,9 +1800,7 @@ def margins_cmd(
             pass
 
     sidecar.add_output(artifact_path)
-    meta_path = sidecar.write(
-        target_dir / f"{study_id}.tox-margins.meta.json"
-    )
+    meta_path = sidecar.write(target_dir / f"{study_id}.tox-margins.meta.json")
 
     # --- Emit (paths only — phase 1 convention) ---
     emit.path(artifact_path, role="margins")
@@ -1822,28 +1808,20 @@ def margins_cmd(
     emit.line(f"margins: {study_id} ({species})")
     emit.line(f"NOAEL: {noael_mg_kg} mg/kg")
     if is_indeterminate:
-        emit.line(f"verdict: indeterminate")
+        emit.line("verdict: indeterminate")
         emit.line(f"reason: {indeterminate_reason}")
     elif margins is not None:
         if clinical_ti is not None:
             # Dual-margin mode
             if animal_margin:
                 if "ti_cmax" in animal_margin:
-                    emit.line(
-                        f"animal margin (Cmax): {animal_margin['ti_cmax']:.1f}"
-                    )
+                    emit.line(f"animal margin (Cmax): {animal_margin['ti_cmax']:.1f}")
                 if "ti_auc" in animal_margin:
-                    emit.line(
-                        f"animal margin (AUC): {animal_margin['ti_auc']:.1f}"
-                    )
+                    emit.line(f"animal margin (AUC): {animal_margin['ti_auc']:.1f}")
             if "ti_cmax" in clinical_ti:
-                emit.line(
-                    f"clinical TI (Cmax): {clinical_ti['ti_cmax']:.1f}"
-                )
+                emit.line(f"clinical TI (Cmax): {clinical_ti['ti_cmax']:.1f}")
             if "ti_auc" in clinical_ti:
-                emit.line(
-                    f"clinical TI (AUC): {clinical_ti['ti_auc']:.1f}"
-                )
+                emit.line(f"clinical TI (AUC): {clinical_ti['ti_auc']:.1f}")
         else:
             if "ti_cmax" in margins:
                 emit.line(f"TI (Cmax): {margins['ti_cmax']:.1f}")
@@ -1852,9 +1830,7 @@ def margins_cmd(
     else:
         emit.line("TI: not computed (no NOAEL exposure data)")
     if "herg" in record:
-        emit.line(
-            f"hERG safety margin: {record['herg']['safety_margin']:.1f}"
-        )
+        emit.line(f"hERG safety margin: {record['herg']['safety_margin']:.1f}")
     emit.flush()
 
 
@@ -1923,8 +1899,7 @@ def _analyze_margins(
         # NOAEL exposure absent — cannot compute TI
         note = doc.get(
             "margin_note",
-            "NOAEL exposure data not available; therapeutic index "
-            "cannot be computed",
+            "NOAEL exposure data not available; therapeutic index cannot be computed",
         )
         assessment["ti"] = {
             "status": "incomplete",
@@ -1976,8 +1951,7 @@ def _analyze_margins(
             assessment[f"{ti_label}_cmax"] = {
                 "status": "acceptable",
                 "message": (
-                    f"TI (Cmax) {ti_cmax:.1f} meets the "
-                    f"{ti_minimum:.0f}-fold minimum"
+                    f"TI (Cmax) {ti_cmax:.1f} meets the {ti_minimum:.0f}-fold minimum"
                 ),
             }
 
@@ -1987,8 +1961,7 @@ def _analyze_margins(
             assessment[f"{ti_label}_auc"] = {
                 "status": "flagged",
                 "message": (
-                    f"TI (AUC) {ti_auc:.1f} is below the "
-                    f"{ti_minimum:.0f}-fold minimum"
+                    f"TI (AUC) {ti_auc:.1f} is below the {ti_minimum:.0f}-fold minimum"
                 ),
             }
             ti_status = "flagged"
@@ -1996,8 +1969,7 @@ def _analyze_margins(
             assessment[f"{ti_label}_auc"] = {
                 "status": "acceptable",
                 "message": (
-                    f"TI (AUC) {ti_auc:.1f} meets the "
-                    f"{ti_minimum:.0f}-fold minimum"
+                    f"TI (AUC) {ti_auc:.1f} meets the {ti_minimum:.0f}-fold minimum"
                 ),
             }
 
@@ -2151,10 +2123,7 @@ def analyze_cmd(
     if schema not in _SCHEMA_MAP:
         raise Refusal(
             f"unrecognised tox artifact schema: {schema!r}",
-            detail=(
-                "expected one of: "
-                + ", ".join(sorted(_SCHEMA_MAP))
-            ),
+            detail=("expected one of: " + ", ".join(sorted(_SCHEMA_MAP))),
             remedy=(
                 "provide a file produced by "
                 "`dde tox margins`, `tox genotox`, or `tox ingest` "
@@ -2172,9 +2141,10 @@ def analyze_cmd(
     # Backward compatibility: warn if an old-format analysis file exists
     old_analysis_name = f"{stem}.tox.analysis.json"
     if old_analysis_name != new_analysis_name:
-        old_candidate = (source.parent / old_analysis_name)
+        old_candidate = source.parent / old_analysis_name
         if old_candidate.exists():
             from ..core.output import warn
+
             warn(
                 f"old-format analysis exists: {old_analysis_name}; "
                 f"new analysis uses: {new_analysis_name}"
@@ -2216,9 +2186,7 @@ def analyze_cmd(
         _analyze_safety_pharm(result_doc, thresholds, metrics, assessment)
 
     # --- Write analysis ---
-    analysis_path = beside_or_out(
-        state, source, new_analysis_name, out
-    )
+    analysis_path = beside_or_out(state, source, new_analysis_name, out)
 
     provenance.write_analysis(
         analysis_path,
@@ -2240,7 +2208,5 @@ def analyze_cmd(
     emit.line(f"Threshold set: {thresholds.tag}")
     emit.line(f"Verdict: {assessment.get('verdict', 'unknown')}")
     if thresholds.unresolved():
-        emit.line(
-            f"Unresolved thresholds: {', '.join(thresholds.unresolved())}"
-        )
+        emit.line(f"Unresolved thresholds: {', '.join(thresholds.unresolved())}")
     emit.flush()

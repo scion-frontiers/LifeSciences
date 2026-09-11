@@ -35,12 +35,12 @@ from typing import Any
 import click
 
 
-def _tool_info(
-    name: str, cmd: click.Group, ctx: click.Context
-) -> dict[str, Any]:
+def _tool_info(name: str, cmd: click.Group, ctx: click.Context) -> dict[str, Any]:
     """Build an info dict for a single command group."""
     purpose = (cmd.help or cmd.short_help or "").split("\n")[0].strip()
-    subcommands = sorted(cmd.list_commands(ctx)) if hasattr(cmd, "list_commands") else []
+    subcommands = (
+        sorted(cmd.list_commands(ctx)) if hasattr(cmd, "list_commands") else []
+    )
 
     # Try to find ARTIFACT_CLASS from the module that defined this group.
     artifact_class: str | None = None
@@ -77,6 +77,7 @@ def _tool_info(
 # The ``tools`` group and its ``list`` subcommand
 # ---------------------------------------------------------------------------
 
+
 # Named ``tools_group`` to avoid shadowing the ``tools/`` directory on
 # disk (the brief warns about this).
 @click.group("tools")
@@ -85,7 +86,9 @@ def tools_group() -> None:
 
 
 @tools_group.command("list")
-@click.option("--json", "as_json", is_flag=True, help="Emit machine-readable JSON array.")
+@click.option(
+    "--json", "as_json", is_flag=True, help="Emit machine-readable JSON array."
+)
 @click.option("--quiet", is_flag=True, help="Print group names only, one per line.")
 @click.option(
     "--domain",
@@ -93,7 +96,9 @@ def tools_group() -> None:
     help="Filter groups whose purpose contains DOMAIN (case-insensitive).",
 )
 @click.pass_context
-def list_tools(ctx: click.Context, as_json: bool, quiet: bool, domain: str | None) -> None:
+def list_tools(
+    ctx: click.Context, as_json: bool, quiet: bool, domain: str | None
+) -> None:
     """List every registered command group with purpose and subcommands."""
     # Walk up to the root CLI group.
     root = ctx

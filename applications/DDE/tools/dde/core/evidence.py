@@ -35,34 +35,34 @@ import re
 from dataclasses import dataclass, fields
 from typing import Any
 
-from .errors import Refusal, SchemaError
+from .errors import Refusal
 
 # ---------------------------------------------------------------------------
 # Enum sets  (design SS1.2, SS1.3)
 # ---------------------------------------------------------------------------
 
 EVIDENCE_STATUSES = {
-    "supported",           # Evidence actively supports the claim
-    "contradicted",        # Evidence contradicts the claim
-    "insufficient",        # Evidence exists but is not decisive
-    "not_assessed",        # No assessment has been performed
+    "supported",  # Evidence actively supports the claim
+    "contradicted",  # Evidence contradicts the claim
+    "insufficient",  # Evidence exists but is not decisive
+    "not_assessed",  # No assessment has been performed
     "not_yet_applicable",  # Cannot be assessed at this stage
 }
 
 EXECUTION_OUTCOMES = {
-    "completed",           # Tool ran successfully; result is in the evidence status
-    "tool_unavailable",    # Required tool is not in the environment
-    "tool_failed",         # Tool ran and errored (exit != 0)
-    "data_unavailable",    # Required upstream data does not exist
-    "blocked",             # Dependency not met; cannot attempt
+    "completed",  # Tool ran successfully; result is in the evidence status
+    "tool_unavailable",  # Required tool is not in the environment
+    "tool_failed",  # Tool ran and errored (exit != 0)
+    "data_unavailable",  # Required upstream data does not exist
+    "blocked",  # Dependency not met; cannot attempt
 }
 
 ACTIONS = {
     "advance_with_budget",  # Proceed to next stage/phase with specified budget
-    "investigate",          # Gather more evidence before deciding
-    "pivot",                # Change direction (within program or concept)
-    "park",                 # Suspend without termination; revisit later
-    "terminate",            # End the concept/program element (human-gated)
+    "investigate",  # Gather more evidence before deciding
+    "pivot",  # Change direction (within program or concept)
+    "park",  # Suspend without termination; revisit later
+    "terminate",  # End the concept/program element (human-gated)
 }
 
 # ---------------------------------------------------------------------------
@@ -90,15 +90,18 @@ class EvidenceReference:
     context: str | None = None
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "EvidenceReference":
+    def from_dict(cls, data: dict[str, Any]) -> EvidenceReference:
         """Create an EvidenceReference from a dict, ignoring unknown keys."""
         known = {f.name for f in fields(cls)}
         return cls(**{k: v for k, v in data.items() if k in known})
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a dict, omitting None values for compactness."""
-        return {f.name: getattr(self, f.name) for f in fields(self)
-                if getattr(self, f.name) is not None}
+        return {
+            f.name: getattr(self, f.name)
+            for f in fields(self)
+            if getattr(self, f.name) is not None
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -111,9 +114,9 @@ _DR_ID_RE = re.compile(r"^DR-\d{3,}$")
 # entity_ref format patterns per entity_type  (design SS2.2 resolution table)
 _ENTITY_REF_PATTERNS: dict[str, re.Pattern[str]] = {
     "concept": re.compile(r"^IC-\d{3,}(-r\d+)?$"),
-    "claim":   re.compile(r"^AR-\d{3,}$"),
+    "claim": re.compile(r"^AR-\d{3,}$"),
     "program": re.compile(r"^DEC-\d{3,}$"),
-    "series":  re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$"),
+    "series": re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$"),
 }
 
 _ENTITY_TYPES = set(_ENTITY_REF_PATTERNS.keys())
@@ -123,8 +126,14 @@ _ENTITY_TYPES = set(_ENTITY_REF_PATTERNS.keys())
 # ---------------------------------------------------------------------------
 
 _ASSESSMENT_REQUIRED_FIELDS = [
-    "schema", "id", "concept_ref", "claim", "evidence_status",
-    "execution_outcome", "assessed_at", "assessed_by",
+    "schema",
+    "id",
+    "concept_ref",
+    "claim",
+    "evidence_status",
+    "execution_outcome",
+    "assessed_at",
+    "assessed_by",
 ]
 
 
@@ -140,9 +149,7 @@ def validate_assessment(data: dict[str, Any]) -> list[str]:
     # Schema string
     schema = data.get("schema")
     if schema is not None and schema != "dde.evidence-assessment.v1":
-        errors.append(
-            f"schema must be 'dde.evidence-assessment.v1', got {schema!r}"
-        )
+        errors.append(f"schema must be 'dde.evidence-assessment.v1', got {schema!r}")
 
     # ID format
     if "id" in data and not _AR_ID_RE.match(str(data["id"])):
@@ -156,7 +163,10 @@ def validate_assessment(data: dict[str, Any]) -> list[str]:
         )
 
     # Execution outcome
-    if "execution_outcome" in data and data["execution_outcome"] not in EXECUTION_OUTCOMES:
+    if (
+        "execution_outcome" in data
+        and data["execution_outcome"] not in EXECUTION_OUTCOMES
+    ):
         errors.append(
             f"execution_outcome {data['execution_outcome']!r} is not valid; "
             f"valid values: {', '.join(sorted(EXECUTION_OUTCOMES))}"
@@ -165,9 +175,12 @@ def validate_assessment(data: dict[str, Any]) -> list[str]:
     # Mutual constraint: execution_outcome != "completed" => evidence_status == "not_assessed"
     exec_out = data.get("execution_outcome")
     ev_status = data.get("evidence_status")
-    if (exec_out is not None and ev_status is not None
-            and exec_out != "completed"
-            and ev_status != "not_assessed"):
+    if (
+        exec_out is not None
+        and ev_status is not None
+        and exec_out != "completed"
+        and ev_status != "not_assessed"
+    ):
         errors.append(
             f"when execution_outcome is {exec_out!r}, evidence_status must be "
             f"'not_assessed', got {ev_status!r}"
@@ -193,12 +206,19 @@ def validate_assessment(data: dict[str, Any]) -> list[str]:
 # ---------------------------------------------------------------------------
 
 _DECISION_REQUIRED_FIELDS = [
-    "schema", "id", "action", "affected_entity", "rationale",
-    "decided_at", "decided_by",
+    "schema",
+    "id",
+    "action",
+    "affected_entity",
+    "rationale",
+    "decided_at",
+    "decided_by",
 ]
 
 _HUMAN_APPROVAL_REQUIRED_FIELDS = [
-    "approver", "approved_at", "approval_method",
+    "approver",
+    "approved_at",
+    "approval_method",
 ]
 
 
@@ -207,9 +227,7 @@ def _validate_human_approval(approval: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     missing = [f for f in _HUMAN_APPROVAL_REQUIRED_FIELDS if f not in approval]
     if missing:
-        errors.append(
-            f"human_approval missing required fields: {', '.join(missing)}"
-        )
+        errors.append(f"human_approval missing required fields: {', '.join(missing)}")
     for field in _HUMAN_APPROVAL_REQUIRED_FIELDS:
         if field in approval and not isinstance(approval[field], str):
             errors.append(
@@ -254,9 +272,7 @@ def validate_decision(
     # Schema string
     schema = data.get("schema")
     if schema is not None and schema != "dde.decision-record.v1":
-        errors.append(
-            f"schema must be 'dde.decision-record.v1', got {schema!r}"
-        )
+        errors.append(f"schema must be 'dde.decision-record.v1', got {schema!r}")
 
     # ID format
     if "id" in data and not _DR_ID_RE.match(str(data["id"])):
@@ -304,8 +320,7 @@ def validate_decision(
             for ref in sa:
                 if not _AR_ID_RE.match(str(ref)):
                     errors.append(
-                        f"supporting_assessments entry {ref!r} "
-                        "must match AR-NNN"
+                        f"supporting_assessments entry {ref!r} must match AR-NNN"
                     )
 
     # human_approval sub-schema validation (when present)

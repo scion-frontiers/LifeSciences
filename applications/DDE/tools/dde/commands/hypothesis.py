@@ -258,7 +258,7 @@ def adopt(
     if origin in _CITE_REQUIRED_ORIGINS and not cite_ref:
         raise UsageError(
             f"--cite is required when --origin is {origin!r}",
-            remedy=f"provide a DOI, PMID, or program-id with --cite",
+            remedy="provide a DOI, PMID, or program-id with --cite",
         )
 
     # -- Resolve the source file --
@@ -337,9 +337,9 @@ def adopt(
             "candidate_id": str(i + 1),
             "statement": hyp["statement"],
         }
-        if "mechanism" in hyp and hyp["mechanism"]:
+        if hyp.get("mechanism"):
             candidate["mechanism"] = hyp["mechanism"]
-        if "evidence_basis" in hyp and hyp["evidence_basis"]:
+        if hyp.get("evidence_basis"):
             candidate["evidence_basis"] = hyp["evidence_basis"]
         candidates_list.append(candidate)
 
@@ -381,6 +381,7 @@ def adopt(
     # capabilities were available.  Old artifacts without this field are
     # treated as capability_state: unknown (not clean) — see §migration.
     from .doctor import get_capability_snapshot
+
     sidecar.set_capability_state(get_capability_snapshot())
 
     # -- Strategy note --
@@ -463,13 +464,15 @@ def analyze(
     # adopted sets. Array position is input order, not preference.
     assessed = []
     for c in candidates_in:
-        assessed.append({
-            "candidate_id": c["candidate_id"],
-            "statement": c["statement"],
-            "rank": None,
-            "score": None,
-            "origin": "adopted",
-        })
+        assessed.append(
+            {
+                "candidate_id": c["candidate_id"],
+                "statement": c["statement"],
+                "rank": None,
+                "score": None,
+                "origin": "adopted",
+            }
+        )
 
     assessment: dict[str, Any] = {}
     assessment["assessment_core"] = {
@@ -497,18 +500,20 @@ def analyze(
     # -- Relays --
     relays: list[dict[str, str]] = []
 
-    relays.append(provenance.relay(
-        "hypothesis.unranked_set",
-        "Adopted hypothesis set carries no ranking. Array position is "
-        "input order, not preference. Do not present it as a leaderboard.",
-    ))
+    relays.append(
+        provenance.relay(
+            "hypothesis.unranked_set",
+            "Adopted hypothesis set carries no ranking. Array position is "
+            "input order, not preference. Do not present it as a leaderboard.",
+        )
+    )
 
     # Carry forward relays from the ingest sidecar
     meta_path = None
     for suffix in (".adopted.json", ".charter.json"):
         if path.name.endswith(suffix):
-            base = path.name[:-len(suffix)]
-            infix = suffix[1:suffix.rindex('.')]  # "adopted" or "charter"
+            base = path.name[: -len(suffix)]
+            infix = suffix[1 : suffix.rindex(".")]  # "adopted" or "charter"
             candidate = path.with_name(f"{base}.{infix}.meta.json")
             if candidate.is_file():
                 meta_path = candidate
@@ -535,6 +540,7 @@ def analyze(
 
     # -- Capability snapshot --
     from .doctor import get_capability_snapshot
+
     cap_snapshot = get_capability_snapshot()
 
     provenance.write_analysis(

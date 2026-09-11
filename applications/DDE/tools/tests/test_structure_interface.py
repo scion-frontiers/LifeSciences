@@ -36,8 +36,6 @@ from dde.commands.structure import (
     _parse_atoms_cif,
     _parse_atoms_pdb,
 )
-from dde.core.errors import UsageError
-
 
 # ---------------------------------------------------------------------------
 # Minimal test fixtures
@@ -206,7 +204,7 @@ class TestFindInterfaceResidues(unittest.TestCase):
         atoms = _parse_atoms_pdb(PDB_WITH_HYDROGENS)
         chain_atoms = _group_atoms_by_chain(atoms)
 
-        residues_a, residues_b, n_contacts = _find_interface_residues(
+        residues_a, residues_b, _n_contacts = _find_interface_residues(
             chain_atoms["A"], chain_atoms["B"], cutoff=5.0
         )
 
@@ -219,7 +217,7 @@ class TestFindInterfaceResidues(unittest.TestCase):
         atoms = _parse_atoms_cif(TWO_CHAIN_CIF)
         chain_atoms = _group_atoms_by_chain(atoms)
 
-        residues_a, residues_b, n_contacts = _find_interface_residues(
+        residues_a, residues_b, _n_contacts = _find_interface_residues(
             chain_atoms["A"], chain_atoms["B"], cutoff=5.0
         )
 
@@ -283,11 +281,7 @@ class TestChainFilter(unittest.TestCase):
         all_chains = sorted(chain_atoms.keys())
 
         # When filtering to chain A, only A-B and A-C pairs
-        filtered_pairs = [
-            (chain_filter, other)
-            for other in all_chains
-            if other != "A"
-        ]
+        filtered_pairs = [(chain_filter, other) for other in all_chains if other != "A"]
         self.assertEqual(len(filtered_pairs), 2)
         pair_set = {(a, b) for a, b in filtered_pairs}
         self.assertIn(("A", "B"), pair_set)

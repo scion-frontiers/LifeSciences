@@ -52,7 +52,7 @@ from ..common import (
     pass_state,
 )
 from ..core import http, provenance
-from ..core.errors import ArtifactError, Refusal, SchemaError
+from ..core.errors import ArtifactError, SchemaError
 from ..core.ncbi import api_key_params
 from ..core.qps import qps_for_host
 
@@ -106,10 +106,12 @@ def _extract_result(doc: dict[str, Any]) -> dict[str, Any]:
     elif isinstance(raw_samples, list):
         for s in raw_samples[:20]:
             if isinstance(s, dict):
-                samples.append({
-                    "accession": s.get("accession", s.get("Accession", "")),
-                    "title": s.get("title", s.get("Title", "")),
-                })
+                samples.append(
+                    {
+                        "accession": s.get("accession", s.get("Accession", "")),
+                        "title": s.get("title", s.get("Title", "")),
+                    }
+                )
 
     # PubMed IDs may come as a list of ints/strings or a single value.
     raw_pmids = doc.get("pubmedids", [])
@@ -153,7 +155,12 @@ def _fetch_geo(
     issues.
     """
     constructed_term = _build_term(
-        query, organism, entry_type, data_type, year_from, year_to,
+        query,
+        organism,
+        entry_type,
+        data_type,
+        year_from,
+        year_to,
     )
 
     # Phase 1a: esearch — get matching IDs.
@@ -331,8 +338,13 @@ def search_cmd(
     slug = _slugify(query)
 
     raw, artifact = _fetch_geo(
-        query, organism, entry_type, data_type,
-        year_from, year_to, max_results,
+        query,
+        organism,
+        entry_type,
+        data_type,
+        year_from,
+        year_to,
+        max_results,
     )
 
     sidecar = provenance.Sidecar(
@@ -361,9 +373,7 @@ def search_cmd(
 
     # Write structured artifact.
     artifact_path = target_dir / f"{slug}.geo.artifact.json"
-    artifact_path.write_text(
-        json.dumps(artifact, indent=2) + "\n", encoding="utf-8"
-    )
+    artifact_path.write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
     sidecar.add_output(artifact_path)
 
     # Write sidecar.
@@ -378,14 +388,12 @@ def search_cmd(
     emit.path(meta_path, role="sidecar")
     emit.line(f"GEO search: {query!r}")
     emit.line(
-        f"  {artifact['query']['esearch_count']} total matches, "
-        f"{n_results} returned"
+        f"  {artifact['query']['esearch_count']} total matches, {n_results} returned"
     )
     if artifact["results"]:
         for r in artifact["results"][:5]:
             emit.line(
-                f"  {r['accession']}: {r['title'][:60]} "
-                f"({r['n_samples']} samples)"
+                f"  {r['accession']}: {r['title'][:60]} ({r['n_samples']} samples)"
             )
         if n_results > 5:
             emit.line(f"  ... {n_results - 5} more in the artifact")
@@ -473,7 +481,9 @@ def analyze_cmd(
         }
 
     # Top datasets by sample count.
-    sorted_by_samples = sorted(results, key=lambda r: r.get("n_samples", 0), reverse=True)
+    sorted_by_samples = sorted(
+        results, key=lambda r: r.get("n_samples", 0), reverse=True
+    )
     top_datasets = [
         {
             "accession": r["accession"],
@@ -557,8 +567,7 @@ def analyze_cmd(
         emit.line("  Top datasets by sample count:")
         for td in top_datasets[:5]:
             emit.line(
-                f"    {td['accession']}: {td['title'][:50]} "
-                f"({td['n_samples']} samples)"
+                f"    {td['accession']}: {td['title'][:50]} ({td['n_samples']} samples)"
             )
     for record in relays:
         emit.line(f"relay {record['code']}: {record['message']}")

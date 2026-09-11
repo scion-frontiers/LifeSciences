@@ -35,7 +35,7 @@ from __future__ import annotations
 
 import click
 
-from ..common import output_options, emitter
+from ..common import emitter, output_options
 from ..core import envstamp
 from ..core.env import tools_home
 from ..core.errors import ArtifactError
@@ -77,11 +77,14 @@ def _emit_host_requirements(e, home) -> None:
         # First time, or an older stamp that pre-dates host-requirements
         # tracking.  Report the count, but don't alarm.
         parsed = envstamp.parse_host_requirements(current)
-        e.data("host_requirements", {
-            "count": len(parsed),
-            "stamped": False,
-            "changed": False,
-        })
+        e.data(
+            "host_requirements",
+            {
+                "count": len(parsed),
+                "stamped": False,
+                "changed": False,
+            },
+        )
         return
 
     delta = envstamp.diff_host_requirements(stamped, current)
@@ -152,18 +155,21 @@ def show(as_json: bool, quiet: bool) -> None:
                     parts.append(f"{added} added")
                 if removed:
                     parts.append(f"{removed} removed")
-                e.line(
-                    f"Host requirements changed since stamp ({', '.join(parts)})."
-                )
+                e.line(f"Host requirements changed since stamp ({', '.join(parts)}).")
             else:
                 e.line(f"{len(host_parsed)} host requirement(s) — match stamp.")
         else:
-            e.data("host_requirements", {
-                "count": len(host_parsed),
-                "stamped": False,
-                "changed": False,
-            })
-            e.line(f"{len(host_parsed)} host requirement(s) declared (no stamp snapshot).")
+            e.data(
+                "host_requirements",
+                {
+                    "count": len(host_parsed),
+                    "stamped": False,
+                    "changed": False,
+                },
+            )
+            e.line(
+                f"{len(host_parsed)} host requirement(s) declared (no stamp snapshot)."
+            )
 
     log = envstamp.history(home)
     if log:
@@ -220,7 +226,9 @@ def plan(as_json: bool, quiet: bool) -> None:
 
 
 @env.command()
-@click.option("--note", default=None, help="One line recorded in ENV_HISTORY beside the stamp.")
+@click.option(
+    "--note", default=None, help="One line recorded in ENV_HISTORY beside the stamp."
+)
 @output_options
 def stamp(note: str | None, as_json: bool, quiet: bool) -> None:
     """Write ENV_VERSION from the environment as it is right now.
@@ -244,7 +252,9 @@ def stamp(note: str | None, as_json: bool, quiet: bool) -> None:
         )
         _emit_changes(e, list(result["changes"]))
     else:
-        e.line(f"{envstamp.short(str(result['env_version']))} — unchanged, nothing logged.")
+        e.line(
+            f"{envstamp.short(str(result['env_version']))} — unchanged, nothing logged."
+        )
     e.flush()
 
 

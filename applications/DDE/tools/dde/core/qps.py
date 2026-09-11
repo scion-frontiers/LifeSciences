@@ -42,53 +42,53 @@ from .ncbi import EUTILS_QPS as _EUTILS_QPS
 
 HOST_QPS: dict[str, float] = {
     # ── NCBI ──────────────────────────────────────────────────────────
-    "pubchem.ncbi.nlm.nih.gov": 2.0,        # compreg=2, assay=4, pubchem=5, similar=5
-    "eutils.ncbi.nlm.nih.gov": _EUTILS_QPS, # ncbi.py dynamic (3 or 10 w/ key); gwas/clinvar was 3
+    "pubchem.ncbi.nlm.nih.gov": 2.0,  # compreg=2, assay=4, pubchem=5, similar=5
+    "eutils.ncbi.nlm.nih.gov": _EUTILS_QPS,  # ncbi.py dynamic (3 or 10 w/ key); gwas/clinvar was 3
     # ── EBI ───────────────────────────────────────────────────────────
-    "www.ebi.ac.uk": 1.0,                   # assay/chembl=1, compreg/chembl=2, gwas/catalog=2,
-                                             # litref/epmc=2, pubchem/chembl=5, similar/chembl=5,
-                                             # pathway/quickgo=5
-    "alphafold.ebi.ac.uk": 1.0,             # alphafold=1
+    "www.ebi.ac.uk": 1.0,  # assay/chembl=1, compreg/chembl=2, gwas/catalog=2,
+    # litref/epmc=2, pubchem/chembl=5, similar/chembl=5,
+    # pathway/quickgo=5
+    "alphafold.ebi.ac.uk": 1.0,  # alphafold=1
     # ── UniProt ───────────────────────────────────────────────────────
-    "rest.uniprot.org": 3.0,                # alphafold=3, homology=3, pathway=5
+    "rest.uniprot.org": 3.0,  # alphafold=3, homology=3, pathway=5
     # ── PDB / RCSB ───────────────────────────────────────────────────
-    "search.rcsb.org": 1.0,                 # homology=1
-    "data.rcsb.org": 1.0,                   # homology=1
-    "files.rcsb.org": 1.0,                  # homology=1
+    "search.rcsb.org": 1.0,  # homology=1
+    "data.rcsb.org": 1.0,  # homology=1
+    "files.rcsb.org": 1.0,  # homology=1
     # ── Clinical / Regulatory ────────────────────────────────────────
-    "clinicaltrials.gov": 2.0,              # litref=2, trials=3
-    "api.fda.gov": 4.0,                     # faers=4
-    "api.platform.opentargets.org": 5.0,    # gwas=5
+    "clinicaltrials.gov": 2.0,  # litref=2, trials=3
+    "api.fda.gov": 4.0,  # faers=4
+    "api.platform.opentargets.org": 5.0,  # gwas=5
     # ── Expression / Omics ───────────────────────────────────────────
-    "www.proteinatlas.org": 1.0,            # expression/hpa=1
-    "gtexportal.org": 1.0,                  # gtex=1
-    "api.cellxgene.cziscience.com": 5.0,    # cellxgene=5
-    "www.cbioportal.org": 5.0,              # cbioportal=5
-    "api.brain-map.org": 5.0,               # allen=5
+    "www.proteinatlas.org": 1.0,  # expression/hpa=1
+    "gtexportal.org": 1.0,  # gtex=1
+    "api.cellxgene.cziscience.com": 5.0,  # cellxgene=5
+    "www.cbioportal.org": 5.0,  # cbioportal=5
+    "api.brain-map.org": 5.0,  # allen=5
     # ── Genetics ─────────────────────────────────────────────────────
-    "gnomad.broadinstitute.org": 0.35,      # genetics=0.35
+    "gnomad.broadinstitute.org": 0.35,  # genetics=0.35
     # ── Phenotype / Model Organisms ──────────────────────────────────
-    "www.informatics.jax.org": 2.0,         # phenotype/mgi=2
-    "ontology.jax.org": 5.0,                # phenotype/hpo=5
-    "www.alliancegenome.org": 5.0,          # phenotype/agr=5
+    "www.informatics.jax.org": 2.0,  # phenotype/mgi=2
+    "ontology.jax.org": 5.0,  # phenotype/hpo=5
+    "www.alliancegenome.org": 5.0,  # phenotype/agr=5
     # ── Gene nomenclature ──────────────────────────────────────────
-    "rest.genenames.org": 5.0,              # gene/hgnc=5
+    "rest.genenames.org": 5.0,  # gene/hgnc=5
     # ── Protein / Pathway ────────────────────────────────────────────
-    "string-db.org": 1.0,                   # ppi=1
-    "reactome.org": 5.0,                    # pathway=5
+    "string-db.org": 1.0,  # ppi=1
+    "reactome.org": 5.0,  # pathway=5
     # ── Single-cell ──────────────────────────────────────────────────
-    "dice-database.org": 2.0,               # dice=2
-    "immunesinglecell.com": 3.0,            # disco=3
-    "www.spatialomics.org": 2.0,            # spatialdb=2
+    "dice-database.org": 2.0,  # dice=2
+    "immunesinglecell.com": 3.0,  # disco=3
+    "www.spatialomics.org": 2.0,  # spatialdb=2
     # ── Citation verification ───────────────────────────────────────
-    "api.crossref.org": 2.0,                # cite/crossref=2
+    "api.crossref.org": 2.0,  # cite/crossref=2
     # ── Preprint servers ────────────────────────────────────────────
-    "export.arxiv.org": 0.333,              # preprint/arxiv; politeness minimum
-    "api.biorxiv.org": 3.0,                 # preprint/biorxiv; design spec §4.1.2
+    "export.arxiv.org": 0.333,  # preprint/arxiv; politeness minimum
+    "api.biorxiv.org": 3.0,  # preprint/biorxiv; design spec §4.1.2
     # ── Other ────────────────────────────────────────────────────────
-    "www.inbirg.com": 2.0,                  # disignatlas=2
-    "patents.google.com": 0.5,              # patent=0.5
-    "askcos.mit.edu": 1.0,                  # retro=1
+    "www.inbirg.com": 2.0,  # disignatlas=2
+    "patents.google.com": 0.5,  # patent=0.5
+    "askcos.mit.edu": 1.0,  # retro=1
 }
 
 # Default for hosts not in the table — conservative.

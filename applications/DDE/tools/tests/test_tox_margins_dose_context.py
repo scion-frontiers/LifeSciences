@@ -32,7 +32,6 @@ Asserts:
 from __future__ import annotations
 
 import json
-import os
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -55,7 +54,6 @@ from dde.commands.tox import (
     _detect_same_study,
 )
 from dde.core.provenance import RELAY_CODES
-
 
 # ---------------------------------------------------------------------------
 # Fixture helpers
@@ -152,9 +150,7 @@ class TestDetectSameStudy(unittest.TestCase):
     def test_matching_study_id(self) -> None:
         tox = _make_tox_artifact(study_id="STUDY-42")
         pk = _make_pk_nca_artifact(study_id="STUDY-42")
-        reason = _detect_same_study(
-            tox, pk, Path("a.json"), Path("b.json")
-        )
+        reason = _detect_same_study(tox, pk, Path("a.json"), Path("b.json"))
         self.assertIsNotNone(reason)
         self.assertIn("STUDY-42", reason)
 
@@ -173,9 +169,7 @@ class TestDetectSameStudy(unittest.TestCase):
         )
         pk = _make_pk_nca_artifact(study_id="B", species="rat", route="oral")
         pk["dose_mg_kg"] = 100.0
-        reason = _detect_same_study(
-            tox, pk, Path("a.json"), Path("b.json")
-        )
+        reason = _detect_same_study(tox, pk, Path("a.json"), Path("b.json"))
         self.assertIsNotNone(reason)
         self.assertIn("rat", reason)
         self.assertIn("oral", reason)
@@ -183,9 +177,7 @@ class TestDetectSameStudy(unittest.TestCase):
     def test_different_studies(self) -> None:
         tox = _make_tox_artifact(study_id="TOX-001", species="rat")
         pk = _make_pk_nca_artifact(study_id="PK-002", species="dog")
-        reason = _detect_same_study(
-            tox, pk, Path("tox.json"), Path("pk.json")
-        )
+        reason = _detect_same_study(tox, pk, Path("tox.json"), Path("pk.json"))
         self.assertIsNone(reason)
 
 
@@ -200,18 +192,14 @@ class TestComputeTiValues(unittest.TestCase):
     def test_basic_cmax_ti(self) -> None:
         exposure = {"cmax": 300.0, "cmax_units": "ng/mL"}
         notes: list[str] = []
-        ti = _compute_ti_values(
-            exposure, 150.0, "ng/mL", None, None, notes
-        )
+        ti = _compute_ti_values(exposure, 150.0, "ng/mL", None, None, notes)
         self.assertAlmostEqual(ti["ti_cmax"], 2.0, places=2)
         self.assertEqual(notes, [])
 
     def test_unit_mismatch_appends_note(self) -> None:
         exposure = {"cmax": 300.0, "cmax_units": "ng/mL"}
         notes: list[str] = []
-        ti = _compute_ti_values(
-            exposure, 150.0, "ug/mL", None, None, notes
-        )
+        ti = _compute_ti_values(exposure, 150.0, "ug/mL", None, None, notes)
         self.assertNotIn("ti_cmax", ti)
         self.assertTrue(len(notes) > 0)
         self.assertIn("unit mismatch", notes[0].lower())
@@ -242,12 +230,9 @@ class TestIndeterminateVerdict(unittest.TestCase):
             tox_path = _write_json(td, "tox.tox-repeat-dose.json", tox)
             pk_path = _write_json(td, "pk.pk-nca.json", pk)
 
-            clinical_pk_path = None
             clinical_pk_doc = None
             if clinical_pk is not None:
-                clinical_pk_path = _write_json(
-                    td, "clinical.pk-nca.json", clinical_pk
-                )
+                _write_json(td, "clinical.pk-nca.json", clinical_pk)
                 clinical_pk_doc = clinical_pk
 
             # Replicate the core margins logic from margins_cmd
@@ -262,15 +247,11 @@ class TestIndeterminateVerdict(unittest.TestCase):
             pk_auc_0_inf = pk_params.get("auc_0_inf")
             pk_auc_0_t = pk_params.get("auc_0_t")
             pk_auc_units = pk_params.get("auc_units")
-            pk_auc = (
-                pk_auc_0_inf if pk_auc_0_inf is not None else pk_auc_0_t
-            )
+            pk_auc = pk_auc_0_inf if pk_auc_0_inf is not None else pk_auc_0_t
 
             resolved_dose_context = pk.get("dose_context") or dose_context
 
-            same_study_reason = _detect_same_study(
-                tox, pk, tox_path, pk_path
-            )
+            same_study_reason = _detect_same_study(tox, pk, tox_path, pk_path)
 
             is_indeterminate = False
             indeterminate_reason = None
@@ -292,8 +273,10 @@ class TestIndeterminateVerdict(unittest.TestCase):
             if noael_exposure is not None and not is_indeterminate:
                 ti_values = _compute_ti_values(
                     noael_exposure,
-                    pk_cmax, pk_cmax_units,
-                    pk_auc, pk_auc_units,
+                    pk_cmax,
+                    pk_cmax_units,
+                    pk_auc,
+                    pk_auc_units,
                     margin_notes,
                 )
                 if clinical_pk_doc is not None:
@@ -305,17 +288,20 @@ class TestIndeterminateVerdict(unittest.TestCase):
                     clin_auc_0_t = clin_params.get("auc_0_t")
                     clin_auc_units = clin_params.get("auc_units")
                     clin_auc = (
-                        clin_auc_0_inf
-                        if clin_auc_0_inf is not None
-                        else clin_auc_0_t
+                        clin_auc_0_inf if clin_auc_0_inf is not None else clin_auc_0_t
                     )
                     clin_notes: list[str] = []
-                    clinical_ti_val = _compute_ti_values(
-                        noael_exposure,
-                        clin_cmax, clin_cmax_units,
-                        clin_auc, clin_auc_units,
-                        clin_notes,
-                    ) or None
+                    clinical_ti_val = (
+                        _compute_ti_values(
+                            noael_exposure,
+                            clin_cmax,
+                            clin_cmax_units,
+                            clin_auc,
+                            clin_auc_units,
+                            clin_notes,
+                        )
+                        or None
+                    )
                     margins = clinical_ti_val
                 else:
                     margins = ti_values if ti_values else None
@@ -346,8 +332,10 @@ class TestIndeterminateVerdict(unittest.TestCase):
         tox = _make_tox_artifact(
             study_id="SAME-001",
             noael_exposure={
-                "cmax": 300.0, "cmax_units": "ng/mL",
-                "auc": 4000.0, "auc_units": "ng/mL * h",
+                "cmax": 300.0,
+                "cmax_units": "ng/mL",
+                "auc": 4000.0,
+                "auc_units": "ng/mL * h",
             },
         )
         pk = _make_pk_nca_artifact(study_id="SAME-001")
@@ -364,13 +352,13 @@ class TestIndeterminateVerdict(unittest.TestCase):
         tox = _make_tox_artifact(
             study_id="SAME-001",
             noael_exposure={
-                "cmax": 300.0, "cmax_units": "ng/mL",
-                "auc": 4000.0, "auc_units": "ng/mL * h",
+                "cmax": 300.0,
+                "cmax_units": "ng/mL",
+                "auc": 4000.0,
+                "auc_units": "ng/mL * h",
             },
         )
-        pk = _make_pk_nca_artifact(
-            study_id="SAME-001", cmax=300.0, auc_0_inf=4000.0
-        )
+        pk = _make_pk_nca_artifact(study_id="SAME-001", cmax=300.0, auc_0_inf=4000.0)
         clinical = _make_pk_nca_artifact(
             study_id="HUMAN-001",
             species="human",
@@ -385,9 +373,7 @@ class TestIndeterminateVerdict(unittest.TestCase):
         self.assertIn("animal_margin", result)
         self.assertIn("clinical_ti", result)
         # Animal margin ≈ 1.0 (same study)
-        self.assertAlmostEqual(
-            result["animal_margin"]["ti_cmax"], 1.0, places=1
-        )
+        self.assertAlmostEqual(result["animal_margin"]["ti_cmax"], 1.0, places=1)
         # Clinical TI should be much larger (300 / 4.37 ≈ 68.6)
         self.assertGreater(result["clinical_ti"]["ti_cmax"], 50.0)
 
@@ -417,9 +403,7 @@ class TestIndeterminateVerdict(unittest.TestCase):
         # clinical_ti passes (68.6 > 10)
         self.assertEqual(assessment["verdict"], "acceptable")
         # Animal margin is recorded as informational, not graded
-        self.assertEqual(
-            assessment["animal_margin"]["status"], "informational"
-        )
+        self.assertEqual(assessment["animal_margin"]["status"], "informational")
         # clinical_ti Cmax is in metrics
         self.assertIn("clinical_ti_cmax", metrics)
         self.assertEqual(metrics["clinical_ti_cmax"], 68.6)
@@ -430,20 +414,14 @@ class TestIndeterminateVerdict(unittest.TestCase):
         """--dose-context label recorded in output artifact."""
         tox = _make_tox_artifact(study_id="TOX-A")
         pk = _make_pk_nca_artifact(study_id="PK-B")
-        result = self._run_margins(
-            tox, pk, dose_context="animal_limit_dose"
-        )
+        result = self._run_margins(tox, pk, dose_context="animal_limit_dose")
         self.assertEqual(result["dose_context"], "animal_limit_dose")
 
     def test_pk_artifact_dose_context_overrides_cli(self) -> None:
         """dose_context in PK artifact overrides --dose-context CLI."""
         tox = _make_tox_artifact(study_id="TOX-A")
-        pk = _make_pk_nca_artifact(
-            study_id="PK-B", dose_context="human_projected"
-        )
-        result = self._run_margins(
-            tox, pk, dose_context="animal_limit_dose"
-        )
+        pk = _make_pk_nca_artifact(study_id="PK-B", dose_context="human_projected")
+        result = self._run_margins(tox, pk, dose_context="animal_limit_dose")
         self.assertEqual(result["dose_context"], "human_projected")
 
     def test_normal_different_studies_produces_verdict(self) -> None:
@@ -452,12 +430,11 @@ class TestIndeterminateVerdict(unittest.TestCase):
             study_id="TOX-001",
             species="rat",
             noael_exposure={
-                "cmax": 300.0, "cmax_units": "ng/mL",
+                "cmax": 300.0,
+                "cmax_units": "ng/mL",
             },
         )
-        pk = _make_pk_nca_artifact(
-            study_id="PK-002", species="dog", cmax=4.37
-        )
+        pk = _make_pk_nca_artifact(study_id="PK-002", species="dog", cmax=4.37)
         result = self._run_margins(tox, pk)
 
         self.assertNotEqual(result.get("verdict"), "indeterminate")

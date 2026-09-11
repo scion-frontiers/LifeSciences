@@ -59,7 +59,7 @@ try:
         validate_assessment_core,
         validate_score,
     )
-except Exception as exc:  # noqa: BLE001
+except Exception as exc:
     print(
         f"CANNOT RUN - {type(exc).__name__}: {exc}\n"
         "  This checker imports assessment_schema to exercise validation.\n"
@@ -117,10 +117,7 @@ def _find_flat_assessment_schema(tree: ast.Module) -> list[int]:
             if not isinstance(node.value, ast.Dict):
                 continue
             for key in node.value.keys:
-                if (
-                    isinstance(key, ast.Constant)
-                    and key.value == "schema"
-                ):
+                if isinstance(key, ast.Constant) and key.value == "schema":
                     # Check if the value is our schema tag
                     idx = node.value.keys.index(key)
                     val = node.value.values[idx]
@@ -155,7 +152,7 @@ def check_envelope() -> list[str]:
 
         if not core_lines:
             errors.append(
-                f"{filename}: no assessment[\"assessment_core\"] = {{...}} "
+                f'{filename}: no assessment["assessment_core"] = {{...}} '
                 f"assignment found. The assessment_core envelope is missing."
             )
 
@@ -163,7 +160,7 @@ def check_envelope() -> list[str]:
             errors.append(
                 f"{filename}: flat assessment dict with schema key found at "
                 f"line(s) {flat_lines}. The assessment fields should be "
-                f"nested under assessment[\"assessment_core\"], not at the "
+                f'nested under assessment["assessment_core"], not at the '
                 f"flat level."
             )
 
@@ -209,8 +206,7 @@ def check_score_validation() -> list[str]:
     result = validate_score(0)
     if not result:
         errors.append(
-            "validate_score(0) should FAIL (bare number forbidden), "
-            "but got no errors"
+            "validate_score(0) should FAIL (bare number forbidden), but got no errors"
         )
 
     # Missing basis
@@ -286,8 +282,7 @@ def check_full_core_validation() -> list[str]:
     result = validate_assessment_core(missing_schema)
     if not result:
         errors.append(
-            "validate_assessment_core(missing schema) should FAIL, "
-            "but got no errors"
+            "validate_assessment_core(missing schema) should FAIL, but got no errors"
         )
 
     return errors

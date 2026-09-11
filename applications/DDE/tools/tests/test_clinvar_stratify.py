@@ -163,7 +163,9 @@ class TestAnalyzeClinvarStratification(unittest.TestCase):
             for i in range(3)
         ]
         relays, add_relay = self._collect_relays()
-        significant, metrics, assessment = _analyze_clinvar("BRCA1", variants, add_relay)
+        significant, metrics, assessment = _analyze_clinvar(
+            "BRCA1", variants, add_relay
+        )
 
         self.assertEqual(len(significant), 3)
         self.assertEqual(metrics["pathogenic_total"], 3)
@@ -195,7 +197,9 @@ class TestAnalyzeClinvarStratification(unittest.TestCase):
             for i in range(14)
         ]
         relays, add_relay = self._collect_relays()
-        significant, metrics, assessment = _analyze_clinvar("MRGPRX2", variants, add_relay)
+        significant, metrics, assessment = _analyze_clinvar(
+            "MRGPRX2", variants, add_relay
+        )
 
         self.assertEqual(len(significant), 14)
         self.assertEqual(metrics["pathogenic_total"], 14)
@@ -233,7 +237,9 @@ class TestAnalyzeClinvarStratification(unittest.TestCase):
             ),
         ]
         relays, add_relay = self._collect_relays()
-        significant, metrics, assessment = _analyze_clinvar("GENE1", variants, add_relay)
+        _significant, metrics, assessment = _analyze_clinvar(
+            "GENE1", variants, add_relay
+        )
 
         self.assertEqual(metrics["pathogenic_total"], 4)
         self.assertEqual(metrics["pathogenic_gene_specific"], 1)
@@ -270,7 +276,9 @@ class TestAnalyzeClinvarStratification(unittest.TestCase):
             ),
         ]
         relays, add_relay = self._collect_relays()
-        significant, metrics, assessment = _analyze_clinvar("GENE2", variants, add_relay)
+        _significant, metrics, _assessment = _analyze_clinvar(
+            "GENE2", variants, add_relay
+        )
 
         self.assertEqual(metrics["pathogenic_gene_specific"], 3)
         self.assertEqual(metrics["pathogenic_locus_overlapping"], 1)
@@ -294,7 +302,9 @@ class TestAnalyzeClinvarStratification(unittest.TestCase):
             ),
         ]
         relays, add_relay = self._collect_relays()
-        significant, metrics, assessment = _analyze_clinvar("GENE3", variants, add_relay)
+        significant, metrics, assessment = _analyze_clinvar(
+            "GENE3", variants, add_relay
+        )
 
         self.assertEqual(len(significant), 0)
         self.assertEqual(metrics["pathogenic_total"], 0)
@@ -323,8 +333,8 @@ class TestAnalyzeClinvarStratification(unittest.TestCase):
                 variant_id="2",
             ),
         ]
-        relays, add_relay = self._collect_relays()
-        significant, metrics, assessment = _analyze_clinvar("GENE", variants, add_relay)
+        _relays, add_relay = self._collect_relays()
+        _significant, metrics, _assessment = _analyze_clinvar("GENE", variants, add_relay)
 
         self.assertEqual(metrics["pathogenic_gene_specific"], 1)
         self.assertEqual(metrics["pathogenic_locus_overlapping"], 1)

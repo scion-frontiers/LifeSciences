@@ -40,7 +40,6 @@ Stage definitions (progressive requirements):
 
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 from typing import Any
 
@@ -55,12 +54,9 @@ MANUFACTURING_EVIDENCE_TYPES = {
         "NOT a synthesis route"
     ),
     "complexity_heuristic": (
-        "Stereocenter/step-count complexity flags — scoped heuristics, "
-        "not vetoes"
+        "Stereocenter/step-count complexity flags — scoped heuristics, not vetoes"
     ),
-    "production_platform_fit": (
-        "Modality-delivery to production-platform mapping"
-    ),
+    "production_platform_fit": ("Modality-delivery to production-platform mapping"),
     "biologic_developability": (
         "Sequence-based biologic developability (qualitative at Stage 0)"
     ),
@@ -274,15 +270,13 @@ def compute_complexity_heuristics(smiles: str) -> dict[str, Any] | None:
         step_range = "5-12 (estimated from molecular size)"
     else:
         step_range = (
-            ">10 (estimated from molecular size; "
-            "retrosynthetic analysis needed)"
+            ">10 (estimated from molecular size; retrosynthetic analysis needed)"
         )
 
     return {
         "stereocenter_count": n_stereocenters,
         "chiral_centers": [
-            {"atom_idx": idx, "assignment": assign}
-            for idx, assign in chiral_centers
+            {"atom_idx": idx, "assignment": assign} for idx, assign in chiral_centers
         ],
         "ring_count": n_rings,
         "aromatic_ring_count": n_aromatic_rings,
@@ -341,40 +335,43 @@ def assess_stage0(
     # --- 1. Production-platform fit ---
     platform_info = PRODUCTION_PLATFORMS.get(modality)
     if platform_info is None:
-        findings.append({
-            "aspect": "production_platform_fit",
-            "status": "not_assessed",
-            "detail": (
-                f"Modality {modality!r} is not in the known "
-                "production-platform mapping.  Manufacturing feasibility "
-                "cannot be assessed at Stage 0 without knowing the "
-                "production platform."
-            ),
-            "next_evidence": "Define the intended production platform",
-        })
+        findings.append(
+            {
+                "aspect": "production_platform_fit",
+                "status": "not_assessed",
+                "detail": (
+                    f"Modality {modality!r} is not in the known "
+                    "production-platform mapping.  Manufacturing feasibility "
+                    "cannot be assessed at Stage 0 without knowing the "
+                    "production platform."
+                ),
+                "next_evidence": "Define the intended production platform",
+            }
+        )
     else:
-        findings.append({
-            "aspect": "production_platform_fit",
-            "status": "supported",
-            "detail": platform_info["description"],
-            "platforms": platform_info["platforms"],
-            "precedent": (
-                f"Modality {modality!r} has established production "
-                f"platforms: {', '.join(platform_info['platforms'])}."
-            ),
-            "assumptions": [
-                f"Standard {modality} production infrastructure is "
-                "available",
-                "No unusual formulation or delivery constraints that "
-                "would preclude standard manufacturing",
-            ],
-            "limitations": [
-                "Platform fit does not imply GMP readiness",
-                "Platform fit does not imply cost-effective manufacturing",
-                "Entity-specific manufacturing challenges are not "
-                "assessed until a physical entity exists",
-            ],
-        })
+        findings.append(
+            {
+                "aspect": "production_platform_fit",
+                "status": "supported",
+                "detail": platform_info["description"],
+                "platforms": platform_info["platforms"],
+                "precedent": (
+                    f"Modality {modality!r} has established production "
+                    f"platforms: {', '.join(platform_info['platforms'])}."
+                ),
+                "assumptions": [
+                    f"Standard {modality} production infrastructure is available",
+                    "No unusual formulation or delivery constraints that "
+                    "would preclude standard manufacturing",
+                ],
+                "limitations": [
+                    "Platform fit does not imply GMP readiness",
+                    "Platform fit does not imply cost-effective manufacturing",
+                    "Entity-specific manufacturing challenges are not "
+                    "assessed until a physical entity exists",
+                ],
+            }
+        )
 
     # --- 2. Delivery compatibility ---
     if delivery is not None:
@@ -399,17 +396,11 @@ def assess_stage0(
             ],
         }
         if route:
-            delivery_finding["assumptions"].append(
-                f"Route of administration: {route}"
-            )
+            delivery_finding["assumptions"].append(f"Route of administration: {route}")
         if formulation:
-            delivery_finding["assumptions"].append(
-                f"Formulation type: {formulation}"
-            )
+            delivery_finding["assumptions"].append(f"Formulation type: {formulation}")
         if vehicle:
-            delivery_finding["assumptions"].append(
-                f"Delivery vehicle: {vehicle}"
-            )
+            delivery_finding["assumptions"].append(f"Delivery vehicle: {vehicle}")
         delivery_finding["next_evidence"] = (
             "Stage 3 formulation/process/developability evidence "
             "required to validate delivery assumptions"
@@ -419,68 +410,69 @@ def assess_stage0(
     # --- 3. Entity-specific assessment ---
     if entity_ref is None:
         # No physical entity — not_yet_applicable
-        findings.append({
-            "aspect": "entity_manufacturing_assessment",
-            "status": "not_yet_applicable",
-            "detail": (
-                "No physical entity (compound, sequence, construct) "
-                "exists for this concept.  Entity-level manufacturing "
-                "assessment is not yet applicable."
-            ),
-            "trigger": (
-                "This assessment becomes applicable when entity_ref "
-                "is populated — i.e., when a physical entity is "
-                "identified for this concept."
-            ),
-        })
+        findings.append(
+            {
+                "aspect": "entity_manufacturing_assessment",
+                "status": "not_yet_applicable",
+                "detail": (
+                    "No physical entity (compound, sequence, construct) "
+                    "exists for this concept.  Entity-level manufacturing "
+                    "assessment is not yet applicable."
+                ),
+                "trigger": (
+                    "This assessment becomes applicable when entity_ref "
+                    "is populated — i.e., when a physical entity is "
+                    "identified for this concept."
+                ),
+            }
+        )
         overall_status = "not_yet_applicable"
     else:
         if modality in SA_SCORE_MODALITIES:
             # Small-molecule-like: SA-score + complexity heuristics
             if sa_score_data is not None:
                 sa_score = sa_score_data.get("sa_score")
-                findings.append({
-                    "aspect": "synthetic_accessibility",
-                    "status": (
-                        "supported" if sa_score is not None
-                        else "not_assessed"
-                    ),
-                    "sa_score": sa_score,
-                    "detail": (
-                        f"SA-score: {sa_score} (1=easy, 10=hard).  "
-                        "This is a fragment-frequency heuristic (Ertl "
-                        "& Schuffenhauer 2009), NOT evidence of a "
-                        "demonstrated synthetic route or scalable "
-                        "manufacturing process."
-                    ),
-                    "distinction": (
-                        "SA-score reflects how common the molecule's "
-                        "fragments are in known compounds.  A low "
-                        "SA-score does NOT mean the molecule is "
-                        "synthesizable.  A high SA-score does NOT mean "
-                        "the molecule cannot be synthesized.  Real "
-                        "synthesis feasibility requires route analysis."
-                    ),
-                    "evidence_type": "synthetic_accessibility",
-                    "method": "sa_score_ertl_schuffenhauer_2009",
-                })
-                overall_status = (
-                    "supported" if sa_score is not None
-                    else "not_assessed"
+                findings.append(
+                    {
+                        "aspect": "synthetic_accessibility",
+                        "status": (
+                            "supported" if sa_score is not None else "not_assessed"
+                        ),
+                        "sa_score": sa_score,
+                        "detail": (
+                            f"SA-score: {sa_score} (1=easy, 10=hard).  "
+                            "This is a fragment-frequency heuristic (Ertl "
+                            "& Schuffenhauer 2009), NOT evidence of a "
+                            "demonstrated synthetic route or scalable "
+                            "manufacturing process."
+                        ),
+                        "distinction": (
+                            "SA-score reflects how common the molecule's "
+                            "fragments are in known compounds.  A low "
+                            "SA-score does NOT mean the molecule is "
+                            "synthesizable.  A high SA-score does NOT mean "
+                            "the molecule cannot be synthesized.  Real "
+                            "synthesis feasibility requires route analysis."
+                        ),
+                        "evidence_type": "synthetic_accessibility",
+                        "method": "sa_score_ertl_schuffenhauer_2009",
+                    }
                 )
+                overall_status = "supported" if sa_score is not None else "not_assessed"
             else:
-                findings.append({
-                    "aspect": "synthetic_accessibility",
-                    "status": "not_assessed",
-                    "detail": (
-                        "SA-score has not been computed for this entity.  "
-                        "Run `dde compound sa-score` to compute it."
-                    ),
-                    "next_evidence": (
-                        "Run `dde compound sa-score` with the "
-                        "entity's SMILES"
-                    ),
-                })
+                findings.append(
+                    {
+                        "aspect": "synthetic_accessibility",
+                        "status": "not_assessed",
+                        "detail": (
+                            "SA-score has not been computed for this entity.  "
+                            "Run `dde compound sa-score` to compute it."
+                        ),
+                        "next_evidence": (
+                            "Run `dde compound sa-score` with the entity's SMILES"
+                        ),
+                    }
+                )
 
             # Complexity heuristics
             complexity = compute_complexity_heuristics(entity_ref)
@@ -508,61 +500,64 @@ def assess_stage0(
                         "require specialized synthetic approaches."
                     )
 
-                findings.append({
-                    "aspect": "complexity_heuristic",
-                    "status": "supported",
-                    "complexity": complexity,
-                    "flags": flags,
-                    "requirement_type": "prioritization_heuristic",
-                    "detail": (
-                        f"Stereocenter count: {stereo_count}, "
-                        f"rings: {complexity['ring_count']}, "
-                        f"estimated steps: "
-                        f"{complexity['estimated_step_range']}.  "
-                        "These are scoped heuristics for "
-                        "prioritization.  Step/stereocenter counts "
-                        "are NOT universal scientific vetoes — they "
-                        "are flagged with the specific concern."
-                    ),
-                })
+                findings.append(
+                    {
+                        "aspect": "complexity_heuristic",
+                        "status": "supported",
+                        "complexity": complexity,
+                        "flags": flags,
+                        "requirement_type": "prioritization_heuristic",
+                        "detail": (
+                            f"Stereocenter count: {stereo_count}, "
+                            f"rings: {complexity['ring_count']}, "
+                            f"estimated steps: "
+                            f"{complexity['estimated_step_range']}.  "
+                            "These are scoped heuristics for "
+                            "prioritization.  Step/stereocenter counts "
+                            "are NOT universal scientific vetoes — they "
+                            "are flagged with the specific concern."
+                        ),
+                    }
+                )
                 if overall_status == "not_assessed":
                     overall_status = "supported"
         else:
             # Biologic-like modalities: qualitative assessment
-            findings.append({
-                "aspect": "biologic_manufacturing_qualitative",
-                "status": "supported",
-                "detail": (
-                    f"Modality {modality!r} uses established biologic "
-                    "production platforms.  Entity-specific assessment "
-                    "(sequence liabilities, expression system "
-                    "feasibility, developability) requires the "
-                    "therapeutic construct sequence, not the target "
-                    "protein sequence."
-                ),
-                "assumptions": [
-                    "Standard expression systems (CHO, E. coli, etc.) "
-                    "are available",
-                    "No known sequence liabilities that would preclude "
-                    "expression (requires sequence-level analysis)",
-                ],
-                "limitations": [
-                    "Sequence-level liability assessment NOT performed "
-                    "— this is a concept-level qualitative assessment "
-                    "only",
-                    "No developability data (aggregation, viscosity, "
-                    "charge patches) is fabricated",
-                    "Post-translational modification complexity not "
-                    "assessed",
-                    "Formulation properties not assessed",
-                ],
-                "next_evidence": (
-                    "Stage 2: sequence-level developability assessment "
-                    "(deamidation hotspots, oxidation-prone residues, "
-                    "aggregation propensity, charge patches)"
-                ),
-                "owner": "CMC scientist or developability specialist",
-            })
+            findings.append(
+                {
+                    "aspect": "biologic_manufacturing_qualitative",
+                    "status": "supported",
+                    "detail": (
+                        f"Modality {modality!r} uses established biologic "
+                        "production platforms.  Entity-specific assessment "
+                        "(sequence liabilities, expression system "
+                        "feasibility, developability) requires the "
+                        "therapeutic construct sequence, not the target "
+                        "protein sequence."
+                    ),
+                    "assumptions": [
+                        "Standard expression systems (CHO, E. coli, etc.) "
+                        "are available",
+                        "No known sequence liabilities that would preclude "
+                        "expression (requires sequence-level analysis)",
+                    ],
+                    "limitations": [
+                        "Sequence-level liability assessment NOT performed "
+                        "— this is a concept-level qualitative assessment "
+                        "only",
+                        "No developability data (aggregation, viscosity, "
+                        "charge patches) is fabricated",
+                        "Post-translational modification complexity not assessed",
+                        "Formulation properties not assessed",
+                    ],
+                    "next_evidence": (
+                        "Stage 2: sequence-level developability assessment "
+                        "(deamidation hotspots, oxidation-prone residues, "
+                        "aggregation propensity, charge patches)"
+                    ),
+                    "owner": "CMC scientist or developability specialist",
+                }
+            )
             if overall_status == "not_assessed":
                 overall_status = "supported"
 

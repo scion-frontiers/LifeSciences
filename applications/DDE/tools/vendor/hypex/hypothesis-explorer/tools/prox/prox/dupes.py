@@ -21,7 +21,9 @@ from pathlib import Path
 from typing import Any
 
 
-def find_dupes(graph_data: dict[str, Any], threshold: float = 0.80) -> list[dict[str, Any]]:
+def find_dupes(
+    graph_data: dict[str, Any], threshold: float = 0.80
+) -> list[dict[str, Any]]:
     """Return pairs with similarity ≥ *threshold* from the adjacency graph.
 
     Each pair appears once (the pair with the lexicographically smaller ID

@@ -49,9 +49,9 @@ from ..common import (
     pass_state,
 )
 from ..core import http, provenance
-from ..core.qps import qps_for_host
 from ..core.errors import ArtifactError, EndpointError, Refusal, UsageError
 from ..core.output import Emitter
+from ..core.qps import qps_for_host
 
 TOOL = "homology-search"
 TOOL_FETCH = "homology-fetch"
@@ -230,9 +230,7 @@ def _extract_hit(result: dict[str, Any], subseq_len: int) -> dict[str, Any]:
     }
 
 
-def _fetch_structure_metadata(
-    hits: list[dict[str, Any]], query_accession: str
-) -> None:
+def _fetch_structure_metadata(hits: list[dict[str, Any]], query_accession: str) -> None:
     """Fetch structure metadata from RCSB GraphQL and update hits in-place.
 
     Batches all PDB IDs into a single GraphQL query to minimise requests.
@@ -313,16 +311,12 @@ def _fetch_structure_metadata(
                 db_acc = (align.get("reference_database_accession") or "").upper()
                 if db_name == "UNIPROT" and db_acc:
                     if source_uniprot is None:
-                        source_uniprot = align.get(
-                            "reference_database_accession", ""
-                        )
+                        source_uniprot = align.get("reference_database_accession", "")
                     if db_acc == query_acc_upper:
                         is_direct = True
             organisms = pe.get("rcsb_entity_source_organism") or []
             if organisms:
-                hit["source_organism"] = (
-                    organisms[0].get("ncbi_scientific_name") or ""
-                )
+                hit["source_organism"] = organisms[0].get("ncbi_scientific_name") or ""
 
         hit["source_uniprot"] = source_uniprot or ""
         hit.setdefault("source_organism", "")
@@ -343,9 +337,7 @@ def homology() -> None:
     help="Residue range START-END (1-indexed, inclusive).",
 )
 @click.option("--evalue", type=float, default=0.001, help="E-value cutoff.")
-@click.option(
-    "--identity", type=float, default=0.2, help="Sequence identity cutoff."
-)
+@click.option("--identity", type=float, default=0.2, help="Sequence identity cutoff.")
 @click.option(
     "--max-hits", type=int, default=25, help="Maximum number of hits to return."
 )
@@ -430,17 +422,13 @@ def search(
         },
         "hits": hits,
         "hit_count": len(hits),
-        "search_timestamp": datetime.now(timezone.utc).strftime(
-            "%Y-%m-%dT%H:%M:%SZ"
-        ),
+        "search_timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
 
     stem = f"HOMOLOGY-{accession}-{start}-{end}"
 
     manifest_path = target_dir / f"{stem}.search.json"
-    manifest_path.write_text(
-        json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
-    )
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     sidecar.add_output(manifest_path)
 
     meta_path = target_dir / f"{stem}.meta.json"
@@ -514,13 +502,15 @@ def _search_orthologs(
         sequence = seq_block.get("value", "")
         length = seq_block.get("length", 0)
 
-        orthologs.append({
-            "accession": acc,
-            "gene_names": gene_names_list,
-            "organism": organism,
-            "sequence": sequence,
-            "length": length,
-        })
+        orthologs.append(
+            {
+                "accession": acc,
+                "gene_names": gene_names_list,
+                "organism": organism,
+                "sequence": sequence,
+                "length": length,
+            }
+        )
 
     return gene, orthologs
 
@@ -595,9 +585,7 @@ def orthologs(
         query_accession = _resolve_gene_to_accession(query_gene)
 
     # Search for orthologs
-    _gene, ortholog_list = _search_orthologs(
-        query_gene, max_orthologs, organism_filter
-    )
+    _gene, ortholog_list = _search_orthologs(query_gene, max_orthologs, organism_filter)
 
     project = state.project()
     target_dir = project.artifact_dir(ORTHOLOGS_ARTIFACT_CLASS, out)
@@ -621,15 +609,11 @@ def orthologs(
         },
         "orthologs": ortholog_list,
         "ortholog_count": len(ortholog_list),
-        "search_timestamp": datetime.now(timezone.utc).strftime(
-            "%Y-%m-%dT%H:%M:%SZ"
-        ),
+        "search_timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
 
     manifest_path = target_dir / f"{stem}.orthologs.json"
-    manifest_path.write_text(
-        json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
-    )
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
     # Write provenance sidecar
     sidecar = provenance.Sidecar(
@@ -654,9 +638,7 @@ def orthologs(
     emit.data("ortholog_count", len(ortholog_list))
     emit.data("gene_symbol", query_gene)
     emit.data("uniprot_accession", query_accession)
-    emit.line(
-        f"{query_gene} ({query_accession}): {len(ortholog_list)} orthologs found"
-    )
+    emit.line(f"{query_gene} ({query_accession}): {len(ortholog_list)} orthologs found")
     for orth in ortholog_list[:5]:
         emit.line(f"  {orth['accession']}  {orth['organism']}")
     if len(ortholog_list) > 5:
@@ -743,8 +725,7 @@ def _compute_verdict(hit_assessments: list[dict[str, Any]], hit_count: int) -> s
         return "strong-candidates"
 
     has_high_or_moderate = any(
-        h["identity_band"] in ("high", "moderate")
-        for h in hit_assessments
+        h["identity_band"] in ("high", "moderate") for h in hit_assessments
     )
     if has_high_or_moderate:
         return "moderate-candidates"
@@ -873,10 +854,14 @@ def analyze(
     manifest = provenance.read_json(manifest_path, "homology search manifest")
 
     # Load the homology threshold set with overrides
-    thresholds = load_thresholds(state, "homology", {
-        "identity_high": identity_high,
-        "identity_moderate": identity_moderate,
-    })
+    thresholds = load_thresholds(
+        state,
+        "homology",
+        {
+            "identity_high": identity_high,
+            "identity_moderate": identity_moderate,
+        },
+    )
 
     query = manifest.get("query", {})
     accession = query.get("uniprot_accession", "unknown")
@@ -905,13 +890,15 @@ def analyze(
             count_str = f"All {total}"
         else:
             count_str = f"{len(non_direct)} of {total}"
-        relays.append(provenance.relay(
-            "homology.structure_is_not_target",
-            f"{count_str} hit(s) are structures of homologous proteins "
-            f"({sources_str}), not {accession} itself. Structural features "
-            "attributed to the query protein from these structures are hypotheses "
-            "transferred by sequence similarity, not direct observations.",
-        ))
+        relays.append(
+            provenance.relay(
+                "homology.structure_is_not_target",
+                f"{count_str} hit(s) are structures of homologous proteins "
+                f"({sources_str}), not {accession} itself. Structural features "
+                "attributed to the query protein from these structures are hypotheses "
+                "transferred by sequence similarity, not direct observations.",
+            )
+        )
 
     # Compute metrics
     metrics = {
@@ -938,9 +925,7 @@ def analyze(
     # Build advisories
     advisories: list[str] = []
     coverage_min = thresholds.get("coverage_minimum")
-    insufficient = [
-        h for h in hit_assessments if h["coverage"] == "insufficient"
-    ]
+    insufficient = [h for h in hit_assessments if h["coverage"] == "insufficient"]
     if insufficient:
         advisories.append(
             f"{len(insufficient)} of {len(hit_assessments)} hit(s) have query "
@@ -1000,7 +985,7 @@ def analyze(
     emit.line(f"{stem}  [threshold_set {thresholds.tag}]")
     emit.line(f"Verdict: {verdict}")
     emit.line(statement)
-    for i, ha in enumerate(hit_assessments[:10]):
+    for _i, ha in enumerate(hit_assessments[:10]):
         emit.line(
             f"  {ha['pdb_entity_id']}  identity={ha['sequence_identity']:.1%} "
             f"({ha['identity_band']})  resolution={ha['resolution_angstrom'] or '?'} "
@@ -1067,7 +1052,9 @@ def fetch_structure(
 
     # Download the coordinate file
     structure_path = target_dir / f"{pdb_id}.{fmt}"
-    structure_path.write_bytes(http.get_bytes(download_url, qps=qps_for_host("files.rcsb.org")))
+    structure_path.write_bytes(
+        http.get_bytes(download_url, qps=qps_for_host("files.rcsb.org"))
+    )
 
     # Write provenance sidecar
     sidecar = provenance.Sidecar(

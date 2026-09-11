@@ -40,7 +40,6 @@ import hashlib
 import json
 import re
 import time
-from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
@@ -85,6 +84,7 @@ def _require_rdkit():
     """Lazy-import RDKit, raising DependencyError if absent."""
     try:
         from rdkit import Chem
+
         return Chem
     except ImportError:
         raise DependencyError(
@@ -130,7 +130,9 @@ def _slug(smiles: str) -> str:
 
 
 def _poll_pubchem_listkey(
-    listkey: str, qps: float = qps_for_host("pubchem.ncbi.nlm.nih.gov"), timeout: float = 120,
+    listkey: str,
+    qps: float = qps_for_host("pubchem.ncbi.nlm.nih.gov"),
+    timeout: float = 120,
 ) -> list[int]:
     """Poll PubChem for async result.  Returns CID list or raises."""
     url = f"{PUBCHEM_API}/compound/listkey/{listkey}/cids/JSON"
@@ -146,10 +148,12 @@ def _poll_pubchem_listkey(
             continue
         # Fault or unexpected response
         raise ArtifactError(
-            "PubChem async search failed", detail=str(resp),
+            "PubChem async search failed",
+            detail=str(resp),
         )
     raise ArtifactError(
-        "PubChem async search timed out", detail=f"timeout={timeout}s",
+        "PubChem async search timed out",
+        detail=f"timeout={timeout}s",
     )
 
 
@@ -177,7 +181,9 @@ def _fetch_pubchem_properties(cids: list[int]) -> list[dict[str, Any]]:
 
 
 def _pubchem_similarity(
-    smiles: str, threshold: float, max_results: int,
+    smiles: str,
+    threshold: float,
+    max_results: int,
 ) -> list[dict[str, Any]]:
     """Run a PubChem similarity search (async ListKey pattern).
 
@@ -222,21 +228,24 @@ def _pubchem_similarity(
     hits: list[dict[str, Any]] = []
     for cid in cids:
         p = props_by_cid.get(cid, {})
-        hits.append({
-            "source_db": "pubchem",
-            "cid": cid,
-            "canonical_smiles": p.get("CanonicalSMILES", ""),
-            "iupac_name": p.get("IUPACName", ""),
-            "tanimoto": threshold,  # server-side filtered lower bound
-            "tanimoto_is_lower_bound": True,
-            "molecular_weight": p.get("MolecularWeight"),
-            "inchikey": p.get("InChIKey", ""),
-        })
+        hits.append(
+            {
+                "source_db": "pubchem",
+                "cid": cid,
+                "canonical_smiles": p.get("CanonicalSMILES", ""),
+                "iupac_name": p.get("IUPACName", ""),
+                "tanimoto": threshold,  # server-side filtered lower bound
+                "tanimoto_is_lower_bound": True,
+                "molecular_weight": p.get("MolecularWeight"),
+                "inchikey": p.get("InChIKey", ""),
+            }
+        )
     return hits
 
 
 def _pubchem_substructure(
-    smiles: str, max_results: int,
+    smiles: str,
+    max_results: int,
 ) -> list[dict[str, Any]]:
     """Run a PubChem substructure search (async ListKey pattern)."""
     encoded = quote(smiles, safe="")
@@ -271,15 +280,17 @@ def _pubchem_substructure(
     hits: list[dict[str, Any]] = []
     for cid in cids:
         p = props_by_cid.get(cid, {})
-        hits.append({
-            "source_db": "pubchem",
-            "cid": cid,
-            "canonical_smiles": p.get("CanonicalSMILES", ""),
-            "iupac_name": p.get("IUPACName", ""),
-            "tanimoto": None,
-            "molecular_weight": p.get("MolecularWeight"),
-            "inchikey": p.get("InChIKey", ""),
-        })
+        hits.append(
+            {
+                "source_db": "pubchem",
+                "cid": cid,
+                "canonical_smiles": p.get("CanonicalSMILES", ""),
+                "iupac_name": p.get("IUPACName", ""),
+                "tanimoto": None,
+                "molecular_weight": p.get("MolecularWeight"),
+                "inchikey": p.get("InChIKey", ""),
+            }
+        )
     return hits
 
 
@@ -313,7 +324,9 @@ def _chembl_paginate(url: str, max_results: int) -> list[dict[str, Any]]:
 
 
 def _chembl_similarity(
-    smiles: str, threshold: float, max_results: int,
+    smiles: str,
+    threshold: float,
+    max_results: int,
 ) -> list[dict[str, Any]]:
     """Run a ChEMBL similarity search (synchronous with pagination)."""
     encoded = quote(smiles, safe="")
@@ -325,20 +338,23 @@ def _chembl_similarity(
     for mol in molecules:
         structures = mol.get("molecule_structures") or {}
         similarity = mol.get("similarity")
-        hits.append({
-            "source_db": "chembl",
-            "chembl_id": mol.get("molecule_chembl_id", ""),
-            "canonical_smiles": structures.get("canonical_smiles", ""),
-            "pref_name": mol.get("pref_name") or "",
-            "tanimoto": similarity / 100.0 if similarity is not None else None,
-            "molecular_weight": None,
-            "inchikey": structures.get("standard_inchi_key", ""),
-        })
+        hits.append(
+            {
+                "source_db": "chembl",
+                "chembl_id": mol.get("molecule_chembl_id", ""),
+                "canonical_smiles": structures.get("canonical_smiles", ""),
+                "pref_name": mol.get("pref_name") or "",
+                "tanimoto": similarity / 100.0 if similarity is not None else None,
+                "molecular_weight": None,
+                "inchikey": structures.get("standard_inchi_key", ""),
+            }
+        )
     return hits
 
 
 def _chembl_substructure(
-    smiles: str, max_results: int,
+    smiles: str,
+    max_results: int,
 ) -> list[dict[str, Any]]:
     """Run a ChEMBL substructure search (synchronous with pagination)."""
     encoded = quote(smiles, safe="")
@@ -348,15 +364,17 @@ def _chembl_substructure(
     hits: list[dict[str, Any]] = []
     for mol in molecules:
         structures = mol.get("molecule_structures") or {}
-        hits.append({
-            "source_db": "chembl",
-            "chembl_id": mol.get("molecule_chembl_id", ""),
-            "canonical_smiles": structures.get("canonical_smiles", ""),
-            "pref_name": mol.get("pref_name") or "",
-            "tanimoto": None,
-            "molecular_weight": None,
-            "inchikey": structures.get("standard_inchi_key", ""),
-        })
+        hits.append(
+            {
+                "source_db": "chembl",
+                "chembl_id": mol.get("molecule_chembl_id", ""),
+                "canonical_smiles": structures.get("canonical_smiles", ""),
+                "pref_name": mol.get("pref_name") or "",
+                "tanimoto": None,
+                "molecular_weight": None,
+                "inchikey": structures.get("standard_inchi_key", ""),
+            }
+        )
     return hits
 
 
@@ -366,7 +384,8 @@ def _chembl_substructure(
 
 
 def _merge_hits(
-    hits: list[dict[str, Any]], max_results: int,
+    hits: list[dict[str, Any]],
+    max_results: int,
 ) -> list[dict[str, Any]]:
     """Deduplicate hits by InChIKey, sort by Tanimoto descending, and cap.
 
@@ -650,20 +669,24 @@ def search_cmd(
             pubchem_hits = _pubchem_similarity(canonical, threshold, max_results)
             all_hits.extend(pubchem_hits)
             endpoints_used.append(f"{PUBCHEM_API}/compound/similarity")
-            backend_results.append({
-                "backend": "pubchem",
-                "status": "completed",
-                "hit_count": len(pubchem_hits),
-            })
+            backend_results.append(
+                {
+                    "backend": "pubchem",
+                    "status": "completed",
+                    "hit_count": len(pubchem_hits),
+                }
+            )
         except (EndpointError, EndpointUnavailable, ArtifactError) as exc:
             backends_failed += 1
             reason = f"pubchem: {exc.message}"
             failure_reasons.append(reason)
-            backend_results.append({
-                "backend": "pubchem",
-                "status": "failed",
-                "failure_reason": str(exc.message),
-            })
+            backend_results.append(
+                {
+                    "backend": "pubchem",
+                    "status": "failed",
+                    "failure_reason": str(exc.message),
+                }
+            )
 
     if source in ("chembl", "both"):
         backends_attempted += 1
@@ -671,20 +694,24 @@ def search_cmd(
             chembl_hits = _chembl_similarity(canonical, threshold, max_results)
             all_hits.extend(chembl_hits)
             endpoints_used.append(f"{CHEMBL_API}/similarity")
-            backend_results.append({
-                "backend": "chembl",
-                "status": "completed",
-                "hit_count": len(chembl_hits),
-            })
+            backend_results.append(
+                {
+                    "backend": "chembl",
+                    "status": "completed",
+                    "hit_count": len(chembl_hits),
+                }
+            )
         except (EndpointError, EndpointUnavailable, ArtifactError) as exc:
             backends_failed += 1
             reason = f"chembl: {exc.message}"
             failure_reasons.append(reason)
-            backend_results.append({
-                "backend": "chembl",
-                "status": "failed",
-                "failure_reason": str(exc.message),
-            })
+            backend_results.append(
+                {
+                    "backend": "chembl",
+                    "status": "failed",
+                    "failure_reason": str(exc.message),
+                }
+            )
 
     # Determine search status.
     if backends_failed == 0:
@@ -700,7 +727,12 @@ def search_cmd(
     merged = _merge_hits(all_hits, max_results)
 
     artifact = _build_artifact(
-        canonical, "similarity", source, threshold, max_results, merged,
+        canonical,
+        "similarity",
+        source,
+        threshold,
+        max_results,
+        merged,
         search_status=search_status,
         failure_reason=failure_reason,
         backend_results=backend_results,
@@ -708,7 +740,8 @@ def search_cmd(
 
     artifact_path = target_dir / f"{slug}.similar-{source}.json"
     artifact_path.write_text(
-        json.dumps(artifact, indent=2) + "\n", encoding="utf-8",
+        json.dumps(artifact, indent=2) + "\n",
+        encoding="utf-8",
     )
 
     # Build sidecar.
@@ -807,20 +840,24 @@ def substructure_cmd(
             pubchem_hits = _pubchem_substructure(canonical, max_results)
             all_hits.extend(pubchem_hits)
             endpoints_used.append(f"{PUBCHEM_API}/compound/substructure")
-            backend_results.append({
-                "backend": "pubchem",
-                "status": "completed",
-                "hit_count": len(pubchem_hits),
-            })
+            backend_results.append(
+                {
+                    "backend": "pubchem",
+                    "status": "completed",
+                    "hit_count": len(pubchem_hits),
+                }
+            )
         except (EndpointError, EndpointUnavailable, ArtifactError) as exc:
             backends_failed += 1
             reason = f"pubchem: {exc.message}"
             failure_reasons.append(reason)
-            backend_results.append({
-                "backend": "pubchem",
-                "status": "failed",
-                "failure_reason": str(exc.message),
-            })
+            backend_results.append(
+                {
+                    "backend": "pubchem",
+                    "status": "failed",
+                    "failure_reason": str(exc.message),
+                }
+            )
 
     if source in ("chembl", "both"):
         backends_attempted += 1
@@ -828,20 +865,24 @@ def substructure_cmd(
             chembl_hits = _chembl_substructure(canonical, max_results)
             all_hits.extend(chembl_hits)
             endpoints_used.append(f"{CHEMBL_API}/substructure")
-            backend_results.append({
-                "backend": "chembl",
-                "status": "completed",
-                "hit_count": len(chembl_hits),
-            })
+            backend_results.append(
+                {
+                    "backend": "chembl",
+                    "status": "completed",
+                    "hit_count": len(chembl_hits),
+                }
+            )
         except (EndpointError, EndpointUnavailable, ArtifactError) as exc:
             backends_failed += 1
             reason = f"chembl: {exc.message}"
             failure_reasons.append(reason)
-            backend_results.append({
-                "backend": "chembl",
-                "status": "failed",
-                "failure_reason": str(exc.message),
-            })
+            backend_results.append(
+                {
+                    "backend": "chembl",
+                    "status": "failed",
+                    "failure_reason": str(exc.message),
+                }
+            )
 
     # Determine search status.
     if backends_failed == 0:
@@ -857,7 +898,12 @@ def substructure_cmd(
     merged = _merge_hits(all_hits, max_results)
 
     artifact = _build_artifact(
-        canonical, "substructure", source, None, max_results, merged,
+        canonical,
+        "substructure",
+        source,
+        None,
+        max_results,
+        merged,
         search_status=search_status,
         failure_reason=failure_reason,
         backend_results=backend_results,
@@ -865,7 +911,8 @@ def substructure_cmd(
 
     artifact_path = target_dir / f"{slug}.substruct-{source}.json"
     artifact_path.write_text(
-        json.dumps(artifact, indent=2) + "\n", encoding="utf-8",
+        json.dumps(artifact, indent=2) + "\n",
+        encoding="utf-8",
     )
 
     # Build sidecar.
@@ -928,8 +975,14 @@ def analyze_cmd(
 
     # Look for similarity artifact first, then substructure.
     artifact_path = None
-    for pattern in ("similar-both", "similar-pubchem", "similar-chembl",
-                    "substruct-both", "substruct-pubchem", "substruct-chembl"):
+    for pattern in (
+        "similar-both",
+        "similar-pubchem",
+        "similar-chembl",
+        "substruct-both",
+        "substruct-pubchem",
+        "substruct-chembl",
+    ):
         candidate = source_dir / f"{slug}.{pattern}.json"
         if candidate.is_file():
             artifact_path = candidate
@@ -945,6 +998,7 @@ def analyze_cmd(
     artifact = provenance.read_json(artifact_path, "similarity artifact")
     if artifact.get("schema") != SCHEMA:
         from ..core.errors import SchemaError
+
         raise SchemaError(
             f"unexpected schema in {artifact_path.name}",
             detail=f"expected {SCHEMA}, got {artifact.get('schema')!r}",
@@ -998,7 +1052,9 @@ def analyze_cmd(
 
     analysis_path = provenance.write_analysis(
         target_dir / f"{slug}.similar.analysis.json",
-        source=state.project().relative(meta_path) if meta_path.is_file() else str(artifact_path),
+        source=state.project().relative(meta_path)
+        if meta_path.is_file()
+        else str(artifact_path),
         threshold_set=thresholds.tag,
         thresholds_applied=thresholds.applied(),
         metrics=metrics,

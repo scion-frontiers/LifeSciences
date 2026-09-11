@@ -182,14 +182,22 @@ def main() -> int:
                 if name not in declared:
                     near = ", ".join(sorted(declared))
                     problems.append(
-                        (rel, lineno, line,
-                         f"`raw/{name}/` is not an artifact class — "
-                         f"nothing can write there. Declared: {near}")
+                        (
+                            rel,
+                            lineno,
+                            line,
+                            f"`raw/{name}/` is not an artifact class — "
+                            f"nothing can write there. Declared: {near}",
+                        )
                     )
                 elif name not in written:
                     notes.append(
-                        (rel, lineno, line,
-                         f"`raw/{name}/` is declared but no command writes it yet")
+                        (
+                            rel,
+                            lineno,
+                            line,
+                            f"`raw/{name}/` is declared but no command writes it yet",
+                        )
                     )
 
     # A class that stops being declared while prose still points at it is the
@@ -211,7 +219,9 @@ def main() -> int:
     # invisible to it; 76 was true and was never the denominator anyone read
     # it as. Label which is which, rather than printing them on one line where
     # the parser-defined one inherits the credibility of the counted one.
-    print(f"corpus: {files_read} file(s) in {', '.join(TARGETS)} (from a directory listing)")
+    print(
+        f"corpus: {files_read} file(s) in {', '.join(TARGETS)} (from a directory listing)"
+    )
     print(f"artifact classes declared in core/context.py: {len(declared)}")
     print(f"  written by some command: {', '.join(sorted(written)) or 'none'}")
     print(f"  declared, nothing writes yet: {', '.join(unwritten) or 'none'}")
@@ -228,8 +238,10 @@ def main() -> int:
     # empty checkout all produce "0 problems" from an instrument that read
     # nothing. Refuse to report success without having inspected something.
     if checked == 0:
-        print("FAIL: no raw/<class>/ paths found at all — "
-              "the checker inspected nothing, which is not the same as finding nothing")
+        print(
+            "FAIL: no raw/<class>/ paths found at all — "
+            "the checker inspected nothing, which is not the same as finding nothing"
+        )
         return 1
     if not declared:
         print("FAIL: ARTIFACT_DIRS is empty — nothing to check against")

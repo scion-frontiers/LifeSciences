@@ -73,8 +73,8 @@ from ..common import (
     pass_state,
 )
 from ..core import http, provenance
-from ..core.qps import qps_for_host
 from ..core.errors import ArtifactError, Refusal, SchemaError, UsageError
+from ..core.qps import qps_for_host
 
 EPMC_SEARCH = "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
 CTGOV_BASE = "https://clinicaltrials.gov/api/v2/studies"
@@ -87,7 +87,9 @@ CTGOV_FIELDS = (
 NCT_RE = re.compile(r"^NCT\d{8}$", re.IGNORECASE)
 PMID_RE = re.compile(r"^(?:PMID[:\s]*)?(\d{1,8})$", re.IGNORECASE)
 PMCID_RE = re.compile(r"^(PMC\d+)$", re.IGNORECASE)
-DOI_RE = re.compile(r"^(?:doi[:\s]*|https?://(?:dx\.)?doi\.org/)?(10\.\d{4,9}/\S+)$", re.IGNORECASE)
+DOI_RE = re.compile(
+    r"^(?:doi[:\s]*|https?://(?:dx\.)?doi\.org/)?(10\.\d{4,9}/\S+)$", re.IGNORECASE
+)
 
 
 def _classify(citation: str) -> tuple[str, str]:
@@ -172,7 +174,11 @@ def _ctgov_by_id(nct: str) -> tuple[str, bytes]:
     """
     url = f"{CTGOV_BASE}/{quote(nct)}?" + urlencode({"fields": CTGOV_FIELDS})
     response = http.request(
-        "GET", url, qps=qps_for_host("clinicaltrials.gov"), timeout=60.0, tolerate_status=(404,)
+        "GET",
+        url,
+        qps=qps_for_host("clinicaltrials.gov"),
+        timeout=60.0,
+        tolerate_status=(404,),
     )
     if response.status_code == 404:
         return url, json.dumps(
@@ -225,14 +231,18 @@ def _ctgov_matches(payload: Any) -> tuple[list[dict[str, Any]], int]:
     elif payload.get("_not_found"):
         return [], 0
     else:
-        raise SchemaError("ClinicalTrials.gov payload has neither studies nor protocolSection")
+        raise SchemaError(
+            "ClinicalTrials.gov payload has neither studies nor protocolSection"
+        )
 
     matches = []
     for study in studies:
         section = study.get("protocolSection") or {}
         ident = section.get("identificationModule") or {}
         status = section.get("statusModule") or {}
-        sponsor = (section.get("sponsorCollaboratorsModule") or {}).get("leadSponsor") or {}
+        sponsor = (section.get("sponsorCollaboratorsModule") or {}).get(
+            "leadSponsor"
+        ) or {}
         matches.append(
             {
                 "source": "clinicaltrials.gov",
@@ -330,7 +340,7 @@ def resolve_cmd(
                 remedy="use --source literature or --source auto",
             )
         query = {
-            "pmid": f'EXT_ID:{value} AND SRC:MED',
+            "pmid": f"EXT_ID:{value} AND SRC:MED",
             "pmcid": f'PMCID:"{value}"',
             "doi": f'DOI:"{value}"',
         }[kind]
@@ -518,7 +528,9 @@ def _locate_meta(state: AppState, citation: str, target_dir: Path) -> tuple[Path
     # punctuation. `10.1056/NEJMoa1505270` is a citation, not a file.
     if citation.endswith(".meta.json"):
         candidate = Path(citation)
-        path = candidate if candidate.is_absolute() else state.project().root / candidate
+        path = (
+            candidate if candidate.is_absolute() else state.project().root / candidate
+        )
         if not path.is_file():
             raise ArtifactError(f"litref sidecar not found: {path}")
         return path, path.name[: -len(".meta.json")]

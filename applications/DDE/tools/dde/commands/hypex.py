@@ -38,7 +38,6 @@ import hashlib
 import io
 import json
 import os
-from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -190,9 +189,7 @@ def _compute_integrity(
     for h_id, h in hypotheses.items():
         declared_id = h.get("id")
         if declared_id and declared_id != h_id:
-            id_filename_mismatches.append(
-                f"file {h_id}.json declares id={declared_id}"
-            )
+            id_filename_mismatches.append(f"file {h_id}.json declares id={declared_id}")
 
     # Unrated hypotheses — in hypotheses/ but not in the ratings
     rated_ids = set(ratings_per_h.keys())
@@ -286,13 +283,20 @@ def _build_hypex_record(
         all_scores = review_scores_by_h.get(h_id, [])
         if not all_scores:
             return {
-                "correctness": None, "novelty": None, "testability": None,
-                "safety": None, "goal_alignment": None,
+                "correctness": None,
+                "novelty": None,
+                "testability": None,
+                "safety": None,
+                "goal_alignment": None,
                 "constraint_compliance": None,
             }
         axes = [
-            "correctness", "novelty", "testability", "safety",
-            "goal_alignment", "constraint_compliance",
+            "correctness",
+            "novelty",
+            "testability",
+            "safety",
+            "goal_alignment",
+            "constraint_compliance",
         ]
         result: dict[str, float | None] = {}
         for axis in axes:
@@ -356,36 +360,38 @@ def _build_hypex_record(
         # Composite is only set when --composite was used; default null
         composite_val = None  # populated below if composite data exists
 
-        hyp_list.append({
-            "id": h_id,
-            "title": h.get("title", ""),
-            "status": h.get("status", ""),
-            "cluster": h.get("cluster"),
-            "elo": rating_rec.get("elo"),
-            "matches": rating_rec.get("matches", 0),
-            "wins": rating_rec.get("wins", 0),
-            "draws": rating_rec.get("draws", 0),
-            "composite": composite_val,
-            "scores": avg,
-            "n_reviews": len(h_reviews),
-            "citations": {
-                "total": total_citations,
-                "verified": verified_count,
-                "suspect": suspect_count,
-                "phantom": phantom_count,
-                "unverified": unverified_count,
-                "manifest_present": manifest_present,
-            },
-            "lineage": {
-                "parents": lineage.get("parents", []),
-                "operator": lineage.get("operator", "null"),
-                "citation_delta_compliant": citation_delta_compliant,
-            },
-            "prose": {
-                "statement": h.get("statement", ""),
-                "mechanism": h.get("mechanism", ""),
-            },
-        })
+        hyp_list.append(
+            {
+                "id": h_id,
+                "title": h.get("title", ""),
+                "status": h.get("status", ""),
+                "cluster": h.get("cluster"),
+                "elo": rating_rec.get("elo"),
+                "matches": rating_rec.get("matches", 0),
+                "wins": rating_rec.get("wins", 0),
+                "draws": rating_rec.get("draws", 0),
+                "composite": composite_val,
+                "scores": avg,
+                "n_reviews": len(h_reviews),
+                "citations": {
+                    "total": total_citations,
+                    "verified": verified_count,
+                    "suspect": suspect_count,
+                    "phantom": phantom_count,
+                    "unverified": unverified_count,
+                    "manifest_present": manifest_present,
+                },
+                "lineage": {
+                    "parents": lineage.get("parents", []),
+                    "operator": lineage.get("operator", "null"),
+                    "citation_delta_compliant": citation_delta_compliant,
+                },
+                "prose": {
+                    "statement": h.get("statement", ""),
+                    "mechanism": h.get("mechanism", ""),
+                },
+            }
+        )
 
     # Run info from run.yaml
     run_info: dict[str, Any] = {
@@ -525,7 +531,9 @@ def ingest(
     for fpath, data in _walk_json_dir(hyp_dir):
         schema_files_checked += 1
         h_id = fpath.stem  # e.g. "H-0042"
-        errors = _validate_hypothesis(data) if data else [f"empty or invalid: {fpath.name}"]
+        errors = (
+            _validate_hypothesis(data) if data else [f"empty or invalid: {fpath.name}"]
+        )
         if errors:
             schema_files_failed.append(f"{fpath.name}: {'; '.join(errors)}")
         if data:
@@ -537,7 +545,9 @@ def ingest(
     for fpath, data in _walk_json_dir(q_dir):
         schema_files_checked += 1
         q_id = fpath.stem
-        errors = _validate_hypothesis(data) if data else [f"empty or invalid: {fpath.name}"]
+        errors = (
+            _validate_hypothesis(data) if data else [f"empty or invalid: {fpath.name}"]
+        )
         if errors:
             schema_files_failed.append(f"quarantine/{fpath.name}: {'; '.join(errors)}")
         if data:
@@ -577,7 +587,11 @@ def ingest(
     ratings_dir = run_path / "ratings"
     if ratings_dir.is_dir():
         rating_files = sorted(
-            [f for f in ratings_dir.iterdir() if f.name.startswith("epoch-") and f.suffix == ".json"],
+            [
+                f
+                for f in ratings_dir.iterdir()
+                if f.name.startswith("epoch-") and f.suffix == ".json"
+            ],
             key=lambda f: f.name,
         )
         if rating_files:
@@ -654,7 +668,11 @@ def ingest(
 
     # --- Compute integrity ---
     integrity = _compute_integrity(
-        hypotheses, matches, reviews, ratings_per_h, quarantine,
+        hypotheses,
+        matches,
+        reviews,
+        ratings_per_h,
+        quarantine,
     )
 
     # --- Build the record ---
@@ -682,7 +700,7 @@ def ingest(
         )
 
     # --- Filenames ---
-    slug = _slug(record["run"].get("goal"), "tournament")
+    _slug(record["run"].get("goal"), "tournament")
     name = f"hx-{record['hypex_run_id']}"
 
     # --- Write artifacts ---
@@ -690,7 +708,7 @@ def ingest(
     archive_path = target_dir / f"{name}.run.tar.zst"
     try:
         archive_sha = _archive_run_dir(run_path, archive_path)
-    except (ImportError, OSError) as exc:
+    except (ImportError, OSError):
         # If zstandard is not available, skip archival but note it
         archive_sha = None
         archive_path = None
@@ -734,7 +752,9 @@ def ingest(
 
 @hypex.command()
 @click.argument("artifact")
-@click.option("--elo-decisive-gap", type=float, default=None, help="Override threshold.")
+@click.option(
+    "--elo-decisive-gap", type=float, default=None, help="Override threshold."
+)
 @click.option("--min-win-rate", type=float, default=None, help="Override threshold.")
 @out_option
 @output_options
@@ -814,14 +834,16 @@ def analyze(
                 f"{h['citations']['phantom']} phantom citation(s) present"
             )
 
-        per_idea.append({
-            "id": h["id"],
-            "title": h.get("title", ""),
-            "elo": h["elo"],
-            "win_rate": win_rate,
-            "n_matches": h.get("matches", 0),
-            "advisories": advisories,
-        })
+        per_idea.append(
+            {
+                "id": h["id"],
+                "title": h.get("title", ""),
+                "elo": h["elo"],
+                "win_rate": win_rate,
+                "n_matches": h.get("matches", 0),
+                "advisories": advisories,
+            }
+        )
 
     # --- ELO gap and leader_gap_is_decisive ---
     elo_gap: float | None = None
@@ -878,9 +900,7 @@ def analyze(
         "n_matches": observed.get("n_matches", 0),
         "n_reviews": observed.get("n_reviews", 0),
         "n_quarantined": observed.get("n_quarantined", 0),
-        "elo_range": (
-            [ranked[-1]["elo"], ranked[0]["elo"]] if ranked else None
-        ),
+        "elo_range": ([ranked[-1]["elo"], ranked[0]["elo"]] if ranked else None),
         "termination": termination,
     }
 
@@ -916,10 +936,7 @@ def analyze(
         )
 
     # phantom_citations_present — when any hypothesis has phantom > 0
-    phantoms = [
-        h for h in hypotheses
-        if h.get("citations", {}).get("phantom", 0) > 0
-    ]
+    phantoms = [h for h in hypotheses if h.get("citations", {}).get("phantom", 0) > 0]
     if phantoms:
         ids = ", ".join(h["id"] for h in phantoms[:10])
         _fire(
@@ -929,7 +946,8 @@ def analyze(
 
     # citation_manifest_absent — when any hypothesis lacks a manifest
     no_manifest = [
-        h for h in hypotheses
+        h
+        for h in hypotheses
         if not h.get("citations", {}).get("manifest_present", False)
     ]
     if no_manifest:
@@ -940,12 +958,11 @@ def analyze(
         )
 
     # integrity_violations — when any integrity array non-empty
-    has_violations = any(
-        len(v) > 0 for v in integrity.values() if isinstance(v, list)
-    )
+    has_violations = any(len(v) > 0 for v in integrity.values() if isinstance(v, list))
     if has_violations:
         violation_summary = "; ".join(
-            f"{k}: {len(v)}" for k, v in integrity.items()
+            f"{k}: {len(v)}"
+            for k, v in integrity.items()
             if isinstance(v, list) and len(v) > 0
         )
         _fire(
@@ -994,7 +1011,7 @@ def analyze(
             pacing_uncoordinated = True
         # Check if all paths agree
         paths = pacing_data.get("paths", [])
-        if isinstance(paths, list) and len(set(str(p) for p in paths)) > 1:
+        if isinstance(paths, list) and len({str(p) for p in paths}) > 1:
             pacing_uncoordinated = True
 
     if pacing_uncoordinated:
@@ -1018,17 +1035,19 @@ def analyze(
                 rank = i + 1
                 break
 
-        assessment_candidates.append({
-            "candidate_id": h.get("id"),
-            "statement": h.get("prose", {}).get("statement", h.get("title", "")),
-            "rank": rank,
-            "score": (
-                {"value": elo, "basis": "hypex-elo@1.0"}
-                if elo is not None
-                else None
-            ),
-            "origin": "generated",
-        })
+        assessment_candidates.append(
+            {
+                "candidate_id": h.get("id"),
+                "statement": h.get("prose", {}).get("statement", h.get("title", "")),
+                "rank": rank,
+                "score": (
+                    {"value": elo, "basis": "hypex-elo@1.0"}
+                    if elo is not None
+                    else None
+                ),
+                "origin": "generated",
+            }
+        )
 
     assessment["assessment_core"] = {
         "schema": "dde.hypothesis-assessment.v1",
@@ -1070,7 +1089,9 @@ def analyze(
         lead = per_idea[0]
         gap_str = f", +{elo_gap:.0f} ELO over #2" if elo_gap is not None else ""
         emit.line(f"Leader: {lead['id']} (ELO {lead['elo']:.0f}{gap_str})")
-    emit.line(f"Hypotheses: {len(hypotheses)} ranked, {observed.get('n_quarantined', 0)} quarantined")
+    emit.line(
+        f"Hypotheses: {len(hypotheses)} ranked, {observed.get('n_quarantined', 0)} quarantined"
+    )
     if relays:
         emit.line(f"Relays fired: {len(relays)}")
         for r in relays[:5]:

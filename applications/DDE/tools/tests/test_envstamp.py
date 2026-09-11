@@ -36,10 +36,10 @@ if str(TOOLS_DIR) not in sys.path:
 
 from dde.core.envstamp import PROVISIONING_INPUTS, source_commit
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_git_side_effect(responses: dict[tuple[str, ...], str | None]):
     """Build a _git() mock side-effect from a dict mapping arg tuples to results.
@@ -48,8 +48,10 @@ def _make_git_side_effect(responses: dict[tuple[str, ...], str | None]):
     None makes _git return None (simulating failure); a string value is
     the successful stdout.
     """
-    def side_effect(*args, cwd):  # noqa: ARG001 — cwd unused in mock
+
+    def side_effect(*args, cwd):
         return responses.get(args)
+
     return side_effect
 
 
@@ -64,8 +66,11 @@ def test_happy_path_reachable_on_non_main_ref():
         ("rev-parse", "HEAD"): "abc123",
         ("status", "--porcelain", "--", "."): "",
         ("status", "--porcelain", "--", *PROVISIONING_INPUTS): "",
-        ("for-each-ref", "--format=%(refname)", "refs/remotes/origin/"):
-            "refs/remotes/origin/main\nrefs/remotes/origin/DDE\n",
+        (
+            "for-each-ref",
+            "--format=%(refname)",
+            "refs/remotes/origin/",
+        ): "refs/remotes/origin/main\nrefs/remotes/origin/DDE\n",
     }
 
     # merge-base --is-ancestor: fail for origin/main (rc=1), succeed for origin/DDE (rc=0)
@@ -79,8 +84,12 @@ def test_happy_path_reachable_on_non_main_ref():
             mock_result.returncode = 1
         return mock_result
 
-    with patch("dde.core.envstamp._git", side_effect=_make_git_side_effect(git_responses)), \
-         patch("dde.core.envstamp.subprocess.run", side_effect=run_side_effect):
+    with (
+        patch(
+            "dde.core.envstamp._git", side_effect=_make_git_side_effect(git_responses)
+        ),
+        patch("dde.core.envstamp.subprocess.run", side_effect=run_side_effect),
+    ):
         result = source_commit(tree=Path("/fake/tree"))
 
     assert result["commit"] == "abc123"
@@ -95,8 +104,11 @@ def test_not_reachable_on_any_ref():
         ("rev-parse", "HEAD"): "deadbeef",
         ("status", "--porcelain", "--", "."): "",
         ("status", "--porcelain", "--", *PROVISIONING_INPUTS): "",
-        ("for-each-ref", "--format=%(refname)", "refs/remotes/origin/"):
-            "refs/remotes/origin/main\nrefs/remotes/origin/DDE\n",
+        (
+            "for-each-ref",
+            "--format=%(refname)",
+            "refs/remotes/origin/",
+        ): "refs/remotes/origin/main\nrefs/remotes/origin/DDE\n",
     }
 
     def run_side_effect(cmd, **kwargs):
@@ -104,8 +116,12 @@ def test_not_reachable_on_any_ref():
         mock_result.returncode = 1  # not ancestor for any ref
         return mock_result
 
-    with patch("dde.core.envstamp._git", side_effect=_make_git_side_effect(git_responses)), \
-         patch("dde.core.envstamp.subprocess.run", side_effect=run_side_effect):
+    with (
+        patch(
+            "dde.core.envstamp._git", side_effect=_make_git_side_effect(git_responses)
+        ),
+        patch("dde.core.envstamp.subprocess.run", side_effect=run_side_effect),
+    ):
         result = source_commit(tree=Path("/fake/tree"))
 
     assert result["commit"] == "deadbeef"
@@ -122,7 +138,9 @@ def test_no_remote_refs_keeps_on_origin_none():
         ("for-each-ref", "--format=%(refname)", "refs/remotes/origin/"): "",
     }
 
-    with patch("dde.core.envstamp._git", side_effect=_make_git_side_effect(git_responses)):
+    with patch(
+        "dde.core.envstamp._git", side_effect=_make_git_side_effect(git_responses)
+    ):
         result = source_commit(tree=Path("/fake/tree"))
 
     assert result["commit"] == "abc123"
@@ -132,7 +150,8 @@ def test_no_remote_refs_keeps_on_origin_none():
 
 def test_no_git_all_none():
     """_git returns None for everything — all fields None."""
-    def git_returns_none(*args, cwd):  # noqa: ARG001
+
+    def git_returns_none(*args, cwd):
         return None
 
     with patch("dde.core.envstamp._git", side_effect=git_returns_none):
@@ -151,8 +170,11 @@ def test_subprocess_error_in_ref_loop_skips_ref():
         ("rev-parse", "HEAD"): "abc123",
         ("status", "--porcelain", "--", "."): "",
         ("status", "--porcelain", "--", *PROVISIONING_INPUTS): "",
-        ("for-each-ref", "--format=%(refname)", "refs/remotes/origin/"):
-            "refs/remotes/origin/broken\nrefs/remotes/origin/good\n",
+        (
+            "for-each-ref",
+            "--format=%(refname)",
+            "refs/remotes/origin/",
+        ): "refs/remotes/origin/broken\nrefs/remotes/origin/good\n",
     }
 
     call_count = 0
@@ -166,8 +188,12 @@ def test_subprocess_error_in_ref_loop_skips_ref():
         mock_result.returncode = 0  # "good" ref succeeds
         return mock_result
 
-    with patch("dde.core.envstamp._git", side_effect=_make_git_side_effect(git_responses)), \
-         patch("dde.core.envstamp.subprocess.run", side_effect=run_side_effect):
+    with (
+        patch(
+            "dde.core.envstamp._git", side_effect=_make_git_side_effect(git_responses)
+        ),
+        patch("dde.core.envstamp.subprocess.run", side_effect=run_side_effect),
+    ):
         result = source_commit(tree=Path("/fake/tree"))
 
     assert result["on_origin"] is True
@@ -181,8 +207,11 @@ def test_timeout_in_ref_loop_skips_ref():
         ("rev-parse", "HEAD"): "abc123",
         ("status", "--porcelain", "--", "."): "",
         ("status", "--porcelain", "--", *PROVISIONING_INPUTS): "",
-        ("for-each-ref", "--format=%(refname)", "refs/remotes/origin/"):
-            "refs/remotes/origin/slow\nrefs/remotes/origin/fast\n",
+        (
+            "for-each-ref",
+            "--format=%(refname)",
+            "refs/remotes/origin/",
+        ): "refs/remotes/origin/slow\nrefs/remotes/origin/fast\n",
     }
 
     def run_side_effect(cmd, **kwargs):
@@ -192,8 +221,12 @@ def test_timeout_in_ref_loop_skips_ref():
         mock_result.returncode = 0
         return mock_result
 
-    with patch("dde.core.envstamp._git", side_effect=_make_git_side_effect(git_responses)), \
-         patch("dde.core.envstamp.subprocess.run", side_effect=run_side_effect):
+    with (
+        patch(
+            "dde.core.envstamp._git", side_effect=_make_git_side_effect(git_responses)
+        ),
+        patch("dde.core.envstamp.subprocess.run", side_effect=run_side_effect),
+    ):
         result = source_commit(tree=Path("/fake/tree"))
 
     assert result["on_origin"] is True
@@ -209,7 +242,9 @@ def test_for_each_ref_failure_keeps_on_origin_none():
         ("for-each-ref", "--format=%(refname)", "refs/remotes/origin/"): None,
     }
 
-    with patch("dde.core.envstamp._git", side_effect=_make_git_side_effect(git_responses)):
+    with patch(
+        "dde.core.envstamp._git", side_effect=_make_git_side_effect(git_responses)
+    ):
         result = source_commit(tree=Path("/fake/tree"))
 
     assert result["commit"] == "abc123"

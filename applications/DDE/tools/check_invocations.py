@@ -196,7 +196,12 @@ def main() -> int:
                     flag = token.split("=")[0]
                     if flag not in known:
                         problems.append(
-                            (rel, lineno, command_text, f"`{command.name}` has no option {flag}")
+                            (
+                                rel,
+                                lineno,
+                                command_text,
+                                f"`{command.name}` has no option {flag}",
+                            )
                         )
 
     # The allowlist checks itself: an entry that now exists is a stale
@@ -204,9 +209,13 @@ def main() -> int:
     landed = [name for name in PLANNED_BUT_UNIMPLEMENTED if cli.get_command(None, name)]
     for name in landed:
         problems.append(
-            ("tools/check_invocations.py", 0, f"dde {name}",
-             f"allowlisted as unimplemented but `dde {name}` now exists — "
-             "remove the entry so its invocations are checked")
+            (
+                "tools/check_invocations.py",
+                0,
+                f"dde {name}",
+                f"allowlisted as unimplemented but `dde {name}` now exists — "
+                "remove the entry so its invocations are checked",
+            )
         )
 
     print(f"checked {checked} dde invocation(s) across {', '.join(TARGETS)}")

@@ -56,12 +56,12 @@ from ..common import (
     pass_state,
 )
 from ..core import http, provenance
-from ..core.qps import qps_for_host
 from ..core.errors import (
     ArtifactError,
     Refusal,
     SchemaError,
 )
+from ..core.qps import qps_for_host
 
 logger = logging.getLogger(__name__)
 
@@ -72,13 +72,13 @@ STRING_API = "https://string-db.org/api"
 
 # Evidence channel names returned by STRING's network endpoint.
 _EVIDENCE_CHANNELS = (
-    "nscore",           # gene neighbourhood
-    "fscore",           # gene fusion
-    "pscore",           # phylogenetic co-occurrence
-    "ascore",           # co-expression
-    "escore",           # experimental
-    "dscore",           # database (curated)
-    "tscore",           # textmining
+    "nscore",  # gene neighbourhood
+    "fscore",  # gene fusion
+    "pscore",  # phylogenetic co-occurrence
+    "ascore",  # co-expression
+    "escore",  # experimental
+    "dscore",  # database (curated)
+    "tscore",  # textmining
 )
 
 # Human-readable names for the evidence channels used in the artifact.
@@ -321,9 +321,7 @@ def search_cmd(
 
     # Write structured artifact.
     artifact_path = target_dir / f"{slug}.ppi-string.artifact.json"
-    artifact_path.write_text(
-        json.dumps(artifact, indent=2) + "\n", encoding="utf-8"
-    )
+    artifact_path.write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
     sidecar.add_output(artifact_path)
 
     # Write sidecar.
@@ -395,16 +393,14 @@ def analyze_cmd(
     # Apply combined score threshold (STRING scores are 0-1).
     score_cutoff = score_threshold if score_threshold is not None else 0.7
     significant = [
-        i for i in interactions
-        if (i.get("combined_score") or 0) >= score_cutoff
+        i for i in interactions if (i.get("combined_score") or 0) >= score_cutoff
     ]
 
     # Apply experimental evidence threshold when set.
     exp_cutoff = experimental_threshold if experimental_threshold is not None else 0.0
     if exp_cutoff > 0:
         significant = [
-            i for i in significant
-            if (i.get("experimental") or 0) >= exp_cutoff
+            i for i in significant if (i.get("experimental") or 0) >= exp_cutoff
         ]
 
     # Top partners from significant interactions.

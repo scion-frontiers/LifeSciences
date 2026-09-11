@@ -120,7 +120,12 @@ _GH = re.compile(
     r"(?:@(?P<ref>[^?]+))?"
     r"(?:\?token=(?P<token>[A-Z][A-Z0-9_]*))?$"
 )
-_OTHER_SCHEMES = ("skill://", "gcp-skill://", "scion-platform://", "https://github.com/")
+_OTHER_SCHEMES = (
+    "skill://",
+    "gcp-skill://",
+    "scion-platform://",
+    "https://github.com/",
+)
 
 #: PyYAML is not installed in every agent's container, and a checker that only
 #: some agents can run is not a gate. The template files are flat, so they are
@@ -136,7 +141,10 @@ def this_repo() -> tuple[str, str] | None:
     try:
         url = subprocess.run(
             ["git", "remote", "get-url", "origin"],
-            cwd=ROOT, capture_output=True, text=True, check=True,
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
         ).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return None
@@ -161,7 +169,10 @@ def on_ref(ref: str, path: str) -> bool:
     try:
         out = subprocess.run(
             ["git", "ls-tree", "--name-only", ref, path],
-            cwd=ROOT, capture_output=True, text=True, check=True,
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
         ).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return False
@@ -180,11 +191,16 @@ def differs_from_ref(ref: str, directory: str) -> str | None:
     try:
         diff = subprocess.run(
             ["git", "diff", "--quiet", ref, "--", directory],
-            cwd=ROOT, capture_output=True, text=True,
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
         )
         untracked = subprocess.run(
             ["git", "ls-files", "--others", "--exclude-standard", "--", directory],
-            cwd=ROOT, capture_output=True, text=True, check=True,
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
         ).stdout.split()
     except (OSError, subprocess.CalledProcessError):
         return None
@@ -199,7 +215,9 @@ def differs_from_ref(ref: str, directory: str) -> str | None:
     return "; ".join(reasons) or None
 
 
-def read_template(path: Path) -> tuple[list[tuple[int, str]], list[tuple[int, str]], list[tuple[int, str]]]:
+def read_template(
+    path: Path,
+) -> tuple[list[tuple[int, str]], list[tuple[int, str]], list[tuple[int, str]]]:
     """(uris, optional_flags, forbidden_fields), each as (lineno, value)."""
     uris: list[tuple[int, str]] = []
     optionals: list[tuple[int, str]] = []
@@ -224,8 +242,10 @@ def main(argv: list[str] | None = None) -> int:
     strict = "--strict" in argv
     for arg in argv:
         if arg != "--strict":
-            print(f"unknown argument {arg!r}; usage: check_skill_uris.py [--strict]",
-                  file=sys.stderr)
+            print(
+                f"unknown argument {arg!r}; usage: check_skill_uris.py [--strict]",
+                file=sys.stderr,
+            )
             return 2
 
     errors: list[str] = []
@@ -305,7 +325,10 @@ def main(argv: list[str] | None = None) -> int:
                 errors.append(f"{rel}:{lineno}: {uri!r} has an invalid skill name")
                 continue
 
-            if owner_repo is None or (match.group("owner"), match.group("repo")) != owner_repo:
+            if (
+                owner_repo is None
+                or (match.group("owner"), match.group("repo")) != owner_repo
+            ):
                 foreign.append(f"{rel}:{lineno} {uri}")
                 continue
 
@@ -399,7 +422,9 @@ def main(argv: list[str] | None = None) -> int:
             f"declared — but {len(stale)} pushed copy(ies) above are superseded "
             f"locally. Re-run with --strict before provisioning against them."
         )
-    elif currency_checked and len(currency_checked) == len(declared & set(skills_on_disk)):
+    elif currency_checked and len(currency_checked) == len(
+        declared & set(skills_on_disk)
+    ):
         print(
             "\nEvery declared URI resolves to a pushed skill and the pushed copy "
             "matches this working tree; every skill is declared."

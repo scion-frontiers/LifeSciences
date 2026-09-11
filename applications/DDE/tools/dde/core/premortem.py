@@ -52,10 +52,10 @@ from .errors import SchemaError
 # ---------------------------------------------------------------------------
 
 RESOLUTION_TYPES = {
-    "accepted",         # Lead agrees — plan changes
-    "rebutted",         # Lead disagrees — cites evidence
-    "accepted_risk",    # Lead acknowledges risk but proceeds under policy
-    "unresolved",       # Neither accepted nor rebutted — follow-up assigned
+    "accepted",  # Lead agrees — plan changes
+    "rebutted",  # Lead disagrees — cites evidence
+    "accepted_risk",  # Lead acknowledges risk but proceeds under policy
+    "unresolved",  # Neither accepted nor rebutted — follow-up assigned
 }
 
 # Prefix used in decision-record ``conditions`` to encode resolutions.
@@ -127,7 +127,10 @@ def is_speculative(hypothesis: dict[str, Any]) -> bool:
 # ---------------------------------------------------------------------------
 
 _PREMORTEM_REQUIRED = [
-    "schema", "review_id", "finding_ref", "review_budget",
+    "schema",
+    "review_id",
+    "finding_ref",
+    "review_budget",
     "failure_hypotheses",
 ]
 
@@ -155,17 +158,13 @@ def validate_premortem(data: dict[str, Any]) -> list[str]:
     # Schema string
     schema = data.get("schema")
     if schema is not None and schema != "dde.premortem-review.v1":
-        errors.append(
-            f"schema must be 'dde.premortem-review.v1', got {schema!r}"
-        )
+        errors.append(f"schema must be 'dde.premortem-review.v1', got {schema!r}")
 
     # Review budget
     budget = data.get("review_budget")
     if budget is not None:
         if not isinstance(budget, int) or budget < 1:
-            errors.append(
-                f"review_budget must be a positive integer, got {budget!r}"
-            )
+            errors.append(f"review_budget must be a positive integer, got {budget!r}")
 
     # Failure hypotheses
     hypotheses = data.get("failure_hypotheses")
@@ -239,8 +238,7 @@ def validate_objection_resolution(data: dict[str, Any]) -> list[str]:
     rtype = data.get("resolution_type")
     if rtype is not None and rtype not in RESOLUTION_TYPES:
         errors.append(
-            f"resolution_type must be one of {sorted(RESOLUTION_TYPES)}, "
-            f"got {rtype!r}"
+            f"resolution_type must be one of {sorted(RESOLUTION_TYPES)}, got {rtype!r}"
         )
 
     # Type-specific requirements
@@ -494,8 +492,7 @@ def generate_gate_dissent_section(
 
     if resolutions:
         accepted_risk = [
-            r for r in resolutions
-            if r.get("resolution_type") == "accepted_risk"
+            r for r in resolutions if r.get("resolution_type") == "accepted_risk"
         ]
         if accepted_risk:
             parts.append("### Accepted Risks\n")

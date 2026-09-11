@@ -120,10 +120,16 @@ def _run_analyze(symbol: str, payload: dict) -> tuple[int, str, dict | None]:
 
         _write_constraint_json(genomics_dir, symbol.upper(), payload)
 
-        result = runner.invoke(cli, [
-            "--project", str(project),
-            "genetics", "analyze", symbol,
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--project",
+                str(project),
+                "genetics",
+                "analyze",
+                symbol,
+            ],
+        )
 
         analysis_dict = None
         analysis_files = list(genomics_dir.glob("*.analysis.json"))
@@ -150,7 +156,7 @@ class TestIndeterminateVerdict(unittest.TestCase):
     def test_no_schema_error(self):
         """SchemaError must NOT be raised — exit 0 instead."""
         payload = _make_gnomad_payload(pli=None, oe_lof_upper=None)
-        exit_code, output, analysis = _run_analyze("MRGPRX2", payload)
+        exit_code, output, _analysis = _run_analyze("MRGPRX2", payload)
         self.assertEqual(exit_code, 0, f"expected exit 0, got {exit_code}:\n{output}")
 
     def test_verdict_is_indeterminate(self):
@@ -176,8 +182,12 @@ class TestIndeterminateVerdict(unittest.TestCase):
     def test_available_metrics_present(self):
         """Constraint metrics that ARE available should still appear."""
         payload = _make_gnomad_payload(
-            pli=None, oe_lof_upper=None,
-            oe_mis=0.89, oe_syn=1.02, exp_lof=0.3, obs_lof=0,
+            pli=None,
+            oe_lof_upper=None,
+            oe_mis=0.89,
+            oe_syn=1.02,
+            exp_lof=0.3,
+            obs_lof=0,
         )
         _, _, analysis = _run_analyze("MRGPRX2", payload)
         self.assertIsNotNone(analysis)

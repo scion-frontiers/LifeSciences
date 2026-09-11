@@ -67,20 +67,37 @@ from ..core.errors import ArtifactError, DependencyError, UsageError
 from ..core.output import Emitter
 from ..core.structures import detect_structure_format
 
-
 TOOL = "fpocket"
 ARTIFACT_CLASS = "structures"
 THRESHOLD_SET = "pocket"
 
 #: Standard amino acid three-letter codes. Non-protein residues are
 #: anything outside this set, after excluding crystallographic waters.
-_STANDARD_AMINO_ACIDS: frozenset[str] = frozenset({
-    "ALA", "ARG", "ASN", "ASP", "CYS",
-    "GLN", "GLU", "GLY", "HIS", "ILE",
-    "LEU", "LYS", "MET", "PHE", "PRO",
-    "SER", "THR", "TRP", "TYR", "VAL",
-    "MSE",  # selenomethionine
-})
+_STANDARD_AMINO_ACIDS: frozenset[str] = frozenset(
+    {
+        "ALA",
+        "ARG",
+        "ASN",
+        "ASP",
+        "CYS",
+        "GLN",
+        "GLU",
+        "GLY",
+        "HIS",
+        "ILE",
+        "LEU",
+        "LYS",
+        "MET",
+        "PHE",
+        "PRO",
+        "SER",
+        "THR",
+        "TRP",
+        "TYR",
+        "VAL",
+        "MSE",  # selenomethionine
+    }
+)
 
 #: Water residues — excluded from non-protein chain detection because
 #: every crystal structure has them and they do not affect pocket scoring
@@ -195,7 +212,9 @@ def _parse_residues_pdb(text: str) -> list[dict[str, Any]]:
             resnum = int(line[22:26])
         except (ValueError, IndexError):
             continue
-        seen.setdefault((chain, resnum), {"chain": chain, "resnum": resnum, "resname": resname})
+        seen.setdefault(
+            (chain, resnum), {"chain": chain, "resnum": resnum, "resname": resname}
+        )
     return [seen[key] for key in sorted(seen)]
 
 
@@ -255,7 +274,9 @@ def _parse_residues_cif(text: str) -> list[dict[str, Any]]:
             resnum = int(fields[col_resnum])
         except (ValueError, IndexError):
             continue
-        seen.setdefault((chain, resnum), {"chain": chain, "resnum": resnum, "resname": resname})
+        seen.setdefault(
+            (chain, resnum), {"chain": chain, "resnum": resnum, "resname": resname}
+        )
     return [seen[key] for key in sorted(seen)]
 
 
@@ -322,7 +343,9 @@ def _detect_non_protein_chains(structure_path: Path) -> tuple[bool, list[str]]:
                 data_start = i
                 break
 
-        col_comp = columns.index("label_comp_id") if "label_comp_id" in columns else None
+        col_comp = (
+            columns.index("label_comp_id") if "label_comp_id" in columns else None
+        )
         col_chain = None
         for name in ("auth_asym_id", "label_asym_id"):
             if name in columns:
@@ -402,7 +425,9 @@ def _detect_short_chains(
                 data_start = i
                 break
 
-        col_comp = columns.index("label_comp_id") if "label_comp_id" in columns else None
+        col_comp = (
+            columns.index("label_comp_id") if "label_comp_id" in columns else None
+        )
         col_chain = None
         for name in ("auth_asym_id", "label_asym_id"):
             if name in columns:
@@ -448,11 +473,13 @@ def _detect_short_chains(
     for chain, residues in sorted(chain_residues.items()):
         n_residues = len(residues)
         if 0 < n_residues < threshold:
-            short_chains.append({
-                "chain": chain,
-                "residues": n_residues,
-                "note": "Possible peptide ligand",
-            })
+            short_chains.append(
+                {
+                    "chain": chain,
+                    "residues": n_residues,
+                    "note": "Possible peptide ligand",
+                }
+            )
 
     return short_chains
 
@@ -661,7 +688,9 @@ def run(
             if completed.returncode != 0 or not info.is_file():
                 raise ArtifactError(
                     f"fpocket produced no result for {source.name}",
-                    detail=(completed.stderr or completed.stdout or "no output").strip()[:400],
+                    detail=(
+                        completed.stderr or completed.stdout or "no output"
+                    ).strip()[:400],
                     remedy="check the file is a parseable structure with protein atoms; "
                     "fpocket exits 0 on some malformed inputs without writing output, "
                     "so a missing info.txt is treated as a failure here",
@@ -771,7 +800,8 @@ def run(
     # occlusion.
     if retained_short_chains and pockets:
         low_scoring_pockets = [
-            p for p in pockets
+            p
+            for p in pockets
             if (p.get("druggability_score") or 0.0) < _LOW_DRUGGABILITY_THRESHOLD
         ]
         if low_scoring_pockets:
@@ -780,7 +810,9 @@ def run(
                 f"{sc['chain']}({sc['residues']} residues)"
                 for sc in retained_short_chains
             )
-            worst = min(low_scoring_pockets, key=lambda p: p.get("druggability_score") or 0.0)
+            worst = min(
+                low_scoring_pockets, key=lambda p: p.get("druggability_score") or 0.0
+            )
             worst_score = worst.get("druggability_score") or 0.0
             sidecar.warn(
                 f"Pocket {worst.get('rank', '?')} scored {worst_score:.3f} "
@@ -798,7 +830,8 @@ def run(
     has_non_receptor_content = has_non_protein or bool(retained_short_chains)
     if has_non_receptor_content and pockets:
         low_scoring = [
-            p for p in pockets
+            p
+            for p in pockets
             if (p.get("druggability_score") or 0.0) < _LOW_DRUGGABILITY_THRESHOLD
         ]
         if low_scoring:
@@ -895,7 +928,9 @@ def _band(dscore: float, thresholds) -> str:
     "Answers whether a pocket lines that site, not merely whether the protein "
     "has one somewhere.",
 )
-@click.option("--druggable", type=float, default=None, help="Override druggable_dscore.")
+@click.option(
+    "--druggable", type=float, default=None, help="Override druggable_dscore."
+)
 @out_option
 @output_options
 @pass_state
@@ -964,9 +999,7 @@ def analyze(
 
     if best is None:
         verdict = "no-pockets-detected"
-        statement = (
-            f"fpocket detected no pockets in {doc.get('structure', stem)}."
-        )
+        statement = f"fpocket detected no pockets in {doc.get('structure', stem)}."
     else:
         best_score = best.get("druggability_score") or 0.0
         band = _band(best_score, thresholds)
@@ -1061,8 +1094,7 @@ def analyze(
                 # 150-character stdout budget and clips precisely where
                 # the evidence is. The reason has to fit on the line.
                 (
-                    f"no pocket at the requested site in "
-                    f"{doc.get('structure', stem)}"
+                    f"no pocket at the requested site in {doc.get('structure', stem)}"
                     if near and not (site.get("pockets_at_site") or [])
                     else f"{reported_score:.3f} in {doc.get('structure', stem)}"
                 )

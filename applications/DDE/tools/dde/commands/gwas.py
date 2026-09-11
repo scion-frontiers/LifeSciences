@@ -61,12 +61,12 @@ from ..common import (
     pass_state,
 )
 from ..core import http, provenance
-from ..core.qps import qps_for_host
 from ..core.errors import (
     ArtifactError,
     Refusal,
     SchemaError,
 )
+from ..core.qps import qps_for_host
 
 TOOL = "gwas"
 ARTIFACT_CLASS = "genomics"  # co-locate with gnomAD data in raw/genomics/
@@ -86,24 +86,30 @@ CLINVAR_RETMAX = 500
 # ACMG clinical significance classifications considered "significant"
 # (pathogenic findings) in the analyze phase. These are the curated
 # clinical assertions that a variant causes the named condition.
-_PATHOGENIC_CLASSIFICATIONS = frozenset({
-    "Pathogenic",
-    "Likely pathogenic",
-    "Pathogenic/Likely pathogenic",
-})
+_PATHOGENIC_CLASSIFICATIONS = frozenset(
+    {
+        "Pathogenic",
+        "Likely pathogenic",
+        "Pathogenic/Likely pathogenic",
+    }
+)
 
 # Review-status tiers. A classification's weight depends on its review
 # status — a "Pathogenic" call with "no assertion criteria provided" is
 # materially weaker than one "reviewed by expert panel".
-_STRONG_REVIEW = frozenset({
-    "reviewed by expert panel",
-    "practice guideline",
-})
-_MODERATE_REVIEW = frozenset({
-    "criteria provided, multiple submitters, no conflicts",
-    "criteria provided, single submitter",
-    "criteria provided, conflicting classifications",
-})
+_STRONG_REVIEW = frozenset(
+    {
+        "reviewed by expert panel",
+        "practice guideline",
+    }
+)
+_MODERATE_REVIEW = frozenset(
+    {
+        "criteria provided, multiple submitters, no conflicts",
+        "criteria provided, single submitter",
+        "criteria provided, conflicting classifications",
+    }
+)
 
 # ClinVar obj_type values (case-insensitive) that indicate locus-overlapping
 # structural variants rather than gene-specific coding variants. A large CNV
@@ -118,13 +124,13 @@ _LOCUS_OVERLAPPING_OBJ_TYPES = re.compile(
 # obj_type is absent (backward compatibility with older artifacts).
 _LOCUS_OVERLAPPING_TITLE = re.compile(
     r"(?:"
-    r"GRCh\d+/hg\d+"         # chromosomal coordinate prefix
-    r"|chr\d+:\d+-\d+"       # explicit chromosomal range
-    r"|\d+[pq]\d+"           # cytogenetic band notation
-    r"|[Xx][pq]\d+"          # X-chromosome cytogenetic band
+    r"GRCh\d+/hg\d+"  # chromosomal coordinate prefix
+    r"|chr\d+:\d+-\d+"  # explicit chromosomal range
+    r"|\d+[pq]\d+"  # cytogenetic band notation
+    r"|[Xx][pq]\d+"  # X-chromosome cytogenetic band
     r")"
     r".*"
-    r"(?:x\d+|del|dup)?",    # optional copy-number suffix
+    r"(?:x\d+|del|dup)?",  # optional copy-number suffix
     re.IGNORECASE,
 )
 
@@ -218,12 +224,10 @@ def _graphql_post(url: str, query: str, qps: float) -> dict[str, Any]:
         raise SchemaError("endpoint did not return JSON", detail=str(exc))
     if payload.get("errors"):
         messages = "; ".join(
-            str(e.get("message", e))
-            for e in payload["errors"]
-            if isinstance(e, dict)
+            str(e.get("message", e)) for e in payload["errors"] if isinstance(e, dict)
         )
         raise Refusal(
-            f"GraphQL query was declined",
+            "GraphQL query was declined",
             detail=messages,
             remedy="check the query input and endpoint availability",
         )
@@ -291,7 +295,11 @@ def _fetch_opentargets_disease(disease: str) -> tuple[bytes, dict[str, Any]]:
     disease_data = (payload.get("data") or {}).get("disease")
     if not disease_data or not disease_data.get("associatedTargets"):
         return raw, _build_disease_artifact(
-            disease, "opentargets", disease_id, resolved_name, [],
+            disease,
+            "opentargets",
+            disease_id,
+            resolved_name,
+            [],
         )
 
     assoc_targets = disease_data["associatedTargets"]
@@ -305,17 +313,23 @@ def _fetch_opentargets_disease(disease: str) -> tuple[bytes, dict[str, Any]]:
         for ds in row.get("datatypeScores", []):
             component = ds.get("id", "")
             datatype_scores[component] = ds.get("score", 0.0)
-        associations.append({
-            "gene_symbol": target.get("approvedSymbol", ""),
-            "ensembl_id": target.get("id", ""),
-            "score": row.get("score", 0.0),
-            "datatype_scores": datatype_scores,
-        })
+        associations.append(
+            {
+                "gene_symbol": target.get("approvedSymbol", ""),
+                "ensembl_id": target.get("id", ""),
+                "score": row.get("score", 0.0),
+                "datatype_scores": datatype_scores,
+            }
+        )
 
     # Already sorted by score descending from the API, but enforce it.
     associations.sort(key=lambda a: a["score"], reverse=True)
     artifact = _build_disease_artifact(
-        disease, "opentargets", disease_id, resolved_name, associations,
+        disease,
+        "opentargets",
+        disease_id,
+        resolved_name,
+        associations,
         total_count=total_count,
     )
     return raw, artifact
@@ -326,7 +340,7 @@ def _fetch_opentargets(symbol: str) -> tuple[bytes, dict[str, Any]]:
 
     Returns (verbatim response bytes, structured artifact dict).
     """
-    ensembl_id, resolved_name = _resolve_ensembl_id(symbol)
+    ensembl_id, _resolved_name = _resolve_ensembl_id(symbol)
     payload = _graphql_post(
         OPENTARGETS_API,
         _OT_ASSOC_QUERY % ensembl_id,
@@ -347,14 +361,16 @@ def _fetch_opentargets(symbol: str) -> tuple[bytes, dict[str, Any]]:
         for ds in row.get("datatypeScores", []):
             component = ds.get("id", "")
             datatype_scores[component] = ds.get("score", 0.0)
-        associations.append({
-            "source_db": "opentargets",
-            "disease_id": disease.get("id", ""),
-            "disease_name": disease.get("name", ""),
-            "score": row.get("score", 0.0),
-            "evidence_count": len(row.get("datatypeScores", [])),
-            "datatype_scores": datatype_scores,
-        })
+        associations.append(
+            {
+                "source_db": "opentargets",
+                "disease_id": disease.get("id", ""),
+                "disease_name": disease.get("name", ""),
+                "score": row.get("score", 0.0),
+                "evidence_count": len(row.get("datatypeScores", [])),
+                "datatype_scores": datatype_scores,
+            }
+        )
 
     # Sort by score descending for top-disease extraction.
     associations.sort(key=lambda a: a["score"], reverse=True)
@@ -410,9 +426,7 @@ def _fetch_gwas_catalog(symbol: str) -> tuple[bytes, dict[str, Any]]:
     try:
         payload = json.loads(raw.decode("utf-8"))
     except Exception as exc:
-        raise SchemaError(
-            "GWAS Catalog did not return JSON", detail=str(exc)
-        )
+        raise SchemaError("GWAS Catalog did not return JSON", detail=str(exc))
 
     # Navigate the HAL-style _embedded response.
     embedded = payload.get("_embedded", {})
@@ -433,7 +447,7 @@ def _fetch_gwas_catalog(symbol: str) -> tuple[bytes, dict[str, Any]]:
         p_exponent = assoc.get("pvalueExponent")
         p_value = None
         if p_mantissa is not None and p_exponent is not None:
-            p_value = p_mantissa * (10 ** p_exponent)
+            p_value = p_mantissa * (10**p_exponent)
 
         # Extract OR/beta.
         or_value = assoc.get("orPerCopyNum")
@@ -451,25 +465,25 @@ def _fetch_gwas_catalog(symbol: str) -> tuple[bytes, dict[str, Any]]:
         study_href = study_link.get("href", "")
         study_accession = study_href.rstrip("/").split("/")[-1] if study_href else None
 
-        associations.append({
-            "source_db": "gwas-catalog",
-            "disease_id": "",
-            "disease_name": disease_name,
-            # NB: score is p-value here (lower = more significant), unlike
-            # Open Targets where score is 0–1 (higher = stronger association).
-            # The analyze command branches on source to interpret correctly.
-            "score": p_value,
-            "rs_ids": rs_ids,
-            "p_value": p_value,
-            "or_per_copy": or_value,
-            "beta": beta,
-            "study_accession": study_accession,
-        })
+        associations.append(
+            {
+                "source_db": "gwas-catalog",
+                "disease_id": "",
+                "disease_name": disease_name,
+                # NB: score is p-value here (lower = more significant), unlike
+                # Open Targets where score is 0–1 (higher = stronger association).
+                # The analyze command branches on source to interpret correctly.
+                "score": p_value,
+                "rs_ids": rs_ids,
+                "p_value": p_value,
+                "or_per_copy": or_value,
+                "beta": beta,
+                "study_accession": study_accession,
+            }
+        )
 
     # Sort by p-value ascending (most significant first), with None last.
-    associations.sort(
-        key=lambda a: (a["p_value"] is None, a["p_value"] or 0)
-    )
+    associations.sort(key=lambda a: (a["p_value"] is None, a["p_value"] or 0))
     artifact = _build_artifact(symbol, "gwas-catalog", None, associations)
     return raw, artifact
 
@@ -520,11 +534,7 @@ def _fetch_clinvar(symbol: str) -> tuple[bytes, dict[str, Any]]:
 
     # Step 2: Batch fetch summaries — one HTTP call for all UIDs.
     ids_param = ",".join(id_list)
-    summary_url = (
-        f"{CLINVAR_ESUMMARY}?db=clinvar"
-        f"&id={ids_param}"
-        f"&retmode=json"
-    )
+    summary_url = f"{CLINVAR_ESUMMARY}?db=clinvar&id={ids_param}&retmode=json"
     summary_response = http.request(
         "GET",
         summary_url,
@@ -534,9 +544,7 @@ def _fetch_clinvar(symbol: str) -> tuple[bytes, dict[str, Any]]:
     try:
         summary_data = json.loads(summary_response.content.decode("utf-8"))
     except Exception as exc:
-        raise SchemaError(
-            "ClinVar esummary did not return JSON", detail=str(exc)
-        )
+        raise SchemaError("ClinVar esummary did not return JSON", detail=str(exc))
 
     raw = json.dumps(summary_data, indent=2).encode("utf-8")
     result_data = summary_data.get("result", {})
@@ -561,23 +569,27 @@ def _fetch_clinvar(symbol: str) -> tuple[bytes, dict[str, Any]]:
             if name:
                 traits.append(name)
             for xref in trait.get("trait_xrefs", []):
-                trait_xrefs.append({
-                    "db": xref.get("db_source", ""),
-                    "id": xref.get("db_id", ""),
-                })
+                trait_xrefs.append(
+                    {
+                        "db": xref.get("db_source", ""),
+                        "id": xref.get("db_id", ""),
+                    }
+                )
 
         disease_name = "; ".join(traits) if traits else ""
 
-        associations.append({
-            "source_db": "clinvar",
-            "variant_id": uid,
-            "variant_title": entry.get("title", ""),
-            "obj_type": entry.get("obj_type", ""),
-            "disease_name": disease_name,
-            "classification": classification,
-            "review_status": review_status,
-            "trait_xrefs": trait_xrefs,
-        })
+        associations.append(
+            {
+                "source_db": "clinvar",
+                "variant_id": uid,
+                "variant_title": entry.get("title", ""),
+                "obj_type": entry.get("obj_type", ""),
+                "disease_name": disease_name,
+                "classification": classification,
+                "review_status": review_status,
+                "trait_xrefs": trait_xrefs,
+            }
+        )
 
     # Sort: pathogenic first (by clinical significance tier), then
     # alphabetically by review status within each tier.
@@ -765,9 +777,7 @@ def search_cmd(
 
     # Write structured artifact.
     artifact_path = target_dir / f"{slug}.gwas-{source}.artifact.json"
-    artifact_path.write_text(
-        json.dumps(artifact, indent=2) + "\n", encoding="utf-8"
-    )
+    artifact_path.write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
     sidecar.add_output(artifact_path)
 
     # Write sidecar.
@@ -857,15 +867,11 @@ def search_disease_cmd(
 
     # Write structured artifact.
     artifact_path = target_dir / f"{slug}.gwas-disease-{source}.artifact.json"
-    artifact_path.write_text(
-        json.dumps(artifact, indent=2) + "\n", encoding="utf-8"
-    )
+    artifact_path.write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
     sidecar.add_output(artifact_path)
 
     # Write sidecar.
-    meta_path = sidecar.write(
-        target_dir / f"{slug}.gwas-disease-{source}.meta.json"
-    )
+    meta_path = sidecar.write(target_dir / f"{slug}.gwas-disease-{source}.meta.json")
 
     emit.data("disease", disease)
     emit.data("source", source)
@@ -963,14 +969,20 @@ def analyze_cmd(
                 "numeric score"
             )
         significant, metrics, assessment = _analyze_clinvar(
-            gene, associations, add_relay,
+            gene,
+            associations,
+            add_relay,
         )
         thresholds_applied: dict[str, Any] = {
             "significant_classifications": sorted(_PATHOGENIC_CLASSIFICATIONS),
         }
     else:
         significant, metrics, assessment = _analyze_gwas(
-            gene, source, associations, score_threshold, add_relay,
+            gene,
+            source,
+            associations,
+            score_threshold,
+            add_relay,
         )
         thresholds_applied = {
             "significance_cutoff": metrics["threshold"],
@@ -980,8 +992,7 @@ def analyze_cmd(
     if disease_filter is not None:
         _filter = disease_filter.lower()
         matches = [
-            a for a in associations
-            if _filter in (a.get("disease_name") or "").lower()
+            a for a in associations if _filter in (a.get("disease_name") or "").lower()
         ]
         assessment["disease_filter_match"] = bool(matches)
         assessment["disease_filter_details"] = [
@@ -1042,9 +1053,7 @@ def analyze_cmd(
         if source == "opentargets":
             for detail in assessment.get("score_details", [])[:5]:
                 dt = detail.get("datatype_scores", {})
-                parts = ", ".join(
-                    f"{k}={v:.2f}" for k, v in sorted(dt.items())
-                )
+                parts = ", ".join(f"{k}={v:.2f}" for k, v in sorted(dt.items()))
                 emit.line(
                     f"  {detail['disease_name']}: "
                     f"Overall score: {detail['overall_score']:.2f} "
@@ -1061,13 +1070,9 @@ def analyze_cmd(
                 f"({len(details)} association(s))"
             )
             for d in details[:5]:
-                emit.line(
-                    f"  {d['disease_name']}: score={d['score']}"
-                )
+                emit.line(f"  {d['disease_name']}: score={d['score']}")
         else:
-            emit.line(
-                f"Disease filter '{disease_filter}': NO MATCH"
-            )
+            emit.line(f"Disease filter '{disease_filter}': NO MATCH")
 
     for record in relays:
         emit.line(f"relay {record['code']}: {record['message']}")
@@ -1099,7 +1104,8 @@ def _analyze_gwas(
         # GWAS Catalog: p-value, lower is more significant.
         cutoff = score_threshold if score_threshold is not None else 5e-8
         significant = [
-            a for a in associations
+            a
+            for a in associations
             if a.get("p_value") is not None and a["p_value"] <= cutoff
         ]
 
@@ -1201,7 +1207,8 @@ def _analyze_clinvar(
     Returns (significant_associations, metrics, assessment).
     """
     significant = [
-        a for a in associations
+        a
+        for a in associations
         if a.get("classification", "") in _PATHOGENIC_CLASSIFICATIONS
     ]
 
@@ -1249,7 +1256,8 @@ def _analyze_clinvar(
     # Verdict uses gene-specific count as primary safety signal:
     # CNV-only pathogenic variants are not gene-specific evidence.
     verdict = (
-        "pathogenic_variants_found" if pathogenic_gene_specific
+        "pathogenic_variants_found"
+        if pathogenic_gene_specific
         else "no_pathogenic_variants"
     )
 
@@ -1282,9 +1290,8 @@ def _analyze_clinvar(
     # locus-overlapping variants outnumber gene-specific ones, because
     # the headline pathogenic count is then actively misleading about
     # gene-specific risk.
-    if (
-        pathogenic_locus_overlapping
-        and len(pathogenic_locus_overlapping) > len(pathogenic_gene_specific)
+    if pathogenic_locus_overlapping and len(pathogenic_locus_overlapping) > len(
+        pathogenic_gene_specific
     ):
         add_relay(
             "clinvar.cnv_not_gene_specific",

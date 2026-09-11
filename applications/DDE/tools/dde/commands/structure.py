@@ -40,17 +40,17 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from pathlib import Path
 from typing import Any
-
-import math
 
 import click
 import numpy as np
 
 from ..common import AppState, out_option, output_options, pass_state, resolve_artifact
-from ..core import http, provenance, thresholds as thresholds_mod
+from ..core import http, provenance
+from ..core import thresholds as thresholds_mod
 from ..core.errors import ArtifactError, SchemaError, UsageError
 from ..core.output import Emitter
 from ..core.qps import qps_for_host
@@ -129,16 +129,18 @@ def _parse_atoms_pdb(text: str) -> list[dict[str, Any]]:
         if element in ("H", "D"):
             continue
 
-        atoms.append({
-            "chain": chain,
-            "resnum": resnum,
-            "resname": resname,
-            "x": x,
-            "y": y,
-            "z": z,
-            "element": element,
-            "bfactor": bfactor,
-        })
+        atoms.append(
+            {
+                "chain": chain,
+                "resnum": resnum,
+                "resname": resname,
+                "x": x,
+                "y": y,
+                "z": z,
+                "element": element,
+                "bfactor": bfactor,
+            }
+        )
     return atoms
 
 
@@ -237,16 +239,18 @@ def _parse_atoms_cif(text: str) -> list[dict[str, Any]]:
             except IndexError:
                 pass
 
-        atoms.append({
-            "chain": chain,
-            "resnum": resnum,
-            "resname": resname,
-            "x": x,
-            "y": y,
-            "z": z,
-            "element": element,
-            "bfactor": bfactor,
-        })
+        atoms.append(
+            {
+                "chain": chain,
+                "resnum": resnum,
+                "resname": resname,
+                "x": x,
+                "y": y,
+                "z": z,
+                "element": element,
+                "bfactor": bfactor,
+            }
+        )
     return atoms
 
 
@@ -465,12 +469,14 @@ def parse_topo_domains(features: list[dict[str, Any]]) -> list[dict[str, Any]]:
         except (ValueError, TypeError):
             continue
         desc = feat.get("description") or ""
-        domains.append({
-            "type": ftype,
-            "start": start,
-            "end": end,
-            "description": desc,
-        })
+        domains.append(
+            {
+                "type": ftype,
+                "start": start,
+                "end": end,
+                "description": desc,
+            }
+        )
     return domains
 
 
@@ -516,12 +522,14 @@ def _parse_glycosylation_sites(
             glyco_type = "C-linked"
         elif "s-linked" in desc_lower:
             glyco_type = "S-linked"
-        sites.append({
-            "position": start,
-            "end": end,
-            "type": glyco_type,
-            "description": desc,
-        })
+        sites.append(
+            {
+                "position": start,
+                "end": end,
+                "type": glyco_type,
+                "description": desc,
+            }
+        )
     return sites
 
 
@@ -546,11 +554,26 @@ _VDW_DEFAULT = 1.70
 # Tien et al., PLoS ONE 2013;8:e80635 — theoretical maxASA from
 # Gly-X-Gly tripeptides.
 MAX_ASA_TIEN: dict[str, float] = {
-    "ALA": 129.0, "ARG": 274.0, "ASN": 195.0, "ASP": 193.0,
-    "CYS": 167.0, "GLN": 225.0, "GLU": 223.0, "GLY": 104.0,
-    "HIS": 224.0, "ILE": 197.0, "LEU": 201.0, "LYS": 236.0,
-    "MET": 224.0, "PHE": 240.0, "PRO": 159.0, "SER": 155.0,
-    "THR": 172.0, "TRP": 285.0, "TYR": 263.0, "VAL": 174.0,
+    "ALA": 129.0,
+    "ARG": 274.0,
+    "ASN": 195.0,
+    "ASP": 193.0,
+    "CYS": 167.0,
+    "GLN": 225.0,
+    "GLU": 223.0,
+    "GLY": 104.0,
+    "HIS": 224.0,
+    "ILE": 197.0,
+    "LEU": 201.0,
+    "LYS": 236.0,
+    "MET": 224.0,
+    "PHE": 240.0,
+    "PRO": 159.0,
+    "SER": 155.0,
+    "THR": 172.0,
+    "TRP": 285.0,
+    "TYR": 263.0,
+    "VAL": 174.0,
 }
 
 
@@ -588,9 +611,7 @@ def _compute_sasa(
         return []
 
     # Build coordinate array and radius array.
-    coords = np.array(
-        [[a["x"], a["y"], a["z"]] for a in atoms], dtype=np.float64
-    )
+    coords = np.array([[a["x"], a["y"], a["z"]] for a in atoms], dtype=np.float64)
     radii = np.array(
         [_VDW_RADII.get(a.get("element", "").upper(), _VDW_DEFAULT) for a in atoms],
         dtype=np.float64,
@@ -610,9 +631,9 @@ def _compute_sasa(
     # Build grid: map each atom to a cell.
     grid: dict[tuple[int, int, int], list[int]] = {}
     for i in range(n_atoms):
-        cx = int(math.floor(coords[i, 0] / cell_size))
-        cy = int(math.floor(coords[i, 1] / cell_size))
-        cz = int(math.floor(coords[i, 2] / cell_size))
+        cx = math.floor(coords[i, 0] / cell_size)
+        cy = math.floor(coords[i, 1] / cell_size)
+        cz = math.floor(coords[i, 2] / cell_size)
         grid.setdefault((cx, cy, cz), []).append(i)
 
     sasa = np.zeros(n_atoms, dtype=np.float64)
@@ -622,9 +643,9 @@ def _compute_sasa(
         ci = coords[i]
 
         # Find neighbor atoms via grid lookup (26 neighbors + own cell).
-        cx = int(math.floor(ci[0] / cell_size))
-        cy = int(math.floor(ci[1] / cell_size))
-        cz = int(math.floor(ci[2] / cell_size))
+        cx = math.floor(ci[0] / cell_size)
+        cy = math.floor(ci[1] / cell_size)
+        cz = math.floor(ci[2] / cell_size)
 
         neighbors = []
         for dx in (-1, 0, 1):
@@ -707,14 +728,16 @@ def _compute_rsa(
         bfactors = rd["bfactors"]
         mean_bfactor = sum(bfactors) / len(bfactors) if bfactors else 0.0
 
-        result.append({
-            "chain": rd["chain"],
-            "resnum": rd["resnum"],
-            "resname": resname,
-            "sasa": round(sasa, 1),
-            "rsa": round(rsa, 3) if rsa is not None else None,
-            "plddt": round(mean_bfactor, 1),
-        })
+        result.append(
+            {
+                "chain": rd["chain"],
+                "resnum": rd["resnum"],
+                "resname": resname,
+                "sasa": round(sasa, 1),
+                "rsa": round(rsa, 3) if rsa is not None else None,
+                "plddt": round(mean_bfactor, 1),
+            }
+        )
     return result
 
 
@@ -765,14 +788,16 @@ def map_pocket_to_topology(
     tm_detail = []
     for label in sorted_tms:
         res_list = tm_mapping[label]
-        tm_detail.append({
-            "label": label,
-            "count": len(res_list),
-            "residues": [
-                f"{r.get('resname', '?')}{r.get('resnum', '?')}"
-                for r in sorted(res_list, key=lambda r: r.get("resnum", 0))
-            ],
-        })
+        tm_detail.append(
+            {
+                "label": label,
+                "count": len(res_list),
+                "residues": [
+                    f"{r.get('resname', '?')}{r.get('resnum', '?')}"
+                    for r in sorted(res_list, key=lambda r: r.get("resnum", 0))
+                ],
+            }
+        )
 
     # Check for orthosteric candidacy.
     tm_labels_present = set(sorted_tms)
@@ -783,12 +808,8 @@ def map_pocket_to_topology(
     bundle_void_reason = None
     n_tm_segments = len(tm_labels_present)
     if n_tm_segments >= _BUNDLE_VOID_MIN_TM_SEGMENTS:
-        alpha_check = (
-            n_alpha is not None and n_alpha > _BUNDLE_VOID_MIN_ALPHA_SPHERES
-        )
-        volume_check = (
-            volume is not None and volume > _BUNDLE_VOID_MIN_VOLUME
-        )
+        alpha_check = n_alpha is not None and n_alpha > _BUNDLE_VOID_MIN_ALPHA_SPHERES
+        volume_check = volume is not None and volume > _BUNDLE_VOID_MIN_VOLUME
         if alpha_check or volume_check:
             is_bundle_void = True
             bundle_void_reason = (
@@ -892,8 +913,7 @@ def interface_cmd(
 
     if len(all_chains) < 2:
         raise UsageError(
-            f"structure {source.name} contains only chain(s) "
-            f"{', '.join(all_chains)}",
+            f"structure {source.name} contains only chain(s) {', '.join(all_chains)}",
             detail="interface detection requires at least two chains",
             remedy="pass a multi-chain complex structure (e.g., an AF3 "
             "prediction with multiple chains)",
@@ -913,7 +933,7 @@ def interface_cmd(
     else:
         pairs = []
         for i, ca in enumerate(all_chains):
-            for cb in all_chains[i + 1:]:
+            for cb in all_chains[i + 1 :]:
                 pairs.append((ca, cb))
 
     # Compute interfaces
@@ -930,13 +950,15 @@ def interface_cmd(
             residues_a + residues_b,
             key=lambda r: (r["chain"], r["resnum"]),
         )
-        interfaces.append({
-            "chain_pair": [chain_a, chain_b],
-            "residues_chain_a": residues_a,
-            "residues_chain_b": residues_b,
-            "n_contacts": n_contacts,
-            "near_query": _near_query(all_interface),
-        })
+        interfaces.append(
+            {
+                "chain_pair": [chain_a, chain_b],
+                "residues_chain_a": residues_a,
+                "residues_chain_b": residues_b,
+                "n_contacts": n_contacts,
+                "near_query": _near_query(all_interface),
+            }
+        )
 
     # Determine output directory
     project = state.project()
@@ -996,14 +1018,10 @@ def interface_cmd(
             f"{n_a} residues on {pair[0]}, {n_b} on {pair[1]} "
             f"({iface['n_contacts']} contacts)"
         )
-        emit.line(
-            f"# Feed to: dde pocket run --near \"{iface['near_query']}\""
-        )
+        emit.line(f'# Feed to: dde pocket run --near "{iface["near_query"]}"')
 
     if not interfaces:
-        emit.line(
-            f"No interfaces found at {cutoff} A cutoff in {source.name}"
-        )
+        emit.line(f"No interfaces found at {cutoff} A cutoff in {source.name}")
 
     emit.data("schema", ARTIFACT_SCHEMA)
     emit.data("n_interfaces", len(interfaces))
@@ -1061,11 +1079,7 @@ def annotate_topology(
     topology = fetch_topology(accession)
     tm_regions = topology["tm_regions"]
 
-    gene_label = (
-        gene_from_search
-        or topology.get("gene")
-        or accession
-    )
+    gene_label = gene_from_search or topology.get("gene") or accession
 
     if not tm_regions:
         # Non-GPCR or no annotated TM regions — still report, don't fail.
@@ -1109,9 +1123,7 @@ def annotate_topology(
     }
 
     artifact_path = target_dir / f"{stem}.topology-annotation.artifact.json"
-    artifact_path.write_text(
-        json.dumps(record, indent=2) + "\n", encoding="utf-8"
-    )
+    artifact_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
 
     # -- sidecar --------------------------------------------------------------
     sidecar = provenance.Sidecar(
@@ -1157,7 +1169,9 @@ def annotate_topology(
     for ann in pocket_annotations:
         rank = ann["rank"]
         dscore = ann.get("druggability_score")
-        dscore_str = f"drug_score={dscore:.2f}" if dscore is not None else "drug_score=N/A"
+        dscore_str = (
+            f"drug_score={dscore:.2f}" if dscore is not None else "drug_score=N/A"
+        )
         header = f"Pocket {rank} (rank {rank}, {dscore_str}):"
         emit.line(header)
         if ann["tm_segments"]:
@@ -1354,10 +1368,8 @@ def surface_cmd(
 
     # Glycosylation sites (if --gene provided).
     glycosylation_sites: list[dict[str, Any]] = []
-    gene_label = None
     if gene is not None:
-        accession, gene_from_search = resolve_accession(gene)
-        gene_label = gene_from_search or gene
+        accession, _gene_from_search = resolve_accession(gene)
         url = f"{UNIPROT_API}/{accession}.json"
         data = http.get_json(url, qps=qps_for_host("rest.uniprot.org"), timeout=30.0)
         features = data.get("features") or []
@@ -1369,27 +1381,18 @@ def surface_cmd(
         near_residues = _parse_near_residues(near)
         if near_residues:
             patch = [
-                r for r in per_residue
-                if (r["chain"], r["resnum"]) in near_residues
+                r for r in per_residue if (r["chain"], r["resnum"]) in near_residues
             ]
             if patch:
                 patch_rsa = [r["rsa"] for r in patch if r["rsa"] is not None]
-                patch_n_exposed = sum(
-                    1 for v in patch_rsa if v > rsa_exposed_t
-                )
-                patch_n_highly = sum(
-                    1 for v in patch_rsa if v > rsa_highly_exposed_t
-                )
-                patch_mean_rsa = (
-                    sum(patch_rsa) / len(patch_rsa) if patch_rsa else 0.0
-                )
+                patch_n_exposed = sum(1 for v in patch_rsa if v > rsa_exposed_t)
+                patch_n_highly = sum(1 for v in patch_rsa if v > rsa_highly_exposed_t)
+                patch_mean_rsa = sum(patch_rsa) / len(patch_rsa) if patch_rsa else 0.0
 
                 # Check glycosylation sites in patch.
                 patch_glyco = []
                 for gs in glycosylation_sites:
-                    if any(
-                        r["resnum"] == gs["position"] for r in patch
-                    ):
+                    if any(r["resnum"] == gs["position"] for r in patch):
                         patch_glyco.append(gs)
 
                 patch_classification = "buried"
@@ -1544,10 +1547,26 @@ SUPERIMPOSE_ARTIFACT_SCHEMA = "dde.structure-superposition.v1"
 
 #: Standard one-letter codes for three-letter amino acid names.
 _AA_3TO1: dict[str, str] = {
-    "ALA": "A", "ARG": "R", "ASN": "N", "ASP": "D", "CYS": "C",
-    "GLN": "Q", "GLU": "E", "GLY": "G", "HIS": "H", "ILE": "I",
-    "LEU": "L", "LYS": "K", "MET": "M", "PHE": "F", "PRO": "P",
-    "SER": "S", "THR": "T", "TRP": "W", "TYR": "Y", "VAL": "V",
+    "ALA": "A",
+    "ARG": "R",
+    "ASN": "N",
+    "ASP": "D",
+    "CYS": "C",
+    "GLN": "Q",
+    "GLU": "E",
+    "GLY": "G",
+    "HIS": "H",
+    "ILE": "I",
+    "LEU": "L",
+    "LYS": "K",
+    "MET": "M",
+    "PHE": "F",
+    "PRO": "P",
+    "SER": "S",
+    "THR": "T",
+    "TRP": "W",
+    "TYR": "Y",
+    "VAL": "V",
     "MSE": "M",  # selenomethionine → methionine
 }
 
@@ -1577,16 +1596,18 @@ def _parse_atoms_with_names_pdb(text: str) -> list[dict[str, Any]]:
             element = atom_name.lstrip("0123456789")[:1]
         if element in ("H", "D"):
             continue
-        atoms.append({
-            "chain": chain,
-            "resnum": resnum,
-            "resname": resname,
-            "atom_name": atom_name,
-            "x": x,
-            "y": y,
-            "z": z,
-            "element": element,
-        })
+        atoms.append(
+            {
+                "chain": chain,
+                "resnum": resnum,
+                "resname": resname,
+                "atom_name": atom_name,
+                "x": x,
+                "y": y,
+                "z": z,
+                "element": element,
+            }
+        )
     return atoms
 
 
@@ -1653,16 +1674,18 @@ def _parse_atoms_with_names_cif(text: str) -> list[dict[str, Any]]:
             element = atom_name.lstrip("0123456789")[:1]
         if element in ("H", "D"):
             continue
-        atoms.append({
-            "chain": chain,
-            "resnum": resnum,
-            "resname": resname,
-            "atom_name": atom_name,
-            "x": x,
-            "y": y,
-            "z": z,
-            "element": element,
-        })
+        atoms.append(
+            {
+                "chain": chain,
+                "resnum": resnum,
+                "resname": resname,
+                "atom_name": atom_name,
+                "x": x,
+                "y": y,
+                "z": z,
+                "element": element,
+            }
+        )
     return atoms
 
 
@@ -1689,7 +1712,9 @@ def _collect_residues(
                 "atom_coords": {},
             }
         grouped[key]["atom_coords"][atom["atom_name"]] = (
-            atom["x"], atom["y"], atom["z"],
+            atom["x"],
+            atom["y"],
+            atom["z"],
         )
     return [grouped[k] for k in sorted(grouped)]
 
@@ -1801,7 +1826,7 @@ def _kabsch_superimpose(
     H = mob_centered.T @ ref_centered
 
     try:
-        U, S, Vt = np.linalg.svd(H)
+        U, _S, Vt = np.linalg.svd(H)
     except np.linalg.LinAlgError as exc:
         raise ArtifactError(
             "SVD failed during superposition — this is an alignment failure, "
@@ -1961,14 +1986,14 @@ def superimpose_cmd(
     if not ref_residues:
         chains = sorted({a["chain"] for a in ref_atoms})
         raise UsageError(
-            f"no residues found in reference"
+            "no residues found in reference"
             + (f" chain {chain_ref}" if chain_ref else ""),
             detail=f"available chains: {', '.join(chains)}",
         )
     if not mob_residues:
         chains = sorted({a["chain"] for a in mob_atoms})
         raise UsageError(
-            f"no residues found in mobile"
+            "no residues found in mobile"
             + (f" chain {chain_mobile}" if chain_mobile else ""),
             detail=f"available chains: {', '.join(chains)}",
         )
@@ -2003,14 +2028,16 @@ def superimpose_cmd(
             if "CA" in ref_ac and "CA" in mob_ac:
                 ref_coord_list.append(np.array(ref_ac["CA"]))
                 mob_coord_list.append(np.array(mob_ac["CA"]))
-                matched_residue_info.append({
-                    "ref_chain": ref_res["chain"],
-                    "ref_resnum": ref_res["resnum"],
-                    "ref_resname": ref_res["resname"],
-                    "mob_chain": mob_res["chain"],
-                    "mob_resnum": mob_res["resnum"],
-                    "mob_resname": mob_res["resname"],
-                })
+                matched_residue_info.append(
+                    {
+                        "ref_chain": ref_res["chain"],
+                        "ref_resnum": ref_res["resnum"],
+                        "ref_resname": ref_res["resname"],
+                        "mob_chain": mob_res["chain"],
+                        "mob_resnum": mob_res["resnum"],
+                        "mob_resname": mob_res["resname"],
+                    }
+                )
         elif atom_mode == "backbone":
             # All backbone atoms present in both
             common = _BACKBONE_ATOMS & set(ref_ac.keys()) & set(mob_ac.keys())
@@ -2018,14 +2045,16 @@ def superimpose_cmd(
                 for aname in sorted(common):
                     ref_coord_list.append(np.array(ref_ac[aname]))
                     mob_coord_list.append(np.array(mob_ac[aname]))
-                matched_residue_info.append({
-                    "ref_chain": ref_res["chain"],
-                    "ref_resnum": ref_res["resnum"],
-                    "ref_resname": ref_res["resname"],
-                    "mob_chain": mob_res["chain"],
-                    "mob_resnum": mob_res["resnum"],
-                    "mob_resname": mob_res["resname"],
-                })
+                matched_residue_info.append(
+                    {
+                        "ref_chain": ref_res["chain"],
+                        "ref_resnum": ref_res["resnum"],
+                        "ref_resname": ref_res["resname"],
+                        "mob_chain": mob_res["chain"],
+                        "mob_resnum": mob_res["resnum"],
+                        "mob_resname": mob_res["resname"],
+                    }
+                )
         else:
             # All heavy atoms — match by atom name
             common = set(ref_ac.keys()) & set(mob_ac.keys())
@@ -2033,14 +2062,16 @@ def superimpose_cmd(
                 for aname in sorted(common):
                     ref_coord_list.append(np.array(ref_ac[aname]))
                     mob_coord_list.append(np.array(mob_ac[aname]))
-                matched_residue_info.append({
-                    "ref_chain": ref_res["chain"],
-                    "ref_resnum": ref_res["resnum"],
-                    "ref_resname": ref_res["resname"],
-                    "mob_chain": mob_res["chain"],
-                    "mob_resnum": mob_res["resnum"],
-                    "mob_resname": mob_res["resname"],
-                })
+                matched_residue_info.append(
+                    {
+                        "ref_chain": ref_res["chain"],
+                        "ref_resnum": ref_res["resnum"],
+                        "ref_resname": ref_res["resname"],
+                        "mob_chain": mob_res["chain"],
+                        "mob_resnum": mob_res["resnum"],
+                        "mob_resname": mob_res["resname"],
+                    }
+                )
 
     if not ref_coord_list:
         raise ArtifactError(
@@ -2070,20 +2101,24 @@ def superimpose_cmd(
             # Apply transformation to mobile CA
             mob_ca_transformed = mob_ca @ rotation.T + translation
             dist = float(np.linalg.norm(ref_ca - mob_ca_transformed))
-            per_residue_distances.append({
-                "ref_chain": ref_res["chain"],
-                "ref_resnum": ref_res["resnum"],
-                "ref_resname": ref_res["resname"],
-                "mob_chain": mob_res["chain"],
-                "mob_resnum": mob_res["resnum"],
-                "mob_resname": mob_res["resname"],
-                "ca_distance": round(dist, 3),
-            })
+            per_residue_distances.append(
+                {
+                    "ref_chain": ref_res["chain"],
+                    "ref_resnum": ref_res["resnum"],
+                    "ref_resname": ref_res["resname"],
+                    "mob_chain": mob_res["chain"],
+                    "mob_resnum": mob_res["resnum"],
+                    "mob_resname": mob_res["resname"],
+                    "ca_distance": round(dist, 3),
+                }
+            )
 
     n_matched = len(matched_residue_info)
     total_ref = len(ref_residues)
     total_mob = len(mob_residues)
-    matched_fraction = n_matched / max(total_ref, total_mob) if max(total_ref, total_mob) > 0 else 0.0
+    matched_fraction = (
+        n_matched / max(total_ref, total_mob) if max(total_ref, total_mob) > 0 else 0.0
+    )
 
     # --- significant divergence flag ---
     significant_divergence = global_rmsd > 2.0
@@ -2095,8 +2130,7 @@ def superimpose_cmd(
 
     # Filter mobile atoms by chain if specified
     atoms_to_write = [
-        a for a in mob_atoms
-        if chain_mobile is None or a["chain"] == chain_mobile
+        a for a in mob_atoms if chain_mobile is None or a["chain"] == chain_mobile
     ]
     aligned_path = target_dir / f"{stem}.superimposed.pdb"
     _write_transformed_pdb(atoms_to_write, rotation, translation, aligned_path)
@@ -2194,9 +2228,7 @@ def superimpose_cmd(
     if significant_divergence:
         emit.line("  *** Significant divergence (RMSD > 2.0 A) ***")
     if matched_fraction < 0.5:
-        emit.line(
-            f"  WARNING: low matched fraction ({matched_fraction:.0%})"
-        )
+        emit.line(f"  WARNING: low matched fraction ({matched_fraction:.0%})")
 
     emit.data("schema", SUPERIMPOSE_ARTIFACT_SCHEMA)
     emit.data("global_rmsd", round(global_rmsd, 4))

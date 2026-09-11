@@ -116,7 +116,9 @@ class ProjectContext:
     root: Path
     source: str  # "DDE_PROJECT" | ".dde walk-up"
 
-    def artifact_dir(self, artifact_class: str, override: str | os.PathLike | None = None) -> Path:
+    def artifact_dir(
+        self, artifact_class: str, override: str | os.PathLike | None = None
+    ) -> Path:
         """Return (and create) the output directory for an artifact class.
 
         ``dde.*`` prefix is normalized before lookup — work orders use
@@ -305,6 +307,7 @@ def init_project(path: str | os.PathLike) -> Path:
 
     # Control plane directories (issue #22).
     from .controlstore import ensure_control_dirs
+
     ensure_control_dirs(root)
 
     return root

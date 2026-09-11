@@ -21,7 +21,6 @@ import logging
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import scipy.sparse
 from sklearn.feature_extraction.text import TfidfVectorizer
 

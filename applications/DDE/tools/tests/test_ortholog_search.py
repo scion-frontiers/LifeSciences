@@ -38,13 +38,12 @@ _module_patches = patch.dict(
 _module_patches.start()
 
 from dde.commands.homology import (
+    _UNIPROT_RE,
     _format_fasta,
     _resolve_gene_to_accession,
     _search_orthologs,
-    _UNIPROT_RE,
 )
 from dde.core.errors import UsageError
-
 
 # ---------------------------------------------------------------------------
 # Test fixtures
@@ -101,9 +100,7 @@ class TestResolveGeneToAccession(unittest.TestCase):
 
     @patch("dde.commands.homology.http.get_json")
     def test_resolves_gene(self, mock_get_json):
-        mock_get_json.return_value = {
-            "results": [{"primaryAccession": "P04637"}]
-        }
+        mock_get_json.return_value = {"results": [{"primaryAccession": "P04637"}]}
         result = _resolve_gene_to_accession("TP53")
         self.assertEqual(result, "P04637")
 
@@ -142,7 +139,9 @@ class TestSearchOrthologs(unittest.TestCase):
             ]
         }
 
-        gene, orthologs = _search_orthologs("TP53", max_orthologs=20, organism_filter=None)
+        gene, orthologs = _search_orthologs(
+            "TP53", max_orthologs=20, organism_filter=None
+        )
         self.assertEqual(gene, "TP53")
         self.assertEqual(len(orthologs), 2)
         self.assertEqual(orthologs[0]["accession"], "P04637")
@@ -167,7 +166,9 @@ class TestSearchOrthologs(unittest.TestCase):
     @patch("dde.commands.homology.http.get_json")
     def test_empty_results(self, mock_get_json):
         mock_get_json.return_value = {"results": []}
-        gene, orthologs = _search_orthologs("UNKNOWN", max_orthologs=20, organism_filter=None)
+        _gene, orthologs = _search_orthologs(
+            "UNKNOWN", max_orthologs=20, organism_filter=None
+        )
         self.assertEqual(orthologs, [])
 
     @patch("dde.commands.homology.http.get_json")
@@ -183,7 +184,9 @@ class TestSearchOrthologs(unittest.TestCase):
                 }
             ]
         }
-        gene, orthologs = _search_orthologs("GENE1", max_orthologs=20, organism_filter=None)
+        _gene, orthologs = _search_orthologs(
+            "GENE1", max_orthologs=20, organism_filter=None
+        )
         self.assertEqual(len(orthologs), 1)
         self.assertEqual(orthologs[0]["accession"], "X12345")
         self.assertEqual(orthologs[0]["gene_names"], [])

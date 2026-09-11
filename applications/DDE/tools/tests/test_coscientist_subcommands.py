@@ -275,9 +275,7 @@ class TestReferencesFailurePaths:
         with pytest.raises(SchemaError, match="no idea list found"):
             _find_ideas(malformed_no_ideas)
 
-    def test_old_artifact_missing_references_detected(
-        self, normalised: dict
-    ) -> None:
+    def test_old_artifact_missing_references_detected(self, normalised: dict) -> None:
         """SchemaError raised when normalised artifact lacks expanded references.
 
         The guard fires before any output is produced, so SchemaError
@@ -320,9 +318,7 @@ class TestKnowledgeLogic:
 
 
 class TestKnowledgeFailurePaths:
-    def test_old_artifact_missing_connections_detected(
-        self, normalised: dict
-    ) -> None:
+    def test_old_artifact_missing_connections_detected(self, normalised: dict) -> None:
         """SchemaError raised when normalised artifact lacks expanded connections.
 
         The guard fires before any output is produced, so SchemaError
@@ -389,13 +385,9 @@ class TestReportFailurePaths:
         with pytest.raises(SchemaError, match="no executive report found"):
             _require_report_content(rpt)
 
-    def test_recommendation_absent_is_not_error(
-        self, normalised_alt: dict
-    ) -> None:
+    def test_recommendation_absent_is_not_error(self, normalised_alt: dict) -> None:
         """No recommendation section in top-ideas summary → None, not error."""
-        rec = _extract_recommendation(
-            normalised_alt["report"]["top_ideas_summary"]
-        )
+        rec = _extract_recommendation(normalised_alt["report"]["top_ideas_summary"])
         assert rec is None
 
     def test_no_report_normalises_to_empty_strings(
@@ -449,13 +441,9 @@ class TestCompareLogic:
     ) -> None:
         entries = []
         for i in normalised["ideas"]:
-            entries.append(
-                {"gene": i["gene"], "elo": i["elo_rating"], "source": "A"}
-            )
+            entries.append({"gene": i["gene"], "elo": i["elo_rating"], "source": "A"})
         for i in normalised_alt["ideas"]:
-            entries.append(
-                {"gene": i["gene"], "elo": i["elo_rating"], "source": "B"}
-            )
+            entries.append({"gene": i["gene"], "elo": i["elo_rating"], "source": "B"})
         entries.sort(key=lambda x: x["elo"], reverse=True)
 
         assert entries[0]["gene"] == "KRAS"

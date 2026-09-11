@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -40,7 +39,6 @@ if str(TOOLS_DIR) not in sys.path:
 from click.testing import CliRunner
 
 from dde.cli import cli
-
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
@@ -80,11 +78,16 @@ def test_register_writes_sidecar(project):
     """register writes a .meta.json with correct type, tool, outputs, sha256."""
     f = _write_file(project, "raw/genomics/msa.fasta", "ACGT")
     runner = CliRunner()
-    result = runner.invoke(cli, [
-        "artifact", "register",
-        str(f.relative_to(project)),
-        "--source", "EBI ClustalO",
-    ])
+    result = runner.invoke(
+        cli,
+        [
+            "artifact",
+            "register",
+            str(f.relative_to(project)),
+            "--source",
+            "EBI ClustalO",
+        ],
+    )
     assert result.exit_code == 0, result.output
 
     sidecar_path = f.parent / f"{f.name}.meta.json"
@@ -109,13 +112,21 @@ def test_register_refuses_overwrite(project):
     sidecar_path.write_text("{}", encoding="utf-8")
 
     runner = CliRunner()
-    result = runner.invoke(cli, [
-        "artifact", "register",
-        str(f.relative_to(project)),
-        "--source", "EBI ClustalO",
-    ])
+    result = runner.invoke(
+        cli,
+        [
+            "artifact",
+            "register",
+            str(f.relative_to(project)),
+            "--source",
+            "EBI ClustalO",
+        ],
+    )
     assert result.exit_code != 0
-    assert "already exists" in result.output.lower() or "already exists" in (result.output + str(result.exception)).lower()
+    assert (
+        "already exists" in result.output.lower()
+        or "already exists" in (result.output + str(result.exception)).lower()
+    )
 
 
 def test_register_sets_work_order_id(project, monkeypatch):
@@ -124,11 +135,16 @@ def test_register_sets_work_order_id(project, monkeypatch):
     f = _write_file(project, "raw/genomics/msa.fasta", "ACGT")
 
     runner = CliRunner()
-    result = runner.invoke(cli, [
-        "artifact", "register",
-        str(f.relative_to(project)),
-        "--source", "test",
-    ])
+    result = runner.invoke(
+        cli,
+        [
+            "artifact",
+            "register",
+            str(f.relative_to(project)),
+            "--source",
+            "test",
+        ],
+    )
     assert result.exit_code == 0, result.output
 
     sidecar_path = f.parent / f"{f.name}.meta.json"
@@ -141,12 +157,19 @@ def test_register_requires_source(project):
     f = _write_file(project, "raw/genomics/msa.fasta", "ACGT")
 
     runner = CliRunner()
-    result = runner.invoke(cli, [
-        "artifact", "register",
-        str(f.relative_to(project)),
-    ])
+    result = runner.invoke(
+        cli,
+        [
+            "artifact",
+            "register",
+            str(f.relative_to(project)),
+        ],
+    )
     assert result.exit_code != 0
-    assert "source" in result.output.lower() or "source" in str(result.exception or "").lower()
+    assert (
+        "source" in result.output.lower()
+        or "source" in str(result.exception or "").lower()
+    )
 
 
 def test_register_sha256_correct(project):
@@ -155,11 +178,16 @@ def test_register_sha256_correct(project):
     f = _write_file(project, "raw/genomics/data.json", content)
 
     runner = CliRunner()
-    result = runner.invoke(cli, [
-        "artifact", "register",
-        str(f.relative_to(project)),
-        "--source", "manual",
-    ])
+    result = runner.invoke(
+        cli,
+        [
+            "artifact",
+            "register",
+            str(f.relative_to(project)),
+            "--source",
+            "manual",
+        ],
+    )
     assert result.exit_code == 0, result.output
 
     sidecar_path = f.parent / f"{f.name}.meta.json"
@@ -173,11 +201,16 @@ def test_register_type_field(project):
     f = _write_file(project, "raw/genomics/msa.fasta", "ACGT")
 
     runner = CliRunner()
-    result = runner.invoke(cli, [
-        "artifact", "register",
-        str(f.relative_to(project)),
-        "--source", "test",
-    ])
+    result = runner.invoke(
+        cli,
+        [
+            "artifact",
+            "register",
+            str(f.relative_to(project)),
+            "--source",
+            "test",
+        ],
+    )
     assert result.exit_code == 0, result.output
 
     sidecar_path = f.parent / f"{f.name}.meta.json"
@@ -191,11 +224,16 @@ def test_register_registered_by_env(project, monkeypatch):
     f = _write_file(project, "raw/genomics/msa.fasta", "ACGT")
 
     runner = CliRunner()
-    result = runner.invoke(cli, [
-        "artifact", "register",
-        str(f.relative_to(project)),
-        "--source", "test",
-    ])
+    result = runner.invoke(
+        cli,
+        [
+            "artifact",
+            "register",
+            str(f.relative_to(project)),
+            "--source",
+            "test",
+        ],
+    )
     assert result.exit_code == 0, result.output
 
     sidecar_path = f.parent / f"{f.name}.meta.json"
@@ -209,11 +247,16 @@ def test_register_registered_by_default(project, monkeypatch):
     f = _write_file(project, "raw/genomics/msa.fasta", "ACGT")
 
     runner = CliRunner()
-    result = runner.invoke(cli, [
-        "artifact", "register",
-        str(f.relative_to(project)),
-        "--source", "test",
-    ])
+    result = runner.invoke(
+        cli,
+        [
+            "artifact",
+            "register",
+            str(f.relative_to(project)),
+            "--source",
+            "test",
+        ],
+    )
     assert result.exit_code == 0, result.output
 
     sidecar_path = f.parent / f"{f.name}.meta.json"

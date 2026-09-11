@@ -94,7 +94,9 @@ class TestFlattenListOfDicts(unittest.TestCase):
             {"label": "ignored", "id": "UsedId", "value": 42.0},
         ]
         result = _flatten_list_of_dicts(
-            "test", records, identity_field="id",
+            "test",
+            records,
+            identity_field="id",
         )
         self.assertIn("test.usedid", result)
         self.assertAlmostEqual(result["test.usedid"], 42.0)
@@ -105,7 +107,9 @@ class TestFlattenListOfDicts(unittest.TestCase):
             {"name": "A", "first_num": 1.0, "target_num": 99.0},
         ]
         result = _flatten_list_of_dicts(
-            "test", records, value_field="target_num",
+            "test",
+            records,
+            value_field="target_num",
         )
         self.assertAlmostEqual(result["test.a"], 99.0)
 
@@ -164,10 +168,12 @@ class TestExtractMetricsWithLists(unittest.TestCase):
         result = _extract_metrics(doc)
         self.assertAlmostEqual(result["pIC50"], 7.5)
         self.assertAlmostEqual(
-            result["selectivity_ratios.klk14"], 631.0,
+            result["selectivity_ratios.klk14"],
+            631.0,
         )
         self.assertAlmostEqual(
-            result["selectivity_ratios.thrombin"], 3162.0,
+            result["selectivity_ratios.thrombin"],
+            3162.0,
         )
 
     def test_ratios_under_assessment(self):
@@ -195,7 +201,8 @@ class TestExtractMetricsWithLists(unittest.TestCase):
         }
         result = _extract_metrics(doc)
         self.assertAlmostEqual(
-            result["selectivity.panel_ratios.cyp3a4"], 100.0,
+            result["selectivity.panel_ratios.cyp3a4"],
+            100.0,
         )
 
     def test_mixed_numeric_and_list_values(self):

@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
 
 import click
 
@@ -98,9 +97,7 @@ def assess_stage0_cmd(
     # Read SA-score if provided
     sa_score_data = None
     if sa_score_path is not None:
-        sa_score_data = provenance.read_json(
-            Path(sa_score_path), "SA-score record"
-        )
+        sa_score_data = provenance.read_json(Path(sa_score_path), "SA-score record")
 
     # Run assessment
     assessment = assess_stage0(concept_data, sa_score_data)
@@ -114,9 +111,7 @@ def assess_stage0_cmd(
 
     target_dir.mkdir(parents=True, exist_ok=True)
     output_path = target_dir / f"{concept_id}.manufacturing-stage0.json"
-    output_path.write_text(
-        json.dumps(assessment, indent=2) + "\n", encoding="utf-8"
-    )
+    output_path.write_text(json.dumps(assessment, indent=2) + "\n", encoding="utf-8")
 
     emit.data("concept_ref", assessment["concept_ref"])
     emit.data("evidence_status", assessment["evidence_status"])
@@ -129,7 +124,7 @@ def assess_stage0_cmd(
         aspect = finding.get("aspect", "?")
         status = finding.get("status", "?")
         emit.line(f"  [{aspect}] {status}")
-        if "flags" in finding and finding["flags"]:
+        if finding.get("flags"):
             for flag in finding["flags"]:
                 emit.line(f"    FLAG: {flag}")
 
@@ -159,17 +154,10 @@ def stage_requirements_cmd(as_json: bool, quiet: bool) -> None:
         for stage, req in sorted(STAGE_REQUIREMENTS.items()):
             emit.line(f"\nStage {stage}: {req['description']}")
             emit.line(f"  Name: {req['name']}")
-            emit.line(
-                f"  Required inputs: {', '.join(req['required_inputs'])}"
-            )
+            emit.line(f"  Required inputs: {', '.join(req['required_inputs'])}")
             if req.get("optional_inputs"):
-                emit.line(
-                    f"  Optional inputs: "
-                    f"{', '.join(req['optional_inputs'])}"
-                )
-            emit.line(
-                f"  Evidence types: {', '.join(req['evidence_types'])}"
-            )
+                emit.line(f"  Optional inputs: {', '.join(req['optional_inputs'])}")
+            emit.line(f"  Evidence types: {', '.join(req['evidence_types'])}")
             if req.get("status"):
                 emit.line(f"  Status: {req['status']}")
     emit.flush()

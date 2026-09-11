@@ -26,7 +26,6 @@ Asserts:
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -51,7 +50,6 @@ from dde.commands.cbioportal import (
 )
 from dde.core.provenance import RELAY_CODES
 from dde.core.thresholds import _DEFAULTS
-
 
 # Sample cBioPortal study records for mocking
 _SAMPLE_STUDIES = [
@@ -104,8 +102,10 @@ class TestFetchStudies(unittest.TestCase):
 
     def test_query_returning_results(self):
         """Query returning results — correct schema and count."""
-        with patch.object(cbioportal_mod.http, "get_json", return_value=list(_SAMPLE_STUDIES)):
-            raw, artifact, truncated = _fetch_studies("breast", None, None, 25)
+        with patch.object(
+            cbioportal_mod.http, "get_json", return_value=list(_SAMPLE_STUDIES)
+        ):
+            _raw, artifact, truncated = _fetch_studies("breast", None, None, 25)
 
         self.assertEqual(artifact["schema"], "dde.cbioportal-search.v1")
         self.assertEqual(artifact["query"], "breast")
@@ -122,9 +122,14 @@ class TestFetchStudies(unittest.TestCase):
 
     def test_zero_results(self):
         """Zero results — produces empty results list."""
-        with patch.object(cbioportal_mod.http, "get_json", return_value=list(_SAMPLE_STUDIES)):
-            raw, artifact, truncated = _fetch_studies(
-                "nonexistent-query-xyz", None, None, 25,
+        with patch.object(
+            cbioportal_mod.http, "get_json", return_value=list(_SAMPLE_STUDIES)
+        ):
+            _raw, artifact, _truncated = _fetch_studies(
+                "nonexistent-query-xyz",
+                None,
+                None,
+                25,
             )
 
         self.assertEqual(len(artifact["results"]), 0)
@@ -132,9 +137,14 @@ class TestFetchStudies(unittest.TestCase):
 
     def test_cancer_type_filter(self):
         """Cancer type filter narrows results."""
-        with patch.object(cbioportal_mod.http, "get_json", return_value=list(_SAMPLE_STUDIES)):
-            raw, artifact, truncated = _fetch_studies(
-                "cancer", "brca", None, 25,
+        with patch.object(
+            cbioportal_mod.http, "get_json", return_value=list(_SAMPLE_STUDIES)
+        ):
+            _raw, artifact, _truncated = _fetch_studies(
+                "cancer",
+                "brca",
+                None,
+                25,
             )
 
         for r in artifact["results"]:
@@ -142,8 +152,10 @@ class TestFetchStudies(unittest.TestCase):
 
     def test_truncation(self):
         """Results are capped at max_results."""
-        with patch.object(cbioportal_mod.http, "get_json", return_value=list(_SAMPLE_STUDIES)):
-            raw, artifact, truncated = _fetch_studies("cancer", None, None, 1)
+        with patch.object(
+            cbioportal_mod.http, "get_json", return_value=list(_SAMPLE_STUDIES)
+        ):
+            _raw, artifact, truncated = _fetch_studies("cancer", None, None, 1)
 
         self.assertEqual(len(artifact["results"]), 1)
         self.assertTrue(truncated)
@@ -183,12 +195,18 @@ class TestRelayGuards(unittest.TestCase):
             (project / "raw" / "expression").mkdir(parents=True)
 
             with patch.object(
-                cbioportal_mod.http, "get_json", return_value=mock_studies,
+                cbioportal_mod.http,
+                "get_json",
+                return_value=mock_studies,
             ):
                 args = [
-                    "--project", str(project),
-                    "cbioportal", "search", query,
-                    "--max-results", str(max_results),
+                    "--project",
+                    str(project),
+                    "cbioportal",
+                    "search",
+                    query,
+                    "--max-results",
+                    str(max_results),
                 ]
                 result = runner.invoke(cli, args)
 
@@ -256,40 +274,59 @@ class TestAnalyzeEndToEnd(unittest.TestCase):
 
             # Step 1: run search
             with patch.object(
-                cbioportal_mod.http, "get_json", return_value=mock_studies,
+                cbioportal_mod.http,
+                "get_json",
+                return_value=mock_studies,
             ):
-                search_result = runner.invoke(cli, [
-                    "--project", str(project),
-                    "cbioportal", "search", query,
-                    "--max-results", str(max_results),
-                ])
+                search_result = runner.invoke(
+                    cli,
+                    [
+                        "--project",
+                        str(project),
+                        "cbioportal",
+                        "search",
+                        query,
+                        "--max-results",
+                        str(max_results),
+                    ],
+                )
             self.assertEqual(
-                search_result.exit_code, 0,
+                search_result.exit_code,
+                0,
                 f"search failed: {search_result.output}",
             )
 
             # Locate the search artifact written by search_cmd
             search_artifacts = list(expr_dir.glob("*.cbioportal-search.json"))
             self.assertEqual(
-                len(search_artifacts), 1,
+                len(search_artifacts),
+                1,
                 f"expected 1 search artifact, got {search_artifacts}",
             )
             artifact_path = search_artifacts[0]
 
             # Step 2: run analyze on the artifact
-            analyze_result = runner.invoke(cli, [
-                "--project", str(project),
-                "cbioportal", "analyze", str(artifact_path),
-            ])
+            analyze_result = runner.invoke(
+                cli,
+                [
+                    "--project",
+                    str(project),
+                    "cbioportal",
+                    "analyze",
+                    str(artifact_path),
+                ],
+            )
             self.assertEqual(
-                analyze_result.exit_code, 0,
+                analyze_result.exit_code,
+                0,
                 f"analyze failed: {analyze_result.output}",
             )
 
             # Read the analysis JSON
             analysis_files = list(expr_dir.glob("*.analysis.json"))
             self.assertEqual(
-                len(analysis_files), 1,
+                len(analysis_files),
+                1,
                 f"expected 1 analysis file, got {analysis_files}",
             )
             analysis = json.loads(analysis_files[0].read_text(encoding="utf-8"))
@@ -338,9 +375,7 @@ class TestPhaseTwoGuard(unittest.TestCase):
 
         # Walk the cli tree to find cbioportal -> analyze
         cbioportal_group = cli.commands.get("cbioportal")
-        self.assertIsNotNone(
-            cbioportal_group, "cbioportal not registered in CLI"
-        )
+        self.assertIsNotNone(cbioportal_group, "cbioportal not registered in CLI")
         analyze = cbioportal_group.commands.get("analyze")
         self.assertIsNotNone(analyze, "analyze not registered under cbioportal")
         # enforce_phase_two marks the callback
@@ -354,8 +389,10 @@ class TestSchemaAndStructure(unittest.TestCase):
     """Search artifact has the correct schema structure."""
 
     def test_artifact_schema_version(self):
-        with patch.object(cbioportal_mod.http, "get_json", return_value=list(_SAMPLE_STUDIES)):
-            raw, artifact, truncated = _fetch_studies("breast", None, None, 25)
+        with patch.object(
+            cbioportal_mod.http, "get_json", return_value=list(_SAMPLE_STUDIES)
+        ):
+            _raw, artifact, _truncated = _fetch_studies("breast", None, None, 25)
 
         self.assertEqual(artifact["schema"], "dde.cbioportal-search.v1")
         self.assertIn("query", artifact)
@@ -365,8 +402,10 @@ class TestSchemaAndStructure(unittest.TestCase):
         self.assertIsInstance(artifact["results"], list)
 
     def test_result_record_fields(self):
-        with patch.object(cbioportal_mod.http, "get_json", return_value=list(_SAMPLE_STUDIES)):
-            raw, artifact, truncated = _fetch_studies("breast", None, None, 25)
+        with patch.object(
+            cbioportal_mod.http, "get_json", return_value=list(_SAMPLE_STUDIES)
+        ):
+            _raw, artifact, _truncated = _fetch_studies("breast", None, None, 25)
 
         for result in artifact["results"]:
             self.assertIn("study_id", result)

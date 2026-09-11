@@ -113,7 +113,9 @@ def check_integrity() -> ToolchainState:
     git_root = _find_git_root(pkg_root)
 
     if git_root is None:
-        _cached = ToolchainState(integrity="installed", modified=False, modified_files=[])
+        _cached = ToolchainState(
+            integrity="installed", modified=False, modified_files=[]
+        )
         return _cached
 
     integrity = _git_describe(git_root)

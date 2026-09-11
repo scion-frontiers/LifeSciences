@@ -27,16 +27,15 @@ Covers:
 from __future__ import annotations
 
 import json
-import textwrap
 import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 
-from dde.commands.alphafold import _af3_template, _parse_cif_plddt, _AF3_TEMPLATES
+from dde.commands.alphafold import _AF3_TEMPLATES, _af3_template, _parse_cif_plddt
 from dde.commands.docking import _grid_size_warning
 from dde.commands.pocket import _detect_non_protein_chains
 from dde.core.errors import UsageError
-
 
 # ---------------------------------------------------------------------------
 # Item 1 — Per-residue pLDDT fixtures
@@ -171,7 +170,7 @@ class TestPerResiduePlddt(unittest.TestCase):
 
     def test_per_residue_means(self):
         """Atoms are correctly grouped by (chain, residue) and averaged."""
-        per_residue, chain_means = _parse_cif_plddt(PLDDT_CIF)
+        per_residue, _chain_means = _parse_cif_plddt(PLDDT_CIF)
 
         # Chain A, residue 1: mean of (90.0, 80.0) = 85.0
         self.assertAlmostEqual(per_residue["A"]["1"], 85.0, places=1)
@@ -184,7 +183,7 @@ class TestPerResiduePlddt(unittest.TestCase):
 
     def test_chain_means(self):
         """Chain means are computed from per-residue means, not per-atom."""
-        per_residue, chain_means = _parse_cif_plddt(PLDDT_CIF)
+        _per_residue, chain_means = _parse_cif_plddt(PLDDT_CIF)
 
         # Chain A: mean of residue means (85.0, 70.0) = 77.5
         self.assertAlmostEqual(chain_means["A"], 77.5, places=1)
@@ -233,9 +232,7 @@ class TestAF3Template(unittest.TestCase):
         """Complex template contains two protein chains."""
         template = _af3_template("complex")
 
-        protein_chains = [
-            seq for seq in template["sequences"] if "protein" in seq
-        ]
+        protein_chains = [seq for seq in template["sequences"] if "protein" in seq]
         self.assertEqual(len(protein_chains), 2)
 
     def test_ligand_template_has_protein_and_ligand(self):
@@ -259,7 +256,9 @@ class TestAF3Template(unittest.TestCase):
             # Must be serialisable and deserialise identically.
             text = json.dumps(template)
             roundtripped = json.loads(text)
-            self.assertEqual(template, roundtripped, f"template {name!r} failed round-trip")
+            self.assertEqual(
+                template, roundtripped, f"template {name!r} failed round-trip"
+            )
 
     def test_template_returns_deep_copy(self):
         """Template returns a deep copy; mutations do not affect the original."""

@@ -33,10 +33,8 @@ hand-coded per group.
 from __future__ import annotations
 
 import difflib
-import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
-
 
 # ---------------------------------------------------------------------------
 # Field and SchemaDef definitions
@@ -149,13 +147,9 @@ def show_table(schema_id: str) -> str:
     req_w = len("Required")
 
     header = (
-        f"{'Field':<{name_w}}  {'Type':<{type_w}}  {'Required':<{req_w}}"
-        f"  Enum Values"
+        f"{'Field':<{name_w}}  {'Type':<{type_w}}  {'Required':<{req_w}}  Enum Values"
     )
-    separator = (
-        f"{'─' * name_w}  {'─' * type_w}  {'─' * req_w}"
-        f"  {'─' * 11}"
-    )
+    separator = f"{'─' * name_w}  {'─' * type_w}  {'─' * req_w}  {'─' * 11}"
 
     lines.append(header)
     lines.append(separator)
@@ -170,8 +164,7 @@ def show_table(schema_id: str) -> str:
         else:
             enum_str = ""
         lines.append(
-            f"{f.name:<{name_w}}  {f.type:<{type_w}}  {req_str:<{req_w}}"
-            f"  {enum_str}"
+            f"{f.name:<{name_w}}  {f.type:<{type_w}}  {req_str:<{req_w}}  {enum_str}"
         )
 
     return "\n".join(lines)
@@ -306,7 +299,7 @@ def validate_required_fields(
     raise SchemaError(
         f"missing required field(s): {missing}",
         detail=f"all required fields for {schema_id}: {all_required_names}",
-        remedy=f"add the missing field(s) to the input JSON",
+        remedy="add the missing field(s) to the input JSON",
     )
 
 
@@ -325,131 +318,284 @@ def suggest_match(
 
 # ── PK schemas ──────────────────────────────────────────────────────────
 
-_register(SchemaDef(
-    schema_id="dde.pk-study.v1",
-    description="PK study input for ingest — concentration-time data",
-    fields=(
-        FieldDef("schema", "string", required=True, const="dde.pk-study.v1"),
-        FieldDef("study_id", "string", required=True,
-                 description="Unique identifier for the study"),
-        FieldDef("species", "string", required=True,
-                 description="Animal species"),
-        FieldDef("route", "string", required=True,
-                 enum_values=("dermal", "im", "inhaled", "intranasal", "ip", "iv", "ophthalmic", "oral", "sc", "topical"),
-                 description="Administration route"),
-        FieldDef("dose_mg_kg", "number", required=True,
-                 description="Administered dose in mg/kg (positive)"),
-        FieldDef("time_units", "string", required=True,
-                 enum_values=("h", "min", "s"),
-                 description="Units for time_points"),
-        FieldDef("concentration_units", "string", required=True,
-                 enum_values=("mg/mL", "nM", "ng/mL", "uM", "ug/mL"),
-                 description="Units for concentrations"),
-        FieldDef("time_points", "array[number]", required=True,
-                 description="Monotonically increasing time values"),
-        FieldDef("concentrations", "array[number]", required=True,
-                 description="Concentration values matching time_points"),
-        FieldDef("dose_units", "string", required=False,
-                 description="Dose units (default: mg/kg)"),
-        FieldDef("blq_value", "number", required=False,
-                 description="BLQ marker value (positive number)"),
-        FieldDef("body_weight_kg", "number", required=False,
-                 description="Animal body weight in kg"),
-        FieldDef("notes", "string", required=False,
-                 description="Free-text notes"),
-    ),
-))
+_register(
+    SchemaDef(
+        schema_id="dde.pk-study.v1",
+        description="PK study input for ingest — concentration-time data",
+        fields=(
+            FieldDef("schema", "string", required=True, const="dde.pk-study.v1"),
+            FieldDef(
+                "study_id",
+                "string",
+                required=True,
+                description="Unique identifier for the study",
+            ),
+            FieldDef("species", "string", required=True, description="Animal species"),
+            FieldDef(
+                "route",
+                "string",
+                required=True,
+                enum_values=(
+                    "dermal",
+                    "im",
+                    "inhaled",
+                    "intranasal",
+                    "ip",
+                    "iv",
+                    "ophthalmic",
+                    "oral",
+                    "sc",
+                    "topical",
+                ),
+                description="Administration route",
+            ),
+            FieldDef(
+                "dose_mg_kg",
+                "number",
+                required=True,
+                description="Administered dose in mg/kg (positive)",
+            ),
+            FieldDef(
+                "time_units",
+                "string",
+                required=True,
+                enum_values=("h", "min", "s"),
+                description="Units for time_points",
+            ),
+            FieldDef(
+                "concentration_units",
+                "string",
+                required=True,
+                enum_values=("mg/mL", "nM", "ng/mL", "uM", "ug/mL"),
+                description="Units for concentrations",
+            ),
+            FieldDef(
+                "time_points",
+                "array[number]",
+                required=True,
+                description="Monotonically increasing time values",
+            ),
+            FieldDef(
+                "concentrations",
+                "array[number]",
+                required=True,
+                description="Concentration values matching time_points",
+            ),
+            FieldDef(
+                "dose_units",
+                "string",
+                required=False,
+                description="Dose units (default: mg/kg)",
+            ),
+            FieldDef(
+                "blq_value",
+                "number",
+                required=False,
+                description="BLQ marker value (positive number)",
+            ),
+            FieldDef(
+                "body_weight_kg",
+                "number",
+                required=False,
+                description="Animal body weight in kg",
+            ),
+            FieldDef("notes", "string", required=False, description="Free-text notes"),
+        ),
+    )
+)
 
-_register(SchemaDef(
-    schema_id="dde.pk-ddi-input.v1",
-    description="DDI input — unbound Cmax and CYP inhibition data",
-    fields=(
-        FieldDef("schema", "string", required=True, const="dde.pk-ddi-input.v1"),
-        FieldDef("compound_id", "string", required=True,
-                 description="Compound identifier"),
-        FieldDef("cmax_unbound", "number", required=True,
-                 description="Unbound Cmax at therapeutic dose (positive)"),
-        FieldDef("cmax_units", "string", required=True,
-                 description="Concentration units for Cmax"),
-        FieldDef("cyp_inhibition", "array[object]", required=True,
-                 description="Array of CYP inhibition entries (isoform, ic50_or_ki, value_type, units)"),
-    ),
-))
+_register(
+    SchemaDef(
+        schema_id="dde.pk-ddi-input.v1",
+        description="DDI input — unbound Cmax and CYP inhibition data",
+        fields=(
+            FieldDef("schema", "string", required=True, const="dde.pk-ddi-input.v1"),
+            FieldDef(
+                "compound_id",
+                "string",
+                required=True,
+                description="Compound identifier",
+            ),
+            FieldDef(
+                "cmax_unbound",
+                "number",
+                required=True,
+                description="Unbound Cmax at therapeutic dose (positive)",
+            ),
+            FieldDef(
+                "cmax_units",
+                "string",
+                required=True,
+                description="Concentration units for Cmax",
+            ),
+            FieldDef(
+                "cyp_inhibition",
+                "array[object]",
+                required=True,
+                description="Array of CYP inhibition entries (isoform, ic50_or_ki, value_type, units)",
+            ),
+        ),
+    )
+)
 
 # ── Tox schemas ─────────────────────────────────────────────────────────
 
-_register(SchemaDef(
-    schema_id="dde.tox-repeat-dose.v1",
-    description="Repeat-dose tox study input",
-    fields=(
-        FieldDef("schema", "string", required=True, const="dde.tox-repeat-dose.v1"),
-        FieldDef("study_id", "string", required=True,
-                 description="Unique identifier for the study"),
-        FieldDef("species", "string", required=True,
-                 enum_values=("dog", "minipig", "monkey", "mouse", "rabbit", "rat"),
-                 description="Animal species"),
-        FieldDef("route", "string", required=True,
-                 enum_values=("dermal", "im", "inhalation", "ip", "iv", "oral", "sc"),
-                 description="Administration route"),
-        FieldDef("duration_days", "integer", required=True,
-                 description="Study duration in days (positive)"),
-        FieldDef("noael_mg_kg", "number", required=True,
-                 description="No-adverse-effect level in mg/kg (positive)"),
-        FieldDef("noael_basis", "string", required=True,
-                 description="Basis for NOAEL determination"),
-        FieldDef("dose_groups", "array[object]", required=True,
-                 description="Array of dose group objects (dose_mg_kg, n_animals, findings)"),
-        FieldDef("glp_status", "string", required=False,
-                 enum_values=("compliant", "non-compliant", "not_stated"),
-                 description="GLP compliance status"),
-        FieldDef("strain", "string", required=False,
-                 description="Animal strain"),
-        FieldDef("loael_mg_kg", "number", required=False,
-                 description="Lowest observed adverse effect level in mg/kg"),
-        FieldDef("noael_exposure", "object", required=False,
-                 description="NOAEL exposure data (auc and/or cmax with units)"),
-        FieldDef("body_weight_kg", "number", required=False,
-                 description="Animal body weight in kg"),
-        FieldDef("notes", "string", required=False,
-                 description="Free-text notes"),
-    ),
-))
+_register(
+    SchemaDef(
+        schema_id="dde.tox-repeat-dose.v1",
+        description="Repeat-dose tox study input",
+        fields=(
+            FieldDef("schema", "string", required=True, const="dde.tox-repeat-dose.v1"),
+            FieldDef(
+                "study_id",
+                "string",
+                required=True,
+                description="Unique identifier for the study",
+            ),
+            FieldDef(
+                "species",
+                "string",
+                required=True,
+                enum_values=("dog", "minipig", "monkey", "mouse", "rabbit", "rat"),
+                description="Animal species",
+            ),
+            FieldDef(
+                "route",
+                "string",
+                required=True,
+                enum_values=("dermal", "im", "inhalation", "ip", "iv", "oral", "sc"),
+                description="Administration route",
+            ),
+            FieldDef(
+                "duration_days",
+                "integer",
+                required=True,
+                description="Study duration in days (positive)",
+            ),
+            FieldDef(
+                "noael_mg_kg",
+                "number",
+                required=True,
+                description="No-adverse-effect level in mg/kg (positive)",
+            ),
+            FieldDef(
+                "noael_basis",
+                "string",
+                required=True,
+                description="Basis for NOAEL determination",
+            ),
+            FieldDef(
+                "dose_groups",
+                "array[object]",
+                required=True,
+                description="Array of dose group objects (dose_mg_kg, n_animals, findings)",
+            ),
+            FieldDef(
+                "glp_status",
+                "string",
+                required=False,
+                enum_values=("compliant", "non-compliant", "not_stated"),
+                description="GLP compliance status",
+            ),
+            FieldDef("strain", "string", required=False, description="Animal strain"),
+            FieldDef(
+                "loael_mg_kg",
+                "number",
+                required=False,
+                description="Lowest observed adverse effect level in mg/kg",
+            ),
+            FieldDef(
+                "noael_exposure",
+                "object",
+                required=False,
+                description="NOAEL exposure data (auc and/or cmax with units)",
+            ),
+            FieldDef(
+                "body_weight_kg",
+                "number",
+                required=False,
+                description="Animal body weight in kg",
+            ),
+            FieldDef("notes", "string", required=False, description="Free-text notes"),
+        ),
+    )
+)
 
-_register(SchemaDef(
-    schema_id="dde.tox-safety-pharm.v1",
-    description="Safety pharmacology input — hERG and core battery",
-    fields=(
-        FieldDef("schema", "string", required=True, const="dde.tox-safety-pharm.v1"),
-        FieldDef("compound_id", "string", required=True,
-                 description="Compound identifier"),
-        FieldDef("herg_ic50", "number", required=True,
-                 description="hERG IC50 value (positive)"),
-        FieldDef("herg_ic50_units", "string", required=True,
-                 enum_values=("mg/mL", "nM", "ng/mL", "uM", "ug/mL"),
-                 description="Concentration units for hERG IC50"),
-        FieldDef("cardiovascular", "object", required=False,
-                 description="Cardiovascular findings (qtc_prolongation, blood_pressure_effect, etc.)"),
-        FieldDef("respiratory", "object", required=False,
-                 description="Respiratory findings (tidal_volume_effect, respiratory_rate_effect, summary)"),
-        FieldDef("cns", "object", required=False,
-                 description="CNS findings (irwin_fob_summary, findings)"),
-        FieldDef("notes", "string", required=False,
-                 description="Free-text notes"),
-    ),
-))
+_register(
+    SchemaDef(
+        schema_id="dde.tox-safety-pharm.v1",
+        description="Safety pharmacology input — hERG and core battery",
+        fields=(
+            FieldDef(
+                "schema", "string", required=True, const="dde.tox-safety-pharm.v1"
+            ),
+            FieldDef(
+                "compound_id",
+                "string",
+                required=True,
+                description="Compound identifier",
+            ),
+            FieldDef(
+                "herg_ic50",
+                "number",
+                required=True,
+                description="hERG IC50 value (positive)",
+            ),
+            FieldDef(
+                "herg_ic50_units",
+                "string",
+                required=True,
+                enum_values=("mg/mL", "nM", "ng/mL", "uM", "ug/mL"),
+                description="Concentration units for hERG IC50",
+            ),
+            FieldDef(
+                "cardiovascular",
+                "object",
+                required=False,
+                description="Cardiovascular findings (qtc_prolongation, blood_pressure_effect, etc.)",
+            ),
+            FieldDef(
+                "respiratory",
+                "object",
+                required=False,
+                description="Respiratory findings (tidal_volume_effect, respiratory_rate_effect, summary)",
+            ),
+            FieldDef(
+                "cns",
+                "object",
+                required=False,
+                description="CNS findings (irwin_fob_summary, findings)",
+            ),
+            FieldDef("notes", "string", required=False, description="Free-text notes"),
+        ),
+    )
+)
 
-_register(SchemaDef(
-    schema_id="dde.tox-genotox.v1",
-    description="Genotoxicity battery input — ICH S2(R1) assay results",
-    fields=(
-        FieldDef("schema", "string", required=True, const="dde.tox-genotox.v1"),
-        FieldDef("compound_id", "string", required=True,
-                 description="Compound identifier"),
-        FieldDef("assays", "array[object]", required=True,
-                 description="Array of assay result objects (type, result, metabolic_activation)"),
-        FieldDef("battery_complete", "boolean", required=True,
-                 description="Whether the ICH S2(R1) standard battery is complete"),
-        FieldDef("notes", "string", required=False,
-                 description="Free-text notes"),
-    ),
-))
+_register(
+    SchemaDef(
+        schema_id="dde.tox-genotox.v1",
+        description="Genotoxicity battery input — ICH S2(R1) assay results",
+        fields=(
+            FieldDef("schema", "string", required=True, const="dde.tox-genotox.v1"),
+            FieldDef(
+                "compound_id",
+                "string",
+                required=True,
+                description="Compound identifier",
+            ),
+            FieldDef(
+                "assays",
+                "array[object]",
+                required=True,
+                description="Array of assay result objects (type, result, metabolic_activation)",
+            ),
+            FieldDef(
+                "battery_complete",
+                "boolean",
+                required=True,
+                description="Whether the ICH S2(R1) standard battery is complete",
+            ),
+            FieldDef("notes", "string", required=False, description="Free-text notes"),
+        ),
+    )
+)

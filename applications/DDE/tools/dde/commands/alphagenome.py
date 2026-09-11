@@ -55,7 +55,6 @@ import os
 import re
 import subprocess
 import time
-from pathlib import Path
 from typing import Any
 
 import click
@@ -73,7 +72,6 @@ from ..core import provenance
 from ..core.errors import (
     CredentialError,
     DependencyError,
-    EndpointError,
     EndpointUnavailable,
     SchemaError,
     UsageError,
@@ -161,7 +159,10 @@ OVERSIZED_OUTPUT_TYPES = frozenset({"OUTPUT_TYPE_CHIP_HISTONE", "OUTPUT_TYPE_CHI
 # through to a confusing server-side error.
 VALID_WINDOWS = (16384, 131072, 524288, 1048576)
 
-ORGANISMS = {"HOMO_SAPIENS": "ORGANISM_HOMO_SAPIENS", "MUS_MUSCULUS": "ORGANISM_MUS_MUSCULUS"}
+ORGANISMS = {
+    "HOMO_SAPIENS": "ORGANISM_HOMO_SAPIENS",
+    "MUS_MUSCULUS": "ORGANISM_MUS_MUSCULUS",
+}
 
 # Track strands that carry no orientation, and so are scored for a gene
 # on either strand. STRAND_UNSTRANDED is a real value, not a synonym for
@@ -628,7 +629,10 @@ def _strand_summary(
     for index, gene in enumerate(genes):
         gene_strand = gene.get("strand", "STRAND_UNSPECIFIED")
         expected = np.array(
-            [strand == gene_strand or strand in UNORIENTED_STRANDS for strand in track_strands]
+            [
+                strand == gene_strand or strand in UNORIENTED_STRANDS
+                for strand in track_strands
+            ]
         )
         observed = finite[index]
         missing_unexplained += int(np.count_nonzero(expected & ~observed))
@@ -729,7 +733,9 @@ def _require_api_key() -> str:
     default="geneMask",
     help="VariantScorer variant to apply to each output type.",
 )
-@click.option("--strand", default="STRAND_POSITIVE", help="Interval strand (required by the API).")
+@click.option(
+    "--strand", default="STRAND_POSITIVE", help="Interval strand (required by the API)."
+)
 @click.option("--organism", default="HOMO_SAPIENS", help="Organism enum.")
 @click.option(
     "--backend",
@@ -1200,7 +1206,9 @@ def predict_interval(
 
 
 @alphagenome.command()
-@click.option("--interval", required=True, help="ISM scan window, e.g. chr1:99900-100100.")
+@click.option(
+    "--interval", required=True, help="ISM scan window, e.g. chr1:99900-100100."
+)
 @click.option("--organism", default="HOMO_SAPIENS")
 @out_option
 @output_options
@@ -1245,8 +1253,12 @@ def ism(
 
 @alphagenome.command()
 @click.argument("artifact")
-@click.option("--raw-score-moderate", type=float, default=None, help="Override threshold.")
-@click.option("--quantile-significance", type=float, default=None, help="Override threshold.")
+@click.option(
+    "--raw-score-moderate", type=float, default=None, help="Override threshold."
+)
+@click.option(
+    "--quantile-significance", type=float, default=None, help="Override threshold."
+)
 @out_option
 @output_options
 @pass_state
@@ -1487,7 +1499,9 @@ def analyze(
     # uncertainty caveat via the no_quantile_scores relay, and no_scores
     # has nothing to over-read.
     if verdict.endswith("_magnitude_confirmed"):
-        top_gene = strongest["genes"][0]["gene_name"] if strongest["genes"] else "unknown"
+        top_gene = (
+            strongest["genes"][0]["gene_name"] if strongest["genes"] else "unknown"
+        )
         relays.append(
             provenance.relay(
                 "alphagenome.effect_is_not_pathogenicity",

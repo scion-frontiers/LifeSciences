@@ -67,16 +67,27 @@ from ..common import (
     resolve_artifact,
 )
 from ..core import provenance
-from ..core.errors import ArtifactError, Refusal, SchemaError
-from ..core.schema_registry import suggest_match, validate_enum
+from ..core.errors import Refusal, SchemaError
 from ..core.output import Emitter
+from ..core.schema_registry import suggest_match
 
 ARTIFACT_CLASS = "pk"
 
 # Recognised unit strings — anything else is refused as ambiguous.
 VALID_TIME_UNITS = {"h", "min", "s"}
 VALID_CONC_UNITS = {"ng/mL", "ug/mL", "mg/mL", "uM", "nM"}
-VALID_ROUTES = {"iv", "oral", "sc", "im", "ip", "dermal", "topical", "inhaled", "ophthalmic", "intranasal"}
+VALID_ROUTES = {
+    "iv",
+    "oral",
+    "sc",
+    "im",
+    "ip",
+    "dermal",
+    "topical",
+    "inhaled",
+    "ophthalmic",
+    "intranasal",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -102,19 +113,23 @@ def _validate_study(doc: dict[str, Any]) -> None:
         raise Refusal(
             "unsupported or missing schema tag",
             detail=f"expected 'dde.pk-study.v1', got {doc.get('schema')!r}",
-            remedy="ensure the input JSON contains '\"schema\": \"dde.pk-study.v1\"'",
+            remedy='ensure the input JSON contains \'"schema": "dde.pk-study.v1"\'',
         )
 
     # Required scalar fields
     _PK_STUDY_REQUIRED = (
-        "species", "route", "dose_mg_kg", "time_units", "concentration_units",
+        "species",
+        "route",
+        "dose_mg_kg",
+        "time_units",
+        "concentration_units",
     )
     for field in _PK_STUDY_REQUIRED:
         if field not in doc or doc[field] is None:
             raise SchemaError(
                 f"required field {field!r} is missing or null",
                 detail=f"all required fields for dde.pk-study.v1: "
-                       f"{['schema', 'study_id'] + list(_PK_STUDY_REQUIRED)}",
+                f"{['schema', 'study_id', *list(_PK_STUDY_REQUIRED)]}",
                 remedy=f"add {field!r} to the input JSON",
             )
 
@@ -182,7 +197,7 @@ def _validate_study(doc: dict[str, Any]) -> None:
         )
 
     # Numeric type validation on array elements and negative concentrations
-    for i, (t, c) in enumerate(zip(time_points, concentrations)):
+    for i, (t, c) in enumerate(zip(time_points, concentrations, strict=False)):
         if not isinstance(t, (int, float)):
             raise SchemaError(
                 f"time_points[{i}] must be a number, got {type(t).__name__}: {t!r}",
@@ -243,15 +258,13 @@ def _apply_blq(
         return time_points, concentrations, 0
 
     if blq_method == "exclude":
-        pairs = [
-            (t, c) for t, c in zip(time_points, concentrations) if c != blq_value
-        ]
+        pairs = [(t, c) for t, c in zip(time_points, concentrations, strict=False) if c != blq_value]
         if not pairs:
             raise Refusal(
                 "all concentrations are BLQ — no data remains after exclusion",
                 remedy="check the input data or choose a different BLQ method",
             )
-        times, concs = zip(*pairs)
+        times, concs = zip(*pairs, strict=False)
         return list(times), list(concs), n_blq
     elif blq_method == "zero":
         concs = [0.0 if c == blq_value else c for c in concentrations]
@@ -267,9 +280,7 @@ def _apply_blq(
         )
 
 
-def _auc_linear_log_trapezoidal(
-    times: list[float], concs: list[float]
-) -> float:
+def _auc_linear_log_trapezoidal(times: list[float], concs: list[float]) -> float:
     """Compute AUC using the linear-log trapezoidal method.
 
     Linear trapezoidal when concentration is increasing;
@@ -308,9 +319,7 @@ def _find_terminal_phase(
     """
     # Collect indices with positive concentrations
     positive_pairs = [
-        (i, times[i], concs[i])
-        for i in range(len(times))
-        if concs[i] > 0
+        (i, times[i], concs[i]) for i in range(len(times)) if concs[i] > 0
     ]
 
     if len(positive_pairs) < 3:
@@ -356,8 +365,9 @@ def _linear_regression(x: list[float], y: list[float]) -> tuple[float, float, fl
     """
     try:
         from scipy import stats
+
         result = stats.linregress(x, y)
-        return result.slope, result.intercept, result.rvalue ** 2
+        return result.slope, result.intercept, result.rvalue**2
     except ImportError:
         pass
 
@@ -365,7 +375,7 @@ def _linear_regression(x: list[float], y: list[float]) -> tuple[float, float, fl
     n = len(x)
     sum_x = sum(x)
     sum_y = sum(y)
-    sum_xy = sum(xi * yi for xi, yi in zip(x, y))
+    sum_xy = sum(xi * yi for xi, yi in zip(x, y, strict=False))
     sum_x2 = sum(xi * xi for xi in x)
 
     denom = n * sum_x2 - sum_x * sum_x
@@ -378,7 +388,7 @@ def _linear_regression(x: list[float], y: list[float]) -> tuple[float, float, fl
     # R-squared
     y_mean = sum_y / n
     ss_tot = sum((yi - y_mean) ** 2 for yi in y)
-    ss_res = sum((yi - (slope * xi + intercept)) ** 2 for xi, yi in zip(x, y))
+    ss_res = sum((yi - (slope * xi + intercept)) ** 2 for xi, yi in zip(x, y, strict=False))
     r_squared = 1.0 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
 
     return slope, intercept, r_squared
@@ -460,9 +470,7 @@ def ingest_cmd(
     }
 
     study_path = target_dir / f"{study_id}.pk-study.json"
-    study_path.write_text(
-        json.dumps(normalised, indent=2) + "\n", encoding="utf-8"
-    )
+    study_path.write_text(json.dumps(normalised, indent=2) + "\n", encoding="utf-8")
 
     # --- provenance sidecar ---
     sidecar = provenance.Sidecar(
@@ -566,9 +574,7 @@ def nca_cmd(
     concentrations = list(doc["concentrations"])
 
     # --- BLQ handling ---
-    has_blq = blq_value is not None and any(
-        c == blq_value for c in concentrations
-    )
+    has_blq = blq_value is not None and any(c == blq_value for c in concentrations)
 
     if has_blq and blq_method is None:
         n_blq = sum(1 for c in concentrations if c == blq_value)
@@ -590,8 +596,7 @@ def nca_cmd(
 
     if len(times) < 3:
         raise Refusal(
-            f"fewer than 3 data points remain after BLQ handling "
-            f"({len(times)} points)",
+            f"fewer than 3 data points remain after BLQ handling ({len(times)} points)",
             remedy="provide more measurable concentration points",
         )
 
@@ -604,16 +609,16 @@ def nca_cmd(
     # Compute AUC only up to the last positive concentration (Tlast) to
     # avoid double-counting when BLQ handling produces trailing zeros.
     tlast_idx = max(i for i, c in enumerate(concs) if c > 0)
-    auc_0_t = _auc_linear_log_trapezoidal(times[:tlast_idx + 1], concs[:tlast_idx + 1])
+    auc_0_t = _auc_linear_log_trapezoidal(
+        times[: tlast_idx + 1], concs[: tlast_idx + 1]
+    )
     last_conc = concs[tlast_idx]
 
     # --- Terminal phase: lambda_z and half-life ---
-    terminal_times, terminal_log_concs, term_start_idx = _find_terminal_phase(
+    terminal_times, terminal_log_concs, _term_start_idx = _find_terminal_phase(
         times, concs
     )
-    slope, intercept, r_squared = _linear_regression(
-        terminal_times, terminal_log_concs
-    )
+    slope, _intercept, r_squared = _linear_regression(terminal_times, terminal_log_concs)
 
     # lambda_z is the negative slope (slope should be negative for decay)
     lambda_z = -slope
@@ -714,9 +719,7 @@ def nca_cmd(
     }
 
     nca_path = target_dir / f"{study_id}.pk-nca.json"
-    nca_path.write_text(
-        json.dumps(nca_record, indent=2) + "\n", encoding="utf-8"
-    )
+    nca_path.write_text(json.dumps(nca_record, indent=2) + "\n", encoding="utf-8")
 
     # --- Provenance sidecar ---
     sidecar = provenance.Sidecar(
@@ -738,12 +741,15 @@ def nca_cmd(
     # NCA linearity assumption is a standing property of the method, not a
     # conditional warning — moved to sidecar field per the always-true rule
     # (tool-design-guidance section 5.1, exit 2: relabel and move). See #146.
-    sidecar.note("method_caveat", (
-        "NCA assumes dose-proportional exposure (linear PK). If the compound "
-        "shows nonlinear PK (saturable metabolism, saturable absorption), NCA "
-        "parameters are dose-dependent and the therapeutic index derived from "
-        "them is specific to the study dose."
-    ))
+    sidecar.note(
+        "method_caveat",
+        (
+            "NCA assumes dose-proportional exposure (linear PK). If the compound "
+            "shows nonlinear PK (saturable metabolism, saturable absorption), NCA "
+            "parameters are dose-dependent and the therapeutic index derived from "
+            "them is specific to the study dose."
+        ),
+    )
 
     sidecar.add_output(nca_path)
     meta_path = sidecar.write(target_dir / f"{study_id}.pk-nca.meta.json")
@@ -827,8 +833,7 @@ def _get_body_weight(nca_doc: dict[str, Any], nca_path: Path) -> float:
         detail="body weight is required for allometric scaling",
         remedy=(
             "either provide body_weight_kg in the study file, or use a "
-            "recognised species name: "
-            + ", ".join(sorted(REFERENCE_BODY_WEIGHTS_KG))
+            "recognised species name: " + ", ".join(sorted(REFERENCE_BODY_WEIGHTS_KG))
         ),
     )
 
@@ -888,9 +893,7 @@ def _extract_pk_for_scaling(
 
 
 @pk.command("scale")
-@click.argument(
-    "nca_files", nargs=-1, required=True, type=click.Path(exists=True)
-)
+@click.argument("nca_files", nargs=-1, required=True, type=click.Path(exists=True))
 @click.option(
     "--human-bw",
     type=float,
@@ -1010,9 +1013,7 @@ def scale_cmd(
                 "IV NCA produces CL and Vd; non-IV produces CL/F and Vd/F. "
                 "These are different quantities and must not be mixed."
             ),
-            remedy=(
-                "provide NCA files from the same route, or compute F first"
-            ),
+            remedy=("provide NCA files from the same route, or compute F first"),
         )
 
     # --- Unit consistency validation ---
@@ -1044,12 +1045,10 @@ def scale_cmd(
         cl_exponent = DEFAULT_CL_EXPONENT
         vd_exponent = DEFAULT_VD_EXPONENT
 
-        predicted_cl = sd["clearance"] * (
-            human_bw / sd["body_weight_kg"]
-        ) ** cl_exponent
-        predicted_vd = sd["vd"] * (
-            human_bw / sd["body_weight_kg"]
-        ) ** vd_exponent
+        predicted_cl = (
+            sd["clearance"] * (human_bw / sd["body_weight_kg"]) ** cl_exponent
+        )
+        predicted_vd = sd["vd"] * (human_bw / sd["body_weight_kg"]) ** vd_exponent
 
         scaling_method = "single_species_published_exponents"
         confidence_class = "low"
@@ -1102,8 +1101,8 @@ def scale_cmd(
             )
 
         # Y_human = a × BW_human^b
-        predicted_cl = cl_coefficient * (human_bw ** cl_exponent)
-        predicted_vd = vd_coefficient * (human_bw ** vd_exponent)
+        predicted_cl = cl_coefficient * (human_bw**cl_exponent)
+        predicted_vd = vd_coefficient * (human_bw**vd_exponent)
 
         confidence_class = "low" if cl_exponent > 0.70 else "moderate"
         scaling_details: dict[str, Any] = {
@@ -1219,17 +1218,18 @@ def scale_cmd(
     # Allometric-vs-PBPK qualifier is a standing property of the method —
     # moved to sidecar field per the always-true rule
     # (tool-design-guidance section 5.1, exit 2: relabel and move). See #146.
-    sidecar.note("method_caveat", (
-        "This is allometric scaling (an empirical correlation across "
-        "species), not a mechanistic PBPK model of human physiology. "
-        "A predicted human dose from allometry is a starting estimate, "
-        "not a validated projection."
-    ))
+    sidecar.note(
+        "method_caveat",
+        (
+            "This is allometric scaling (an empirical correlation across "
+            "species), not a mechanistic PBPK model of human physiology. "
+            "A predicted human dose from allometry is a starting estimate, "
+            "not a validated projection."
+        ),
+    )
 
     sidecar.add_output(scaling_path)
-    meta_path = sidecar.write(
-        target_dir / f"{compound_id}.pk-scaling.meta.json"
-    )
+    meta_path = sidecar.write(target_dir / f"{compound_id}.pk-scaling.meta.json")
 
     # --- Emit summary ---
     emit.path(scaling_path, role="scaling")
@@ -1237,13 +1237,9 @@ def scale_cmd(
     emit.line(f"Scaling: {compound_id} ({n_species} species)")
     emit.line(f"Method: {scaling_method}")
     emit.line(
-        f"Predicted human CL = {predicted_cl:.4f} "
-        f"{species_data[0]['clearance_units']}"
+        f"Predicted human CL = {predicted_cl:.4f} {species_data[0]['clearance_units']}"
     )
-    emit.line(
-        f"Predicted human Vd = {predicted_vd:.4f} "
-        f"{species_data[0]['vd_units']}"
-    )
+    emit.line(f"Predicted human Vd = {predicted_vd:.4f} {species_data[0]['vd_units']}")
     if predicted_half_life is not None:
         emit.line(f"Predicted human t1/2 = {predicted_half_life:.2f} h")
     emit.line(f"Confidence: {confidence_class}")
@@ -1265,12 +1261,9 @@ def _validate_ddi_input(doc: dict[str, Any]) -> None:
     if doc.get("schema") != "dde.pk-ddi-input.v1":
         raise Refusal(
             "unsupported or missing schema tag",
-            detail=(
-                f"expected 'dde.pk-ddi-input.v1', got {doc.get('schema')!r}"
-            ),
+            detail=(f"expected 'dde.pk-ddi-input.v1', got {doc.get('schema')!r}"),
             remedy=(
-                "ensure the input JSON contains "
-                "'\"schema\": \"dde.pk-ddi-input.v1\"'"
+                'ensure the input JSON contains \'"schema": "dde.pk-ddi-input.v1"\''
             ),
         )
 
@@ -1439,8 +1432,7 @@ def ddi_cmd(
                     else f"Ki ({raw_value})"
                 ),
                 "formula": (
-                    f"R = 1 + [I]max,u / Ki = 1 + {cmax_unbound} / "
-                    f"{round(ki, 4)}"
+                    f"R = 1 + [I]max,u / Ki = 1 + {cmax_unbound} / {round(ki, 4)}"
                 ),
                 "ki_units": entry["units"],
             }
@@ -1464,9 +1456,7 @@ def ddi_cmd(
     }
 
     ddi_path = target_dir / f"{compound_id}.pk-ddi.json"
-    ddi_path.write_text(
-        json.dumps(ddi_record, indent=2) + "\n", encoding="utf-8"
-    )
+    ddi_path.write_text(json.dumps(ddi_record, indent=2) + "\n", encoding="utf-8")
 
     # --- Provenance sidecar ---
     sidecar = provenance.Sidecar(
@@ -1494,16 +1484,17 @@ def ddi_cmd(
     # Static-model qualifier is a standing property of the method, not a
     # conditional warning — moved to sidecar field per the always-true rule
     # (tool-design-guidance section 5.1, exit 2: relabel and move). See #146.
-    sidecar.note("method_caveat", (
-        "The static R model is worst-case by design (worst-case assumptions "
-        "about intestinal and hepatic inhibitor concentrations). 'Possible "
-        "interaction' means 'do a clinical DDI study', not 'a DDI exists'."
-    ))
+    sidecar.note(
+        "method_caveat",
+        (
+            "The static R model is worst-case by design (worst-case assumptions "
+            "about intestinal and hepatic inhibitor concentrations). 'Possible "
+            "interaction' means 'do a clinical DDI study', not 'a DDI exists'."
+        ),
+    )
 
     sidecar.add_output(ddi_path)
-    meta_path = sidecar.write(
-        target_dir / f"{compound_id}.pk-ddi.meta.json"
-    )
+    meta_path = sidecar.write(target_dir / f"{compound_id}.pk-ddi.meta.json")
 
     # --- Emit summary ---
     emit.path(ddi_path, role="ddi")
@@ -1512,8 +1503,7 @@ def ddi_cmd(
     emit.line(f"[I]max,u = {cmax_unbound} {cmax_units}")
     for ir in isoform_results:
         emit.line(
-            f"  {ir['isoform']}: R = {ir['r_value']:.3f} — "
-            f"{ir['risk_classification']}"
+            f"  {ir['isoform']}: R = {ir['r_value']:.3f} — {ir['risk_classification']}"
         )
     emit.flush()
 
@@ -1571,14 +1561,8 @@ def analyze_cmd(
     if schema not in _SCHEMA_MAP:
         raise Refusal(
             f"unrecognised PK artifact schema: {schema!r}",
-            detail=(
-                "expected one of: "
-                + ", ".join(sorted(_SCHEMA_MAP))
-            ),
-            remedy=(
-                "provide a file produced by "
-                "`dde pk nca`, `pk scale`, or `pk ddi`"
-            ),
+            detail=("expected one of: " + ", ".join(sorted(_SCHEMA_MAP))),
+            remedy=("provide a file produced by `dde pk nca`, `pk scale`, or `pk ddi`"),
         )
 
     analysis_type, file_suffix, meta_suffix = _SCHEMA_MAP[schema]
@@ -1591,9 +1575,10 @@ def analyze_cmd(
     # Backward compatibility: warn if an old-format analysis file exists
     old_analysis_name = f"{stem}.pk.analysis.json"
     if old_analysis_name != new_analysis_name:
-        old_candidate = (source.parent / old_analysis_name)
+        old_candidate = source.parent / old_analysis_name
         if old_candidate.exists():
             from ..core.output import warn
+
             warn(
                 f"old-format analysis exists: {old_analysis_name}; "
                 f"new analysis uses: {new_analysis_name}"
@@ -1635,9 +1620,7 @@ def analyze_cmd(
         _analyze_ddi(result_doc, thresholds, metrics, assessment)
 
     # --- Write analysis ---
-    analysis_path = beside_or_out(
-        state, source, new_analysis_name, out
-    )
+    analysis_path = beside_or_out(state, source, new_analysis_name, out)
 
     provenance.write_analysis(
         analysis_path,
@@ -1659,9 +1642,7 @@ def analyze_cmd(
     emit.line(f"Threshold set: {thresholds.tag}")
     emit.line(f"Verdict: {assessment.get('verdict', 'unknown')}")
     if thresholds.unresolved():
-        emit.line(
-            f"Unresolved thresholds: {', '.join(thresholds.unresolved())}"
-        )
+        emit.line(f"Unresolved thresholds: {', '.join(thresholds.unresolved())}")
     emit.flush()
 
 
@@ -1693,8 +1674,7 @@ def _analyze_nca(
         assessment["auc_extrapolation"] = {
             "status": "acceptable",
             "message": (
-                f"AUC extrapolation ({auc_extrap_pct:.1f}%) within "
-                f"{auc_limit}% limit"
+                f"AUC extrapolation ({auc_extrap_pct:.1f}%) within {auc_limit}% limit"
             ),
         }
 
@@ -1970,9 +1950,7 @@ def dermal_partition_cmd(
     }
 
     record_path = target_dir / "dermal-partition.pk-dermal.json"
-    record_path.write_text(
-        json.dumps(record, indent=2) + "\n", encoding="utf-8"
-    )
+    record_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
 
     # --- Provenance sidecar ---
     sidecar = provenance.Sidecar(
@@ -1999,9 +1977,7 @@ def dermal_partition_cmd(
     )
 
     sidecar.add_output(record_path)
-    meta_path = sidecar.write(
-        target_dir / "dermal-partition.pk-dermal.meta.json"
-    )
+    meta_path = sidecar.write(target_dir / "dermal-partition.pk-dermal.meta.json")
 
     # --- Emit summary ---
     emit.path(record_path, role="dermal-partition")

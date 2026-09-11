@@ -28,70 +28,70 @@ import click
 
 from .commands.admet import admet
 from .commands.allen import allen
-from .commands.artifact import artifact
-from .commands.cite import cite
 from .commands.alphafold import alphafold
 from .commands.alphagenome import alphagenome
 from .commands.analog import analog
+from .commands.artifact import artifact
 from .commands.assay import assay
-from .commands.compound import compound
-from .commands.compreg import compreg
 from .commands.cbioportal import cbioportal
 from .commands.cellxgene import cellxgene
+from .commands.cite import cite
+from .commands.compound import compound
+from .commands.compreg import compreg
 from .commands.conservation import conservation
 from .commands.coscientist import coscientist
 from .commands.dice import dice
+from .commands.differentiation import differentiation
 from .commands.disco import disco
 from .commands.disignatlas import disignatlas
 from .commands.docking import docking
-from .commands.dossier import dossier
 from .commands.doctor import doctor
-from .commands.manufacturing import manufacturing
-from .commands.mmp import mmp
-from .commands.mpo import mpo
+from .commands.dossier import dossier
 from .commands.env import env
-from .commands.program import program
 from .commands.expression import expression
 from .commands.faers import faers
+from .commands.genetics import genetics
 from .commands.geo import geo
+from .commands.gtex import gtex
+from .commands.gwas import gwas
 from .commands.homology import homology
 from .commands.hypex import hypex
 from .commands.hypothesis import hypothesis
-from .commands.gtex import gtex
-from .commands.genetics import genetics
-from .commands.gwas import gwas
-from .commands.retro import retro
-from .commands.phenotype import phenotype
-from .commands.pathway import pathway
 from .commands.litref import litref
+from .commands.manufacturing import manufacturing
+from .commands.mmp import mmp
+from .commands.mpo import mpo
+from .commands.patent import patent
+from .commands.pathway import pathway
+from .commands.phenotype import phenotype
+from .commands.pk import pk
+from .commands.pocket import pocket
 from .commands.ppi import ppi
-from .commands.pubchem import pubchem
-from .commands.similar import similar
 from .commands.preprint import preprint
+from .commands.program import program
+from .commands.pubchem import pubchem
 from .commands.pubmed import pubmed
 from .commands.pubmed_bq import pubmed_bq
-from .commands.scp import scp
-from .commands.spatialdb import spatialdb
-from .commands.pk import pk
+from .commands.retro import retro
+from .commands.run import run
 from .commands.schema import schema
-from .commands.tox import tox
-from .commands.differentiation import differentiation
-from .commands.patent import patent
-from .commands.trials import trials
-from .commands.triage import triage
-from .commands.pocket import pocket
+from .commands.scp import scp
 from .commands.screen import screen
+from .commands.selectivity import selectivity
+from .commands.similar import similar
+from .commands.site import site
+from .commands.spatialdb import spatialdb
 from .commands.structure import structure
 from .commands.structure_screening import structure_screen
-from .commands.run import run
-from .commands.selectivity import selectivity
-from .commands.site import site
-from .commands.validate import validate
 from .commands.tools_cmd import tools_group
+from .commands.tox import tox
+from .commands.triage import triage
+from .commands.trials import trials
+from .commands.validate import validate
 from .commands.workorder import workorder
 from .common import AppState, DDEGroup, enforce_phase_two
-from .core.context import init_project
 from .core import provenance
+from .core.context import init_project
 from .core.env import CLI_VERSION
 from .core.toolchain import check_integrity
 
@@ -173,7 +173,7 @@ def _collect_sources(
         if cmd_id in _seen:
             continue
         _seen.add(cmd_id)
-        path = prefix + [name]
+        path = [*prefix, name]
         if isinstance(cmd, click.Group):
             _collect_sources(cmd, path, out, _seen=_seen)
             continue
@@ -356,8 +356,7 @@ def relays(as_json: bool) -> None:
     click.echo(f"{n_codes} codes, {n_sites} emission site(s) found")
     if orphaned:
         click.echo(
-            f"  {len(orphaned)} code(s) with no emission site: "
-            + ", ".join(orphaned)
+            f"  {len(orphaned)} code(s) with no emission site: " + ", ".join(orphaned)
         )
 
 

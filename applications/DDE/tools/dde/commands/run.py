@@ -46,14 +46,16 @@ from ..core.statemachine import (
 # Constants
 # ---------------------------------------------------------------------------
 
-VALID_FAILURE_CLASSES = frozenset({
-    "transient_infrastructure",
-    "persistent_infrastructure",
-    "contract_failure",
-    "scientific_block",
-    "critical_alert",
-    "policy_boundary",
-})
+VALID_FAILURE_CLASSES = frozenset(
+    {
+        "transient_infrastructure",
+        "persistent_infrastructure",
+        "contract_failure",
+        "scientific_block",
+        "critical_alert",
+        "policy_boundary",
+    }
+)
 
 _WO_REV_RE = re.compile(r"^.*-r(\d+)\.json$")
 
@@ -100,8 +102,7 @@ def _count_attempts(project_root: Path, wo_id: str, revision: int) -> int:
         project_root,
         "run",
         filter_fn=lambda r: (
-            r.get("work_order_id") == wo_id
-            and r.get("work_order_revision") == revision
+            r.get("work_order_id") == wo_id and r.get("work_order_revision") == revision
         ),
     )
     return len(runs)
@@ -143,8 +144,12 @@ def run():
 
 @run.command()
 @click.argument("work_order_id")
-@click.option("--revision", type=int, default=None, help="Work-order revision to target.")
-@click.option("--json", "as_json", is_flag=True, help="Emit a machine-readable JSON record.")
+@click.option(
+    "--revision", type=int, default=None, help="Work-order revision to target."
+)
+@click.option(
+    "--json", "as_json", is_flag=True, help="Emit a machine-readable JSON record."
+)
 @click.option("--quiet", is_flag=True, help="Emit output paths only.")
 @pass_state
 def create(
@@ -235,9 +240,15 @@ def create(
 @run.command()
 @click.argument("run_id")
 @click.argument("target_state")
-@click.option("--failure-class", default=None, help="Failure classification (required for failed/blocked).")
+@click.option(
+    "--failure-class",
+    default=None,
+    help="Failure classification (required for failed/blocked).",
+)
 @click.option("--detail", default=None, help="Failure detail message.")
-@click.option("--json", "as_json", is_flag=True, help="Emit a machine-readable JSON record.")
+@click.option(
+    "--json", "as_json", is_flag=True, help="Emit a machine-readable JSON record."
+)
 @click.option("--quiet", is_flag=True, help="Emit output paths only.")
 @pass_state
 def transition(
@@ -265,7 +276,7 @@ def transition(
             raise UsageError(
                 f"--failure-class is required when transitioning to {target_state!r}",
                 detail=f"valid classes: {', '.join(sorted(VALID_FAILURE_CLASSES))}",
-                remedy=f"add --failure-class <class> to specify the failure classification",
+                remedy="add --failure-class <class> to specify the failure classification",
             )
         if failure_class not in VALID_FAILURE_CLASSES:
             raise UsageError(
@@ -314,7 +325,9 @@ def transition(
 
 @run.command()
 @click.argument("run_id")
-@click.option("--json", "as_json", is_flag=True, help="Emit a machine-readable JSON record.")
+@click.option(
+    "--json", "as_json", is_flag=True, help="Emit a machine-readable JSON record."
+)
 @click.option("--quiet", is_flag=True, help="Emit output paths only.")
 @pass_state
 def show(state: AppState, run_id: str, as_json: bool, quiet: bool) -> None:
@@ -365,7 +378,9 @@ def show(state: AppState, run_id: str, as_json: bool, quiet: bool) -> None:
 @run.command(name="list")
 @click.option("--work-order", default=None, help="Filter by work-order ID.")
 @click.option("--state", "filter_state", default=None, help="Filter by run state.")
-@click.option("--json", "as_json", is_flag=True, help="Emit a machine-readable JSON array.")
+@click.option(
+    "--json", "as_json", is_flag=True, help="Emit a machine-readable JSON array."
+)
 @click.option("--quiet", is_flag=True, help="Emit output paths only.")
 @pass_state
 def list_runs(

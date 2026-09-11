@@ -28,13 +28,11 @@ Covers:
 
 from __future__ import annotations
 
-import math
 import unittest
 
 from dde.commands.pk import VALID_ROUTES
 from dde.core.errors import Refusal
 from dde.core.provenance import RELAY_CODES
-
 
 # ---------------------------------------------------------------------------
 # Item 1: VALID_ROUTES expansion
@@ -192,7 +190,7 @@ class TestJmax(unittest.TestCase):
         """
         log_kp = -2.5
         sw_mg_ml = 10.0
-        kp = 10 ** log_kp
+        kp = 10**log_kp
         jmax = kp * (sw_mg_ml * 1000)  # convert mg/mL → ug/mL
         expected = 10 ** (-2.5) * 10000
         self.assertAlmostEqual(jmax, expected, places=2)
@@ -205,7 +203,7 @@ class TestJmax(unittest.TestCase):
     def test_jmax_proportional_to_solubility(self):
         """Doubling solubility doubles Jmax."""
         log_kp = -2.0
-        kp = 10 ** log_kp
+        kp = 10**log_kp
         jmax_1 = kp * 1000  # Sw = 1 mg/mL
         jmax_2 = kp * 2000  # Sw = 2 mg/mL
         self.assertAlmostEqual(jmax_2, 2 * jmax_1, places=6)
@@ -214,11 +212,13 @@ class TestJmax(unittest.TestCase):
 class TestTopicalArtifactStructure(unittest.TestCase):
     """Topical prediction artifacts must contain required fields."""
 
-    def _build_record(self, logp: float, mw: float, solubility: float | None = None) -> dict:
+    def _build_record(
+        self, logp: float, mw: float, solubility: float | None = None
+    ) -> dict:
         """Build a record matching the admet topical command output."""
         log_kp = round(-2.72 + 0.71 * logp - 0.0061 * mw, 4)
         log_kscw = round(0.71 * logp - 0.061, 4)
-        kp_cm_hr = 10 ** log_kp
+        kp_cm_hr = 10**log_kp
 
         if log_kp > -1.0:
             permeability_class = "high"
@@ -255,7 +255,14 @@ class TestTopicalArtifactStructure(unittest.TestCase):
 
     def test_required_fields_present(self):
         record = self._build_record(2.0, 200.0, solubility=5.0)
-        for field in ("log_kp", "log_kscw", "jmax_ug_cm2_hr", "logP_used", "mw", "solubility_used"):
+        for field in (
+            "log_kp",
+            "log_kscw",
+            "jmax_ug_cm2_hr",
+            "logP_used",
+            "mw",
+            "solubility_used",
+        ):
             self.assertIn(field, record, f"required field {field!r} missing")
 
     def test_jmax_none_without_solubility(self):
@@ -284,7 +291,10 @@ class TestRelayRegistration(unittest.TestCase):
         self.assertIn("pk.dermal_partition_estimated", RELAY_CODES)
 
     def test_relay_code_prose_is_nonempty(self):
-        for code in ("admet.prediction_not_measurement", "pk.dermal_partition_estimated"):
+        for code in (
+            "admet.prediction_not_measurement",
+            "pk.dermal_partition_estimated",
+        ):
             self.assertTrue(
                 len(RELAY_CODES[code]) > 10,
                 f"relay code {code!r} has suspiciously short prose",
@@ -301,8 +311,12 @@ class TestDermalPartitionFlux(unittest.TestCase):
     Cv = strength * density * 10000 (ug/mL)."""
 
     def _compute(
-        self, kp: float, strength: float, area: float,
-        dose_interval: float, density: float = 1.0,
+        self,
+        kp: float,
+        strength: float,
+        area: float,
+        dose_interval: float,
+        density: float = 1.0,
     ) -> dict:
         cv = strength * density * 10000
         jss = kp * cv
@@ -332,9 +346,7 @@ class TestDermalPartitionFlux(unittest.TestCase):
         """Doubling density doubles Cv and all downstream values."""
         result_1 = self._compute(0.001, 1.0, 100.0, 24.0, density=1.0)
         result_2 = self._compute(0.001, 1.0, 100.0, 24.0, density=2.0)
-        self.assertAlmostEqual(
-            result_2["cv_ug_ml"], 2 * result_1["cv_ug_ml"], places=2
-        )
+        self.assertAlmostEqual(result_2["cv_ug_ml"], 2 * result_1["cv_ug_ml"], places=2)
         self.assertAlmostEqual(
             result_2["total_absorbed_ug"], 2 * result_1["total_absorbed_ug"], places=2
         )
@@ -363,9 +375,7 @@ class TestDermalPartitionFlux(unittest.TestCase):
         """Doubling strength doubles Cv."""
         result_1 = self._compute(0.001, 0.5, 100.0, 24.0)
         result_2 = self._compute(0.001, 1.0, 100.0, 24.0)
-        self.assertAlmostEqual(
-            result_2["cv_ug_ml"], 2 * result_1["cv_ug_ml"], places=2
-        )
+        self.assertAlmostEqual(result_2["cv_ug_ml"], 2 * result_1["cv_ug_ml"], places=2)
 
 
 class TestDermalPartitionValidation(unittest.TestCase):
@@ -401,7 +411,7 @@ class TestPottsGuyIntegration(unittest.TestCase):
 
         # Potts-Guy
         log_kp = -2.72 + 0.71 * logp - 0.0061 * mw
-        kp = 10 ** log_kp
+        kp = 10**log_kp
 
         # Dermal-partition with 1% strength, 200 cm2, 24 hr
         cv = 1.0 * 1.0 * 10000  # 10000 ug/mL

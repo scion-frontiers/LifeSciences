@@ -160,7 +160,11 @@ def _md(obj: Any, *keys: str) -> str:
 
 
 def _gene(idea: dict) -> str | None:
-    attrs = {a.get("name"): a.get("value") for a in idea.get("attributes", []) if isinstance(a, dict)}
+    attrs = {
+        a.get("name"): a.get("value")
+        for a in idea.get("attributes", [])
+        if isinstance(a, dict)
+    }
     for name in _GENE_ATTRS:
         if attrs.get(name):
             return str(attrs[name])
@@ -217,7 +221,9 @@ def _normalise(doc: dict, source: Path) -> dict:
 
     ideas = []
     for raw in raw_ideas:
-        match = raw.get("matchResult") if isinstance(raw.get("matchResult"), dict) else {}
+        match = (
+            raw.get("matchResult") if isinstance(raw.get("matchResult"), dict) else {}
+        )
         claims = _claims(raw)
         reviews_raw = raw.get("reviews", []) or []
         review_refs: list[dict] = []
@@ -270,7 +276,9 @@ def _normalise(doc: dict, source: Path) -> dict:
                     "summary": _md(raw, "summary"),
                     "description": _md(raw, "description"),
                     "reviews_summary": _md(raw, "reviewsSummary"),
-                    "verification_summary": _md(raw, "deepVerification", "verificationSummary"),
+                    "verification_summary": _md(
+                        raw, "deepVerification", "verificationSummary"
+                    ),
                 },
             }
         )
@@ -431,7 +439,11 @@ def ingest(
         record["ideas"] = record["ideas"][:top]
 
     session = record["tournament"].get("session_id")
-    name = f"cs-{session}" if session else f"cs-{_slug(record['tournament'].get('title'), 'tournament')}"
+    name = (
+        f"cs-{session}"
+        if session
+        else f"cs-{_slug(record['tournament'].get('title'), 'tournament')}"
+    )
 
     sidecar = provenance.Sidecar(
         tool=TOOL,
@@ -504,7 +516,9 @@ def ingest(
 
 @coscientist.command()
 @click.argument("artifact")
-@click.option("--elo-decisive-gap", type=float, default=None, help="Override threshold.")
+@click.option(
+    "--elo-decisive-gap", type=float, default=None, help="Override threshold."
+)
 @click.option("--min-win-rate", type=float, default=None, help="Override threshold.")
 @click.option(
     "--max-contradicted-claims", type=int, default=None, help="Override threshold."
@@ -639,7 +653,9 @@ def analyze(
     metrics = {
         "n_ideas": len(ideas),
         "n_ideas_generated": record["stats"].get("n_ideas_generated"),
-        "elo_range": [ranked[-1]["elo_rating"], ranked[0]["elo_rating"]] if ranked else None,
+        "elo_range": [ranked[-1]["elo_rating"], ranked[0]["elo_rating"]]
+        if ranked
+        else None,
         "claim_verdicts": dict(verdict_counts),
         "n_claims_reported_total": sum(len(i["claims"]) for i in ideas),
     }
@@ -661,12 +677,8 @@ def analyze(
         "section": _extract_recommendation(
             record["report"].get("top_ideas_summary", "")
         ),
-        "reviews_overview_available": bool(
-            record["report"].get("reviews_overview")
-        ),
-        "top_ideas_summary_available": bool(
-            record["report"].get("top_ideas_summary")
-        ),
+        "reviews_overview_available": bool(record["report"].get("reviews_overview")),
+        "top_ideas_summary_available": bool(record["report"].get("top_ideas_summary")),
     }
     assessment["recommendation"] = recommendation
 
@@ -716,11 +728,13 @@ def analyze(
     if recommendation["section"]:
         relay_code = "coscientist.review_recommendation_available"
         if not any(r["code"] == relay_code for r in relays):
-            relays.append(provenance.relay(
-                relay_code,
-                "Co-scientist tournament produced a review recommendation. "
-                "Address it before proceeding with target selection.",
-            ))
+            relays.append(
+                provenance.relay(
+                    relay_code,
+                    "Co-scientist tournament produced a review recommendation. "
+                    "Address it before proceeding with target selection.",
+                )
+            )
 
     # Mandatory relay: leader has worst contradiction profile.
     # Fires when the top-ranked idea has the highest (or joint-highest)
@@ -735,16 +749,18 @@ def analyze(
             relay_code = "coscientist.leader_worst_contradiction_profile"
             if not any(r["code"] == relay_code for r in relays):
                 leader_gene = per_idea[0]["gene"] or "(unknown)"
-                relays.append(provenance.relay(
-                    relay_code,
-                    f"The recommended idea ({leader_gene}) has the worst "
-                    f"contradiction profile in the tournament: "
-                    f"{leader_bad} contradicted claim(s), the highest "
-                    f"(or joint-highest) among all candidates. The Science "
-                    f"Lead must acknowledge this finding, justify proceeding "
-                    f"with this target, and consider a fast-fail foundational "
-                    f"claim check before committing a full cohort.",
-                ))
+                relays.append(
+                    provenance.relay(
+                        relay_code,
+                        f"The recommended idea ({leader_gene}) has the worst "
+                        f"contradiction profile in the tournament: "
+                        f"{leader_bad} contradicted claim(s), the highest "
+                        f"(or joint-highest) among all candidates. The Science "
+                        f"Lead must acknowledge this finding, justify proceeding "
+                        f"with this target, and consider a fast-fail foundational "
+                        f"claim check before committing a full cohort.",
+                    )
+                )
             assessment["leader_has_worst_contradiction_profile"] = True
 
     analysis_path = beside_or_out(
@@ -798,12 +814,8 @@ def analyze(
         and verdict in ("leader-with-advisories", "no-clear-leader")
     ):
         emit.line("")
-        emit.line(
-            "Consider: foundational-claim-check template before full cohort"
-        )
-        emit.line(
-            "  See tools/templates/work-orders/foundational-claim-check.yaml"
-        )
+        emit.line("Consider: foundational-claim-check template before full cohort")
+        emit.line("  See tools/templates/work-orders/foundational-claim-check.yaml")
 
     if recommendation["section"]:
         emit.line("")
@@ -884,18 +896,27 @@ def show(
         matches = [
             i
             for i in ideas
-            if target in {g.strip().upper() for g in (i.get("gene") or "").split(",") if g.strip()}
+            if target
+            in {
+                g.strip().upper() for g in (i.get("gene") or "").split(",") if g.strip()
+            }
         ]
         if not matches:
             raise UsageError(
                 f"no idea with target gene {gene!r}",
                 detail="available: "
-                + "; ".join(f"#{i.get('ranking')} {i.get('gene')}" for i in ideas if i.get("gene")),
+                + "; ".join(
+                    f"#{i.get('ranking')} {i.get('gene')}"
+                    for i in ideas
+                    if i.get("gene")
+                ),
             )
         if len(matches) > 1:
             raise UsageError(
                 f"gene {gene!r} appears in {len(matches)} ideas",
-                detail="; ".join(f"#{i.get('ranking')} {i.get('gene')}" for i in matches),
+                detail="; ".join(
+                    f"#{i.get('ranking')} {i.get('gene')}" for i in matches
+                ),
                 remedy="select by --rank instead",
             )
         chosen = matches[0]
@@ -932,7 +953,9 @@ def show(
     emit.data("rank", chosen["ranking"])
     emit.data("gene", chosen["gene"])
     emit.line(f"Rank #{chosen['ranking']} {chosen['gene']}: {chosen['title'][:60]}")
-    emit.line(f"Wrote {section} section ({sum(len(prose.get(k) or '') for k in wanted)} chars).")
+    emit.line(
+        f"Wrote {section} section ({sum(len(prose.get(k) or '') for k in wanted)} chars)."
+    )
     emit.path(project.relative(dest), "prose")
     emit.flush()
 
@@ -968,7 +991,9 @@ def _require_expanded_fields(record: dict, field: str) -> None:
 
 def _require_report_content(rpt: dict) -> None:
     """Raise ``SchemaError`` if the report dict has no content at all."""
-    if not any(rpt.get(k) for k in ("overview", "top_ideas_summary", "reviews_overview")):
+    if not any(
+        rpt.get(k) for k in ("overview", "top_ideas_summary", "reviews_overview")
+    ):
         raise SchemaError(
             "no executive report found in this tournament artifact",
             remedy="confirm this tournament produced an executive report",
@@ -1097,9 +1122,7 @@ def references(
             for i in ideas
             if target
             in {
-                g.strip().upper()
-                for g in (i.get("gene") or "").split(",")
-                if g.strip()
+                g.strip().upper() for g in (i.get("gene") or "").split(",") if g.strip()
             }
         ]
         if not scoped:
@@ -1142,7 +1165,11 @@ def references(
         for ref in refs:
             title = ref.get("title", "")
             src = ref.get("source", "")
-            if search and search.lower() not in title.lower() and search.lower() not in src.lower():
+            if (
+                search
+                and search.lower() not in title.lower()
+                and search.lower() not in src.lower()
+            ):
                 continue
             all_refs.append({"pool": pool_name, "title": title, "source": src})
 
@@ -1164,9 +1191,7 @@ def references(
                 if ref["pool"] != current_pool:
                     current_pool = ref["pool"]
                     lines.append(f"\n## {current_pool}\n")
-                lines.append(
-                    f"- [{ref['title'] or 'Untitled'}]({ref['source']})"
-                )
+                lines.append(f"- [{ref['title'] or 'Untitled'}]({ref['source']})")
             lines.append(f"\n---\n**Total references**: {len(all_refs)}\n")
         dest = target_dir / f"{stem}.references.md"
         dest.write_text("\n".join(lines), encoding="utf-8")
@@ -1242,7 +1267,9 @@ def knowledge(
     emit = Emitter(as_json=as_json, quiet=quiet)
     emit.data("n_references", kb.get("n_references", 0))
     emit.data("n_connections", n_conns)
-    emit.line(f"Knowledge base: {kb.get('n_references', 0)} references, {n_conns} connections")
+    emit.line(
+        f"Knowledge base: {kb.get('n_references', 0)} references, {n_conns} connections"
+    )
     emit.path(project.relative(dest), "knowledge")
     emit.flush()
 
@@ -1327,8 +1354,7 @@ def report(
                 lines.append("")
             else:
                 lines.append(
-                    "No structured recommendation section found in "
-                    "top-ideas summary."
+                    "No structured recommendation section found in top-ideas summary."
                 )
                 lines.append("")
 
@@ -1340,11 +1366,14 @@ def report(
         dest.write_text("\n".join(lines), encoding="utf-8")
 
     emit = Emitter(as_json=as_json, quiet=quiet)
-    emit.data("sections_available", {
-        "overview": bool(rpt.get("overview")),
-        "top_ideas_summary": bool(rpt.get("top_ideas_summary")),
-        "reviews_overview": bool(rpt.get("reviews_overview")),
-    })
+    emit.data(
+        "sections_available",
+        {
+            "overview": bool(rpt.get("overview")),
+            "top_ideas_summary": bool(rpt.get("top_ideas_summary")),
+            "reviews_overview": bool(rpt.get("reviews_overview")),
+        },
+    )
     emit.line(f"Report section: {section}")
     emit.path(project.relative(dest), "report")
     emit.flush()
@@ -1437,11 +1466,21 @@ def _compare_json(
             "only_in_a": sorted(genes_a - genes_b),
             "only_in_b": sorted(genes_b - genes_a),
             "ideas_a": [
-                {"ranking": i["ranking"], "gene": i["gene"], "elo_rating": i["elo_rating"], "title": i["title"]}
+                {
+                    "ranking": i["ranking"],
+                    "gene": i["gene"],
+                    "elo_rating": i["elo_rating"],
+                    "title": i["title"],
+                }
                 for i in ideas_a
             ],
             "ideas_b": [
-                {"ranking": i["ranking"], "gene": i["gene"], "elo_rating": i["elo_rating"], "title": i["title"]}
+                {
+                    "ranking": i["ranking"],
+                    "gene": i["gene"],
+                    "elo_rating": i["elo_rating"],
+                    "title": i["title"],
+                }
                 for i in ideas_b
             ],
         }
@@ -1454,22 +1493,42 @@ def _compare_json(
         for r in range(1, max_rank + 1):
             a = next((i for i in ideas_a if i["ranking"] == r), None)
             b = next((i for i in ideas_b if i["ranking"] == r), None)
-            rows.append({
-                "rank": r,
-                "a": {"gene": a["gene"], "title": a["title"]} if a else None,
-                "b": {"gene": b["gene"], "title": b["title"]} if b else None,
-            })
+            rows.append(
+                {
+                    "rank": r,
+                    "a": {"gene": a["gene"], "title": a["title"]} if a else None,
+                    "b": {"gene": b["gene"], "title": b["title"]} if b else None,
+                }
+            )
         return {"tournament_a": title_a, "tournament_b": title_b, "rankings": rows}
     else:  # elo
         entries = []
         for i in ideas_a:
-            entries.append({"source": "A", "gene": i["gene"], "elo_rating": i["elo_rating"],
-                            "ranking": i["ranking"], "title": i["title"]})
+            entries.append(
+                {
+                    "source": "A",
+                    "gene": i["gene"],
+                    "elo_rating": i["elo_rating"],
+                    "ranking": i["ranking"],
+                    "title": i["title"],
+                }
+            )
         for i in ideas_b:
-            entries.append({"source": "B", "gene": i["gene"], "elo_rating": i["elo_rating"],
-                            "ranking": i["ranking"], "title": i["title"]})
+            entries.append(
+                {
+                    "source": "B",
+                    "gene": i["gene"],
+                    "elo_rating": i["elo_rating"],
+                    "ranking": i["ranking"],
+                    "title": i["title"],
+                }
+            )
         entries.sort(key=lambda x: x["elo_rating"] or 0, reverse=True)
-        return {"tournament_a": title_a, "tournament_b": title_b, "leaderboard": entries}
+        return {
+            "tournament_a": title_a,
+            "tournament_b": title_b,
+            "leaderboard": entries,
+        }
 
 
 def _compare_markdown(
@@ -1499,7 +1558,9 @@ def _compare_markdown(
                 genes_a.add(idea["gene"])
             elo = idea.get("elo_rating")
             elo_s = f"{elo:.0f}" if elo is not None else "N/A"
-            lines.append(f"| {idea['ranking']} | {g} | {elo_s} | {(idea['title'] or '')[:60]} |")
+            lines.append(
+                f"| {idea['ranking']} | {g} | {elo_s} | {(idea['title'] or '')[:60]} |"
+            )
         lines.append("")
 
         lines.append("## Tournament B - Top Ideas")
@@ -1511,16 +1572,24 @@ def _compare_markdown(
                 genes_b.add(idea["gene"])
             elo = idea.get("elo_rating")
             elo_s = f"{elo:.0f}" if elo is not None else "N/A"
-            lines.append(f"| {idea['ranking']} | {g} | {elo_s} | {(idea['title'] or '')[:60]} |")
+            lines.append(
+                f"| {idea['ranking']} | {g} | {elo_s} | {(idea['title'] or '')[:60]} |"
+            )
         lines.append("")
 
         shared = genes_a & genes_b
         only_a = genes_a - genes_b
         only_b = genes_b - genes_a
         lines.append("## Overlap Analysis")
-        lines.append(f"- **Shared genes**: {', '.join(sorted(shared)) if shared else 'None'}")
-        lines.append(f"- **Only in A**: {', '.join(sorted(only_a)) if only_a else 'None'}")
-        lines.append(f"- **Only in B**: {', '.join(sorted(only_b)) if only_b else 'None'}")
+        lines.append(
+            f"- **Shared genes**: {', '.join(sorted(shared)) if shared else 'None'}"
+        )
+        lines.append(
+            f"- **Only in A**: {', '.join(sorted(only_a)) if only_a else 'None'}"
+        )
+        lines.append(
+            f"- **Only in B**: {', '.join(sorted(only_b)) if only_b else 'None'}"
+        )
         lines.append("")
 
     elif aspect == "rankings":
@@ -1549,21 +1618,33 @@ def _compare_markdown(
         lines.append("## ELO Ratings Comparison\n")
         entries: list[dict] = []
         for idea in ideas_a:
-            entries.append({"source": "A", "gene": idea.get("gene") or "N/A",
-                            "elo": idea.get("elo_rating") or 0,
-                            "ranking": idea.get("ranking", "?"),
-                            "title": (idea.get("title") or "")[:50]})
+            entries.append(
+                {
+                    "source": "A",
+                    "gene": idea.get("gene") or "N/A",
+                    "elo": idea.get("elo_rating") or 0,
+                    "ranking": idea.get("ranking", "?"),
+                    "title": (idea.get("title") or "")[:50],
+                }
+            )
         for idea in ideas_b:
-            entries.append({"source": "B", "gene": idea.get("gene") or "N/A",
-                            "elo": idea.get("elo_rating") or 0,
-                            "ranking": idea.get("ranking", "?"),
-                            "title": (idea.get("title") or "")[:50]})
+            entries.append(
+                {
+                    "source": "B",
+                    "gene": idea.get("gene") or "N/A",
+                    "elo": idea.get("elo_rating") or 0,
+                    "ranking": idea.get("ranking", "?"),
+                    "title": (idea.get("title") or "")[:50],
+                }
+            )
         entries.sort(key=lambda x: x["elo"], reverse=True)
         lines.append("| Source | Rank | Gene | ELO | Title |")
         lines.append("|--------|------|------|-----|-------|")
         for e in entries:
             elo_s = f"{e['elo']:.0f}" if isinstance(e["elo"], (int, float)) else "N/A"
-            lines.append(f"| {e['source']} | {e['ranking']} | {e['gene']} | {elo_s} | {e['title']} |")
+            lines.append(
+                f"| {e['source']} | {e['ranking']} | {e['gene']} | {elo_s} | {e['title']} |"
+            )
         lines.append("")
 
     return "\n".join(lines) + "\n"

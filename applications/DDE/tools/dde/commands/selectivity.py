@@ -104,9 +104,7 @@ def _validate_target(target: dict, label: str) -> list[str]:
         elif isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
             problems.append(f"{label}: activity_value must be finite")
         elif val <= 0:
-            problems.append(
-                f"{label}: activity_value must be positive, got {val}"
-            )
+            problems.append(f"{label}: activity_value must be positive, got {val}")
 
     if "activity_unit" in target and target["activity_unit"] is not None:
         if target["activity_unit"] != "nM":
@@ -171,9 +169,7 @@ def _check_measure_consistency(doc: dict) -> None:
     mixed = []
     for i, ot in enumerate(doc["off_targets"]):
         if ot["activity_type"] != primary_type:
-            mixed.append(
-                f"off_targets[{i}] ({ot['name']}): {ot['activity_type']}"
-            )
+            mixed.append(f"off_targets[{i}] ({ot['name']}): {ot['activity_type']}")
 
     if mixed:
         raise Refusal(
@@ -206,16 +202,18 @@ def _compute_ratios(doc: dict) -> list[dict[str, Any]]:
     ratios: list[dict[str, Any]] = []
     for ot in doc["off_targets"]:
         ratio = ot["activity_value"] / primary_value
-        ratios.append({
-            "off_target": ot["name"],
-            "off_target_value": ot["activity_value"],
-            "off_target_unit": ot["activity_unit"],
-            "primary_target": primary_name,
-            "primary_value": primary_value,
-            "primary_unit": doc["primary_target"]["activity_unit"],
-            "activity_type": activity_type,
-            "selectivity_ratio": round(ratio, 4),
-        })
+        ratios.append(
+            {
+                "off_target": ot["name"],
+                "off_target_value": ot["activity_value"],
+                "off_target_unit": ot["activity_unit"],
+                "primary_target": primary_name,
+                "primary_value": primary_value,
+                "primary_unit": doc["primary_target"]["activity_unit"],
+                "activity_type": activity_type,
+                "selectivity_ratio": round(ratio, 4),
+            }
+        )
     return ratios
 
 
@@ -320,7 +318,7 @@ def compare(
             detail=f"got schema {doc.get('schema')!r}",
             remedy=(
                 "ensure the input file has "
-                "'\"schema\": \"dde.selectivity-panel.v1\"' at the top level"
+                '\'"schema": "dde.selectivity-panel.v1"\' at the top level'
             ),
         )
 
@@ -503,9 +501,7 @@ def analyze(
                 target_result["classification"] = classification
             except ThresholdError:
                 target_result["classification"] = "UNRESOLVED"
-                target_result["advisory"] = (
-                    "hERG margin threshold is UNRESOLVED"
-                )
+                target_result["advisory"] = "hERG margin threshold is UNRESOLVED"
         else:
             target_result["classification"] = "UNRESOLVED"
             target_result["advisory"] = (
@@ -554,14 +550,13 @@ def analyze(
         old_candidate = path.parent / old_analysis_name
         if old_candidate.exists():
             from ..core.output import warn
+
             warn(
                 f"old-format analysis exists: {old_analysis_name}; "
                 f"new analysis uses: {new_analysis_name}"
             )
 
-    analysis_path = beside_or_out(
-        state, path, new_analysis_name, out
-    )
+    analysis_path = beside_or_out(state, path, new_analysis_name, out)
     provenance.write_analysis(
         analysis_path,
         source=path,
@@ -586,8 +581,10 @@ def analyze(
     emit.line(f"Primary target: {record.get('primary_target', {}).get('name')}")
     emit.line(f"Off-targets analyzed: {len(per_target)}")
     if n_classified:
-        emit.line(f"Classified: {n_classified} (adequate: {n_adequate}, "
-                  f"marginal: {n_marginal}, insufficient: {n_insufficient})")
+        emit.line(
+            f"Classified: {n_classified} (adequate: {n_adequate}, "
+            f"marginal: {n_marginal}, insufficient: {n_insufficient})"
+        )
     emit.line(f"Unresolved: {len(per_target) - n_classified}")
     for t in per_target:
         ratio_str = f"{t['selectivity_ratio']:.1f}x"

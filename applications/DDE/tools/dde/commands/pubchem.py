@@ -40,7 +40,6 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
 import click
@@ -91,11 +90,16 @@ def _fetch_synonyms(cid: int) -> tuple[str, bytes]:
     """
     url = f"{PUBCHEM_API}/compound/cid/{cid}/synonyms/JSON"
     response = http.request(
-        "GET", url, qps=qps_for_host("pubchem.ncbi.nlm.nih.gov"), timeout=60.0, tolerate_status=(404,),
+        "GET",
+        url,
+        qps=qps_for_host("pubchem.ncbi.nlm.nih.gov"),
+        timeout=60.0,
+        tolerate_status=(404,),
     )
     if response.status_code == 404:
         return url, json.dumps(
-            {"_not_found": True, "cid": cid, "http_status": 404}, indent=2,
+            {"_not_found": True, "cid": cid, "http_status": 404},
+            indent=2,
         ).encode("utf-8")
     body = response.content
     try:
@@ -109,18 +113,24 @@ def _fetch_classification(cid: int) -> tuple[str, bytes]:
     """Fetch pharmacological classification for a CID from PubChem."""
     url = f"{PUBCHEM_API}/compound/cid/{cid}/classification/JSON"
     response = http.request(
-        "GET", url, qps=qps_for_host("pubchem.ncbi.nlm.nih.gov"), timeout=60.0, tolerate_status=(404,),
+        "GET",
+        url,
+        qps=qps_for_host("pubchem.ncbi.nlm.nih.gov"),
+        timeout=60.0,
+        tolerate_status=(404,),
     )
     if response.status_code == 404:
         return url, json.dumps(
-            {"_not_found": True, "cid": cid, "http_status": 404}, indent=2,
+            {"_not_found": True, "cid": cid, "http_status": 404},
+            indent=2,
         ).encode("utf-8")
     body = response.content
     try:
         json.loads(body.decode("utf-8"))
     except Exception as exc:
         raise SchemaError(
-            "PubChem classification did not return JSON", detail=str(exc),
+            "PubChem classification did not return JSON",
+            detail=str(exc),
         )
     return url, body
 
@@ -129,18 +139,24 @@ def _fetch_inchikey(cid: int) -> tuple[str, bytes]:
     """Fetch InChIKey for CID-to-ChEMBL cross-reference."""
     url = f"{PUBCHEM_API}/compound/cid/{cid}/property/InChIKey/JSON"
     response = http.request(
-        "GET", url, qps=qps_for_host("pubchem.ncbi.nlm.nih.gov"), timeout=60.0, tolerate_status=(404,),
+        "GET",
+        url,
+        qps=qps_for_host("pubchem.ncbi.nlm.nih.gov"),
+        timeout=60.0,
+        tolerate_status=(404,),
     )
     if response.status_code == 404:
         return url, json.dumps(
-            {"_not_found": True, "cid": cid, "http_status": 404}, indent=2,
+            {"_not_found": True, "cid": cid, "http_status": 404},
+            indent=2,
         ).encode("utf-8")
     body = response.content
     try:
         json.loads(body.decode("utf-8"))
     except Exception as exc:
         raise SchemaError(
-            "PubChem InChIKey did not return JSON", detail=str(exc),
+            "PubChem InChIKey did not return JSON",
+            detail=str(exc),
         )
     return url, body
 
@@ -153,7 +169,11 @@ def _fetch_chembl_molecule(inchikey: str) -> tuple[str, bytes]:
     """
     url = f"{CHEMBL_API}/molecule/{inchikey}.json"
     response = http.request(
-        "GET", url, qps=qps_for_host("www.ebi.ac.uk"), timeout=60.0, tolerate_status=(404,),
+        "GET",
+        url,
+        qps=qps_for_host("www.ebi.ac.uk"),
+        timeout=60.0,
+        tolerate_status=(404,),
     )
     if response.status_code == 404:
         return url, json.dumps(
@@ -172,7 +192,11 @@ def _fetch_chembl_mechanism(chembl_id: str) -> tuple[str, bytes]:
     """Fetch mechanism of action for a ChEMBL molecule."""
     url = f"{CHEMBL_API}/mechanism.json?molecule_chembl_id={chembl_id}"
     response = http.request(
-        "GET", url, qps=qps_for_host("www.ebi.ac.uk"), timeout=60.0, tolerate_status=(404,),
+        "GET",
+        url,
+        qps=qps_for_host("www.ebi.ac.uk"),
+        timeout=60.0,
+        tolerate_status=(404,),
     )
     if response.status_code == 404:
         return url, json.dumps(
@@ -267,7 +291,8 @@ def _extract_inchikey(payload: Any) -> str | None:
 
 
 def _extract_chembl_data(
-    mol_payload: Any, moa_payload: Any,
+    mol_payload: Any,
+    moa_payload: Any,
 ) -> dict[str, Any]:
     """Extract drug status and mechanism data from stored ChEMBL responses."""
     result: dict[str, Any] = {
@@ -287,12 +312,14 @@ def _extract_chembl_data(
         for mech in mechanisms:
             if not isinstance(mech, dict):
                 continue
-            result["mechanisms"].append({
-                "target_name": mech.get("target_name"),
-                "target_chembl_id": mech.get("target_chembl_id"),
-                "action_type": mech.get("action_type"),
-                "source": "chembl",
-            })
+            result["mechanisms"].append(
+                {
+                    "target_name": mech.get("target_name"),
+                    "target_chembl_id": mech.get("target_chembl_id"),
+                    "action_type": mech.get("action_type"),
+                    "source": "chembl",
+                }
+            )
 
     return result
 
@@ -346,7 +373,8 @@ def _build_artifact(
 
 
 def _classify_annotation(
-    annotation: dict[str, Any], cid: int,
+    annotation: dict[str, Any],
+    cid: int,
 ) -> tuple[str, list[dict[str, str]]]:
     """Classify an annotation artifact and produce guarded relays.
 
@@ -427,7 +455,8 @@ def _fetch_properties(cid: int) -> tuple[str, dict[str, Any] | None]:
     """
     url = f"{PUBCHEM_API}/compound/cid/{cid}/property/{_PROPERTY_FIELDS}/JSON"
     response = http.request(
-        "GET", url,
+        "GET",
+        url,
         qps=qps_for_host("pubchem.ncbi.nlm.nih.gov"),
         timeout=60.0,
         tolerate_status=(404,),
@@ -438,7 +467,9 @@ def _fetch_properties(cid: int) -> tuple[str, dict[str, Any] | None]:
     try:
         payload = json.loads(body.decode("utf-8"))
     except Exception as exc:
-        raise SchemaError("PubChem property endpoint did not return JSON", detail=str(exc))
+        raise SchemaError(
+            "PubChem property endpoint did not return JSON", detail=str(exc)
+        )
     props_list = payload.get("PropertyTable", {}).get("Properties", [])
     if not props_list:
         return url, None
@@ -453,7 +484,8 @@ def _fetch_full_record(cid: int) -> tuple[str, dict[str, Any]]:
     """
     url = f"{PUBCHEM_API}/compound/cid/{cid}/JSON"
     response = http.request(
-        "GET", url,
+        "GET",
+        url,
         qps=qps_for_host("pubchem.ncbi.nlm.nih.gov"),
         timeout=60.0,
     )
@@ -501,12 +533,7 @@ def _needs_fallback(props: dict[str, Any]) -> bool:
     """Return True if the property response has N/A or empty SMILES."""
     canonical = props.get("CanonicalSMILES", "")
     isomeric = props.get("IsomericSMILES", "")
-    return (
-        not canonical
-        or canonical == "N/A"
-        or not isomeric
-        or isomeric == "N/A"
-    )
+    return not canonical or canonical == "N/A" or not isomeric or isomeric == "N/A"
 
 
 def _build_compound_artifact(
@@ -534,8 +561,12 @@ def _build_compound_artifact(
 
 @pubchem.command("fetch")
 @click.argument("cids", type=int, nargs=-1, required=True)
-@click.option("--name", "slug_override", default=None,
-              help="Override the output filename slug (default: CID as string).")
+@click.option(
+    "--name",
+    "slug_override",
+    default=None,
+    help="Override the output filename slug (default: CID as string).",
+)
 @out_option
 @output_options
 @pass_state
@@ -574,7 +605,8 @@ def fetch_cmd(
             }
             artifact_path = target_dir / f"{slug}.pubchem-compound.artifact.json"
             artifact_path.write_text(
-                json.dumps(not_found_artifact, indent=2) + "\n", encoding="utf-8",
+                json.dumps(not_found_artifact, indent=2) + "\n",
+                encoding="utf-8",
             )
             sidecar = provenance.Sidecar(
                 tool=TOOL,
@@ -634,7 +666,8 @@ def fetch_cmd(
 
         artifact_path = target_dir / f"{slug}.pubchem-compound.artifact.json"
         artifact_path.write_text(
-            json.dumps(artifact, indent=2) + "\n", encoding="utf-8",
+            json.dumps(artifact, indent=2) + "\n",
+            encoding="utf-8",
         )
 
         # --- Sidecar ---
@@ -706,7 +739,8 @@ def annotate_cmd(
         }
         artifact_path = target_dir / f"{slug}.pubchem-annotation.json"
         artifact_path.write_text(
-            json.dumps(not_found_artifact, indent=2) + "\n", encoding="utf-8",
+            json.dumps(not_found_artifact, indent=2) + "\n",
+            encoding="utf-8",
         )
         sidecar = provenance.Sidecar(
             tool=TOOL,
@@ -764,7 +798,8 @@ def annotate_cmd(
 
     artifact_path = target_dir / f"{slug}.pubchem-annotation.json"
     artifact_path.write_text(
-        json.dumps(artifact, indent=2) + "\n", encoding="utf-8",
+        json.dumps(artifact, indent=2) + "\n",
+        encoding="utf-8",
     )
 
     # --- Sidecar ---
@@ -802,8 +837,7 @@ def annotate_cmd(
         if chembl_data.get("mechanisms"):
             for mech in chembl_data["mechanisms"][:3]:
                 emit.line(
-                    f"    MoA: {mech.get('action_type')} → "
-                    f"{mech.get('target_name')}"
+                    f"    MoA: {mech.get('action_type')} → {mech.get('target_name')}"
                 )
     emit.path(artifact_path, role="annotation")
     emit.path(meta_path, role="sidecar")
@@ -930,8 +964,7 @@ def analyze_cmd(
         if mechanisms:
             for mech in mechanisms[:3]:
                 emit.line(
-                    f"  MoA: {mech.get('action_type')} -> "
-                    f"{mech.get('target_name')}"
+                    f"  MoA: {mech.get('action_type')} -> {mech.get('target_name')}"
                 )
     for record in relays:
         emit.line(f"relay {record['code']}: {record['message']}")

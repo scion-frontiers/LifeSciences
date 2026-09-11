@@ -36,7 +36,6 @@ import click
 
 from ..common import AppState, pass_state
 from ..core import env, envstamp
-from ..core.context import resolve_project
 from ..core.errors import DDEError
 from ..core.thresholds import UNRESOLVED, declared_sets
 from ..core.toolchain import check_integrity
@@ -135,8 +134,14 @@ def _check_toolchain_integrity(report: Report) -> None:
         return
 
     if tc.modified:
-        file_list = ", ".join(tc.modified_files[:10]) if tc.modified_files else "(unknown)"
-        suffix = f" … and {len(tc.modified_files) - 10} more" if len(tc.modified_files) > 10 else ""
+        file_list = (
+            ", ".join(tc.modified_files[:10]) if tc.modified_files else "(unknown)"
+        )
+        suffix = (
+            f" … and {len(tc.modified_files) - 10} more"
+            if len(tc.modified_files) > 10
+            else ""
+        )
         report.add(
             "toolchain integrity",
             WARN,
@@ -566,7 +571,10 @@ _HELP_MARKERS = {
 
 
 def _validate_script_capability(
-    report: Report, binary: str, path: str, remedy: str,
+    report: Report,
+    binary: str,
+    path: str,
+    remedy: str,
 ) -> None:
     """Run ``<script> --help`` and report FAIL if it cannot execute.
 
@@ -705,8 +713,7 @@ def _check_credentials(report: Report) -> None:
             report.add(
                 "credential ALPHAGENOME_API_KEY",
                 WARN,
-                "not set and ADC resolution failed — neither auth path "
-                "available",
+                "not set and ADC resolution failed — neither auth path available",
                 "set ALPHAGENOME_API_KEY for the pip backend, or configure "
                 "ADC for the Vertex backend (gcloud auth application-default "
                 "login, workload identity, etc.)",
@@ -764,8 +771,7 @@ def _check_credentials(report: Report) -> None:
         report.add(
             "credential GCP",
             WARN,
-            f"GOOGLE_APPLICATION_CREDENTIALS not set and ADC resolution "
-            f"failed: {exc}",
+            f"GOOGLE_APPLICATION_CREDENTIALS not set and ADC resolution failed: {exc}",
             "set GOOGLE_APPLICATION_CREDENTIALS or configure ADC "
             "(gcloud auth application-default login, workload identity, etc.)",
             kind=CAPABILITY,
@@ -773,7 +779,7 @@ def _check_credentials(report: Report) -> None:
 
 
 def _check_thresholds(report: Report) -> None:
-    for name, tset in sorted(declared_sets().items()):
+    for _name, tset in sorted(declared_sets().items()):
         unresolved = [k for k, v in tset.values.items() if v is UNRESOLVED]
         if unresolved:
             report.add(
@@ -1166,7 +1172,10 @@ def _check_hypothesis_strategies(report: Report) -> None:
             continue
         try:
             result = subprocess.run(
-                [path, "--help"], capture_output=True, text=True, timeout=10,
+                [path, "--help"],
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
         except (OSError, subprocess.TimeoutExpired):
             missing.append(tool)
@@ -1288,6 +1297,7 @@ def _check_phase_two_contract(report: Report) -> None:
 #: decision made when hypex was unavailable is structurally
 #: distinguishable from one made with full tooling — no prose required.
 
+
 def get_capability_snapshot() -> dict[str, str]:
     """Return a dict mapping capability names to status strings.
 
@@ -1320,7 +1330,9 @@ def get_capability_snapshot() -> dict[str, str]:
                     capture_output=True,
                     timeout=10,
                 )
-                snapshot[binary] = "available" if result.returncode == 0 else "unavailable"
+                snapshot[binary] = (
+                    "available" if result.returncode == 0 else "unavailable"
+                )
             except (subprocess.TimeoutExpired, OSError):
                 snapshot[binary] = "unavailable"
         else:
@@ -1346,6 +1358,7 @@ def get_capability_snapshot() -> dict[str, str]:
     else:
         try:
             import google.auth
+
             google.auth.default()
             snapshot["alphagenome_credential"] = "available"
         except Exception:
@@ -1357,6 +1370,7 @@ def get_capability_snapshot() -> dict[str, str]:
     else:
         try:
             import google.auth
+
             google.auth.default()
             snapshot["gcp_credential"] = "available"
         except Exception:

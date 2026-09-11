@@ -35,8 +35,7 @@ import click
 # Suppress dirty-source warnings during test import.
 os.environ["DDE_NO_DIRTY_WARNING"] = "1"
 
-from dde.cli import cli  # noqa: E402
-
+from dde.cli import cli
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -177,8 +176,7 @@ class TestCompoundAnalyzeSmiles(unittest.TestCase):
         self.assertIsNotNone(smiles_param, "compound analyze has no smiles param")
         self.assertFalse(
             smiles_param.required,
-            "compound analyze SMILES should not be required "
-            "(--name can substitute)",
+            "compound analyze SMILES should not be required (--name can substitute)",
         )
 
     def test_smiles_positional_still_accepted(self):
@@ -192,7 +190,8 @@ class TestCompoundAnalyzeSmiles(unittest.TestCase):
                 break
         self.assertIsNotNone(smiles_param)
         self.assertIsInstance(
-            smiles_param, click.Argument,
+            smiles_param,
+            click.Argument,
             "smiles should still be a positional argument",
         )
 
@@ -218,7 +217,8 @@ class TestDockingAnalyzeVariadic(unittest.TestCase):
             "docking analyze should have a 'paths' parameter (variadic)",
         )
         self.assertEqual(
-            paths_param.nargs, -1,
+            paths_param.nargs,
+            -1,
             "docking analyze paths should accept variable number of args",
         )
 

@@ -46,9 +46,17 @@ from ..core.errors import DependencyError
 from ..core.output import Emitter
 from ..core.pipeline import (
     name_slug as _name_slug,
+)
+from ..core.pipeline import (
     prepare_3d as _prepare_3d,
+)
+from ..core.pipeline import (
     prepare_ligand_pdbqt as _prepare_ligand_pdbqt,
+)
+from ..core.pipeline import (
     run_docking as _run_docking_impl,
+)
+from ..core.pipeline import (
     validate_smiles as _validate_smiles,
 )
 
@@ -98,7 +106,11 @@ def _run_docking(
 
 
 def _predict_admet(
-    mol: Any, canonical: str, Chem: Any, Descriptors: Any, rdMolDescriptors: Any,
+    mol: Any,
+    canonical: str,
+    Chem: Any,
+    Descriptors: Any,
+    rdMolDescriptors: Any,
 ) -> dict[str, Any]:
     """Run ADMET predictions on a molecule, following admet.py logic.
 
@@ -152,7 +164,11 @@ def _predict_admet(
     aromatic_atoms = sum(1 for atom in mol.GetAtoms() if atom.GetIsAromatic())
     aromatic_proportion = aromatic_atoms / heavy_atoms if heavy_atoms > 0 else 0.0
     predicted_logs = round(
-        0.16 - 0.63 * logp - 0.0062 * mw + 0.066 * rotatable_bonds - 0.74 * aromatic_proportion,
+        0.16
+        - 0.63 * logp
+        - 0.0062 * mw
+        + 0.066 * rotatable_bonds
+        - 0.74 * aromatic_proportion,
         3,
     )
     if predicted_logs > -1:
@@ -310,6 +326,7 @@ def evaluate_cmd(
         analogs_path = state.project().root / analogs_path
     if not analogs_path.is_file():
         from ..core.errors import ArtifactError
+
         raise ArtifactError(
             f"analogs JSON not found: {analogs_path}",
             detail="relative paths resolve against the project root",
@@ -319,6 +336,7 @@ def evaluate_cmd(
         analogs_raw = json.loads(analogs_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         from ..core.errors import ArtifactError
+
         raise ArtifactError(
             f"invalid JSON in {analogs_path.name}: {exc}",
             remedy="check the JSON syntax in the analogs file",
@@ -326,6 +344,7 @@ def evaluate_cmd(
 
     if not isinstance(analogs_raw, list):
         from ..core.errors import UsageError
+
         raise UsageError(
             "analogs JSON must be a list of objects",
             detail=f"got {type(analogs_raw).__name__}",
@@ -351,6 +370,7 @@ def evaluate_cmd(
 
     if not analogs:
         from ..core.errors import UsageError
+
         raise UsageError(
             "no valid analog entries found in the input file",
             remedy="each entry must be an object with at least a 'smiles' field",
@@ -402,6 +422,7 @@ def evaluate_cmd(
 
     # --- RDKit version for provenance ---
     from rdkit import rdBase
+
     rdkit_version = rdBase.rdkitVersion
 
     # --- run the pipeline for each analog ---
@@ -478,12 +499,18 @@ def evaluate_cmd(
                         ligand_pdbqt = Path(tmpdir) / f"{identifier}.pdbqt"
                         if _prepare_ligand_pdbqt(sdf_path, ligand_pdbqt):
                             dock_result = _run_docking(
-                                ligand_pdbqt, receptor_path, pocket_path,
+                                ligand_pdbqt,
+                                receptor_path,
+                                pocket_path,
                             )
                             if dock_result is not None:
                                 analog_result["pipeline_status"]["dock"] = "passed"
-                                analog_result["scores"]["docking_score"] = dock_result["best_score"]
-                                analog_result["scores"]["docking_n_poses"] = dock_result["n_poses"]
+                                analog_result["scores"]["docking_score"] = dock_result[
+                                    "best_score"
+                                ]
+                                analog_result["scores"]["docking_n_poses"] = (
+                                    dock_result["n_poses"]
+                                )
                             else:
                                 analog_result["pipeline_status"]["dock"] = "failed"
                         else:
@@ -504,7 +531,11 @@ def evaluate_cmd(
             # Step 4: ADMET predict
             try:
                 admet_result = _predict_admet(
-                    mol, canonical, Chem, Descriptors, rdMolDescriptors,
+                    mol,
+                    canonical,
+                    Chem,
+                    Descriptors,
+                    rdMolDescriptors,
                 )
                 analog_result["pipeline_status"]["admet-predict"] = "passed"
                 analog_result["scores"]["admet"] = admet_result
@@ -526,10 +557,7 @@ def evaluate_cmd(
 
     # --- Step 5: Rank ---
     # Separate successful results from failures for ranking
-    rankable = [
-        r for r in results
-        if r["pipeline_status"].get("validate") == "passed"
-    ]
+    rankable = [r for r in results if r["pipeline_status"].get("validate") == "passed"]
 
     if mpo_weights and rankable:
         # MPO ranking
@@ -537,7 +565,9 @@ def evaluate_cmd(
             docking_score = r["scores"].get("docking_score")
             admet_data = r["scores"].get("admet", {})
             r["scores"]["mpo_score"] = _compute_mpo_score(
-                docking_score, admet_data, mpo_weights,
+                docking_score,
+                admet_data,
+                mpo_weights,
             )
         rankable.sort(key=lambda r: r["scores"].get("mpo_score", 0), reverse=True)
         ranking_method = "mpo"
@@ -661,8 +691,11 @@ def evaluate_cmd(
 
         # Note pipeline failures
         failed_steps = [
-            step for step, status in r.get("pipeline_status", {}).items()
-            if status == "failed" and not step.endswith("_detail") and not step.endswith("_reason")
+            step
+            for step, status in r.get("pipeline_status", {}).items()
+            if status == "failed"
+            and not step.endswith("_detail")
+            and not step.endswith("_reason")
         ]
         if failed_steps:
             parts.append(f"[failed: {','.join(failed_steps)}]")

@@ -30,9 +30,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from dde.commands.doctor import OK, WARN, Report, _check_toolchain_integrity
 from dde.core import toolchain
 from dde.core.provenance import Sidecar
-from dde.commands.doctor import Report, OK, WARN, _check_toolchain_integrity
 
 
 class _ResetCacheMixin:
@@ -65,9 +65,7 @@ class TestCheckIntegrityClean(_ResetCacheMixin, unittest.TestCase):
         self.assertEqual(state.modified_files, [])
 
     @mock.patch("dde.core.toolchain._git_modified_files", return_value=[])
-    @mock.patch(
-        "dde.core.toolchain._git_describe", return_value="v0.3.0-12-gabcdef1"
-    )
+    @mock.patch("dde.core.toolchain._git_describe", return_value="v0.3.0-12-gabcdef1")
     @mock.patch("dde.core.toolchain._find_git_root", return_value=Path("/fake/repo"))
     def test_ahead_not_dirty(self, _root, _describe, _files):
         state = toolchain.check_integrity()
@@ -269,6 +267,7 @@ class TestCLIDirtyWarning(_ResetCacheMixin, unittest.TestCase):
     def test_warning_emitted(self, _mock):
         """The cli group callback prints a warning to stderr on dirty source."""
         from click.testing import CliRunner
+
         from dde.cli import cli
 
         runner = CliRunner(mix_stderr=False)
@@ -279,13 +278,12 @@ class TestCLIDirtyWarning(_ResetCacheMixin, unittest.TestCase):
 
     @mock.patch(
         "dde.cli.check_integrity",
-        return_value=toolchain.ToolchainState(
-            "v0.3.0-dirty", True, ["a.py"]
-        ),
+        return_value=toolchain.ToolchainState("v0.3.0-dirty", True, ["a.py"]),
     )
     def test_warning_suppressed(self, _mock):
         """DDE_NO_DIRTY_WARNING=1 suppresses the stderr warning."""
         from click.testing import CliRunner
+
         from dde.cli import cli
 
         runner = CliRunner(mix_stderr=False)
@@ -301,6 +299,7 @@ class TestCLIDirtyWarning(_ResetCacheMixin, unittest.TestCase):
     def test_no_warning_when_clean(self, _mock):
         """No warning when source is clean."""
         from click.testing import CliRunner
+
         from dde.cli import cli
 
         runner = CliRunner(mix_stderr=False)

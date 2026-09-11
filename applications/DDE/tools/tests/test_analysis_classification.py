@@ -30,22 +30,17 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
-import pytest
-
 TOOLS_DIR = Path(__file__).resolve().parent.parent
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 from dde.commands.validate import (
-    _build_sidecar_index,
     _check_provenance_valid,
     _check_unrecognized_json,
     _is_analysis,
-    _is_sidecar,
 )
 from dde.core.context import ARTIFACT_DIRS
 from dde.core.provenance import sha256_file
-
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
@@ -120,14 +115,17 @@ class TestIsAnalysisContent:
     def test_mmp_analysis_with_record_type(self, tmp_path: Path) -> None:
         """A .mmp-analysis.json with record_type='analysis' is recognised."""
         path = tmp_path / "protein.mmp-analysis.json"
-        _write_json(path, {
-            "record_type": "analysis",
-            "source": "protein.pdb",
-            "threshold_set": "default",
-            "thresholds_applied": {},
-            "metrics": {},
-            "assessment": {},
-        })
+        _write_json(
+            path,
+            {
+                "record_type": "analysis",
+                "source": "protein.pdb",
+                "threshold_set": "default",
+                "thresholds_applied": {},
+                "metrics": {},
+                "assessment": {},
+            },
+        )
         assert _is_analysis(path.name, path) is True
 
     def test_custom_suffix_with_record_type(self, tmp_path: Path) -> None:
@@ -201,14 +199,17 @@ class TestUnrecognizedJson:
 
         # Write a standard analysis record.
         analysis = art_dir / "protein.analysis.json"
-        _write_json(analysis, {
-            "record_type": "analysis",
-            "source": "protein.pdb",
-            "threshold_set": "default",
-            "thresholds_applied": {},
-            "metrics": {},
-            "assessment": {},
-        })
+        _write_json(
+            analysis,
+            {
+                "record_type": "analysis",
+                "source": "protein.pdb",
+                "threshold_set": "default",
+                "thresholds_applied": {},
+                "metrics": {},
+                "assessment": {},
+            },
+        )
 
         deliverables = {"layer_0_classes": ["structures"]}
         result = _check_unrecognized_json(project, deliverables)
@@ -220,14 +221,17 @@ class TestUnrecognizedJson:
         art_dir = project / ARTIFACT_DIRS["structures"]
 
         analysis = art_dir / "protein.mmp-analysis.json"
-        _write_json(analysis, {
-            "record_type": "analysis",
-            "source": "protein.pdb",
-            "threshold_set": "default",
-            "thresholds_applied": {},
-            "metrics": {},
-            "assessment": {},
-        })
+        _write_json(
+            analysis,
+            {
+                "record_type": "analysis",
+                "source": "protein.pdb",
+                "threshold_set": "default",
+                "thresholds_applied": {},
+                "metrics": {},
+                "assessment": {},
+            },
+        )
 
         deliverables = {"layer_0_classes": ["structures"]}
         result = _check_unrecognized_json(project, deliverables)
@@ -305,10 +309,16 @@ class TestWriteAnalysisRecordType:
         source_file.write_text("ATOM ...", encoding="utf-8")
 
         with patch("dde.core.provenance.check_integrity") as mock_tc:
-            mock_tc.return_value = type("TC", (), {
-                "integrity": "ok", "modified": False,
-            })()
+            mock_tc.return_value = type(
+                "TC",
+                (),
+                {
+                    "integrity": "ok",
+                    "modified": False,
+                },
+            )()
             from dde.core.provenance import write_analysis
+
             write_analysis(
                 path=out,
                 source=str(source_file),
@@ -328,10 +338,16 @@ class TestWriteAnalysisRecordType:
         source_file.write_text("ATOM ...", encoding="utf-8")
 
         with patch("dde.core.provenance.check_integrity") as mock_tc:
-            mock_tc.return_value = type("TC", (), {
-                "integrity": "ok", "modified": False,
-            })()
+            mock_tc.return_value = type(
+                "TC",
+                (),
+                {
+                    "integrity": "ok",
+                    "modified": False,
+                },
+            )()
             from dde.core.provenance import write_analysis
+
             write_analysis(
                 path=out,
                 source=str(source_file),

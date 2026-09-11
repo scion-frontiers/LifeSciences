@@ -41,8 +41,8 @@ from __future__ import annotations
 import difflib
 import hashlib
 import json
-import re
 import platform
+import re
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -403,7 +403,9 @@ def read_state(home: Path) -> EnvState:
     recorded = None
     if manifest_path.is_file():
         recorded = manifest_path.read_text(encoding="utf-8")
-    return EnvState(home=home, stamped=stamped, recorded=recorded, live=build_manifest(home))
+    return EnvState(
+        home=home, stamped=stamped, recorded=recorded, live=build_manifest(home)
+    )
 
 
 def diff_manifests(before: str, after: str) -> list[str]:
@@ -484,21 +486,23 @@ def read_host_requirements_stamped(home: Path) -> str | None:
     return path.read_text(encoding="utf-8")
 
 
-def diff_host_requirements(
-    before: str | None, after: str | None
-) -> dict[str, object]:
+def diff_host_requirements(before: str | None, after: str | None) -> dict[str, object]:
     """Compare two host-requirements texts.
 
     Returns a dict with ``added``, ``removed``, ``changed``, and
     ``before_count`` / ``after_count``.  When *before* is ``None``
     (no prior snapshot), everything in *after* is reported as added.
     """
-    before_entries = set() if before is None else {
-        (cat, name) for cat, name, _ in parse_host_requirements(before)
-    }
-    after_entries = set() if after is None else {
-        (cat, name) for cat, name, _ in parse_host_requirements(after)
-    }
+    before_entries = (
+        set()
+        if before is None
+        else {(cat, name) for cat, name, _ in parse_host_requirements(before)}
+    )
+    after_entries = (
+        set()
+        if after is None
+        else {(cat, name) for cat, name, _ in parse_host_requirements(after)}
+    )
     added = sorted(after_entries - before_entries)
     removed = sorted(before_entries - after_entries)
     return {
@@ -531,7 +535,9 @@ def stamp(home: Path, note: str | None = None) -> dict[str, object]:
 
     archive = home / ARCHIVE
     archive.mkdir(parents=True, exist_ok=True)
-    (archive / f"{version.replace(':', '-')}.txt").write_text(manifest, encoding="utf-8")
+    (archive / f"{version.replace(':', '-')}.txt").write_text(
+        manifest, encoding="utf-8"
+    )
 
     # Written on every stamp, including an unchanged one: the source
     # tree can move without the environment moving, and the question

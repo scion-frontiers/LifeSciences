@@ -34,8 +34,9 @@ from __future__ import annotations
 import json
 import shutil
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import click
 
@@ -88,7 +89,8 @@ def _require_rdkit():
 
 
 def _iter_library(
-    library_path: Path, Chem: Any,
+    library_path: Path,
+    Chem: Any,
 ) -> Iterator[tuple[str, Any | None]]:
     """Yield (name, mol) pairs from a multi-molecule SDF file.
 
@@ -121,10 +123,7 @@ def _has_3d_coords(mol: Any) -> bool:
         conf = mol.GetConformer()
     except ValueError:
         return False
-    return any(
-        abs(conf.GetAtomPosition(i).z) > 0.01
-        for i in range(mol.GetNumAtoms())
-    )
+    return any(abs(conf.GetAtomPosition(i).z) > 0.01 for i in range(mol.GetNumAtoms()))
 
 
 # ---------------------------------------------------------------------------
@@ -316,6 +315,7 @@ def run_cmd(
 
     # --- RDKit version for provenance ---
     from rdkit import rdBase
+
     rdkit_version = rdBase.rdkitVersion
 
     # --- load pre-filter thresholds if requested ---
@@ -327,8 +327,7 @@ def run_cmd(
 
     # --- iterate library and process each compound ---
     click.echo(
-        f"Screening compounds from {library_path.name} against "
-        f"{receptor_path.name}",
+        f"Screening compounds from {library_path.name} against {receptor_path.name}",
         err=True,
     )
 
@@ -397,7 +396,10 @@ def run_cmd(
         # --- Pre-filter (if enabled) ---
         if pre_filter and prefilter_thresholds is not None:
             passes, reason = _check_prefilter(
-                mol, Descriptors, rdMolDescriptors, prefilter_thresholds,
+                mol,
+                Descriptors,
+                rdMolDescriptors,
+                prefilter_thresholds,
             )
             if not passes:
                 compound_result["pipeline_status"] = "prefiltered"
@@ -501,9 +503,7 @@ def run_cmd(
             # Write poses to target directory
             poses_filename = f"{identifier}.poses.pdbqt"
             poses_dest = target_dir / poses_filename
-            poses_dest.write_text(
-                dock_result["poses_text"], encoding="utf-8"
-            )
+            poses_dest.write_text(dock_result["poses_text"], encoding="utf-8")
             compound_result["poses_file"] = poses_filename
 
         results.append(compound_result)
@@ -586,9 +586,7 @@ def run_cmd(
     meta_path = sidecar.write(target_dir / "screen-results.meta.json")
 
     # --- CLI output: ranked summary ---
-    emit.line(
-        f"Screen complete: {counts['docked']}/{counts['input']} compounds docked"
-    )
+    emit.line(f"Screen complete: {counts['docked']}/{counts['input']} compounds docked")
     if counts["prefiltered"] > 0:
         emit.line(f"  Pre-filtered: {counts['prefiltered']}")
     if counts["parse_failed"] > 0:
@@ -608,14 +606,12 @@ def run_cmd(
     for r in display_results:
         score_str = f"{r['best_score']:.1f}" if r["best_score"] is not None else "N/A"
         emit.line(
-            f"  #{r['rank']}  {r['name']}  score={score_str}  "
-            f"poses={r['n_poses']}"
+            f"  #{r['rank']}  {r['name']}  score={score_str}  poses={r['n_poses']}"
         )
 
     if top_n is not None and len(ranked_results) > top_n:
         emit.line(
-            f"  ... and {len(ranked_results) - top_n} more "
-            f"(all in {results_filename})"
+            f"  ... and {len(ranked_results) - top_n} more (all in {results_filename})"
         )
 
     if sidecar.relays:

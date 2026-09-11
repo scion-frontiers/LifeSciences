@@ -252,10 +252,7 @@ def _safe_write_artifact(path: Path, content: str, *, overwrite: bool) -> bool:
     new_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
 
     if existing_hash == new_hash:
-        warn(
-            f"artifact already exists with identical content, skipping: "
-            f"{path.name}"
-        )
+        warn(f"artifact already exists with identical content, skipping: {path.name}")
         return False
 
     raise Refusal(
@@ -369,7 +366,7 @@ def descriptors_cmd(
     emit = Emitter(as_json=as_json, quiet=quiet)
     target_dir = state.project().artifact_dir(ARTIFACT_CLASS, out)
 
-    Chem, Descriptors, rdMolDescriptors, _, _ = _require_rdkit()
+    _Chem, Descriptors, rdMolDescriptors, _, _ = _require_rdkit()
     mol, canonical, fragment_notes, _ = _parse_smiles(smiles)
     slug = _slug(name) if name else _slug(canonical)
 
@@ -455,10 +452,12 @@ def alerts_cmd(
 
     pains_hits: list[dict[str, str]] = []
     for entry in pains_catalog.GetMatches(mol):
-        pains_hits.append({
-            "pattern_name": entry.GetDescription(),
-            "source": "PAINS",
-        })
+        pains_hits.append(
+            {
+                "pattern_name": entry.GetDescription(),
+                "source": "PAINS",
+            }
+        )
 
     # --- Brenk filters (built-in catalog) ---
     brenk_params = FilterCatalogParams()
@@ -467,21 +466,25 @@ def alerts_cmd(
 
     brenk_hits: list[dict[str, str]] = []
     for entry in brenk_catalog.GetMatches(mol):
-        brenk_hits.append({
-            "pattern_name": entry.GetDescription(),
-            "source": "Brenk",
-        })
+        brenk_hits.append(
+            {
+                "pattern_name": entry.GetDescription(),
+                "source": "Brenk",
+            }
+        )
 
     # --- Aggregator patterns (custom SMARTS; no built-in catalog) ---
     aggregator_hits: list[dict[str, str]] = []
     for agg_name, smarts in _AGGREGATOR_PATTERNS:
         pattern = Chem.MolFromSmarts(smarts)
         if pattern is not None and mol.HasSubstructMatch(pattern):
-            aggregator_hits.append({
-                "pattern_name": agg_name,
-                "smarts": smarts,
-                "source": "aggregator",
-            })
+            aggregator_hits.append(
+                {
+                    "pattern_name": agg_name,
+                    "smarts": smarts,
+                    "source": "aggregator",
+                }
+            )
 
     all_hits = pains_hits + brenk_hits + aggregator_hits
 
@@ -692,7 +695,9 @@ def sa_score_cmd(
     if name:
         sidecar.note("compound_name", name)
     sidecar.note("rdkit_version", rdkit.__version__)
-    sidecar.note("sa_score_source", "rdkit.Contrib.SA_Score.sascorer (Ertl & Schuffenhauer 2009)")
+    sidecar.note(
+        "sa_score_source", "rdkit.Contrib.SA_Score.sascorer (Ertl & Schuffenhauer 2009)"
+    )
 
     score = round(sascorer.calculateScore(mol), 2)
 
@@ -766,7 +771,7 @@ def profile_cmd(
                 as_json=as_json,
                 quiet=quiet,
             )
-        except Exception as exc:
+        except Exception:
             if not quiet and not as_json:
                 click.echo(f"--- {step_name} FAILED ---")
             raise
@@ -786,8 +791,12 @@ _LIPINSKI_CHECKS: list[tuple[str, str, str, str]] = [
 
 #: Descriptor-to-threshold mappings for Veber criteria.
 _VEBER_CHECKS: list[tuple[str, str, str, str]] = [
-    ("rotatable_bonds", "rotatable_bonds", "max_rotatable_bonds",
-     "Veber et al., J Med Chem 2002"),
+    (
+        "rotatable_bonds",
+        "rotatable_bonds",
+        "max_rotatable_bonds",
+        "Veber et al., J Med Chem 2002",
+    ),
     ("TPSA", "tpsa", "max_tpsa", "Veber et al., J Med Chem 2002"),
 ]
 
@@ -846,7 +855,7 @@ def analyze_cmd(
             f"no descriptors found for {smiles!r} under {source_dir}",
             detail=f"tried slug {slug!r}; if you passed a non-canonical SMILES, "
             "pass the canonical form printed by `dde compound validate`",
-            remedy=f"run `dde compound descriptors` first, then pass the "
+            remedy="run `dde compound descriptors` first, then pass the "
             "canonical SMILES it printed",
         )
     desc_doc = provenance.read_json(desc_path, "descriptors record")
@@ -893,12 +902,14 @@ def analyze_cmd(
         value = descriptors.get(desc_key)
         limit = desc_thresholds.get(thresh_key)
         if value is not None and value > limit:
-            lipinski_violations.append({
-                "rule": rule_name,
-                "value": value,
-                "limit": limit,
-                "source": source,
-            })
+            lipinski_violations.append(
+                {
+                    "rule": rule_name,
+                    "value": value,
+                    "limit": limit,
+                    "source": source,
+                }
+            )
 
     # --- check Veber criteria ---
     veber_violations: list[dict[str, Any]] = []
@@ -906,12 +917,14 @@ def analyze_cmd(
         value = descriptors.get(desc_key)
         limit = desc_thresholds.get(thresh_key)
         if value is not None and value > limit:
-            veber_violations.append({
-                "rule": rule_name,
-                "value": value,
-                "limit": limit,
-                "source": source,
-            })
+            veber_violations.append(
+                {
+                    "rule": rule_name,
+                    "value": value,
+                    "limit": limit,
+                    "source": source,
+                }
+            )
 
     # --- check alert thresholds ---
     pains_hits = alerts_doc.get("pains_hits", [])
@@ -920,23 +933,29 @@ def analyze_cmd(
 
     alert_violations: list[dict[str, Any]] = []
     if len(pains_hits) > alert_thresholds.get("max_pains_hits"):
-        alert_violations.append({
-            "type": "PAINS",
-            "count": len(pains_hits),
-            "limit": alert_thresholds.get("max_pains_hits"),
-        })
+        alert_violations.append(
+            {
+                "type": "PAINS",
+                "count": len(pains_hits),
+                "limit": alert_thresholds.get("max_pains_hits"),
+            }
+        )
     if len(brenk_hits) > alert_thresholds.get("max_brenk_hits"):
-        alert_violations.append({
-            "type": "Brenk",
-            "count": len(brenk_hits),
-            "limit": alert_thresholds.get("max_brenk_hits"),
-        })
+        alert_violations.append(
+            {
+                "type": "Brenk",
+                "count": len(brenk_hits),
+                "limit": alert_thresholds.get("max_brenk_hits"),
+            }
+        )
     if len(aggregator_hits) > alert_thresholds.get("max_aggregator_hits"):
-        alert_violations.append({
-            "type": "aggregator",
-            "count": len(aggregator_hits),
-            "limit": alert_thresholds.get("max_aggregator_hits"),
-        })
+        alert_violations.append(
+            {
+                "type": "aggregator",
+                "count": len(aggregator_hits),
+                "limit": alert_thresholds.get("max_aggregator_hits"),
+            }
+        )
 
     # --- check SA-score threshold (when available) ---
     sa_score_violation: dict[str, Any] | None = None
@@ -977,17 +996,16 @@ def analyze_cmd(
         verdict = "rule-violations"
         all_v = lipinski_violations + veber_violations
         if sa_score_violation:
-            all_v = all_v + [sa_score_violation]
+            all_v = [*all_v, sa_score_violation]
         rule_names = ", ".join(v["rule"] for v in all_v)
         statement = (
-            f"{canonical} violates {len(all_v)} drug-likeness rule(s): "
-            f"{rule_names}."
+            f"{canonical} violates {len(all_v)} drug-likeness rule(s): {rule_names}."
         )
     else:
         verdict = "rule-violations-and-alerts"
         all_v = lipinski_violations + veber_violations
         if sa_score_violation:
-            all_v = all_v + [sa_score_violation]
+            all_v = [*all_v, sa_score_violation]
         rule_names = ", ".join(v["rule"] for v in all_v)
         alert_names = ", ".join(v["type"] for v in alert_violations)
         statement = (
@@ -1006,7 +1024,9 @@ def analyze_cmd(
 
     # --- conditional relay: alerts_not_toxicology ---
     # Fires only when alerts are clean, per the relay code registration.
-    alerts_clean = alerts_doc.get("clean", len(pains_hits) + len(brenk_hits) + len(aggregator_hits) == 0)
+    alerts_clean = alerts_doc.get(
+        "clean", len(pains_hits) + len(brenk_hits) + len(aggregator_hits) == 0
+    )
     if alerts_clean:
         relays.append(
             provenance.relay(
@@ -1072,9 +1092,7 @@ def analyze_cmd(
         combined_tag = f"{combined_tag}+{sa_thresholds.tag}"
         thresholds_applied.update(sa_thresholds.applied())
         threshold_sources.update(sa_thresholds.sources())
-        threshold_provenance = (
-            f"{threshold_provenance}; {sa_thresholds.provenance}"
-        )
+        threshold_provenance = f"{threshold_provenance}; {sa_thresholds.provenance}"
         unresolved = unresolved + sa_thresholds.unresolved()
 
     analysis_path = target_dir / f"{slug}.analysis.json"

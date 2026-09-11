@@ -26,7 +26,6 @@ Asserts:
 from __future__ import annotations
 
 import ast
-import os
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -37,9 +36,7 @@ with patch.dict("sys.modules", {"requests": MagicMock(), "click": MagicMock()}):
 
 
 # Root of the commands package, relative to the repository layout.
-_COMMANDS_DIR = (
-    Path(__file__).resolve().parent.parent / "dde" / "commands"
-)
+_COMMANDS_DIR = Path(__file__).resolve().parent.parent / "dde" / "commands"
 
 
 class TestHostQPSTable(unittest.TestCase):
@@ -112,7 +109,9 @@ class TestNoLocalQPSConstants(unittest.TestCase):
                                 f"{py_file.name}:{node.lineno}: {target.id}"
                             )
                 # Annotated assignments: X_QPS: float = ...
-                if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                if isinstance(node, ast.AnnAssign) and isinstance(
+                    node.target, ast.Name
+                ):
                     if node.target.id.endswith("_QPS"):
                         violations.append(
                             f"{py_file.name}:{node.lineno}: {node.target.id}"
@@ -211,7 +210,11 @@ class TestHostnameExistence(unittest.TestCase):
                 else:
                     continue
                 # Extract the first positional argument if it's a string literal
-                if node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+                if (
+                    node.args
+                    and isinstance(node.args[0], ast.Constant)
+                    and isinstance(node.args[0].value, str)
+                ):
                     hostname = node.args[0].value
                     seen_hosts.add(hostname)
                     if hostname not in HOST_QPS:

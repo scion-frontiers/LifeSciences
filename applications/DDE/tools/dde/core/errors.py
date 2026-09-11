@@ -33,7 +33,9 @@ class DDEError(Exception):
 
     exit_code = 1
 
-    def __init__(self, message: str, *, remedy: str | None = None, detail: str | None = None):
+    def __init__(
+        self, message: str, *, remedy: str | None = None, detail: str | None = None
+    ):
         super().__init__(message)
         self.message = message
         self.remedy = remedy

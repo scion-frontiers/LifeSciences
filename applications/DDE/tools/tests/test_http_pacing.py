@@ -69,8 +69,10 @@ class TestPaceDisk(unittest.TestCase):
         # wait = 1.0 - (1000.3 - 1000.0) = 0.7 → sleep(0.7)
         time_values = iter([1000.0, 1000.0, 1000.3, 1000.3])
 
-        with patch("time.time", side_effect=lambda: next(time_values)), \
-             patch("time.sleep") as mock_sleep:
+        with (
+            patch("time.time", side_effect=lambda: next(time_values)),
+            patch("time.sleep") as mock_sleep,
+        ):
             _pace_disk(host, interval)
             mock_sleep.assert_not_called()
 
@@ -94,8 +96,10 @@ class TestPaceDisk(unittest.TestCase):
         # Capped wait  = min(501.0, 1.0) = 1.0
         time_values = iter([1000.0, 1000.0, 500.0, 500.0])
 
-        with patch("time.time", side_effect=lambda: next(time_values)), \
-             patch("time.sleep") as mock_sleep:
+        with (
+            patch("time.time", side_effect=lambda: next(time_values)),
+            patch("time.sleep") as mock_sleep,
+        ):
             _pace_disk(host, interval)
 
             _pace_disk(host, interval)
@@ -119,8 +123,7 @@ class TestPaceDisk(unittest.TestCase):
 
         # now=2000.0, previous falls back to 0.0
         # wait = 1.0 - (2000.0 - 0.0) < 0 → no sleep
-        with patch("time.time", return_value=2000.0), \
-             patch("time.sleep") as mock_sleep:
+        with patch("time.time", return_value=2000.0), patch("time.sleep") as mock_sleep:
             _pace_disk(host, interval)  # Should not raise
             mock_sleep.assert_not_called()
 
@@ -149,8 +152,7 @@ class TestPaceFallback(unittest.TestCase):
 
         url = "https://api.example.com/resource"
 
-        with patch("time.sleep"), \
-             patch("time.monotonic", return_value=9999.0):
+        with patch("time.sleep"), patch("time.monotonic", return_value=9999.0):
             _pace(url, qps=1.0)
 
         # _pace_memory should have recorded the host.
@@ -167,8 +169,10 @@ class TestPaceFallback(unittest.TestCase):
 
         mono_values = iter([100.0, 100.0, 100.4, 100.4])
 
-        with patch("time.monotonic", side_effect=lambda: next(mono_values)), \
-             patch("time.sleep") as mock_sleep:
+        with (
+            patch("time.monotonic", side_effect=lambda: next(mono_values)),
+            patch("time.sleep") as mock_sleep,
+        ):
             # First call — no previous entry, no sleep.
             _pace_memory(host, interval)
             mock_sleep.assert_not_called()
@@ -184,8 +188,10 @@ class TestPaceFallback(unittest.TestCase):
     # ------------------------------------------------------------------
     def test_pace_zero_qps_skips(self):
         """``_pace`` with qps<=0 should return immediately."""
-        with patch.object(http, "_pace_disk") as mock_disk, \
-             patch.object(http, "_pace_memory") as mock_mem:
+        with (
+            patch.object(http, "_pace_disk") as mock_disk,
+            patch.object(http, "_pace_memory") as mock_mem,
+        ):
             _pace("https://example.com", qps=0)
             mock_disk.assert_not_called()
             mock_mem.assert_not_called()
@@ -257,7 +263,7 @@ class TestResolvePaceDir(unittest.TestCase):
         with patch.dict(os.environ, env_clean, clear=True):
             with patch.object(Path, "mkdir", _always_fail):
                 # Should NOT raise — falls through to memory tier.
-                path, tier = _resolve_pace_dir()
+                _path, tier = _resolve_pace_dir()
         self.assertEqual(tier, "memory")
 
     # ------------------------------------------------------------------
@@ -268,8 +274,10 @@ class TestResolvePaceDir(unittest.TestCase):
         orig_tier = http._PACE_TIER
         try:
             http._PACE_TIER = "memory"
-            with patch.object(http, "_pace_disk") as mock_disk, \
-                 patch.object(http, "_pace_memory") as mock_mem:
+            with (
+                patch.object(http, "_pace_disk") as mock_disk,
+                patch.object(http, "_pace_memory") as mock_mem,
+            ):
                 _pace("https://example.com/foo", qps=1.0)
                 mock_disk.assert_not_called()
                 mock_mem.assert_called_once()

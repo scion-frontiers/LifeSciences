@@ -24,17 +24,16 @@ Covers:
 
 from __future__ import annotations
 
-import textwrap
 import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 from unittest import mock
 
 from dde.commands.docking import (
-    _resolve_highest_occupancy_altloc,
     _convert_receptor_to_pdbqt,
+    _resolve_highest_occupancy_altloc,
 )
-
 
 # ---------------------------------------------------------------------------
 # Minimal PDB fixtures with altlocs
@@ -122,15 +121,15 @@ class TestConvertReceptorAltloc(unittest.TestCase):
     def test_passes_default_altloc_a(self, mock_require, mock_run):
         """Default altloc 'A' is passed as --default_altloc A."""
         mock_require.return_value = "mk_prepare_receptor.py"
-        mock_run.return_value = mock.Mock(
-            returncode=0, stderr="", stdout=""
-        )
+        mock_run.return_value = mock.Mock(returncode=0, stderr="", stdout="")
 
         structure = Path("/tmp/test.pdb")
         output = Path("/tmp/test.pdbqt")
         # Create a fake output file so the file-existence check passes.
-        with mock.patch.object(Path, "is_file", return_value=True), \
-             mock.patch.object(Path, "stat") as mock_stat:
+        with (
+            mock.patch.object(Path, "is_file", return_value=True),
+            mock.patch.object(Path, "stat") as mock_stat,
+        ):
             mock_stat.return_value = mock.Mock(st_size=100)
             _convert_receptor_to_pdbqt(structure, output, altloc="A")
 
@@ -145,14 +144,14 @@ class TestConvertReceptorAltloc(unittest.TestCase):
     def test_passes_default_altloc_b(self, mock_require, mock_run):
         """Altloc 'B' is passed as --default_altloc B."""
         mock_require.return_value = "mk_prepare_receptor.py"
-        mock_run.return_value = mock.Mock(
-            returncode=0, stderr="", stdout=""
-        )
+        mock_run.return_value = mock.Mock(returncode=0, stderr="", stdout="")
 
         structure = Path("/tmp/test.pdb")
         output = Path("/tmp/test.pdbqt")
-        with mock.patch.object(Path, "is_file", return_value=True), \
-             mock.patch.object(Path, "stat") as mock_stat:
+        with (
+            mock.patch.object(Path, "is_file", return_value=True),
+            mock.patch.object(Path, "stat") as mock_stat,
+        ):
             mock_stat.return_value = mock.Mock(st_size=100)
             _convert_receptor_to_pdbqt(structure, output, altloc="B")
 
@@ -167,15 +166,15 @@ class TestConvertReceptorAltloc(unittest.TestCase):
     def test_highest_resolves_then_passes(self, mock_require, mock_run, mock_resolve):
         """Altloc 'highest' resolves to actual label, then passes it."""
         mock_require.return_value = "mk_prepare_receptor.py"
-        mock_run.return_value = mock.Mock(
-            returncode=0, stderr="", stdout=""
-        )
+        mock_run.return_value = mock.Mock(returncode=0, stderr="", stdout="")
         mock_resolve.return_value = "B"
 
         structure = Path("/tmp/test.pdb")
         output = Path("/tmp/test.pdbqt")
-        with mock.patch.object(Path, "is_file", return_value=True), \
-             mock.patch.object(Path, "stat") as mock_stat:
+        with (
+            mock.patch.object(Path, "is_file", return_value=True),
+            mock.patch.object(Path, "stat") as mock_stat,
+        ):
             mock_stat.return_value = mock.Mock(st_size=100)
             _convert_receptor_to_pdbqt(structure, output, altloc="highest")
 
@@ -193,14 +192,14 @@ class TestConvertReceptorAltloc(unittest.TestCase):
     def test_default_altloc_is_a(self, mock_require, mock_run):
         """When no altloc specified, default is 'A'."""
         mock_require.return_value = "mk_prepare_receptor.py"
-        mock_run.return_value = mock.Mock(
-            returncode=0, stderr="", stdout=""
-        )
+        mock_run.return_value = mock.Mock(returncode=0, stderr="", stdout="")
 
         structure = Path("/tmp/test.pdb")
         output = Path("/tmp/test.pdbqt")
-        with mock.patch.object(Path, "is_file", return_value=True), \
-             mock.patch.object(Path, "stat") as mock_stat:
+        with (
+            mock.patch.object(Path, "is_file", return_value=True),
+            mock.patch.object(Path, "stat") as mock_stat,
+        ):
             mock_stat.return_value = mock.Mock(st_size=100)
             # Call without altloc — should use default "A"
             _convert_receptor_to_pdbqt(structure, output)
@@ -215,14 +214,14 @@ class TestConvertReceptorAltloc(unittest.TestCase):
     def test_read_with_prody_still_passed(self, mock_require, mock_run):
         """--read_with_prody is still passed alongside --default_altloc."""
         mock_require.return_value = "mk_prepare_receptor.py"
-        mock_run.return_value = mock.Mock(
-            returncode=0, stderr="", stdout=""
-        )
+        mock_run.return_value = mock.Mock(returncode=0, stderr="", stdout="")
 
         structure = Path("/tmp/test.pdb")
         output = Path("/tmp/test.pdbqt")
-        with mock.patch.object(Path, "is_file", return_value=True), \
-             mock.patch.object(Path, "stat") as mock_stat:
+        with (
+            mock.patch.object(Path, "is_file", return_value=True),
+            mock.patch.object(Path, "stat") as mock_stat,
+        ):
             mock_stat.return_value = mock.Mock(st_size=100)
             _convert_receptor_to_pdbqt(structure, output, altloc="A")
 

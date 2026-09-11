@@ -32,7 +32,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .errors import Refusal, SchemaError
+from .errors import Refusal
 
 # ---------------------------------------------------------------------------
 # Concept ID
@@ -49,15 +49,15 @@ CONCEPT_SCHEMA = "dde.intervention-concept.v1"
 # ---------------------------------------------------------------------------
 
 CONCEPT_TRANSITIONS: dict[str | None, set[str]] = {
-    None:              {"draft"},
-    "draft":           {"active", "withdrawn"},
-    "active":          {"under_review", "pivoting", "parked", "terminated"},
-    "under_review":    {"active", "pivoting", "parked", "terminated"},
-    "pivoting":        {"active", "terminated"},
-    "parked":          {"active", "terminated"},
+    None: {"draft"},
+    "draft": {"active", "withdrawn"},
+    "active": {"under_review", "pivoting", "parked", "terminated"},
+    "under_review": {"active", "pivoting", "parked", "terminated"},
+    "pivoting": {"active", "terminated"},
+    "parked": {"active", "terminated"},
     # Terminal states.
-    "terminated":      set(),
-    "withdrawn":       set(),
+    "terminated": set(),
+    "withdrawn": set(),
 }
 
 CONCEPT_STATES: set[str] = set()
@@ -67,7 +67,8 @@ for _src, _targets in CONCEPT_TRANSITIONS.items():
     CONCEPT_STATES.update(_targets)
 
 TERMINAL_CONCEPT_STATES: set[str] = {
-    state for state, targets in CONCEPT_TRANSITIONS.items()
+    state
+    for state, targets in CONCEPT_TRANSITIONS.items()
     if state is not None and not targets
 }
 
@@ -123,7 +124,9 @@ def validate_biomarker(entry: dict[str, Any], index: int) -> list[str]:
         # Rationale required when status != "known".
         if entry["status"] in ("unknown", "not_applicable"):
             rationale = entry.get("rationale")
-            if rationale is None or (isinstance(rationale, str) and not rationale.strip()):
+            if rationale is None or (
+                isinstance(rationale, str) and not rationale.strip()
+            ):
                 errors.append(
                     f"{prefix}: rationale is required when status is "
                     f"{entry['status']!r}"
@@ -196,8 +199,14 @@ def requires_new_revision(old: dict[str, Any], new: dict[str, Any]) -> bool:
 # ---------------------------------------------------------------------------
 
 _REQUIRED_FIELDS = [
-    "schema", "id", "revision", "state", "disease_context",
-    "target_pathway", "modality", "created_at",
+    "schema",
+    "id",
+    "revision",
+    "state",
+    "disease_context",
+    "target_pathway",
+    "modality",
+    "created_at",
 ]
 
 
@@ -216,9 +225,7 @@ def validate_concept(data: dict[str, Any]) -> list[str]:
 
     # Schema string.
     if "schema" in data and data["schema"] != CONCEPT_SCHEMA:
-        errors.append(
-            f"schema must be {CONCEPT_SCHEMA!r}, got {data['schema']!r}"
-        )
+        errors.append(f"schema must be {CONCEPT_SCHEMA!r}, got {data['schema']!r}")
 
     # ID format.
     if "id" in data and not CONCEPT_ID_RE.match(str(data["id"])):
@@ -241,9 +248,7 @@ def validate_concept(data: dict[str, Any]) -> list[str]:
     if "disease_context" in data:
         dc = data["disease_context"]
         if not isinstance(dc, dict):
-            errors.append(
-                f"disease_context must be a dict, got {type(dc).__name__}"
-            )
+            errors.append(f"disease_context must be a dict, got {type(dc).__name__}")
         elif "indication" not in dc:
             errors.append("disease_context.indication is required")
 
@@ -251,16 +256,18 @@ def validate_concept(data: dict[str, Any]) -> list[str]:
     if "target_pathway" in data:
         tp = data["target_pathway"]
         if not isinstance(tp, dict):
-            errors.append(
-                f"target_pathway must be a dict, got {type(tp).__name__}"
-            )
+            errors.append(f"target_pathway must be a dict, got {type(tp).__name__}")
         elif "gene" not in tp:
             errors.append("target_pathway.gene is required")
 
     # modality must be a string or null (null = gap declared per §3.4).
     # The key is required (in _REQUIRED_FIELDS) but the value may be
     # None for migrated records that predate modality assignment.
-    if "modality" in data and data["modality"] is not None and not isinstance(data["modality"], str):
+    if (
+        "modality" in data
+        and data["modality"] is not None
+        and not isinstance(data["modality"], str)
+    ):
         errors.append(
             f"modality must be a string or null, got {type(data['modality']).__name__}"
         )
@@ -270,8 +277,7 @@ def validate_concept(data: dict[str, Any]) -> list[str]:
         ba = data["biomarker_assumptions"]
         if not isinstance(ba, list):
             errors.append(
-                f"biomarker_assumptions must be a list or null, "
-                f"got {type(ba).__name__}"
+                f"biomarker_assumptions must be a list or null, got {type(ba).__name__}"
             )
         else:
             for i, entry in enumerate(ba):
@@ -313,6 +319,7 @@ def validate_concept(data: dict[str, Any]) -> list[str]:
 # Charter-linkage gate
 # ---------------------------------------------------------------------------
 
+
 def check_charter_linkage(data: dict[str, Any], target_state: str) -> str | None:
     """Return an error message if the charter-linkage gate blocks transition.
 
@@ -321,7 +328,9 @@ def check_charter_linkage(data: dict[str, Any], target_state: str) -> str | None
     """
     if target_state == "active":
         charter_ref = data.get("charter_ref")
-        if charter_ref is None or (isinstance(charter_ref, str) and not charter_ref.strip()):
+        if charter_ref is None or (
+            isinstance(charter_ref, str) and not charter_ref.strip()
+        ):
             return (
                 "concept cannot transition to 'active' without charter_ref; "
                 "set charter_ref to the originating charter decision "

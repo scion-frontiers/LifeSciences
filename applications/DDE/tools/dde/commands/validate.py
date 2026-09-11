@@ -49,7 +49,6 @@ from ..core.errors import ArtifactError, Refusal, SchemaError
 from ..core.provenance import read_json, sha256_file
 from ..core.statemachine import validate_transition
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -258,7 +257,9 @@ def _has_artifacts_from_consumed_wos(
     """
     for consumed_wo_id in consumed_wo_ids:
         consumed_index, _, _ = _build_sidecar_index(
-            art_dir, project_root, wo_id=consumed_wo_id,
+            art_dir,
+            project_root,
+            wo_id=consumed_wo_id,
         )
         for artifact_path in artifacts:
             actual_sha = sha256_file(artifact_path)
@@ -303,7 +304,9 @@ def _check_deliverables_exist(
     confined_failures: list[str] = []
     skipped: list[dict[str, str]] = []
     unknown_classes: list[dict[str, str]] = []
-    consumed_satisfied: list[dict[str, Any]] = []  # classes satisfied via consumes (#132)
+    consumed_satisfied: list[
+        dict[str, Any]
+    ] = []  # classes satisfied via consumes (#132)
     cross_wo_citations: list[dict[str, Any]] = []  # cross-WO citation records (#132)
     optional_info: list[dict[str, Any]] = []  # optional class status (#132)
 
@@ -335,20 +338,24 @@ def _check_deliverables_exist(
                 skipped.append({"class": cls_name, "reason": reason})
                 continue
 
-            artifact_class = entry if isinstance(entry, str) else (
-                entry.get("class") or entry.get("name") or str(entry)
+            artifact_class = (
+                entry
+                if isinstance(entry, str)
+                else (entry.get("class") or entry.get("name") or str(entry))
             )
             # Distinguish unknown class (toolchain bug) from empty results
             # (real scientific finding).  Issue #131 / #83 / #85.
             if not _is_known_artifact_class(artifact_class):
-                unknown_classes.append({
-                    "class": artifact_class,
-                    "message": (
-                        f"Artifact class {artifact_class!r} is not registered "
-                        "in ARTIFACT_DIRS. This is a toolchain bug, not missing "
-                        "science. File an issue."
-                    ),
-                })
+                unknown_classes.append(
+                    {
+                        "class": artifact_class,
+                        "message": (
+                            f"Artifact class {artifact_class!r} is not registered "
+                            "in ARTIFACT_DIRS. This is a toolchain bug, not missing "
+                            "science. File an issue."
+                        ),
+                    }
+                )
                 continue
             artifacts = _find_layer0_artifacts(project_root, artifact_class)
             if not artifacts:
@@ -358,12 +365,17 @@ def _check_deliverables_exist(
             if wo_id is not None:
                 art_dir = artifacts[0].parent
                 sidecar_index, _, other_wo_hashes = _build_sidecar_index(
-                    art_dir, project_root, wo_id=wo_id,
+                    art_dir,
+                    project_root,
+                    wo_id=wo_id,
                 )
                 has_own_artifact = False
                 for artifact_path in artifacts:
                     actual_sha = sha256_file(artifact_path)
-                    if actual_sha in other_wo_hashes and actual_sha not in sidecar_index:
+                    if (
+                        actual_sha in other_wo_hashes
+                        and actual_sha not in sidecar_index
+                    ):
                         continue
                     has_own_artifact = True
                     break
@@ -375,17 +387,24 @@ def _check_deliverables_exist(
                         normalize_artifact_class(artifact_class), set()
                     )
                     if consumed_wo_ids and _has_artifacts_from_consumed_wos(
-                        art_dir, project_root, artifacts, consumed_wo_ids,
+                        art_dir,
+                        project_root,
+                        artifacts,
+                        consumed_wo_ids,
                     ):
                         # Record the cross-WO satisfaction (#132).
-                        consumed_satisfied.append({
-                            "class": artifact_class,
-                            "satisfied_by": sorted(consumed_wo_ids),
-                        })
-                        cross_wo_citations.append({
-                            "class": artifact_class,
-                            "from_work_orders": sorted(consumed_wo_ids),
-                        })
+                        consumed_satisfied.append(
+                            {
+                                "class": artifact_class,
+                                "satisfied_by": sorted(consumed_wo_ids),
+                            }
+                        )
+                        cross_wo_citations.append(
+                            {
+                                "class": artifact_class,
+                                "from_work_orders": sorted(consumed_wo_ids),
+                            }
+                        )
                         continue  # satisfied by consumption
                     missing.append(
                         f"layer_0_classes/{artifact_class} "
@@ -401,30 +420,38 @@ def _check_deliverables_exist(
     optional_classes = deliverables.get("layer_0_classes_optional", [])
     if isinstance(optional_classes, list):
         for entry in optional_classes:
-            artifact_class = entry if isinstance(entry, str) else (
-                entry.get("class") or entry.get("name") or str(entry)
+            artifact_class = (
+                entry
+                if isinstance(entry, str)
+                else (entry.get("class") or entry.get("name") or str(entry))
             )
             if not _is_known_artifact_class(artifact_class):
-                optional_info.append({
-                    "class": artifact_class,
-                    "status": "unknown",
-                    "message": (
-                        f"Artifact class {artifact_class!r} is not registered "
-                        "in ARTIFACT_DIRS."
-                    ),
-                })
+                optional_info.append(
+                    {
+                        "class": artifact_class,
+                        "status": "unknown",
+                        "message": (
+                            f"Artifact class {artifact_class!r} is not registered "
+                            "in ARTIFACT_DIRS."
+                        ),
+                    }
+                )
                 continue
             opt_artifacts = _find_layer0_artifacts(project_root, artifact_class)
             if not opt_artifacts:
-                optional_info.append({
-                    "class": artifact_class,
-                    "status": "absent",
-                })
+                optional_info.append(
+                    {
+                        "class": artifact_class,
+                        "status": "absent",
+                    }
+                )
                 continue
             if wo_id is not None:
                 opt_art_dir = opt_artifacts[0].parent
                 opt_sidecar_index, _, opt_other_wo_hashes = _build_sidecar_index(
-                    opt_art_dir, project_root, wo_id=wo_id,
+                    opt_art_dir,
+                    project_root,
+                    wo_id=wo_id,
                 )
                 has_own = any(
                     sha256_file(a) not in opt_other_wo_hashes
@@ -432,33 +459,44 @@ def _check_deliverables_exist(
                     for a in opt_artifacts
                 )
                 if has_own:
-                    optional_info.append({
-                        "class": artifact_class,
-                        "status": "present",
-                    })
+                    optional_info.append(
+                        {
+                            "class": artifact_class,
+                            "status": "present",
+                        }
+                    )
                 else:
                     # Check if optional class is satisfied via consumes.
                     opt_consumed_wo_ids = consumes_map.get(
                         normalize_artifact_class(artifact_class), set()
                     )
                     if opt_consumed_wo_ids and _has_artifacts_from_consumed_wos(
-                        opt_art_dir, project_root, opt_artifacts, opt_consumed_wo_ids,
+                        opt_art_dir,
+                        project_root,
+                        opt_artifacts,
+                        opt_consumed_wo_ids,
                     ):
-                        optional_info.append({
-                            "class": artifact_class,
-                            "status": "present_via_consumes",
-                            "satisfied_by": sorted(opt_consumed_wo_ids),
-                        })
+                        optional_info.append(
+                            {
+                                "class": artifact_class,
+                                "status": "present_via_consumes",
+                                "satisfied_by": sorted(opt_consumed_wo_ids),
+                            }
+                        )
                     else:
-                        optional_info.append({
-                            "class": artifact_class,
-                            "status": "absent",
-                        })
+                        optional_info.append(
+                            {
+                                "class": artifact_class,
+                                "status": "absent",
+                            }
+                        )
             else:
-                optional_info.append({
-                    "class": artifact_class,
-                    "status": "present",
-                })
+                optional_info.append(
+                    {
+                        "class": artifact_class,
+                        "status": "present",
+                    }
+                )
 
     detail: dict[str, Any] = {}
     if confined_failures:
@@ -549,10 +587,12 @@ def _wo_reference_found(
     # 1. Split metadata fields:
     #    Work Order: WO-<num>  +  Revision: <rev>
     wo_field_re = re.compile(
-        rf"Work\s+Order\s*:\s*WO-{re.escape(wo_num)}", re.IGNORECASE,
+        rf"Work\s+Order\s*:\s*WO-{re.escape(wo_num)}",
+        re.IGNORECASE,
     )
     rev_field_re = re.compile(
-        rf"(?:Revision|Rev)\s*:\s*{revision}", re.IGNORECASE,
+        rf"(?:Revision|Rev)\s*:\s*{revision}",
+        re.IGNORECASE,
     )
     wo_match = wo_field_re.search(content)
     rev_match = rev_field_re.search(content)
@@ -564,7 +604,8 @@ def _wo_reference_found(
 
     # 2. Inline forms: WO-<num> r<rev>
     inline_re = re.compile(
-        rf"WO-{re.escape(wo_num)}\s+r{revision}\b", re.IGNORECASE,
+        rf"WO-{re.escape(wo_num)}\s+r{revision}\b",
+        re.IGNORECASE,
     )
     m = inline_re.search(content)
     if m:
@@ -645,16 +686,20 @@ def _check_report_headings(
 
         # Sub-check 1: WO reference string.
         match_kind, found_text = _wo_reference_found(
-            content, wo_num, revision,
+            content,
+            wo_num,
+            revision,
         )
         if match_kind == "none":
             missing_ref.append(str(rel_path))
         elif match_kind == "accepted":
-            nonstandard_ref.append({
-                "file": str(rel_path),
-                "found": found_text or "(alternative form)",
-                "expected": reference,
-            })
+            nonstandard_ref.append(
+                {
+                    "file": str(rel_path),
+                    "found": found_text or "(alternative form)",
+                    "expected": reference,
+                }
+            )
 
         # Sub-check 2: ## Key Findings heading.
         if "## Key Findings" not in content:
@@ -672,7 +717,9 @@ def _check_report_headings(
 
             # Search region: after Summary, before Implications (or EOF).
             search_start = (summary_pos + 1) if summary_pos is not None else 0
-            search_end = implications_pos if implications_pos is not None else len(lines)
+            search_end = (
+                implications_pos if implications_pos is not None else len(lines)
+            )
 
             variant_heading: str | None = None
             for idx in range(search_start, search_end):
@@ -682,10 +729,12 @@ def _check_report_headings(
                     break
 
             if variant_heading is not None:
-                heading_variants.append({
-                    "file": str(rel_path),
-                    "found_heading": variant_heading,
-                })
+                heading_variants.append(
+                    {
+                        "file": str(rel_path),
+                        "found_heading": variant_heading,
+                    }
+                )
             else:
                 missing_headings.append(str(rel_path))
 
@@ -797,18 +846,24 @@ def _check_paths_resolve(
             if not link_resolved.exists():
                 # Check whether the link would resolve from project root.
                 root_resolved = (project_root / target_no_fragment).resolve()
-                if root_resolved.exists() and root_resolved.is_relative_to(project_root.resolve()):
-                    correct_relative = os.path.relpath(root_resolved, resolved_file.parent)
-                    broken.append({
-                        "file": str(rel_path),
-                        "link": target,
-                        "would_resolve_from_root": True,
-                        "suggested_fix": correct_relative,
-                        "detail": (
-                            f"This link resolves from project root but not "
-                            f"from the file directory. Use {correct_relative!r} instead."
-                        ),
-                    })
+                if root_resolved.exists() and root_resolved.is_relative_to(
+                    project_root.resolve()
+                ):
+                    correct_relative = os.path.relpath(
+                        root_resolved, resolved_file.parent
+                    )
+                    broken.append(
+                        {
+                            "file": str(rel_path),
+                            "link": target,
+                            "would_resolve_from_root": True,
+                            "suggested_fix": correct_relative,
+                            "detail": (
+                                f"This link resolves from project root but not "
+                                f"from the file directory. Use {correct_relative!r} instead."
+                            ),
+                        }
+                    )
                 else:
                     broken.append({"file": str(rel_path), "link": target})
 
@@ -821,13 +876,29 @@ def _check_paths_resolve(
     if confined_failures or broken:
         truly_broken = [b for b in broken if not b.get("would_resolve_from_root")]
         if confined_failures or truly_broken:
-            return {"name": "paths_resolve", "result": "fail", "status": "fail",
-                    "kind": "DATA_INTEGRITY", "detail": detail}
+            return {
+                "name": "paths_resolve",
+                "result": "fail",
+                "status": "fail",
+                "kind": "DATA_INTEGRITY",
+                "detail": detail,
+            }
         else:
             # All broken links are root-resolvable → convention warning.
-            return {"name": "paths_resolve", "result": "pass", "status": "warn",
-                    "kind": "CONVENTION", "detail": detail}
-    return {"name": "paths_resolve", "result": "pass", "status": "ok", "kind": "DATA_INTEGRITY", "detail": detail}
+            return {
+                "name": "paths_resolve",
+                "result": "pass",
+                "status": "warn",
+                "kind": "CONVENTION",
+                "detail": detail,
+            }
+    return {
+        "name": "paths_resolve",
+        "result": "pass",
+        "status": "ok",
+        "kind": "DATA_INTEGRITY",
+        "detail": detail,
+    }
 
 
 def _build_sidecar_index(
@@ -932,7 +1003,9 @@ def _check_provenance_valid(
         # Build a sha256 → sidecar mapping once for the whole directory.
         art_dir = artifacts[0].parent
         sidecar_index, sidecar_issues, other_wo_hashes = _build_sidecar_index(
-            art_dir, project_root, wo_id=wo_id,
+            art_dir,
+            project_root,
+            wo_id=wo_id,
         )
         issues.extend(sidecar_issues)
 
@@ -949,16 +1022,30 @@ def _check_provenance_valid(
                 # not be folded into provenance_valid.
                 if artifact_path.name.endswith(".json"):
                     continue
-                issues.append({
-                    "artifact": str(artifact_path.relative_to(project_root)),
-                    "issue": "no provenance sidecar covers this artifact",
-                })
+                issues.append(
+                    {
+                        "artifact": str(artifact_path.relative_to(project_root)),
+                        "issue": "no provenance sidecar covers this artifact",
+                    }
+                )
 
     detail: dict[str, Any] = {"artifacts_checked": artifacts_checked}
     if issues:
         detail["issues"] = issues
-        return {"name": "provenance_valid", "result": "fail", "status": "fail", "kind": "DATA_INTEGRITY", "detail": detail}
-    return {"name": "provenance_valid", "result": "pass", "status": "ok", "kind": "DATA_INTEGRITY", "detail": detail}
+        return {
+            "name": "provenance_valid",
+            "result": "fail",
+            "status": "fail",
+            "kind": "DATA_INTEGRITY",
+            "detail": detail,
+        }
+    return {
+        "name": "provenance_valid",
+        "result": "pass",
+        "status": "ok",
+        "kind": "DATA_INTEGRITY",
+        "detail": detail,
+    }
 
 
 def _check_analysis_citations(
@@ -990,14 +1077,16 @@ def _check_analysis_citations(
         normalized = normalize_artifact_class(artifact_class)
         rel_dir = ARTIFACT_DIRS.get(normalized)
         if rel_dir is None:
-            issues.append({
-                "file": f"(artifact class {artifact_class!r})",
-                "issue": (
-                    f"Artifact class {artifact_class!r} is not registered "
-                    "in ARTIFACT_DIRS. This is a toolchain bug, not missing "
-                    "science. File an issue."
-                ),
-            })
+            issues.append(
+                {
+                    "file": f"(artifact class {artifact_class!r})",
+                    "issue": (
+                        f"Artifact class {artifact_class!r} is not registered "
+                        "in ARTIFACT_DIRS. This is a toolchain bug, not missing "
+                        "science. File an issue."
+                    ),
+                }
+            )
             continue
         art_dir = project_root / rel_dir
         if not art_dir.is_dir():
@@ -1021,52 +1110,76 @@ def _check_analysis_citations(
             analyses_checked += 1
             # data was already parsed above for WO scoping; reuse it.
             if data is None:
-                issues.append({
-                    "file": str(child.relative_to(project_root)),
-                    "issue": "not valid JSON",
-                })
+                issues.append(
+                    {
+                        "file": str(child.relative_to(project_root)),
+                        "issue": "not valid JSON",
+                    }
+                )
                 continue
             if not isinstance(data, dict):
-                issues.append({
-                    "file": str(child.relative_to(project_root)),
-                    "issue": "not a JSON object",
-                })
+                issues.append(
+                    {
+                        "file": str(child.relative_to(project_root)),
+                        "issue": "not a JSON object",
+                    }
+                )
                 continue
             if "source" not in data:
-                issues.append({
-                    "file": str(child.relative_to(project_root)),
-                    "issue": "missing 'source' field",
-                })
+                issues.append(
+                    {
+                        "file": str(child.relative_to(project_root)),
+                        "issue": "missing 'source' field",
+                    }
+                )
             if "threshold_set" not in data:
-                issues.append({
-                    "file": str(child.relative_to(project_root)),
-                    "issue": "missing 'threshold_set' field",
-                })
+                issues.append(
+                    {
+                        "file": str(child.relative_to(project_root)),
+                        "issue": "missing 'threshold_set' field",
+                    }
+                )
             # Verify source reference resolves within the project root.
             source = data.get("source")
             if isinstance(source, str) and source:
                 source_path = _confine_path(project_root, Path(source))
                 if source_path is None:
-                    issues.append({
-                        "file": str(child.relative_to(project_root)),
-                        "issue": f"source path escapes project root: {source}",
-                    })
+                    issues.append(
+                        {
+                            "file": str(child.relative_to(project_root)),
+                            "issue": f"source path escapes project root: {source}",
+                        }
+                    )
                 elif not source_path.is_file():
-                    issues.append({
-                        "file": str(child.relative_to(project_root)),
-                        "issue": (
-                            f"Analysis cites source {source!r} which resolved "
-                            f"to '{source_path}' — file not found. Expected "
-                            "project-relative path like "
-                            f"'raw/<class>/{Path(source).name}'."
-                        ),
-                    })
+                    issues.append(
+                        {
+                            "file": str(child.relative_to(project_root)),
+                            "issue": (
+                                f"Analysis cites source {source!r} which resolved "
+                                f"to '{source_path}' — file not found. Expected "
+                                "project-relative path like "
+                                f"'raw/<class>/{Path(source).name}'."
+                            ),
+                        }
+                    )
 
     detail: dict[str, Any] = {"analyses_checked": analyses_checked}
     if issues:
         detail["issues"] = issues
-        return {"name": "analysis_citations", "result": "fail", "status": "fail", "kind": "DATA_INTEGRITY", "detail": detail}
-    return {"name": "analysis_citations", "result": "pass", "status": "ok", "kind": "DATA_INTEGRITY", "detail": detail}
+        return {
+            "name": "analysis_citations",
+            "result": "fail",
+            "status": "fail",
+            "kind": "DATA_INTEGRITY",
+            "detail": detail,
+        }
+    return {
+        "name": "analysis_citations",
+        "result": "pass",
+        "status": "ok",
+        "kind": "DATA_INTEGRITY",
+        "detail": detail,
+    }
 
 
 def _collect_relay_codes(
@@ -1163,8 +1276,12 @@ def _check_relay_coverage(
             "result": "pass",
             "status": "ok",
             "kind": "COMPLETENESS",
-            "detail": {"codes_checked": 0, "codes_addressed": 0,
-                        "codes_not_addressed": 0, "unaddressed": []},
+            "detail": {
+                "codes_checked": 0,
+                "codes_addressed": 0,
+                "codes_not_addressed": 0,
+                "unaddressed": [],
+            },
         }
 
     # Read all Layer 1 findings content
@@ -1190,12 +1307,14 @@ def _check_relay_coverage(
             addressed.add(code)
             # Label-format sub-check.
             if code not in labeled_codes:
-                sub_findings.append({
-                    "code": code,
-                    "status": "warn",
-                    "kind": "FORMAT",
-                    "detail": "relay code found in text but not in standard label format",
-                })
+                sub_findings.append(
+                    {
+                        "code": code,
+                        "status": "warn",
+                        "kind": "FORMAT",
+                        "detail": "relay code found in text but not in standard label format",
+                    }
+                )
         else:
             unaddressed.append(code)
 
@@ -1207,14 +1326,29 @@ def _check_relay_coverage(
     }
 
     if unaddressed:
-        result = {"name": "relay_coverage", "result": "fail", "status": "fail",
-                  "kind": "COMPLETENESS", "detail": detail}
+        result = {
+            "name": "relay_coverage",
+            "result": "fail",
+            "status": "fail",
+            "kind": "COMPLETENESS",
+            "detail": detail,
+        }
     elif sub_findings:
-        result = {"name": "relay_coverage", "result": "pass", "status": "warn",
-                  "kind": "FORMAT", "detail": detail}
+        result = {
+            "name": "relay_coverage",
+            "result": "pass",
+            "status": "warn",
+            "kind": "FORMAT",
+            "detail": detail,
+        }
     else:
-        result = {"name": "relay_coverage", "result": "pass", "status": "ok",
-                  "kind": "COMPLETENESS", "detail": detail}
+        result = {
+            "name": "relay_coverage",
+            "result": "pass",
+            "status": "ok",
+            "kind": "COMPLETENESS",
+            "detail": detail,
+        }
 
     if sub_findings:
         result["sub_findings"] = sub_findings
@@ -1336,7 +1470,9 @@ def _check_unrecognized_json(
 
         # Build sidecar index to check provenance coverage.
         sidecar_index, _, other_wo_hashes = _build_sidecar_index(
-            art_dir, project_root, wo_id=wo_id,
+            art_dir,
+            project_root,
+            wo_id=wo_id,
         )
 
         root_resolved = project_root.resolve()
@@ -1359,14 +1495,16 @@ def _check_unrecognized_json(
                 continue  # belongs to another WO
             if actual_sha in sidecar_index:
                 continue  # covered by provenance — it is a known raw artifact
-            unrecognized.append({
-                "file": str(child.relative_to(project_root)),
-                "message": (
-                    f"File '{child.name}' is not a recognized analysis or "
-                    "raw artifact type. If it was produced by a DDE command, "
-                    "this may be a toolchain bug."
-                ),
-            })
+            unrecognized.append(
+                {
+                    "file": str(child.relative_to(project_root)),
+                    "message": (
+                        f"File '{child.name}' is not a recognized analysis or "
+                        "raw artifact type. If it was produced by a DDE command, "
+                        "this may be a toolchain bug."
+                    ),
+                }
+            )
 
     detail: dict[str, Any] = {"files_checked": len(unrecognized)}
     if unrecognized:
@@ -1400,9 +1538,7 @@ _SOURCE_TABLE_TAG_RE = re.compile(r"\{source-table:\s+(\S+)(?:\s+(.*?))?\}")
 # Captures: optional negative sign, integer or decimal, optional scientific
 # notation, optional trailing % sign.  We look backward from the {source:
 # position so the match is on the content *before* the tag.
-_CLAIMED_VALUE_RE = re.compile(
-    r"(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\s*%?\s*$"
-)
+_CLAIMED_VALUE_RE = re.compile(r"(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\s*%?\s*$")
 
 # Code fences: triple backtick blocks and inline backtick spans.
 _CODE_FENCE_RE = re.compile(r"```.*?```", re.DOTALL)
@@ -1613,21 +1749,37 @@ def _evaluate_scalar_tag(
     # Step 3: resolve path.
     resolved = _confine_path(project_root, Path(tag_path_str))
     if resolved is None:
-        return {**base, "status": "fail", "kind": "DATA_INTEGRITY",
-                "detail": f"path escapes project root: {tag_path_str}"}
+        return {
+            **base,
+            "status": "fail",
+            "kind": "DATA_INTEGRITY",
+            "detail": f"path escapes project root: {tag_path_str}",
+        }
     if not resolved.is_file():
-        return {**base, "status": "fail", "kind": "DATA_INTEGRITY",
-                "detail": f"path does not resolve: {tag_path_str}"}
+        return {
+            **base,
+            "status": "fail",
+            "kind": "DATA_INTEGRITY",
+            "detail": f"path does not resolve: {tag_path_str}",
+        }
 
     # Step 4: evaluate locator.
     if locator is None:
         # No locator.
         if claimed_value is not None:
-            return {**base, "status": "warn", "kind": "FORMAT",
-                    "detail": "missing locator — cannot verify value mechanically"}
+            return {
+                **base,
+                "status": "warn",
+                "kind": "FORMAT",
+                "detail": "missing locator — cannot verify value mechanically",
+            }
         # Non-numerical reference — file-level provenance is sufficient.
-        return {**base, "status": "ok", "kind": "DATA_INTEGRITY",
-                "detail": "file-level provenance (no locator, non-numerical)"}
+        return {
+            **base,
+            "status": "ok",
+            "kind": "DATA_INTEGRITY",
+            "detail": "file-level provenance (no locator, non-numerical)",
+        }
 
     # Locator present — determine type and evaluate.
     if locator.startswith("$"):
@@ -1652,8 +1804,12 @@ def _evaluate_scalar_tag(
         )
 
     # Unrecognised locator format — treat as ok (might be a future extension).
-    return {**base, "status": "ok", "kind": "DATA_INTEGRITY",
-            "detail": f"locator format not recognised: {locator}"}
+    return {
+        **base,
+        "status": "ok",
+        "kind": "DATA_INTEGRITY",
+        "detail": f"locator format not recognised: {locator}",
+    }
 
 
 def _evaluate_table_tag(
@@ -1671,16 +1827,28 @@ def _evaluate_table_tag(
 
     resolved = _confine_path(project_root, Path(tag_path_str))
     if resolved is None:
-        return {**base, "status": "fail", "kind": "DATA_INTEGRITY",
-                "detail": f"path escapes project root: {tag_path_str}"}
+        return {
+            **base,
+            "status": "fail",
+            "kind": "DATA_INTEGRITY",
+            "detail": f"path escapes project root: {tag_path_str}",
+        }
     if not resolved.is_file():
-        return {**base, "status": "fail", "kind": "DATA_INTEGRITY",
-                "detail": f"path does not resolve: {tag_path_str}"}
+        return {
+            **base,
+            "status": "fail",
+            "kind": "DATA_INTEGRITY",
+            "detail": f"path does not resolve: {tag_path_str}",
+        }
 
     if locator is None:
         # Table tag without locator — file-level provenance.
-        return {**base, "status": "ok", "kind": "DATA_INTEGRITY",
-                "detail": "file-level provenance (table tag, no locator)"}
+        return {
+            **base,
+            "status": "ok",
+            "kind": "DATA_INTEGRITY",
+            "detail": "file-level provenance (table tag, no locator)",
+        }
 
     if locator.startswith("$"):
         return _evaluate_jsonpath_locator(
@@ -1692,8 +1860,12 @@ def _evaluate_table_tag(
             jsonpath_parse=jsonpath_parse,
         )
 
-    return {**base, "status": "ok", "kind": "DATA_INTEGRITY",
-            "detail": f"locator format not recognised: {locator}"}
+    return {
+        **base,
+        "status": "ok",
+        "kind": "DATA_INTEGRITY",
+        "detail": f"locator format not recognised: {locator}",
+    }
 
 
 def _evaluate_jsonpath_locator(
@@ -1712,53 +1884,89 @@ def _evaluate_jsonpath_locator(
     except OSError:
         file_size = 0
     if file_size > _MAX_JSON_READ_BYTES:
-        return {**base, "status": "warn", "kind": "FORMAT",
-                "detail": f"JSON file too large to evaluate ({file_size} bytes)"}
+        return {
+            **base,
+            "status": "warn",
+            "kind": "FORMAT",
+            "detail": f"JSON file too large to evaluate ({file_size} bytes)",
+        }
     try:
         data = json_mod.loads(resolved.read_text(encoding="utf-8", errors="replace"))
     except (json_mod.JSONDecodeError, OSError) as exc:
-        return {**base, "status": "fail", "kind": "DATA_INTEGRITY",
-                "detail": f"cannot parse JSON: {exc}"}
+        return {
+            **base,
+            "status": "fail",
+            "kind": "DATA_INTEGRITY",
+            "detail": f"cannot parse JSON: {exc}",
+        }
 
     try:
         expr = jsonpath_parse(locator)
     except Exception as exc:
-        return {**base, "status": "fail", "kind": "DATA_INTEGRITY",
-                "detail": f"invalid JSONPath expression: {exc}"}
+        return {
+            **base,
+            "status": "fail",
+            "kind": "DATA_INTEGRITY",
+            "detail": f"invalid JSONPath expression: {exc}",
+        }
 
     matches = expr.find(data)
     if not matches:
-        return {**base, "status": "fail", "kind": "DATA_INTEGRITY",
-                "detail": f"locator does not resolve: {locator}"}
+        return {
+            **base,
+            "status": "fail",
+            "kind": "DATA_INTEGRITY",
+            "detail": f"locator does not resolve: {locator}",
+        }
 
     actual = matches[0].value
 
     # For table tags: resolution is enough; non-scalar is expected.
     if is_table:
-        return {**base, "status": "ok", "kind": "DATA_INTEGRITY",
-                "detail": "table tag locator resolves"}
+        return {
+            **base,
+            "status": "ok",
+            "kind": "DATA_INTEGRITY",
+            "detail": "table tag locator resolves",
+        }
 
     # For scalar tags: non-scalar resolution is a format warning.
     if isinstance(actual, (dict, list)):
-        return {**base, "status": "warn", "kind": "FORMAT",
-                "detail": "locator resolves to non-scalar"}
+        return {
+            **base,
+            "status": "warn",
+            "kind": "FORMAT",
+            "detail": "locator resolves to non-scalar",
+        }
 
     # If no claimed value was extracted, we can only confirm resolution.
     if claimed_value is None:
-        return {**base, "status": "ok", "kind": "DATA_INTEGRITY",
-                "detail": "locator resolves (no numerical claim to compare)"}
+        return {
+            **base,
+            "status": "ok",
+            "kind": "DATA_INTEGRITY",
+            "detail": "locator resolves (no numerical claim to compare)",
+        }
 
     # Compare values.
     if isinstance(actual, (int, float)):
         if _values_match(claimed_value, actual):
-            return {**base, "status": "ok", "kind": "DATA_INTEGRITY",
-                    "claimed_value": str(claimed_value),
-                    "actual_value": str(actual),
-                    "detail": "values match within tolerance"}
-        return {**base, "status": "fail", "kind": "DATA_INTEGRITY",
+            return {
+                **base,
+                "status": "ok",
+                "kind": "DATA_INTEGRITY",
                 "claimed_value": str(claimed_value),
                 "actual_value": str(actual),
-                "detail": f"value mismatch: claimed {claimed_value}, actual {actual}"}
+                "detail": "values match within tolerance",
+            }
+        return {
+            **base,
+            "status": "fail",
+            "kind": "DATA_INTEGRITY",
+            "claimed_value": str(claimed_value),
+            "actual_value": str(actual),
+            "detail": f"value mismatch: claimed {claimed_value}, actual {actual}",
+        }
 
     # Actual is a string — attempt exact match with claimed value string.
     claimed_str = str(claimed_value)
@@ -1766,20 +1974,32 @@ def _evaluate_jsonpath_locator(
     if claimed_value == int(claimed_value):
         claimed_str_int = str(int(claimed_value))
         if str(actual) == claimed_str or str(actual) == claimed_str_int:
-            return {**base, "status": "ok", "kind": "DATA_INTEGRITY",
-                    "claimed_value": claimed_str,
-                    "actual_value": str(actual),
-                    "detail": "string values match"}
-    elif str(actual) == claimed_str:
-        return {**base, "status": "ok", "kind": "DATA_INTEGRITY",
+            return {
+                **base,
+                "status": "ok",
+                "kind": "DATA_INTEGRITY",
                 "claimed_value": claimed_str,
                 "actual_value": str(actual),
-                "detail": "string values match"}
-
-    return {**base, "status": "fail", "kind": "DATA_INTEGRITY",
+                "detail": "string values match",
+            }
+    elif str(actual) == claimed_str:
+        return {
+            **base,
+            "status": "ok",
+            "kind": "DATA_INTEGRITY",
             "claimed_value": claimed_str,
             "actual_value": str(actual),
-            "detail": f"value mismatch: claimed {claimed_value}, actual {actual!r}"}
+            "detail": "string values match",
+        }
+
+    return {
+        **base,
+        "status": "fail",
+        "kind": "DATA_INTEGRITY",
+        "claimed_value": claimed_str,
+        "actual_value": str(actual),
+        "detail": f"value mismatch: claimed {claimed_value}, actual {actual!r}",
+    }
 
 
 def _evaluate_line_locator(
@@ -1793,39 +2013,67 @@ def _evaluate_line_locator(
     try:
         lines = resolved.read_text(encoding="utf-8", errors="replace").splitlines()
     except OSError as exc:
-        return {**base, "status": "fail", "kind": "DATA_INTEGRITY",
-                "detail": f"cannot read file: {exc}"}
+        return {
+            **base,
+            "status": "fail",
+            "kind": "DATA_INTEGRITY",
+            "detail": f"cannot read file: {exc}",
+        }
 
     if line_num < 1 or line_num > len(lines):
-        return {**base, "status": "fail", "kind": "DATA_INTEGRITY",
-                "detail": f"line {line_num} does not exist (file has {len(lines)} lines)"}
+        return {
+            **base,
+            "status": "fail",
+            "kind": "DATA_INTEGRITY",
+            "detail": f"line {line_num} does not exist (file has {len(lines)} lines)",
+        }
 
     if claimed_value is None:
-        return {**base, "status": "ok", "kind": "DATA_INTEGRITY",
-                "detail": f"line {line_num} exists (no numerical claim to compare)"}
+        return {
+            **base,
+            "status": "ok",
+            "kind": "DATA_INTEGRITY",
+            "detail": f"line {line_num} exists (no numerical claim to compare)",
+        }
 
     # Best-effort: scan for a number on that line.
     line_text = lines[line_num - 1]
     num_match = re.search(r"(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)", line_text)
     if num_match is None:
-        return {**base, "status": "warn", "kind": "FORMAT",
-                "detail": f"line {line_num} exists but no number found to compare"}
+        return {
+            **base,
+            "status": "warn",
+            "kind": "FORMAT",
+            "detail": f"line {line_num} exists but no number found to compare",
+        }
 
     try:
         actual = float(num_match.group(1))
     except (ValueError, OverflowError):
-        return {**base, "status": "warn", "kind": "FORMAT",
-                "detail": f"line {line_num} exists but number could not be parsed"}
+        return {
+            **base,
+            "status": "warn",
+            "kind": "FORMAT",
+            "detail": f"line {line_num} exists but number could not be parsed",
+        }
 
     if _values_match(claimed_value, actual):
-        return {**base, "status": "ok", "kind": "DATA_INTEGRITY",
-                "claimed_value": str(claimed_value),
-                "actual_value": str(actual),
-                "detail": "values match within tolerance"}
-    return {**base, "status": "fail", "kind": "DATA_INTEGRITY",
+        return {
+            **base,
+            "status": "ok",
+            "kind": "DATA_INTEGRITY",
             "claimed_value": str(claimed_value),
             "actual_value": str(actual),
-            "detail": f"value mismatch: claimed {claimed_value}, actual {actual}"}
+            "detail": "values match within tolerance",
+        }
+    return {
+        **base,
+        "status": "fail",
+        "kind": "DATA_INTEGRITY",
+        "claimed_value": str(claimed_value),
+        "actual_value": str(actual),
+        "detail": f"value mismatch: claimed {claimed_value}, actual {actual}",
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -1911,18 +2159,20 @@ def _run_all_checks(
         checks.append(schema_finding)
 
     # Run all 10 checks.
-    checks.extend([
-        _check_deliverables_exist(project_root, deliverables, wo_id=wo_id),
-        _check_report_headings(project_root, deliverables, wo_id, revision),
-        _check_paths_resolve(project_root, deliverables),
-        _check_provenance_valid(project_root, deliverables, wo_id=wo_id),
-        _check_analysis_citations(project_root, deliverables, wo_id=wo_id),
-        _check_relay_coverage(project_root, deliverables, wo_id=wo_id),
-        _check_version_policy(project_root),
-        _check_findings_integrity(project_root),
-        _check_source_tags_resolve(project_root, deliverables),
-        _check_unrecognized_json(project_root, deliverables, wo_id=wo_id),
-    ])
+    checks.extend(
+        [
+            _check_deliverables_exist(project_root, deliverables, wo_id=wo_id),
+            _check_report_headings(project_root, deliverables, wo_id, revision),
+            _check_paths_resolve(project_root, deliverables),
+            _check_provenance_valid(project_root, deliverables, wo_id=wo_id),
+            _check_analysis_citations(project_root, deliverables, wo_id=wo_id),
+            _check_relay_coverage(project_root, deliverables, wo_id=wo_id),
+            _check_version_policy(project_root),
+            _check_findings_integrity(project_root),
+            _check_source_tags_resolve(project_root, deliverables),
+            _check_unrecognized_json(project_root, deliverables, wo_id=wo_id),
+        ]
+    )
 
     # Determine overall result using the severity-model verdict.
     overall_result = _overall_verdict(checks)
@@ -1978,13 +2228,15 @@ def _perform_validation(
 
     # Find the latest run for this WO revision (informational).
     runs = controlstore.list_records(
-        project_root, "run",
+        project_root,
+        "run",
         filter_fn=lambda r: (
-            r.get("work_order_id") == wo_id
-            and r.get("work_order_revision") == revision
+            r.get("work_order_id") == wo_id and r.get("work_order_revision") == revision
         ),
     )
-    run_id = max(runs, key=lambda r: r.get("created_at", "")).get("run_id") if runs else None
+    run_id = (
+        max(runs, key=lambda r: r.get("created_at", "")).get("run_id") if runs else None
+    )
 
     # Build validation record.
     record: dict[str, Any] = {
@@ -2000,7 +2252,10 @@ def _perform_validation(
     # Write the validation record.
     val_identifier = f"{wo_id}-r{revision}"
     record_path = controlstore.write_record(
-        project_root, "validation", val_identifier, record,
+        project_root,
+        "validation",
+        val_identifier,
+        record,
     )
 
     # State transition.
@@ -2015,28 +2270,42 @@ def _perform_validation(
     controlstore.write_record(project_root, "work-order", wo_identifier, wo_record)
 
     # Append event.
-    controlstore.append_event(project_root, {
-        "type": "validation.completed",
-        "subject_id": wo_id,
-        "revision": revision,
-        "from_state": current_state,
-        "to_state": target_state,
-        "detail": {"result": overall_result, "checks_failed": checks_failed},
-    })
+    controlstore.append_event(
+        project_root,
+        {
+            "type": "validation.completed",
+            "subject_id": wo_id,
+            "revision": revision,
+            "from_state": current_state,
+            "to_state": target_state,
+            "detail": {"result": overall_result, "checks_failed": checks_failed},
+        },
+    )
 
-    return wo_record, record_path, overall_result, checks, checks_failed, current_state, target_state
+    return (
+        wo_record,
+        record_path,
+        overall_result,
+        checks,
+        checks_failed,
+        current_state,
+        target_state,
+    )
 
 
 @validate.command("check")
 @click.argument("work_order_id", metavar="WORK-ORDER-ID")
 @click.option(
-    "--revision", "revision_num",
+    "--revision",
+    "revision_num",
     type=int,
     default=None,
     help="Validate a specific revision (default: latest).",
 )
 @click.option(
-    "--dry-run", "--preflight", "dry_run",
+    "--dry-run",
+    "--preflight",
+    "dry_run",
     is_flag=True,
     default=False,
     help=(
@@ -2071,13 +2340,16 @@ def check_cmd(
     if dry_run:
         # Dry-run mode: skip state guard, run checks only, no recording.
         wo_record = _resolve_wo_record(
-            project.root, work_order_id, revision_num,
+            project.root,
+            work_order_id,
+            revision_num,
         )
         wo_id = wo_record["id"]
         revision = wo_record["revision"]
 
         checks, overall_result, checks_failed = _run_all_checks(
-            project.root, wo_record,
+            project.root,
+            wo_record,
         )
 
         has_failure = bool(checks_failed)
@@ -2107,8 +2379,7 @@ def check_cmd(
         emit.line("=== PREFLIGHT VALIDATION (dry run) ===")
         emit.line("")
         emit.line(
-            f"Validation: {wo_id} revision {revision}  "
-            f"[{overall_result.upper()}]"
+            f"Validation: {wo_id} revision {revision}  [{overall_result.upper()}]"
         )
         emit.line("")
         for c in checks:
@@ -2118,19 +2389,22 @@ def check_cmd(
         if checks_failed:
             emit.line(f"Failed checks: {', '.join(checks_failed)}")
             emit.line("")
-        emit.line(
-            "This is an advisory check. "
-            "No validation record has been written."
-        )
+        emit.line("This is an advisory check. No validation record has been written.")
         emit.flush()
         if has_failure:
             _sys.exit(1)
         return
 
     # --- Normal (non-dry-run) path: full validation with recording ---
-    wo_record, record_path, overall_result, checks, checks_failed, current_state, target_state = (
-        _perform_validation(project.root, work_order_id, revision_num)
-    )
+    (
+        wo_record,
+        record_path,
+        overall_result,
+        checks,
+        checks_failed,
+        current_state,
+        target_state,
+    ) = _perform_validation(project.root, work_order_id, revision_num)
     wo_id = wo_record["id"]
     revision = wo_record["revision"]
 
@@ -2139,7 +2413,9 @@ def check_cmd(
         # Read the full validation record from disk (includes run_id,
         # validated_at, cli_version written by _perform_validation).
         val_record = controlstore.read_record(
-            project.root, "validation", f"{wo_id}-r{revision}",
+            project.root,
+            "validation",
+            f"{wo_id}-r{revision}",
         )
         for k, v in val_record.items():
             emit.data(k, v)

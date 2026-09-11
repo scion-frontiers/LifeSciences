@@ -25,9 +25,9 @@ they are than ``chem.py`` would be.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
-import hashlib
 import shutil
 import subprocess
 import tempfile
@@ -76,7 +76,10 @@ def validate_smiles(smiles: str, Chem: Any) -> tuple[Any, str] | None:
 
 
 def prepare_3d(
-    mol: Any, canonical: str, Chem: Any, AllChem: Any,
+    mol: Any,
+    canonical: str,
+    Chem: Any,
+    AllChem: Any,
 ) -> tuple[Any, str, bool] | None:
     """Generate 3D coordinates using ETKDGv3 + MMFF/UFF.
 
@@ -169,24 +172,37 @@ def run_docking(
         return None
 
     with tempfile.NamedTemporaryFile(
-        suffix=".pdbqt", prefix="dde-dock-", delete=False,
+        suffix=".pdbqt",
+        prefix="dde-dock-",
+        delete=False,
     ) as poses_file:
         poses_path = Path(poses_file.name)
 
     try:
         cmd = [
             vina_path,
-            "--receptor", str(receptor_path),
-            "--ligand", str(ligand_pdbqt),
-            "--center_x", str(center[0]),
-            "--center_y", str(center[1]),
-            "--center_z", str(center[2]),
-            "--size_x", str(size[0]),
-            "--size_y", str(size[1]),
-            "--size_z", str(size[2]),
-            "--exhaustiveness", str(exhaustiveness),
-            "--num_modes", str(n_poses),
-            "--out", str(poses_path),
+            "--receptor",
+            str(receptor_path),
+            "--ligand",
+            str(ligand_pdbqt),
+            "--center_x",
+            str(center[0]),
+            "--center_y",
+            str(center[1]),
+            "--center_z",
+            str(center[2]),
+            "--size_x",
+            str(size[0]),
+            "--size_y",
+            str(size[1]),
+            "--size_z",
+            str(size[2]),
+            "--exhaustiveness",
+            str(exhaustiveness),
+            "--num_modes",
+            str(n_poses),
+            "--out",
+            str(poses_path),
         ]
         completed = subprocess.run(
             cmd,
@@ -203,14 +219,16 @@ def run_docking(
         poses: list[dict[str, Any]] = []
         for line in poses_text.splitlines():
             if line.startswith("REMARK VINA RESULT:"):
-                parts = line[len("REMARK VINA RESULT:"):].split()
+                parts = line[len("REMARK VINA RESULT:") :].split()
                 if len(parts) >= 3:
-                    poses.append({
-                        "rank": len(poses) + 1,
-                        "affinity_kcalmol": float(parts[0]),
-                        "rmsd_lb": float(parts[1]),
-                        "rmsd_ub": float(parts[2]),
-                    })
+                    poses.append(
+                        {
+                            "rank": len(poses) + 1,
+                            "affinity_kcalmol": float(parts[0]),
+                            "rmsd_lb": float(parts[1]),
+                            "rmsd_ub": float(parts[2]),
+                        }
+                    )
 
         if not poses:
             return None

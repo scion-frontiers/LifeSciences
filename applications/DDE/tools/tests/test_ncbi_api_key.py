@@ -127,8 +127,7 @@ class TestURLKeyTransmission(unittest.TestCase):
         base = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
         url = (
             f"{base}/esearch.fcgi?db=pubmed&term=test&retmax=20"
-            f"&sort=relevance&retmode=json"
-            + ncbi.api_key_suffix()
+            f"&sort=relevance&retmode=json" + ncbi.api_key_suffix()
         )
         parsed = parse_qs(urlparse(url).query)
         self.assertIn("api_key", parsed)
@@ -139,8 +138,7 @@ class TestURLKeyTransmission(unittest.TestCase):
         base = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
         url = (
             f"{base}/esearch.fcgi?db=pubmed&term=test&retmax=20"
-            f"&sort=relevance&retmode=json"
-            + ncbi.api_key_suffix()
+            f"&sort=relevance&retmode=json" + ncbi.api_key_suffix()
         )
         parsed = parse_qs(urlparse(url).query)
         self.assertNotIn("api_key", parsed)
@@ -213,8 +211,7 @@ class TestCredentialScrubbing(unittest.TestCase):
         exc_msg = ctx.exception.message
         exc_detail = ctx.exception.detail or ""
         combined = f"{exc_msg} {exc_detail} {exc_text}"
-        self.assertNotIn(secret, combined,
-                         "API key leaked in EndpointError")
+        self.assertNotIn(secret, combined, "API key leaked in EndpointError")
 
     def test_error_message_excludes_key_on_transport_failure(self):
         """EndpointUnavailable from a transport error must not contain the key."""
@@ -239,10 +236,10 @@ class TestCredentialScrubbing(unittest.TestCase):
         exc_msg = ctx.exception.message
         exc_detail = ctx.exception.detail or ""
         combined = f"{exc_msg} {exc_detail} {exc_text}"
-        self.assertNotIn(secret, combined,
-                         "API key leaked in EndpointUnavailable")
-        self.assertIn("<REDACTED>", exc_detail,
-                      "detail field should contain redacted marker")
+        self.assertNotIn(secret, combined, "API key leaked in EndpointUnavailable")
+        self.assertIn(
+            "<REDACTED>", exc_detail, "detail field should contain redacted marker"
+        )
 
     def test_error_message_excludes_key_on_retry_exhaustion(self):
         """Retry-exhaustion error must not contain the key."""
@@ -262,8 +259,7 @@ class TestCredentialScrubbing(unittest.TestCase):
         exc_text = str(ctx.exception)
         exc_msg = ctx.exception.message
         combined = f"{exc_msg} {exc_text}"
-        self.assertNotIn(secret, combined,
-                         "API key leaked in retry-exhaustion error")
+        self.assertNotIn(secret, combined, "API key leaked in retry-exhaustion error")
 
     def test_error_message_excludes_key_on_invalid_json(self):
         """get_json error must not contain the key."""
@@ -281,8 +277,7 @@ class TestCredentialScrubbing(unittest.TestCase):
         exc_text = str(ctx.exception)
         exc_msg = ctx.exception.message
         combined = f"{exc_msg} {exc_text}"
-        self.assertNotIn(secret, combined,
-                         "API key leaked in get_json error")
+        self.assertNotIn(secret, combined, "API key leaked in get_json error")
 
 
 if __name__ == "__main__":

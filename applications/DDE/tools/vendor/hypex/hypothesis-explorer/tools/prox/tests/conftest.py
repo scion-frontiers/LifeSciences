@@ -16,8 +16,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 
 def make_graph_data(edges: list[tuple[str, str, float]]) -> dict:
     """Build a minimal graph.json-style dict from edge tuples.

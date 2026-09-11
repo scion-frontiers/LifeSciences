@@ -26,13 +26,8 @@ Covers:
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
-
-from click.testing import CliRunner
 
 from dde.commands.mpo import (
     _normalize_absolute,
@@ -111,7 +106,10 @@ class TestAbsoluteScoringCohortIndependence(unittest.TestCase):
 
         # Score compound A alone.
         result_alone = _normalize_absolute(
-            {"A": 7.0}, "maximize", bounds_low, bounds_high,
+            {"A": 7.0},
+            "maximize",
+            bounds_low,
+            bounds_high,
         )
 
         # Score compound A with a cohort of different compounds.
@@ -129,7 +127,10 @@ class TestAbsoluteScoringCohortIndependence(unittest.TestCase):
         bounds_low, bounds_high = 0.0, 10.0
 
         result_normal = _normalize_absolute(
-            {"A": 5.0}, "maximize", bounds_low, bounds_high,
+            {"A": 5.0},
+            "maximize",
+            bounds_low,
+            bounds_high,
         )
 
         result_with_extremes = _normalize_absolute(
@@ -148,7 +149,7 @@ class TestMinMaxNormalizationRangeInfo(unittest.TestCase):
     def test_returns_range_info(self):
         """Range info contains min, max, range keys."""
         values = {"A": 10.0, "B": 20.0, "C": 30.0}
-        normalized, range_info = _normalize_scores(values, "maximize")
+        _normalized, range_info = _normalize_scores(values, "maximize")
         self.assertAlmostEqual(range_info["min"], 10.0)
         self.assertAlmostEqual(range_info["max"], 30.0)
         self.assertAlmostEqual(range_info["range"], 20.0)

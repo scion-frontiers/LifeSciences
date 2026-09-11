@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import functools
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from . import http
@@ -162,9 +162,9 @@ def resolve_gene(symbol: str) -> GeneResolution:
     suggestions: list[str] = []
     try:
         broad = _hgnc_search("symbol", f"{symbol}*")
-        suggestions = sorted(
-            {d.get("symbol", "?") for d in broad if d.get("symbol")}
-        )[:5]
+        suggestions = sorted({d.get("symbol", "?") for d in broad if d.get("symbol")})[
+            :5
+        ]
     except Exception:
         pass
 

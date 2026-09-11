@@ -140,7 +140,9 @@ def _fetch_collections(
     Returns (verbatim response bytes, structured artifact dict).
     """
     url = f"{CELLXGENE_API}/collections"
-    raw_data = http.get_json(url, qps=qps_for_host("api.cellxgene.cziscience.com"), timeout=120.0)
+    raw_data = http.get_json(
+        url, qps=qps_for_host("api.cellxgene.cziscience.com"), timeout=120.0
+    )
 
     if not isinstance(raw_data, list):
         raise SchemaError(
@@ -173,17 +175,23 @@ def _fetch_collections(
             # Collection matched text but no datasets pass filters.
             continue
 
-        dataset_records = [_extract_dataset_record(ds) for ds in filtered] if filtered else [_extract_dataset_record(ds) for ds in datasets]
+        dataset_records = (
+            [_extract_dataset_record(ds) for ds in filtered]
+            if filtered
+            else [_extract_dataset_record(ds) for ds in datasets]
+        )
 
         if dataset_records:
-            matched_collections.append({
-                "collection_id": collection.get("collection_id", ""),
-                "name": name,
-                "description": (description or "")[:500],
-                "doi": collection.get("doi", ""),
-                "n_datasets": len(dataset_records),
-                "datasets": dataset_records,
-            })
+            matched_collections.append(
+                {
+                    "collection_id": collection.get("collection_id", ""),
+                    "name": name,
+                    "description": (description or "")[:500],
+                    "doi": collection.get("doi", ""),
+                    "n_datasets": len(dataset_records),
+                    "datasets": dataset_records,
+                }
+            )
 
     artifact: dict[str, Any] = {
         "schema": "dde.cellxgene-search.v1",
@@ -302,9 +310,7 @@ def search_cmd(
 
     # Write structured artifact.
     artifact_path = target_dir / f"{slug}.cellxgene.artifact.json"
-    artifact_path.write_text(
-        json.dumps(artifact, indent=2) + "\n", encoding="utf-8"
-    )
+    artifact_path.write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
     sidecar.add_output(artifact_path)
 
     # Write sidecar.
@@ -327,9 +333,7 @@ def search_cmd(
         for c in artifact["collections"][:5]:
             emit.line(f"  {c['name'][:70]} ({c['n_datasets']} datasets)")
         if len(artifact["collections"]) > 5:
-            emit.line(
-                f"  ... {len(artifact['collections']) - 5} more in the artifact"
-            )
+            emit.line(f"  ... {len(artifact['collections']) - 5} more in the artifact")
     emit.flush()
 
 
@@ -449,19 +453,13 @@ def analyze_cmd(
         "n_collections": len(collections),
         "n_datasets": total_datasets,
         "total_cell_count": total_cell_count,
-        "tissue_distribution": [
-            {"tissue": t, "count": c} for t, c in top_tissues
-        ],
+        "tissue_distribution": [{"tissue": t, "count": c} for t, c in top_tissues],
         "cell_type_distribution": [
             {"cell_type": ct, "count": c} for ct, c in top_cell_types
         ],
         "organism_breakdown": dict(organism_counts),
-        "disease_distribution": [
-            {"disease": d, "count": c} for d, c in top_diseases
-        ],
-        "assay_distribution": [
-            {"assay": a, "count": c} for a, c in top_assays
-        ],
+        "disease_distribution": [{"disease": d, "count": c} for d, c in top_diseases],
+        "assay_distribution": [{"assay": a, "count": c} for a, c in top_assays],
     }
 
     metrics = {

@@ -53,7 +53,13 @@ from ..common import (
     resolve_artifact,
 )
 from ..core import provenance
-from ..core.errors import ArtifactError, DependencyError, Refusal, SchemaError, ThresholdError
+from ..core.errors import (
+    ArtifactError,
+    DependencyError,
+    Refusal,
+    SchemaError,
+    ThresholdError,
+)
 from ..core.output import Emitter
 
 ARTIFACT_CLASS = "compounds"
@@ -67,9 +73,9 @@ ARTIFACT_CLASS = "compounds"
 def _require_rdkit():
     """Lazy-import RDKit, raising DependencyError if absent."""
     try:
+        import rdkit
         from rdkit import Chem
         from rdkit.Chem import BRICS
-        import rdkit
 
         return Chem, BRICS, rdkit
     except ImportError:
@@ -163,12 +169,14 @@ def _brics_fragment(mol: Any) -> dict[str, Any]:
         else:
             core, r_group = pieces[1], pieces[0]
 
-        single_cuts.append({
-            "core": core,
-            "r_group": r_group,
-            "bond_atoms": [begin_idx, end_idx],
-            "bond_types": [begin_type, end_type],
-        })
+        single_cuts.append(
+            {
+                "core": core,
+                "r_group": r_group,
+                "bond_atoms": [begin_idx, end_idx],
+                "bond_types": [begin_type, end_type],
+            }
+        )
 
     return {
         "fragments": fragments,
@@ -189,7 +197,7 @@ def _find_matched_pairs(
 
     Returns a list of pair records.
     """
-    Chem, BRICS, _ = _require_rdkit()
+    Chem, _BRICS, _ = _require_rdkit()
 
     # Build an index: core_smiles -> [(compound_id, r_group, properties, smiles)]
     core_index: dict[str, list[dict[str, Any]]] = {}
@@ -220,7 +228,7 @@ def _find_matched_pairs(
         if len(entries) < 2:
             continue
         for i, a in enumerate(entries):
-            for b in entries[i + 1:]:
+            for b in entries[i + 1 :]:
                 if a["compound_id"] == b["compound_id"]:
                     continue
                 if a["r_group"] == b["r_group"]:
@@ -249,21 +257,23 @@ def _find_matched_pairs(
                     ):
                         deltas[prop] = round(val_b - val_a, 6)
 
-                pairs.append({
-                    "core": core,
-                    "compound_a": {
-                        "compound_id": a["compound_id"],
-                        "smiles": a["smiles"],
-                        "r_group": a["r_group"],
-                    },
-                    "compound_b": {
-                        "compound_id": b["compound_id"],
-                        "smiles": b["smiles"],
-                        "r_group": b["r_group"],
-                    },
-                    "transformation": f"{a['r_group']} -> {b['r_group']}",
-                    "property_deltas": deltas,
-                })
+                pairs.append(
+                    {
+                        "core": core,
+                        "compound_a": {
+                            "compound_id": a["compound_id"],
+                            "smiles": a["smiles"],
+                            "r_group": a["r_group"],
+                        },
+                        "compound_b": {
+                            "compound_id": b["compound_id"],
+                            "smiles": b["smiles"],
+                            "r_group": b["r_group"],
+                        },
+                        "transformation": f"{a['r_group']} -> {b['r_group']}",
+                        "property_deltas": deltas,
+                    }
+                )
 
     return pairs
 
@@ -330,9 +340,7 @@ def fragment_cmd(
     }
 
     record_path = target_dir / f"{slug}.mmp-fragment.json"
-    record_path.write_text(
-        json.dumps(record, indent=2) + "\n", encoding="utf-8"
-    )
+    record_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     sidecar.add_output(record_path)
     meta_path = sidecar.write(target_dir / f"{slug}.mmp-fragment.meta.json")
 
@@ -405,7 +413,7 @@ def pairs_cmd(
         raise Refusal(
             "series file does not match canonical schema dde.mmp-series.v1",
             detail=f"got schema {doc.get('schema')!r}",
-            remedy="ensure the input file has '\"schema\": \"dde.mmp-series.v1\"' "
+            remedy='ensure the input file has \'"schema": "dde.mmp-series.v1"\' '
             "at the top level",
         )
 
@@ -429,7 +437,9 @@ def pairs_cmd(
     valid_compounds: list[dict[str, Any]] = []
     for i, cpd in enumerate(compounds):
         if not isinstance(cpd, dict):
-            problems.append(f"compounds[{i}]: expected a dict, got {type(cpd).__name__}")
+            problems.append(
+                f"compounds[{i}]: expected a dict, got {type(cpd).__name__}"
+            )
             continue
         if "compound_id" not in cpd:
             problems.append(f"compounds[{i}]: missing required field 'compound_id'")
@@ -437,9 +447,7 @@ def pairs_cmd(
             problems.append(f"compounds[{i}]: missing required field 'smiles'")
         props = cpd.get("properties")
         if not isinstance(props, dict) or not props:
-            problems.append(
-                f"compounds[{i}]: 'properties' must be a non-empty dict"
-            )
+            problems.append(f"compounds[{i}]: 'properties' must be a non-empty dict")
             continue
         valid_compounds.append(cpd)
 
@@ -493,9 +501,7 @@ def pairs_cmd(
     }
 
     record_path = target_dir / f"{name}.mmp-pairs.json"
-    record_path.write_text(
-        json.dumps(record, indent=2) + "\n", encoding="utf-8"
-    )
+    record_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     sidecar.add_output(record_path)
     meta_path = sidecar.write(target_dir / f"{name}.mmp-pairs.meta.json")
 
@@ -656,18 +662,20 @@ def analyze_cmd(
                     continue
 
                 if abs(delta) >= threshold:
-                    result["cliffs"].append({
-                        "pair": {
-                            "compound_a": pair["compound_a"]["compound_id"],
-                            "compound_b": pair["compound_b"]["compound_id"],
-                        },
-                        "property": prop,
-                        "delta": delta,
-                        "reasons": [
-                            f"|delta| {abs(delta):.4f} >= "
-                            f"cliff_absolute_delta[{prop_key}] {threshold}"
-                        ],
-                    })
+                    result["cliffs"].append(
+                        {
+                            "pair": {
+                                "compound_a": pair["compound_a"]["compound_id"],
+                                "compound_b": pair["compound_b"]["compound_id"],
+                            },
+                            "property": prop,
+                            "delta": delta,
+                            "reasons": [
+                                f"|delta| {abs(delta):.4f} >= "
+                                f"cliff_absolute_delta[{prop_key}] {threshold}"
+                            ],
+                        }
+                    )
 
         if not_evaluated_display:
             display_names = sorted(not_evaluated_display.values())
@@ -737,9 +745,7 @@ def analyze_cmd(
         )
 
     stem = source.stem.replace(".mmp-pairs", "")
-    analysis_path = beside_or_out(
-        state, source, f"{stem}.mmp-analysis.json", out
-    )
+    analysis_path = beside_or_out(state, source, f"{stem}.mmp-analysis.json", out)
     provenance.write_analysis(
         analysis_path,
         source=source,
@@ -771,9 +777,7 @@ def analyze_cmd(
             f"{', '.join(sorted(all_not_evaluated))}"
         )
     if unresolved_cliff_thresholds:
-        emit.line(
-            f"Unresolved: {', '.join(unresolved_cliff_thresholds)}"
-        )
+        emit.line(f"Unresolved: {', '.join(unresolved_cliff_thresholds)}")
     for r in relays:
         emit.line(f"relay {r['code']}: {r['message']}")
     emit.path(project.relative(analysis_path), role="analysis")

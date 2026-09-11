@@ -40,7 +40,6 @@ from ..common import (
 )
 from ..core import provenance
 
-
 # ---------------------------------------------------------------------------
 # IND Module 4 checklist — small-molecule FDA IND default
 # ---------------------------------------------------------------------------
@@ -66,7 +65,9 @@ IND_MODULE4_CHECKLIST: list[dict[str, Any]] = [
         "section": "pharmacology.primary",
         "label": "Primary Pharmacodynamics",
         "keywords": [
-            "primary pharmacodynamics", "primary pd", "primary-pd",
+            "primary pharmacodynamics",
+            "primary pd",
+            "primary-pd",
             "primary_pd",
         ],
         "dir_hints": ["pharmacology"],
@@ -77,7 +78,9 @@ IND_MODULE4_CHECKLIST: list[dict[str, Any]] = [
         "section": "pharmacology.secondary",
         "label": "Secondary Pharmacodynamics",
         "keywords": [
-            "secondary pharmacodynamics", "secondary pd", "secondary-pd",
+            "secondary pharmacodynamics",
+            "secondary pd",
+            "secondary-pd",
             "secondary_pd",
         ],
         "dir_hints": ["pharmacology"],
@@ -88,8 +91,11 @@ IND_MODULE4_CHECKLIST: list[dict[str, Any]] = [
         "section": "pharmacology.safety",
         "label": "Safety Pharmacology",
         "keywords": [
-            "safety pharmacology", "safety pharm", "safety-pharm",
-            "safety_pharm", "safety-pharmacology",
+            "safety pharmacology",
+            "safety pharm",
+            "safety-pharm",
+            "safety_pharm",
+            "safety-pharmacology",
         ],
         "dir_hints": ["pharmacology"],
         "raw_dirs": ["assays"],
@@ -100,8 +106,13 @@ IND_MODULE4_CHECKLIST: list[dict[str, Any]] = [
         "section": "pk.adme",
         "label": "PK/ADME",
         "keywords": [
-            "pk", "adme", "pharmacokinetics", "absorption", "distribution",
-            "metabolism", "excretion",
+            "pk",
+            "adme",
+            "pharmacokinetics",
+            "absorption",
+            "distribution",
+            "metabolism",
+            "excretion",
         ],
         "dir_hints": ["pk", "pharmacokinetics", "adme"],
         "raw_dirs": ["pk"],
@@ -111,7 +122,9 @@ IND_MODULE4_CHECKLIST: list[dict[str, Any]] = [
         "section": "pk.ddi",
         "label": "Drug-Drug Interaction Studies",
         "keywords": [
-            "drug-drug interaction", "ddi", "drug interaction",
+            "drug-drug interaction",
+            "ddi",
+            "drug interaction",
             "drug_drug_interaction",
         ],
         "dir_hints": ["pk", "pharmacokinetics", "ddi"],
@@ -123,7 +136,10 @@ IND_MODULE4_CHECKLIST: list[dict[str, Any]] = [
         "section": "tox.repeat_dose",
         "label": "Repeat-Dose Toxicity",
         "keywords": [
-            "repeat-dose", "repeat dose", "repeat_dose", "subchronic",
+            "repeat-dose",
+            "repeat dose",
+            "repeat_dose",
+            "subchronic",
             "chronic toxicity",
         ],
         "dir_hints": ["tox", "toxicology", "repeat-dose"],
@@ -134,8 +150,11 @@ IND_MODULE4_CHECKLIST: list[dict[str, Any]] = [
         "section": "tox.safety_pharm",
         "label": "Safety Pharmacology (Toxicology)",
         "keywords": [
-            "safety pharmacology", "safety pharm", "herg",
-            "cardiovascular safety", "safety-pharmacology",
+            "safety pharmacology",
+            "safety pharm",
+            "herg",
+            "cardiovascular safety",
+            "safety-pharmacology",
         ],
         "dir_hints": ["tox", "toxicology", "safety-pharm"],
         "raw_dirs": ["tox"],
@@ -145,8 +164,12 @@ IND_MODULE4_CHECKLIST: list[dict[str, Any]] = [
         "section": "tox.genotox",
         "label": "Genotoxicity",
         "keywords": [
-            "genotoxicity", "genotox", "mutagenicity", "ames",
-            "micronucleus", "clastogenicity",
+            "genotoxicity",
+            "genotox",
+            "mutagenicity",
+            "ames",
+            "micronucleus",
+            "clastogenicity",
         ],
         "dir_hints": ["tox", "toxicology", "genotox"],
         "raw_dirs": ["tox"],
@@ -156,7 +179,10 @@ IND_MODULE4_CHECKLIST: list[dict[str, Any]] = [
         "section": "tox.repro",
         "label": "Reproductive Toxicology",
         "keywords": [
-            "reproductive", "repro", "fertility", "teratogenicity",
+            "reproductive",
+            "repro",
+            "fertility",
+            "teratogenicity",
             "developmental toxicology",
         ],
         "dir_hints": ["tox", "toxicology", "repro", "reproductive"],
@@ -212,13 +238,15 @@ def _scan_findings(project_root: Path) -> list[dict[str, Any]]:
         except OSError:
             content = ""
 
-        results.append({
-            "path": str(rel_path),
-            "title": title,
-            "dir_parts": [p.lower() for p in parts_under_findings],
-            "stem": md_file.stem.lower(),
-            "content_lower": content.lower(),
-        })
+        results.append(
+            {
+                "path": str(rel_path),
+                "title": title,
+                "dir_parts": [p.lower() for p in parts_under_findings],
+                "stem": md_file.stem.lower(),
+                "content_lower": content.lower(),
+            }
+        )
 
     return results
 
@@ -304,13 +332,10 @@ def _match_section(
         # no matching artifact will be classified as "finding_only" rather
         # than the previous false "covered".
         searchable = (
-            f"{finding['stem']} {finding['title'].lower()} "
-            f"{finding['content_lower']}"
+            f"{finding['stem']} {finding['title'].lower()} {finding['content_lower']}"
         )
         keyword_match = any(kw in searchable for kw in keywords)
-        dir_exact_match = bool(
-            section_local_variants & set(finding["dir_parts"])
-        )
+        dir_exact_match = bool(section_local_variants & set(finding["dir_parts"]))
 
         if keyword_match or dir_exact_match:
             matched_findings.append(finding["path"])
@@ -398,8 +423,7 @@ ICH_GUIDANCE_REFERENCES: dict[str, list[dict[str, str]]] = {
         {
             "code": "ICH S3A",
             "title": (
-                "Toxicokinetics: Assessment of Systemic Exposure "
-                "in Toxicity Studies"
+                "Toxicokinetics: Assessment of Systemic Exposure in Toxicity Studies"
             ),
         },
     ],
@@ -445,8 +469,12 @@ CTD_SECTION_MAP: list[dict[str, Any]] = [
                 "raw_dirs": ["assays"],
                 "artifact_suffixes": [".assay.json", ".selectivity.json"],
                 "fields": [
-                    "study_type", "target", "species", "assay_type",
-                    "result", "conclusion",
+                    "study_type",
+                    "target",
+                    "species",
+                    "assay_type",
+                    "result",
+                    "conclusion",
                 ],
             },
             {
@@ -454,8 +482,12 @@ CTD_SECTION_MAP: list[dict[str, Any]] = [
                 "raw_dirs": ["tox"],
                 "artifact_suffixes": [".tox-safety-pharm.json"],
                 "fields": [
-                    "study_type", "species", "route", "dose",
-                    "findings", "conclusion",
+                    "study_type",
+                    "species",
+                    "route",
+                    "dose",
+                    "findings",
+                    "conclusion",
                 ],
             },
         ],
@@ -468,10 +500,14 @@ CTD_SECTION_MAP: list[dict[str, Any]] = [
                 "name": "Absorption",
                 "raw_dirs": ["pk"],
                 "artifact_suffixes": [
-                    ".pk-study.json", ".pk-nca.json",
+                    ".pk-study.json",
+                    ".pk-nca.json",
                 ],
                 "fields": [
-                    "species", "route", "dose_mg_kg", "dose_units",
+                    "species",
+                    "route",
+                    "dose_mg_kg",
+                    "dose_units",
                     "parameters",
                 ],
             },
@@ -480,7 +516,10 @@ CTD_SECTION_MAP: list[dict[str, Any]] = [
                 "raw_dirs": ["pk"],
                 "artifact_suffixes": [".pk-study.json"],
                 "fields": [
-                    "species", "route", "dose_mg_kg", "vd",
+                    "species",
+                    "route",
+                    "dose_mg_kg",
+                    "vd",
                 ],
             },
             {
@@ -488,7 +527,10 @@ CTD_SECTION_MAP: list[dict[str, Any]] = [
                 "raw_dirs": ["pk"],
                 "artifact_suffixes": [".pk-study.json"],
                 "fields": [
-                    "species", "route", "metabolites", "enzyme",
+                    "species",
+                    "route",
+                    "metabolites",
+                    "enzyme",
                 ],
             },
             {
@@ -496,7 +538,10 @@ CTD_SECTION_MAP: list[dict[str, Any]] = [
                 "raw_dirs": ["pk"],
                 "artifact_suffixes": [".pk-study.json", ".pk-nca.json"],
                 "fields": [
-                    "species", "route", "clearance", "half_life",
+                    "species",
+                    "route",
+                    "clearance",
+                    "half_life",
                 ],
             },
         ],
@@ -510,8 +555,12 @@ CTD_SECTION_MAP: list[dict[str, Any]] = [
                 "raw_dirs": ["tox"],
                 "artifact_suffixes": [".tox-single-dose.json"],
                 "fields": [
-                    "species", "route", "dose", "ld50",
-                    "findings", "noael",
+                    "species",
+                    "route",
+                    "dose",
+                    "ld50",
+                    "findings",
+                    "noael",
                 ],
             },
             {
@@ -519,8 +568,13 @@ CTD_SECTION_MAP: list[dict[str, Any]] = [
                 "raw_dirs": ["tox"],
                 "artifact_suffixes": [".tox-repeat-dose.json"],
                 "fields": [
-                    "species", "route", "duration", "dose",
-                    "noael", "loael", "findings",
+                    "species",
+                    "route",
+                    "duration",
+                    "dose",
+                    "noael",
+                    "loael",
+                    "findings",
                 ],
             },
             {
@@ -531,7 +585,9 @@ CTD_SECTION_MAP: list[dict[str, Any]] = [
                     ".tox-genotox-assessment.json",
                 ],
                 "fields": [
-                    "test_system", "result", "conclusion",
+                    "test_system",
+                    "result",
+                    "conclusion",
                 ],
             },
         ],
@@ -606,13 +662,15 @@ def _collect_relays_from_artifact(
         if meta and isinstance(meta.get("mandatory_relays"), list):
             for r in meta["mandatory_relays"]:
                 if isinstance(r, dict) and "code" in r:
-                    relays.append({
-                        "code": r["code"],
-                        "message": r.get("message", ""),
-                        "source_artifact": str(
-                            artifact_path.relative_to(project_root)
-                        ),
-                    })
+                    relays.append(
+                        {
+                            "code": r["code"],
+                            "message": r.get("message", ""),
+                            "source_artifact": str(
+                                artifact_path.relative_to(project_root)
+                            ),
+                        }
+                    )
 
     # Check for .analysis.json beside the artifact.
     analysis_path = artifact_path.with_name(
@@ -623,13 +681,15 @@ def _collect_relays_from_artifact(
         if analysis and isinstance(analysis.get("mandatory_relays"), list):
             for r in analysis["mandatory_relays"]:
                 if isinstance(r, dict) and "code" in r:
-                    relays.append({
-                        "code": r["code"],
-                        "message": r.get("message", ""),
-                        "source_artifact": str(
-                            artifact_path.relative_to(project_root)
-                        ),
-                    })
+                    relays.append(
+                        {
+                            "code": r["code"],
+                            "message": r.get("message", ""),
+                            "source_artifact": str(
+                                artifact_path.relative_to(project_root)
+                            ),
+                        }
+                    )
 
     return relays
 
@@ -671,8 +731,7 @@ def _build_export(
                     if not f.resolve().is_relative_to(root_resolved):
                         continue
                     if not any(
-                        f.name.endswith(sfx)
-                        for sfx in subsection["artifact_suffixes"]
+                        f.name.endswith(sfx) for sfx in subsection["artifact_suffixes"]
                     ):
                         continue
 
@@ -683,7 +742,10 @@ def _build_export(
                     rel_path = str(f.relative_to(project_root))
                     wo_id = artifact.get("work_order_id", work_order_id)
                     row = _extract_fields(
-                        artifact, subsection["fields"], rel_path, wo_id,
+                        artifact,
+                        subsection["fields"],
+                        rel_path,
+                        wo_id,
                     )
                     entries.append(row)
                     matched_paths.append(f)
@@ -694,25 +756,31 @@ def _build_export(
                 all_relays.extend(art_relays)
 
             if entries:
-                subsection_results.append({
-                    "name": subsection["name"],
-                    "status": "POPULATED",
-                    "entries": entries,
-                })
+                subsection_results.append(
+                    {
+                        "name": subsection["name"],
+                        "status": "POPULATED",
+                        "entries": entries,
+                    }
+                )
             else:
-                subsection_results.append({
-                    "name": subsection["name"],
-                    "status": "NOT_AVAILABLE",
-                    "reason": "No source artifact found",
-                    "entries": [],
-                })
+                subsection_results.append(
+                    {
+                        "name": subsection["name"],
+                        "status": "NOT_AVAILABLE",
+                        "reason": "No source artifact found",
+                        "entries": [],
+                    }
+                )
 
-        sections.append({
-            "ctd_section": ctd_section,
-            "title": section_def["title"],
-            "guidance_references": ICH_GUIDANCE_REFERENCES.get(ctd_section, []),
-            "subsections": subsection_results,
-        })
+        sections.append(
+            {
+                "ctd_section": ctd_section,
+                "title": section_def["title"],
+                "guidance_references": ICH_GUIDANCE_REFERENCES.get(ctd_section, []),
+                "subsections": subsection_results,
+            }
+        )
 
     # Deduplicate relays by (code, source_artifact).
     seen_relay_keys: set[tuple[str, str]] = set()
@@ -727,19 +795,13 @@ def _build_export(
     forwarded_relays: list[dict[str, Any]] = []
     for r in unique_relays:
         code = r["code"]
-        if (
-            code in _MUST_PROPAGATE_RELAY_CODES
-            or "prediction_not_measurement" in code
-        ):
+        if code in _MUST_PROPAGATE_RELAY_CODES or "prediction_not_measurement" in code:
             forwarded_relays.append(r)
 
     # Also include all other relays — the must-propagate set is a
     # minimum, not a filter.  All upstream relays are forwarded so
     # provenance is not lost.
-    other_relays = [
-        r for r in unique_relays
-        if r not in forwarded_relays
-    ]
+    other_relays = [r for r in unique_relays if r not in forwarded_relays]
     forwarded_relays.extend(other_relays)
 
     return {
@@ -768,9 +830,7 @@ def _export_to_tsv(export: dict[str, Any]) -> str:
     lines: list[str] = []
 
     for section in export["sections"]:
-        lines.append(
-            f"# {section['ctd_section']} — {section['title']}"
-        )
+        lines.append(f"# {section['ctd_section']} — {section['title']}")
         refs = section.get("guidance_references", [])
         if refs:
             ref_str = ", ".join(r["code"] for r in refs)
@@ -802,9 +862,7 @@ def _export_to_tsv(export: dict[str, Any]) -> str:
                 for k in all_keys:
                     if k == "source_path":
                         src = entry.get("source", {})
-                        row_values.append(
-                            str(src.get("artifact_path", ""))
-                        )
+                        row_values.append(str(src.get("artifact_path", "")))
                     else:
                         val = entry.get(k, "")
                         if isinstance(val, (dict, list)):
@@ -818,9 +876,7 @@ def _export_to_tsv(export: dict[str, Any]) -> str:
         lines.append("# Forwarded Relays")
         lines.append("code\tmessage\tsource_artifact")
         for r in export["relays"]:
-            lines.append(
-                f"{r['code']}\t{r['message']}\t{r['source_artifact']}"
-            )
+            lines.append(f"{r['code']}\t{r['message']}\t{r['source_artifact']}")
 
     return "\n".join(lines) + "\n"
 
@@ -838,9 +894,7 @@ def _export_to_markdown(export: dict[str, Any]) -> str:
     lines.append("")
 
     for section in export["sections"]:
-        lines.append(
-            f"## {section['ctd_section']} {section['title']}"
-        )
+        lines.append(f"## {section['ctd_section']} {section['title']}")
         lines.append("")
 
         refs = section.get("guidance_references", [])
@@ -855,9 +909,7 @@ def _export_to_markdown(export: dict[str, Any]) -> str:
 
             if subsection["status"] == "NOT_AVAILABLE":
                 reason = subsection.get("reason", "No source artifact found")
-                lines.append(
-                    f"*NOT AVAILABLE — {reason}*"
-                )
+                lines.append(f"*NOT AVAILABLE — {reason}*")
                 lines.append("")
                 continue
 
@@ -887,9 +939,7 @@ def _export_to_markdown(export: dict[str, Any]) -> str:
                         val = json.dumps(val)
                     cells.append(str(val).replace("|", "\\|"))
                 src = entry.get("source", {})
-                source_str = str(
-                    src.get("artifact_path", "")
-                ).replace("|", "\\|")
+                source_str = str(src.get("artifact_path", "")).replace("|", "\\|")
                 cells.append(source_str)
                 lines.append("| " + " | ".join(cells) + " |")
 
@@ -898,9 +948,7 @@ def _export_to_markdown(export: dict[str, Any]) -> str:
     if export.get("relays"):
         lines.append("## Forwarded Relays")
         lines.append("")
-        lines.append(
-            f"**{len(export['relays'])} upstream relay(s) forwarded.**"
-        )
+        lines.append(f"**{len(export['relays'])} upstream relay(s) forwarded.**")
         lines.append("")
         lines.append("| Code | Message | Source Artifact |")
         lines.append("| --- | --- | --- |")
@@ -948,7 +996,8 @@ def check_cmd(state: AppState, as_json: bool, quiet: bool) -> None:
 
     output_path = gates_dir / "dossier-check.json"
     output_path.write_text(
-        json.dumps(report, indent=2) + "\n", encoding="utf-8",
+        json.dumps(report, indent=2) + "\n",
+        encoding="utf-8",
     )
 
     # Provenance sidecar.
@@ -972,10 +1021,7 @@ def check_cmd(state: AppState, as_json: bool, quiet: bool) -> None:
     emit.data("summary", report["summary"])
 
     # Human-readable summary.
-    emit.line(
-        f"IND Module 4 Readiness — "
-        f"{summary['total_sections']} sections"
-    )
+    emit.line(f"IND Module 4 Readiness — {summary['total_sections']} sections")
     emit.line(f"  covered:      {summary['covered']}")
     emit.line(f"  finding_only: {summary['finding_only']}")
     emit.line(f"  missing:      {summary['missing']}")
@@ -1001,11 +1047,16 @@ def check_cmd(state: AppState, as_json: bool, quiet: bool) -> None:
 @dossier.command("export")
 @click.argument("wo_id")
 @click.option(
-    "--format", "fmt", default="ctd", show_default=True,
+    "--format",
+    "fmt",
+    default="ctd",
+    show_default=True,
     help="Export format (currently only 'ctd' is supported).",
 )
 @click.option(
-    "--output-format", "output_fmt", default="json",
+    "--output-format",
+    "output_fmt",
+    default="json",
     type=click.Choice(["json", "tsv", "markdown"], case_sensitive=False),
     show_default=True,
     help="Output rendering: json (structured), tsv (tabular), markdown.",
@@ -1045,7 +1096,8 @@ def export_cmd(
     # Always write the canonical JSON for provenance.
     json_path = gates_dir / "dossier-export.json"
     json_path.write_text(
-        json.dumps(export, indent=2) + "\n", encoding="utf-8",
+        json.dumps(export, indent=2) + "\n",
+        encoding="utf-8",
     )
 
     # Write the requested output format.
@@ -1097,12 +1149,14 @@ def export_cmd(
     # Human-readable summary.
     section_count = len(export["sections"])
     populated = sum(
-        1 for s in export["sections"]
+        1
+        for s in export["sections"]
         for ss in s["subsections"]
         if ss["status"] == "POPULATED"
     )
     not_available = sum(
-        1 for s in export["sections"]
+        1
+        for s in export["sections"]
         for ss in s["subsections"]
         if ss["status"] == "NOT_AVAILABLE"
     )

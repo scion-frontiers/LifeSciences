@@ -55,12 +55,12 @@ from ..common import (
     pass_state,
 )
 from ..core import http, provenance
-from ..core.qps import qps_for_host
 from ..core.errors import (
     ArtifactError,
     Refusal,
     SchemaError,
 )
+from ..core.qps import qps_for_host
 
 TOOL = "phenotype"
 ARTIFACT_CLASS = "genomics"
@@ -87,10 +87,7 @@ def _fetch_mgi(gene: str) -> tuple[bytes, dict[str, Any]]:
     Returns (verbatim response bytes, structured artifact dict).
     """
     # Step 1: Search for the gene marker via MGI marker/json.
-    search_url = (
-        f"{MGI_API}/marker/json"
-        f"?nomen={quote(gene, safe='')}*"
-    )
+    search_url = f"{MGI_API}/marker/json?nomen={quote(gene, safe='')}*"
     search_data = http.get_json(
         search_url,
         qps=qps_for_host("www.informatics.jax.org"),
@@ -199,9 +196,7 @@ def _extract_mgi_markers(data: Any, gene: str) -> list[dict[str, Any]]:
     return markers
 
 
-def _best_mgi_marker(
-    markers: list[dict[str, Any]], gene: str
-) -> dict[str, Any]:
+def _best_mgi_marker(markers: list[dict[str, Any]], gene: str) -> dict[str, Any]:
     """Pick the best marker from a search result list.
 
     Prefer an exact case-insensitive symbol match. Fall back to the
@@ -254,27 +249,35 @@ def _extract_mgi_phenotypes(
             allele_sym = ""
             if isinstance(allele_info, dict):
                 sym_obj = allele_info.get("alleleSymbol") or {}
-                allele_sym = sym_obj.get("formatText", "") if isinstance(sym_obj, dict) else ""
+                allele_sym = (
+                    sym_obj.get("formatText", "") if isinstance(sym_obj, dict) else ""
+                )
 
             # Extract PMID references.
             evidence = annot.get("evidenceItem") or {}
             refs: list[str] = []
             if isinstance(evidence, dict):
                 for xref in evidence.get("crossReferences") or []:
-                    curie = xref.get("referencedCurie", "") if isinstance(xref, dict) else ""
+                    curie = (
+                        xref.get("referencedCurie", "")
+                        if isinstance(xref, dict)
+                        else ""
+                    )
                     if curie.startswith("PMID:"):
                         refs.append(curie)
 
-            phenotypes.append({
-                "source_db": "mgi",
-                "gene_id": mgi_id,
-                "gene_symbol": symbol,
-                "organism": "Mus musculus",
-                "allele_type": allele_sym,
-                "phenotype_term": term_name,
-                "mp_id": mp_id,
-                "references": refs,
-            })
+            phenotypes.append(
+                {
+                    "source_db": "mgi",
+                    "gene_id": mgi_id,
+                    "gene_symbol": symbol,
+                    "organism": "Mus musculus",
+                    "allele_type": allele_sym,
+                    "phenotype_term": term_name,
+                    "mp_id": mp_id,
+                    "references": refs,
+                }
+            )
 
     return phenotypes
 
@@ -319,7 +322,9 @@ def _fetch_hpo(gene: str) -> tuple[bytes, dict[str, Any]]:
     )
 
     phenotypes: list[dict[str, Any]] = []
-    hpo_phenotypes = annot_data.get("phenotypes") if isinstance(annot_data, dict) else []
+    hpo_phenotypes = (
+        annot_data.get("phenotypes") if isinstance(annot_data, dict) else []
+    )
     hpo_diseases = annot_data.get("diseases") if isinstance(annot_data, dict) else []
     if not isinstance(hpo_phenotypes, list):
         hpo_phenotypes = []
@@ -340,15 +345,17 @@ def _fetch_hpo(gene: str) -> tuple[bytes, dict[str, Any]]:
             continue
         hpo_id = term.get("id", "")
         name = term.get("name", "")
-        phenotypes.append({
-            "source_db": "hpo",
-            "gene_id": gene_id,
-            "gene_symbol": resolved_name,
-            "organism": "Homo sapiens",
-            "hpo_id": hpo_id,
-            "phenotype_term": name,
-            "frequency": "",
-        })
+        phenotypes.append(
+            {
+                "source_db": "hpo",
+                "gene_id": gene_id,
+                "gene_symbol": resolved_name,
+                "organism": "Homo sapiens",
+                "hpo_id": hpo_id,
+                "phenotype_term": name,
+                "frequency": "",
+            }
+        )
 
     if not phenotypes:
         raise Refusal(
@@ -363,22 +370,24 @@ def _fetch_hpo(gene: str) -> tuple[bytes, dict[str, Any]]:
     }
     raw = json.dumps(combined, indent=2).encode("utf-8")
     artifact = _build_artifact(
-        gene, "hpo", gene_id, resolved_name, "Homo sapiens", phenotypes,
+        gene,
+        "hpo",
+        gene_id,
+        resolved_name,
+        "Homo sapiens",
+        phenotypes,
     )
     # Disease associations from HPO are gene-level, not per-phenotype.
     # Place them in the summary to avoid implying each phenotype term
     # is individually linked to every disease.
     if disease_names:
         artifact["summary"]["disease_associations"] = [
-            {"id": did, "name": dname}
-            for did, dname in disease_names.items()
+            {"id": did, "name": dname} for did, dname in disease_names.items()
         ]
     return raw, artifact
 
 
-def _best_hpo_gene(
-    results: list[dict[str, Any]], gene: str
-) -> dict[str, Any]:
+def _best_hpo_gene(results: list[dict[str, Any]], gene: str) -> dict[str, Any]:
     """Pick the best gene match from HPO gene search results.
 
     Prefer an exact case-insensitive name match. Fall back to the first
@@ -400,11 +409,9 @@ def _build_artifact(
     phenotypes: list[dict[str, Any]],
 ) -> dict[str, Any]:
     """Build the structured dde.phenotype.v1 artifact."""
-    model_organisms = sorted({
-        p.get("organism", organism)
-        for p in phenotypes
-        if p.get("organism")
-    }) or [organism]
+    model_organisms = sorted(
+        {p.get("organism", organism) for p in phenotypes if p.get("organism")}
+    ) or [organism]
 
     artifact: dict[str, Any] = {
         "schema": "dde.phenotype.v1",
@@ -474,8 +481,7 @@ def search_cmd(
     if source == "mgi":
         sidecar.note(
             "endpoint_detail",
-            f"Gene resolution via {MGI_API}; "
-            f"phenotype data via {AGR_API}",
+            f"Gene resolution via {MGI_API}; phenotype data via {AGR_API}",
         )
     sidecar.note("n_phenotypes", artifact["summary"]["n_phenotypes"])
     sidecar.note("model_organisms", artifact["summary"]["model_organisms"])
@@ -490,15 +496,11 @@ def search_cmd(
 
     # Write structured artifact.
     artifact_path = target_dir / f"{slug}.phenotype-{source}.artifact.json"
-    artifact_path.write_text(
-        json.dumps(artifact, indent=2) + "\n", encoding="utf-8"
-    )
+    artifact_path.write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
     sidecar.add_output(artifact_path)
 
     # Write sidecar.
-    meta_path = sidecar.write(
-        target_dir / f"{slug}.phenotype-{source}.meta.json"
-    )
+    meta_path = sidecar.write(target_dir / f"{slug}.phenotype-{source}.meta.json")
 
     emit.data("gene", gene.upper())
     emit.data("source", source)

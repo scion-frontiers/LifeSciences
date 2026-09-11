@@ -214,7 +214,10 @@ def search_cmd(
     slug = _slugify(query)
 
     raw, artifact, truncated = _fetch_studies(
-        query, cancer_type, study_filter, max_results,
+        query,
+        cancer_type,
+        study_filter,
+        max_results,
     )
 
     sidecar = provenance.Sidecar(
@@ -254,7 +257,8 @@ def search_cmd(
     # Write structured artifact
     artifact_path = target_dir / f"{slug}.cbioportal-search.json"
     artifact_path.write_text(
-        json.dumps(artifact, indent=2) + "\n", encoding="utf-8",
+        json.dumps(artifact, indent=2) + "\n",
+        encoding="utf-8",
     )
     sidecar.add_output(artifact_path)
 
@@ -272,8 +276,7 @@ def search_cmd(
     if artifact["results"]:
         for r in artifact["results"][:5]:
             emit.line(
-                f"  {r['study_id']}: {r['name'][:60]} "
-                f"({r['sample_count']} samples)"
+                f"  {r['study_id']}: {r['name'][:60]} ({r['sample_count']} samples)"
             )
         if n_results > 5:
             emit.line(f"  ... {n_results - 5} more in the artifact")
@@ -353,8 +356,10 @@ def analyze_cmd(
     }
 
     analysis_path = provenance.write_analysis(
-        target_dir / artifact_path.name.replace(
-            ".cbioportal-search.json", ".cbioportal-search.analysis.json",
+        target_dir
+        / artifact_path.name.replace(
+            ".cbioportal-search.json",
+            ".cbioportal-search.analysis.json",
         ),
         source=state.project().relative(artifact_path),
         threshold_set="cbioportal-search",

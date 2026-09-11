@@ -40,7 +40,6 @@ import csv
 import hashlib
 import io
 import json
-import math
 import re
 from pathlib import Path
 from typing import Any
@@ -204,10 +203,7 @@ def _safe_write_artifact(path: Path, content: str, *, overwrite: bool) -> bool:
     new_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
 
     if existing_hash == new_hash:
-        warn(
-            f"artifact already exists with identical content, skipping: "
-            f"{path.name}"
-        )
+        warn(f"artifact already exists with identical content, skipping: {path.name}")
         return False
 
     raise Refusal(
@@ -237,7 +233,9 @@ _ACIDIC_GROUP_SMARTS = "[CX3](=O)[OX2H1]"
 
 
 def _predict_metabolic_stability(
-    mol: Any, logp: float, aromatic_rings: int,
+    mol: Any,
+    logp: float,
+    aromatic_rings: int,
 ) -> dict[str, Any]:
     """Predict metabolic stability class from LogP and aromatic ring count.
 
@@ -275,7 +273,10 @@ def _predict_metabolic_stability(
 
 
 def _predict_cyp_inhibition(
-    mol: Any, Chem: Any, logp: float, mw: float,
+    mol: Any,
+    Chem: Any,
+    logp: float,
+    mw: float,
 ) -> dict[str, Any]:
     """Predict CYP inhibition risk for CYP2D6, CYP3A4, CYP2C9.
 
@@ -289,11 +290,11 @@ def _predict_cyp_inhibition(
     basic_n_pattern = Chem.MolFromSmarts(_BASIC_NITROGEN_SMARTS)
     acidic_pattern = Chem.MolFromSmarts(_ACIDIC_GROUP_SMARTS)
 
-    has_basic_nitrogen = (
-        basic_n_pattern is not None and mol.HasSubstructMatch(basic_n_pattern)
+    has_basic_nitrogen = basic_n_pattern is not None and mol.HasSubstructMatch(
+        basic_n_pattern
     )
-    has_acidic_group = (
-        acidic_pattern is not None and mol.HasSubstructMatch(acidic_pattern)
+    has_acidic_group = acidic_pattern is not None and mol.HasSubstructMatch(
+        acidic_pattern
     )
 
     isoforms: dict[str, dict[str, Any]] = {}
@@ -354,7 +355,10 @@ def _predict_cyp_inhibition(
 
 
 def _predict_permeability(
-    mol: Any, logp: float, tpsa: float, mw: float,
+    mol: Any,
+    logp: float,
+    tpsa: float,
+    mw: float,
 ) -> dict[str, Any]:
     """Predict passive permeability using the Egan egg model.
 
@@ -407,7 +411,10 @@ def _predict_permeability(
 
 
 def _predict_herg(
-    mol: Any, Chem: Any, logp: float, aromatic_rings: int,
+    mol: Any,
+    Chem: Any,
+    logp: float,
+    aromatic_rings: int,
 ) -> dict[str, Any]:
     """Predict hERG liability from pharmacophore features.
 
@@ -418,8 +425,8 @@ def _predict_herg(
     + LogP > 3.7 + two or more aromatic rings (hydrophobic mass).
     """
     basic_n_pattern = Chem.MolFromSmarts(_BASIC_NITROGEN_SMARTS)
-    has_basic_nitrogen = (
-        basic_n_pattern is not None and mol.HasSubstructMatch(basic_n_pattern)
+    has_basic_nitrogen = basic_n_pattern is not None and mol.HasSubstructMatch(
+        basic_n_pattern
     )
 
     triggering_features: list[str] = []
@@ -462,8 +469,12 @@ def _predict_herg(
 
 
 def _predict_solubility(
-    mol: Any, Descriptors: Any, rdMolDescriptors: Any,
-    logp: float, mw: float, rotatable_bonds: int,
+    mol: Any,
+    Descriptors: Any,
+    rdMolDescriptors: Any,
+    logp: float,
+    mw: float,
+    rotatable_bonds: int,
 ) -> dict[str, Any]:
     """Predict aqueous solubility using the ESOL (Delaney) model.
 
@@ -480,9 +491,7 @@ def _predict_solubility(
       AP = aromatic proportion (aromatic atoms / heavy atoms)
     """
     heavy_atoms = mol.GetNumHeavyAtoms()
-    aromatic_atoms = sum(
-        1 for atom in mol.GetAtoms() if atom.GetIsAromatic()
-    )
+    aromatic_atoms = sum(1 for atom in mol.GetAtoms() if atom.GetIsAromatic())
     aromatic_proportion = aromatic_atoms / heavy_atoms if heavy_atoms > 0 else 0.0
 
     # ESOL equation coefficients
@@ -571,7 +580,12 @@ def _predict_single(smiles_input: str) -> dict[str, Any]:
     permeability = _predict_permeability(mol, logp, tpsa, mw)
     herg = _predict_herg(mol, Chem, logp, aromatic_rings)
     solubility = _predict_solubility(
-        mol, Descriptors, rdMolDescriptors, logp, mw, rotatable_bonds,
+        mol,
+        Descriptors,
+        rdMolDescriptors,
+        logp,
+        mw,
+        rotatable_bonds,
     )
 
     return {
@@ -679,7 +693,7 @@ def _read_batch_input(input_path: Path) -> list[dict[str, str]]:
         if not isinstance(data, list):
             raise Refusal(
                 f"JSON batch input must be a list of objects, got {type(data).__name__}",
-                detail="expected [{\"smiles\": \"...\", ...}, ...]",
+                detail='expected [{"smiles": "...", ...}, ...]',
                 remedy="wrap the data in a JSON array",
             )
         for i, entry in enumerate(data):
@@ -874,7 +888,11 @@ def predict_batch_cmd(
 
             summary_rows.append(row)
             n_succeeded += 1
-            emit.line(f"{canonical}: predicted ({name})" if name else f"{canonical}: predicted")
+            emit.line(
+                f"{canonical}: predicted ({name})"
+                if name
+                else f"{canonical}: predicted"
+            )
 
         except Exception as exc:
             # Record error and continue with next compound
@@ -1020,7 +1038,7 @@ def topical_cmd(
     mw = _compute_mw_from_smiles(smiles)
 
     # --- Parse SMILES for canonical form ---
-    mol, canonical, fragment_notes, _ = _parse_smiles(smiles)
+    _mol, canonical, fragment_notes, _ = _parse_smiles(smiles)
     slug = _slug(name) if name else _slug(canonical)
 
     # --- Potts-Guy log Kp ---
@@ -1034,7 +1052,7 @@ def topical_cmd(
     log_kscw = round(log_kscw, 4)
 
     # --- Kp in cm/hr ---
-    kp_cm_hr = 10 ** log_kp
+    kp_cm_hr = 10**log_kp
 
     # --- Jmax (maximum flux) ---
     jmax = None
@@ -1081,8 +1099,7 @@ def topical_cmd(
             "name": "Potts-Guy",
             "equation": "log Kp = -2.72 + 0.71 * logP - 0.0061 * MW",
             "citation": (
-                "Potts & Guy, 'Predicting Skin Permeability', "
-                "Pharm Res 1992;9:663-669"
+                "Potts & Guy, 'Predicting Skin Permeability', Pharm Res 1992;9:663-669"
             ),
         },
     }
@@ -1175,7 +1192,7 @@ def analyze_cmd(
             f"no ADMET predictions found for {smiles!r} under {source_dir}",
             detail=f"tried slug {slug!r}; if you passed a non-canonical SMILES, "
             "pass the canonical form printed by `dde admet predict`",
-            remedy=f"run `dde admet predict` first, then pass the "
+            remedy="run `dde admet predict` first, then pass the "
             "canonical SMILES it printed",
         )
     predict_doc = provenance.read_json(predict_path, "ADMET prediction record")
@@ -1208,8 +1225,9 @@ def analyze_cmd(
     metab_logp = metab_descs.get("logp", 0)
     metab_aromatic = metab_descs.get("aromatic_rings", 0)
 
-    if (metab_logp > thresh.get("metabolic_logp_high")
-            and metab_aromatic >= thresh.get("metabolic_aromatic_rings_high")):
+    if metab_logp > thresh.get("metabolic_logp_high") and metab_aromatic >= thresh.get(
+        "metabolic_aromatic_rings_high"
+    ):
         metab_class = "high"
     elif metab_logp <= thresh.get("metabolic_logp_low") and metab_logp >= 1:
         metab_class = "low"
@@ -1242,14 +1260,10 @@ def analyze_cmd(
         "n_flagged": len(flagged_isoforms),
     }
     if len(flagged_isoforms) >= 2:
-        liabilities.append(
-            f"cyp_inhibition ({', '.join(flagged_isoforms)} flagged)"
-        )
+        liabilities.append(f"cyp_inhibition ({', '.join(flagged_isoforms)} flagged)")
         cyp_result["status"] = "unacceptable"
     elif len(flagged_isoforms) == 1:
-        marginals.append(
-            f"cyp_inhibition ({flagged_isoforms[0]} flagged)"
-        )
+        marginals.append(f"cyp_inhibition ({flagged_isoforms[0]} flagged)")
         cyp_result["status"] = "marginal"
     else:
         cyp_result["status"] = "acceptable"
@@ -1264,9 +1278,11 @@ def analyze_cmd(
 
     if perm_mw > thresh.get("permeability_mw_max"):
         perm_class = "low"
-    elif (perm_tpsa <= thresh.get("permeability_tpsa_high")
-            and perm_logp >= thresh.get("permeability_logp_min")
-            and perm_logp <= thresh.get("permeability_logp_max")):
+    elif (
+        perm_tpsa <= thresh.get("permeability_tpsa_high")
+        and perm_logp >= thresh.get("permeability_logp_min")
+        and perm_logp <= thresh.get("permeability_logp_max")
+    ):
         perm_class = "high"
     elif perm_tpsa > thresh.get("permeability_tpsa_low"):
         perm_class = "low"
@@ -1383,7 +1399,9 @@ def analyze_cmd(
     # --- conditional relay: herg_structural_flag ---
     # Fires when hERG structural features are detected.
     if herg_flagged:
-        features_text = "; ".join(herg_features) if herg_features else "structural features"
+        features_text = (
+            "; ".join(herg_features) if herg_features else "structural features"
+        )
         relays.append(
             provenance.relay(
                 "admet.herg_structural_flag",
@@ -1403,36 +1421,44 @@ def analyze_cmd(
     relay_dispositions: list[dict[str, str]] = []
 
     if verdict == "developable":
-        relay_dispositions.append({
-            "code": "admet.prediction_not_measurement",
-            "status": "emitted",
-            "condition": "verdict is developable",
-        })
+        relay_dispositions.append(
+            {
+                "code": "admet.prediction_not_measurement",
+                "status": "emitted",
+                "condition": "verdict is developable",
+            }
+        )
     else:
-        relay_dispositions.append({
-            "code": "admet.prediction_not_measurement",
-            "status": "not_applicable",
-            "condition": "verdict is developable",
-            "reason": (
-                f"verdict is {verdict}; the over-read risk this relay guards "
-                "against — treating predictions as measurements — is highest "
-                "when the profile looks clean, which this one does not"
-            ),
-        })
+        relay_dispositions.append(
+            {
+                "code": "admet.prediction_not_measurement",
+                "status": "not_applicable",
+                "condition": "verdict is developable",
+                "reason": (
+                    f"verdict is {verdict}; the over-read risk this relay guards "
+                    "against — treating predictions as measurements — is highest "
+                    "when the profile looks clean, which this one does not"
+                ),
+            }
+        )
 
     if herg_flagged:
-        relay_dispositions.append({
-            "code": "admet.herg_structural_flag",
-            "status": "emitted",
-            "condition": "hERG structural features detected",
-        })
+        relay_dispositions.append(
+            {
+                "code": "admet.herg_structural_flag",
+                "status": "emitted",
+                "condition": "hERG structural features detected",
+            }
+        )
     else:
-        relay_dispositions.append({
-            "code": "admet.herg_structural_flag",
-            "status": "not_applicable",
-            "condition": "hERG structural features detected",
-            "reason": "no hERG pharmacophore features matched",
-        })
+        relay_dispositions.append(
+            {
+                "code": "admet.herg_structural_flag",
+                "status": "not_applicable",
+                "condition": "hERG structural features detected",
+                "reason": "no hERG pharmacophore features matched",
+            }
+        )
 
     metrics: dict[str, Any] = {
         "canonical_smiles": canonical,

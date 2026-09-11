@@ -25,10 +25,8 @@ Covers:
 
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
-from typing import Any
 
 TOOLS_DIR = Path(__file__).resolve().parent.parent
 if str(TOOLS_DIR) not in sys.path:
@@ -37,11 +35,9 @@ if str(TOOLS_DIR) not in sys.path:
 from dde.commands.validate import (
     _build_consumes_map,
     _check_deliverables_exist,
-    _has_artifacts_from_consumed_wos,
 )
 from dde.core.controlstore import normalize_deliverables
 from dde.core.provenance import Sidecar
-
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
@@ -128,8 +124,8 @@ def test_build_consumes_map_malformed():
     deliverables = {
         "consumes": [
             "not-a-dict",
-            {"artifact_class": "structures"},              # missing from_work_order
-            {"from_work_order": "WO-002"},                 # missing artifact_class
+            {"artifact_class": "structures"},  # missing from_work_order
+            {"from_work_order": "WO-002"},  # missing artifact_class
             {"artifact_class": "", "from_work_order": ""},  # empty strings
             42,
         ],
@@ -226,7 +222,9 @@ def test_deliverables_exist_consumes_plus_own_artifacts(tmp_path):
     project = _make_project(tmp_path)
 
     # Artifact from consumed WO
-    consumed = _write_artifact(project, "structures", "consumed.cif", content="from-002")
+    consumed = _write_artifact(
+        project, "structures", "consumed.cif", content="from-002"
+    )
     _write_sidecar_for(consumed, "WO-002")
 
     # Own artifact

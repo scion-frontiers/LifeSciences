@@ -87,7 +87,7 @@ CANNOT_RUN = 2
 try:
     from dde.cli import _enumerate_emission_sites
     from dde.core import provenance
-except Exception as exc:  # noqa: BLE001 — any import-time failure is cannot-run
+except Exception as exc:
     print(
         f"CANNOT RUN — {type(exc).__name__}: {exc}\n"
         "  This checker imports the CLI to reuse _enumerate_emission_sites() "
@@ -211,7 +211,7 @@ def skill_relay_table_codes() -> dict[str, list[tuple[str, int]]]:
     """
     found: dict[str, list[tuple[str, int]]] = {}
     skill_files = sorted(
-        {p for p in list(SKILLS.glob("*/SKILL.md")) + list(SKILLS.glob("*/*.md"))}
+        set(list(SKILLS.glob("*/SKILL.md")) + list(SKILLS.glob("*/*.md")))
     )
 
     for path in skill_files:
@@ -326,12 +326,10 @@ def main() -> int:
         1 for p in COMMANDS.glob("*.py") if not p.stem.startswith("_")
     )
     all_skill_files = sorted(
-        {p for p in list(SKILLS.glob("*/SKILL.md")) + list(SKILLS.glob("*/*.md"))}
+        set(list(SKILLS.glob("*/SKILL.md")) + list(SKILLS.glob("*/*.md")))
     )
     n_skill_files = len(all_skill_files)
-    skills_with_tables = len(
-        {p for codes in skill_codes.values() for p, _ in codes}
-    )
+    skills_with_tables = len({p for codes in skill_codes.values() for p, _ in codes})
 
     print(f"registered relay codes: {n_registered}")
     print(

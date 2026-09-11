@@ -72,12 +72,14 @@ _PHASE_ORDER: dict[str, float] = {
 }
 
 # Statuses that indicate a trial is actively running.
-_ACTIVE_STATUSES = frozenset({
-    "RECRUITING",
-    "ENROLLING_BY_INVITATION",
-    "NOT_YET_RECRUITING",
-    "ACTIVE_NOT_RECRUITING",
-})
+_ACTIVE_STATUSES = frozenset(
+    {
+        "RECRUITING",
+        "ENROLLING_BY_INVITATION",
+        "NOT_YET_RECRUITING",
+        "ACTIVE_NOT_RECRUITING",
+    }
+)
 
 
 def _phase_label(phases: list[str]) -> str:
@@ -136,9 +138,7 @@ def _fetch_clinicaltrials(query: str, search_by: str) -> tuple[bytes, dict[str, 
         try:
             payload = json.loads(response.content.decode("utf-8"))
         except Exception as exc:
-            raise SchemaError(
-                "ClinicalTrials.gov did not return JSON", detail=str(exc)
-            )
+            raise SchemaError("ClinicalTrials.gov did not return JSON", detail=str(exc))
 
         studies = payload.get("studies", [])
         if not studies:
@@ -178,14 +178,19 @@ def _fetch_clinicaltrials(query: str, search_by: str) -> tuple[bytes, dict[str, 
         sponsor_counts[sponsor] = sponsor_counts.get(sponsor, 0) + 1
 
     top_sponsors = [
-        name for name, _ in sorted(
-            sponsor_counts.items(), key=lambda x: x[1], reverse=True
-        )[:5]
+        name
+        for name, _ in sorted(sponsor_counts.items(), key=lambda x: x[1], reverse=True)[
+            :5
+        ]
     ]
 
     artifact: dict[str, Any] = {
         "schema": "dde.clinical-trials.v1",
-        "query": {"term": query, "search_by": search_by, "source": "clinicaltrials.gov"},
+        "query": {
+            "term": query,
+            "search_by": search_by,
+            "source": "clinicaltrials.gov",
+        },
         "summary": {
             "n_studies": len(all_studies),
             "by_phase": by_phase,
@@ -214,10 +219,12 @@ def _extract_study(study: dict[str, Any]) -> dict[str, Any]:
     # Extract interventions.
     interventions: list[dict[str, str]] = []
     for interv in arms.get("interventions", []):
-        interventions.append({
-            "type": interv.get("type", ""),
-            "name": interv.get("name", ""),
-        })
+        interventions.append(
+            {
+                "type": interv.get("type", ""),
+                "name": interv.get("name", ""),
+            }
+        )
 
     # Extract sponsor.
     lead_sponsor = (sponsor_mod.get("leadSponsor") or {}).get("name", "")
@@ -225,9 +232,7 @@ def _extract_study(study: dict[str, Any]) -> dict[str, Any]:
     # Extract enrollment.
     enrollment_info = design.get("enrollmentInfo") or {}
     enrollment = (
-        enrollment_info.get("count")
-        if isinstance(enrollment_info, dict)
-        else None
+        enrollment_info.get("count") if isinstance(enrollment_info, dict) else None
     )
 
     # Extract dates.
@@ -266,6 +271,7 @@ def trials() -> None:
 # Both verbs are accepted as aliases for discoverability.  The primary
 # verb for this group is ``search`` (ClinicalTrials.gov returns a result
 # set for a text query); ``fetch`` is the alias.
+
 
 @trials.command("search")
 @click.argument("query")
@@ -319,15 +325,11 @@ def search_cmd(
 
     # Write structured artifact.
     artifact_path = target_dir / f"{slug}.trials-clinicaltrials.artifact.json"
-    artifact_path.write_text(
-        json.dumps(artifact, indent=2) + "\n", encoding="utf-8"
-    )
+    artifact_path.write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
     sidecar.add_output(artifact_path)
 
     # Write sidecar.
-    meta_path = sidecar.write(
-        target_dir / f"{slug}.trials-clinicaltrials.meta.json"
-    )
+    meta_path = sidecar.write(target_dir / f"{slug}.trials-clinicaltrials.meta.json")
 
     emit.data("query", query)
     emit.data("search_by", search_by)
@@ -369,10 +371,7 @@ def analyze_cmd(
     source_dir = state.project().artifact_dir(ARTIFACT_CLASS, from_dir)
     target_dir = state.project().artifact_dir(ARTIFACT_CLASS, out)
 
-    slug = (
-        re.sub(r"[^a-z0-9._-]+", "-", query_term.lower()).strip("-")[:80]
-        or "query"
-    )
+    slug = re.sub(r"[^a-z0-9._-]+", "-", query_term.lower()).strip("-")[:80] or "query"
     artifact_path = source_dir / f"{slug}.trials-clinicaltrials.artifact.json"
     if not artifact_path.is_file():
         raise ArtifactError(
@@ -384,10 +383,7 @@ def analyze_cmd(
     if artifact.get("schema") != "dde.clinical-trials.v1":
         raise SchemaError(
             f"unexpected schema in {artifact_path.name}",
-            detail=(
-                f"expected dde.clinical-trials.v1, "
-                f"got {artifact.get('schema')!r}"
-            ),
+            detail=(f"expected dde.clinical-trials.v1, got {artifact.get('schema')!r}"),
         )
 
     studies = artifact.get("studies", [])
@@ -401,8 +397,11 @@ def analyze_cmd(
             relays.append(provenance.relay(code, message))
 
     # Classify trials.
-    significant, metrics, assessment = _analyze_trials(
-        query_term, studies, active_min_phase, add_relay,
+    _significant, metrics, assessment = _analyze_trials(
+        query_term,
+        studies,
+        active_min_phase,
+        add_relay,
     )
 
     analysis_path = provenance.write_analysis(
@@ -487,9 +486,7 @@ def _analyze_trials(
         for interv in s.get("interventions", []):
             name = interv.get("name", "")
             if name:
-                intervention_counts[name] = (
-                    intervention_counts.get(name, 0) + 1
-                )
+                intervention_counts[name] = intervention_counts.get(name, 0) + 1
 
         if status in _ACTIVE_STATUSES:
             recruiting_count += 1
@@ -537,7 +534,7 @@ def _analyze_trials(
     if n_total > 0 and len(phase_3_plus) / n_total > _HIGH_PHASE3_RATIO:
         confidence_triggers.append(
             f"Phase 3+ ratio ({len(phase_3_plus)}/{n_total} = "
-            f"{len(phase_3_plus)/n_total:.1%}) exceeds "
+            f"{len(phase_3_plus) / n_total:.1%}) exceeds "
             f"{_HIGH_PHASE3_RATIO:.0%} threshold"
         )
 
@@ -562,12 +559,14 @@ def _analyze_trials(
 
     # Top sponsors and interventions.
     top_sponsors = [
-        name for name, _ in sorted(
-            sponsor_counts.items(), key=lambda x: x[1], reverse=True
-        )[:5]
+        name
+        for name, _ in sorted(sponsor_counts.items(), key=lambda x: x[1], reverse=True)[
+            :5
+        ]
     ]
     top_interventions = [
-        name for name, _ in sorted(
+        name
+        for name, _ in sorted(
             intervention_counts.items(), key=lambda x: x[1], reverse=True
         )[:5]
     ]
@@ -581,9 +580,9 @@ def _analyze_trials(
 
     # Relay: competitor pipeline when Phase 3+ trials exist.
     if phase_3_plus:
-        sponsors_in_p3 = sorted({
-            s.get("sponsor", "") for s in phase_3_plus if s.get("sponsor")
-        })
+        sponsors_in_p3 = sorted(
+            {s.get("sponsor", "") for s in phase_3_plus if s.get("sponsor")}
+        )
         add_relay(
             "trials.active_competitor_pipeline",
             f"{len(phase_3_plus)} Phase 3+ trial(s) found for "

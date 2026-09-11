@@ -40,7 +40,6 @@ if str(TOOLS_DIR) not in sys.path:
 
 from dde.core.controlstore import _flatten_entry, normalize_deliverables
 
-
 # ---------------------------------------------------------------------------
 # _flatten_entry tests
 # ---------------------------------------------------------------------------

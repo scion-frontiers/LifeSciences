@@ -87,8 +87,8 @@ from ..common import (
     pass_state,
 )
 from ..core import http, provenance
-from ..core.qps import qps_for_host
 from ..core.errors import ArtifactError, Refusal, SchemaError
+from ..core.qps import qps_for_host
 
 GTEX_BASE = "https://gtexportal.org"
 GTEX_API = f"{GTEX_BASE}/api/v2"
@@ -124,11 +124,13 @@ def _resolve_gene(query: str) -> tuple[str, str, str]:
     """
     query = query.strip()
 
-    url = f"{GTEX_API}/reference/gene?" + urlencode({
-        "geneId": query,
-        "gencodeVersion": GENCODE_VERSION,
-        "genomeBuild": GENOME_BUILD,
-    })
+    url = f"{GTEX_API}/reference/gene?" + urlencode(
+        {
+            "geneId": query,
+            "gencodeVersion": GENCODE_VERSION,
+            "genomeBuild": GENOME_BUILD,
+        }
+    )
 
     payload = http.get_json(url, qps=qps_for_host("gtexportal.org"), timeout=90.0)
     if not isinstance(payload, dict) or "data" not in payload:
@@ -140,7 +142,7 @@ def _resolve_gene(query: str) -> tuple[str, str, str]:
     data = payload["data"]
     if not isinstance(data, list):
         raise SchemaError(
-            f"GTEx gene lookup 'data' field is not a list",
+            "GTEx gene lookup 'data' field is not a list",
             detail=f"got {type(data).__name__}",
         )
 
@@ -148,15 +150,16 @@ def _resolve_gene(query: str) -> tuple[str, str, str]:
     if ENSG_RE.match(query.upper()):
         base_id = query.upper()
         exact = [
-            r for r in data
-            if isinstance(r, dict)
-            and (r.get("gencodeId", "").split(".")[0] == base_id)
+            r
+            for r in data
+            if isinstance(r, dict) and (r.get("gencodeId", "").split(".")[0] == base_id)
         ]
         how = "ensembl_id"
     else:
         # Symbol search: exact match only.
         exact = [
-            r for r in data
+            r
+            for r in data
             if isinstance(r, dict)
             and (r.get("geneSymbol", "").upper() == query.upper())
         ]
@@ -177,8 +180,7 @@ def _resolve_gene(query: str) -> tuple[str, str, str]:
 
     if len(exact) > 1:
         listed = ", ".join(
-            f"{r.get('gencodeId', '?')} ({r.get('geneSymbol', '?')})"
-            for r in exact
+            f"{r.get('gencodeId', '?')} ({r.get('geneSymbol', '?')})" for r in exact
         )
         raise Refusal(
             f"the query {query!r} matches {len(exact)} GTEx genes",
@@ -209,19 +211,23 @@ def _fetch_expression_bytes(gencode_id: str) -> bytes:
     through json.loads/json.dumps would change the digest for formatting
     reasons and break the provenance anchor.
     """
-    url = f"{GTEX_API}/expression/medianGeneExpression?" + urlencode({
-        "gencodeId": gencode_id,
-        "datasetId": GTEX_DATASET,
-        "tissueSiteDetailId": TISSUE_ID,
-    })
+    url = f"{GTEX_API}/expression/medianGeneExpression?" + urlencode(
+        {
+            "gencodeId": gencode_id,
+            "datasetId": GTEX_DATASET,
+            "tissueSiteDetailId": TISSUE_ID,
+        }
+    )
 
-    response = http.request("GET", url, qps=qps_for_host("gtexportal.org"), timeout=90.0)
+    response = http.request(
+        "GET", url, qps=qps_for_host("gtexportal.org"), timeout=90.0
+    )
     body = response.content
     try:
         json.loads(body.decode("utf-8"))
     except Exception as exc:
         raise SchemaError(
-            f"GTEx expression response is not valid JSON",
+            "GTEx expression response is not valid JSON",
             detail=str(exc),
         )
     return body
@@ -340,7 +346,7 @@ def analyze_cmd(
 
     if not isinstance(expression_data, dict) or "data" not in expression_data:
         raise SchemaError(
-            f"GTEx expression record does not have the expected shape",
+            "GTEx expression record does not have the expected shape",
             detail=f"expected a dict with 'data' key, got {type(expression_data).__name__}",
         )
 
@@ -460,9 +466,7 @@ def analyze_cmd(
             f"{record.get('geneSymbol', gencode_id)} ({gencode_id}) — "
             f"GTEx whole-blood median"
         )
-        emit.line(
-            f"median: {record.get('median')} {record.get('unit', 'TPM')}"
-        )
+        emit.line(f"median: {record.get('median')} {record.get('unit', 'TPM')}")
     else:
         emit.line(f"{gencode_id} — no GTEx whole-blood data")
     for r in relays:
@@ -491,8 +495,7 @@ def _locate(state: AppState, gene: str, target_dir: Path) -> tuple[Path, str]:
     candidate = Path(gene)
     if candidate.suffix or "/" in gene:
         expression_path = (
-            candidate if candidate.is_absolute()
-            else state.project().root / candidate
+            candidate if candidate.is_absolute() else state.project().root / candidate
         )
         if not expression_path.is_file():
             raise ArtifactError(f"GTEx expression file not found: {expression_path}")
@@ -521,9 +524,10 @@ def _locate(state: AppState, gene: str, target_dir: Path) -> tuple[Path, str]:
     matches = [
         meta
         for meta in sorted(target_dir.glob("ENSG*.meta.json"))
-        if (
-            json.loads(meta.read_text(encoding="utf-8")).get("parameters") or {}
-        ).get("resolved_symbol", "").upper() == gene.upper()
+        if (json.loads(meta.read_text(encoding="utf-8")).get("parameters") or {})
+        .get("resolved_symbol", "")
+        .upper()
+        == gene.upper()
     ]
     if not matches:
         raise ArtifactError(

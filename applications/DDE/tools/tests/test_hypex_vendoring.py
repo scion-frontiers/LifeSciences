@@ -18,7 +18,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 TOOLS = Path(__file__).resolve().parents[1]
 VENDORED = TOOLS / "vendor" / "hypex"
 EXPLORER = VENDORED / "hypothesis-explorer"
@@ -78,7 +77,8 @@ def test_no_compiled_hypex_artifacts_are_committed() -> None:
             or suffix in {".a", ".dll", ".dylib", ".exe", ".o", ".so", ".wasm"}
             or magic == b"\x7fELF"
             or magic[:2] == b"MZ"
-            or magic in {
+            or magic
+            in {
                 b"\xca\xfe\xba\xbe",
                 b"\xce\xfa\xed\xfe",
                 b"\xcf\xfa\xed\xfe",

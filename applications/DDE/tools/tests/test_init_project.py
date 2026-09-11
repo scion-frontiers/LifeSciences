@@ -204,7 +204,9 @@ class TestInitProjectRejectsRepo(unittest.TestCase):
         """The heuristic backstop also rejects directories that look like
         the dde source repo (docs/tool-design-guidance.md + tools/)."""
         (self.repo / "docs").mkdir()
-        (self.repo / "docs" / "tool-design-guidance.md").write_text("", encoding="utf-8")
+        (self.repo / "docs" / "tool-design-guidance.md").write_text(
+            "", encoding="utf-8"
+        )
         (self.repo / "tools").mkdir()
         with self.assertRaises(ProjectRootError) as ctx:
             init_project(self.repo)

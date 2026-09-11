@@ -50,10 +50,10 @@ from dde.commands.pubchem import (
     _needs_fallback,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 def _property_response(
     cid: int = 2244,
@@ -228,7 +228,8 @@ class TestExtractSmilesFromFullRecord(unittest.TestCase):
 
     def test_both_smiles_extracted(self):
         payload = _full_record_response(
-            canonical="C1=CC=CC=C1", isomeric="[C@@H]1CC1",
+            canonical="C1=CC=CC=C1",
+            isomeric="[C@@H]1CC1",
         )
         result = _extract_smiles_from_full_record(payload)
         self.assertEqual(result["canonical"], "C1=CC=CC=C1")
@@ -290,9 +291,15 @@ class TestBuildCompoundArtifact(unittest.TestCase):
             source="property",
         )
         for key in (
-            "schema", "cid", "canonical_smiles", "isomeric_smiles",
-            "inchikey", "molecular_formula", "molecular_weight",
-            "source", "retrieved",
+            "schema",
+            "cid",
+            "canonical_smiles",
+            "isomeric_smiles",
+            "inchikey",
+            "molecular_formula",
+            "molecular_weight",
+            "source",
+            "retrieved",
         ):
             self.assertIn(key, art, f"missing key: {key}")
 
@@ -460,16 +467,20 @@ class TestFetchSlugOverride(unittest.TestCase):
     def test_custom_slug(self):
         resp = _make_http_response(_property_response(cid=2244))
         exit_code, output, files = _run_fetch(
-            [2244], [resp], slug_override="aspirin",
+            [2244],
+            [resp],
+            slug_override="aspirin",
         )
         self.assertEqual(exit_code, 0, f"exit {exit_code}:\n{output}")
 
         self.assertIn(
-            "aspirin.pubchem-compound.artifact.json", files,
+            "aspirin.pubchem-compound.artifact.json",
+            files,
             "custom-slug artifact not written",
         )
         self.assertIn(
-            "aspirin.pubchem-compound.meta.json", files,
+            "aspirin.pubchem-compound.meta.json",
+            files,
             "custom-slug sidecar not written",
         )
 
@@ -484,9 +495,15 @@ class TestArtifactSchemaShape(unittest.TestCase):
         artifact = files.get("2244.pubchem-compound.artifact.json")
         self.assertIsNotNone(artifact)
         expected_keys = {
-            "schema", "cid", "canonical_smiles", "isomeric_smiles",
-            "inchikey", "molecular_formula", "molecular_weight",
-            "source", "retrieved",
+            "schema",
+            "cid",
+            "canonical_smiles",
+            "isomeric_smiles",
+            "inchikey",
+            "molecular_formula",
+            "molecular_weight",
+            "source",
+            "retrieved",
         }
         self.assertEqual(set(artifact.keys()), expected_keys)
 

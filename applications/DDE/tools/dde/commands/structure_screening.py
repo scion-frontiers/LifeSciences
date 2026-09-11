@@ -59,6 +59,7 @@ from typing import Any
 
 try:
     import click
+
     _HAS_CLICK = True
 except ImportError:
     _HAS_CLICK = False
@@ -69,35 +70,43 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 #: Modalities for which pocket geometry IS the relevant tractability test.
-POCKET_RELEVANT_MODALITIES = frozenset({
-    "small_molecule",
-    "molecular_glue",
-})
+POCKET_RELEVANT_MODALITIES = frozenset(
+    {
+        "small_molecule",
+        "molecular_glue",
+    }
+)
 
 #: Modalities for which pocket geometry is NOT the relevant test.
 #: This is not exhaustive — any modality not in POCKET_RELEVANT_MODALITIES
 #: gets a ``not_yet_applicable`` assessment, not a forced pocket score.
-POCKET_IRRELEVANT_MODALITIES_EXAMPLES = frozenset({
-    "biologic",
-    "antibody",
-    "antisense",
-    "gene_therapy",
-    "cell_therapy",
-})
+POCKET_IRRELEVANT_MODALITIES_EXAMPLES = frozenset(
+    {
+        "biologic",
+        "antibody",
+        "antisense",
+        "gene_therapy",
+        "cell_therapy",
+    }
+)
 
 #: Structure sources that count as "retrieval" (in scope for bounded screen).
-RETRIEVAL_SOURCES = frozenset({
-    "alphafold_db",
-    "pdb",
-    "existing_model",
-})
+RETRIEVAL_SOURCES = frozenset(
+    {
+        "alphafold_db",
+        "pdb",
+        "existing_model",
+    }
+)
 
 #: Structure sources that are new predictions (out of scope).
-PREDICTION_SOURCES = frozenset({
-    "af3_prediction",
-    "af3_new",
-    "new_prediction",
-})
+PREDICTION_SOURCES = frozenset(
+    {
+        "af3_prediction",
+        "af3_new",
+        "new_prediction",
+    }
+)
 
 
 # ---------------------------------------------------------------------------
@@ -322,7 +331,8 @@ def build_assessment_record(
             "schema": "dde.evidence-assessment.v1",
             "id": assessment_id,
             "concept_ref": concept_ref,
-            "claim": claim or (
+            "claim": claim
+            or (
                 f"target has a druggable binding pocket relevant to "
                 f"{modality} intervention"
             ),
@@ -342,7 +352,8 @@ def build_assessment_record(
             "claim": claim or "target has a druggable binding pocket",
             "evidence_status": "not_assessed",
             "execution_outcome": execution_outcome,
-            "rationale": data_unavailable_reason or (
+            "rationale": data_unavailable_reason
+            or (
                 "no suitable structure or model is available for pocket "
                 "analysis; a new prediction would require separate "
                 "cost/resource justification"
@@ -355,9 +366,7 @@ def build_assessment_record(
     evidence_status = _pocket_verdict_to_evidence_status(
         pocket_result, intended_site_residues
     )
-    rationale = _build_rationale(
-        pocket_result, evidence_status, intended_site_residues
-    )
+    rationale = _build_rationale(pocket_result, evidence_status, intended_site_residues)
 
     evidence_ref = {
         "artifact_path": pocket_result.analysis_path or "unknown",
@@ -387,8 +396,7 @@ def build_assessment_record(
     # the qualifiers the pocket tool attached.
     if pocket_result.relays:
         record["relay_codes"] = [
-            {"code": r["code"], "message": r["message"]}
-            for r in pocket_result.relays
+            {"code": r["code"], "message": r["message"]} for r in pocket_result.relays
         ]
 
     # --- Confidence scoping ---
@@ -506,9 +514,7 @@ def _build_rationale(
     # Site relevance
     if intended_site_residues is not None:
         if pocket_result.site_relevant is True:
-            parts.append(
-                "The pocket is at the intended intervention site."
-            )
+            parts.append("The pocket is at the intended intervention site.")
         elif pocket_result.site_relevant is False:
             parts.append(
                 "The pocket is NOT at the intended intervention site; "
@@ -618,7 +624,7 @@ def screen_structures(
     """
     # Modality check first — if pocket geometry is irrelevant, produce
     # one not_yet_applicable record and stop.
-    applicable, modality_reason = check_modality_applicability(modality)
+    applicable, _modality_reason = check_modality_applicability(modality)
     if not applicable:
         return [
             build_assessment_record(
@@ -653,29 +659,27 @@ def screen_structures(
 
     for i, candidate in enumerate(candidates):
         # Budget check
-        within_budget, budget_reason = check_budget(
-            budget, evaluated, start_time
-        )
+        within_budget, budget_reason = check_budget(budget, evaluated, start_time)
         if not within_budget:
             # Record that we stopped due to budget
-            assessments.append({
-                "schema": "dde.evidence-assessment.v1",
-                "id": f"AR-{len(assessments) + 1:03d}",
-                "concept_ref": concept_ref,
-                "claim": claim or "target has a druggable binding pocket",
-                "evidence_status": "not_assessed",
-                "execution_outcome": "blocked",
-                "rationale": f"screen budget exhausted: {budget_reason}; "
+            assessments.append(
+                {
+                    "schema": "dde.evidence-assessment.v1",
+                    "id": f"AR-{len(assessments) + 1:03d}",
+                    "concept_ref": concept_ref,
+                    "claim": claim or "target has a druggable binding pocket",
+                    "evidence_status": "not_assessed",
+                    "execution_outcome": "blocked",
+                    "rationale": f"screen budget exhausted: {budget_reason}; "
                     f"{len(candidates) - i} candidate(s) not evaluated",
-                "assessed_at": _utc_now(),
-                "assessed_by": assessed_by,
-            })
+                    "assessed_at": _utc_now(),
+                    "assessed_by": assessed_by,
+                }
+            )
             break
 
         # Source classification — reject new predictions
-        in_scope, source_reason = classify_structure_source(
-            candidate.source, budget
-        )
+        in_scope, source_reason = classify_structure_source(candidate.source, budget)
         if not in_scope:
             assessments.append(
                 build_assessment_record(
@@ -721,8 +725,7 @@ def screen_structures(
                     modality=modality,
                     execution_outcome="data_unavailable",
                     data_unavailable_reason=(
-                        f"pocket analysis tool not available for "
-                        f"{candidate.identifier}"
+                        f"pocket analysis tool not available for {candidate.identifier}"
                     ),
                     claim=claim,
                     assessed_by=assessed_by,
@@ -752,7 +755,9 @@ def screen_structures(
 # ---------------------------------------------------------------------------
 
 
-def _parse_pocket_analysis(analysis_path: Path, candidate: StructureCandidate) -> PocketResult:
+def _parse_pocket_analysis(
+    analysis_path: Path, candidate: StructureCandidate
+) -> PocketResult:
     """Parse a ``dde pocket analyze`` output into a ``PocketResult``.
 
     Reads the ``.pocket.analysis.json`` file that ``dde pocket analyze``
@@ -794,8 +799,7 @@ def _parse_pocket_analysis(analysis_path: Path, candidate: StructureCandidate) -
         structure_name=candidate.identifier,
         is_experimental=candidate.is_experimental,
         relays=[
-            {"code": r.get("code", ""), "message": r.get("message", "")}
-            for r in relays
+            {"code": r.get("code", ""), "message": r.get("message", "")} for r in relays
         ],
         analysis_path=str(analysis_path),
         threshold_set=doc.get("threshold_set"),
@@ -829,6 +833,7 @@ def make_pocket_runner(
     passing to ``screen_structures(pocket_runner=...)``.
     """
     from click.testing import CliRunner
+
     from ..cli import cli
 
     runner = CliRunner(mix_stderr=False)
@@ -863,6 +868,7 @@ def make_pocket_runner(
                 p = Path(project_dir)
             else:
                 import os
+
                 p = Path(os.environ.get("DDE_PROJECT", "."))
             stem = Path(candidate.identifier).stem
             candidate_path = p / "raw" / "structures" / f"{stem}.pockets.json"
@@ -871,8 +877,7 @@ def make_pocket_runner(
 
         if pockets_path is None:
             raise RuntimeError(
-                "dde pocket run succeeded but pockets record path not found "
-                "in output"
+                "dde pocket run succeeded but pockets record path not found in output"
             )
 
         # --- Phase 2: dde pocket analyze ---
@@ -896,7 +901,10 @@ def make_pocket_runner(
             analysis_dir = Path(project_dir) / "raw" / "structures"
         else:
             import os
-            analysis_dir = Path(os.environ.get("DDE_PROJECT", ".")) / "raw" / "structures"
+
+            analysis_dir = (
+                Path(os.environ.get("DDE_PROJECT", ".")) / "raw" / "structures"
+            )
         analysis_path = analysis_dir / f"{stem}.pocket.analysis.json"
 
         if not analysis_path.is_file():
@@ -934,37 +942,52 @@ if _HAS_CLICK:
     @structure_screen.command()
     @click.argument("structures", nargs=-1, required=True)
     @click.option(
-        "--concept-ref", required=True,
+        "--concept-ref",
+        required=True,
         help="Concept reference (IC-NNN) this screen is for.",
     )
     @click.option(
-        "--modality", required=True,
+        "--modality",
+        required=True,
         help="Intervention modality (e.g. small_molecule, antibody).",
     )
     @click.option(
-        "--max-structures", default=5, type=int, show_default=True,
+        "--max-structures",
+        default=5,
+        type=int,
+        show_default=True,
         help="Maximum structures to evaluate.",
     )
     @click.option(
-        "--max-seconds", default=300.0, type=float, show_default=True,
+        "--max-seconds",
+        default=300.0,
+        type=float,
+        show_default=True,
         help="Maximum wall-clock seconds for the screen.",
     )
     @click.option(
-        "--near", default=None,
+        "--near",
+        default=None,
         help="Residues defining the intervention site (CHAIN:RESNUM, comma-separated). "
         "Passed through to dde pocket analyze --near.",
     )
     @click.option(
-        "--claim", default=None,
+        "--claim",
+        default=None,
         help="The claim being assessed. Defaults to 'target has a druggable binding pocket'.",
     )
     @click.option(
-        "--source", "source_type", default="pdb",
-        type=click.Choice(sorted(RETRIEVAL_SOURCES | PREDICTION_SOURCES), case_sensitive=False),
+        "--source",
+        "source_type",
+        default="pdb",
+        type=click.Choice(
+            sorted(RETRIEVAL_SOURCES | PREDICTION_SOURCES), case_sensitive=False
+        ),
         help="Structure source type for all input structures.",
     )
     @click.option(
-        "--experimental/--no-experimental", default=None,
+        "--experimental/--no-experimental",
+        default=None,
         help="Whether structures are experimental. If omitted, "
         "pocket.py's _is_experimental() auto-detects per structure.",
     )
@@ -1012,11 +1035,13 @@ if _HAS_CLICK:
                 # Default to True for PDB, False for AlphaFold DB sources.
                 is_exp = source_type == "pdb"
 
-            candidates.append(StructureCandidate(
-                source=source_type,
-                identifier=struct_path,
-                is_experimental=is_exp,
-            ))
+            candidates.append(
+                StructureCandidate(
+                    source=source_type,
+                    identifier=struct_path,
+                    is_experimental=is_exp,
+                )
+            )
 
         # Build the real pocket runner
         project_path = state.project_override
@@ -1048,7 +1073,7 @@ if _HAS_CLICK:
         emit.data("assessments", assessments)
         for i, a in enumerate(assessments):
             emit.line(
-                f"[{a.get('id', i+1)}] {a.get('evidence_status', '?')} "
+                f"[{a.get('id', i + 1)}] {a.get('evidence_status', '?')} "
                 f"({a.get('execution_outcome', '?')})"
             )
             if a.get("rationale"):

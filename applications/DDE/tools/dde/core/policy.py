@@ -117,9 +117,15 @@ def _validate_requirement(req: Any, index: int) -> list[str]:
         return errors
 
     required = [
-        "req_id", "version", "description", "type",
-        "evidence_type", "applicability", "authority",
-        "override_permitted", "effective_date",
+        "req_id",
+        "version",
+        "description",
+        "type",
+        "evidence_type",
+        "applicability",
+        "authority",
+        "override_permitted",
+        "effective_date",
     ]
     missing = [f for f in required if f not in req]
     if missing:
@@ -184,17 +190,20 @@ def validate_policy(data: dict[str, Any]) -> list[str]:
     errors: list[str] = []
 
     required = [
-        "id", "version", "stage", "gate_name",
-        "effective_date", "requirements", "created_at",
+        "id",
+        "version",
+        "stage",
+        "gate_name",
+        "effective_date",
+        "requirements",
+        "created_at",
     ]
     missing = [f for f in required if f not in data]
     if missing:
         errors.append(f"missing required fields: {', '.join(missing)}")
 
     if "schema" in data and data["schema"] != POLICY_SCHEMA:
-        errors.append(
-            f"schema must be {POLICY_SCHEMA!r}, got {data['schema']!r}"
-        )
+        errors.append(f"schema must be {POLICY_SCHEMA!r}, got {data['schema']!r}")
 
     if "id" in data and not _GP_ID_RE.match(str(data["id"])):
         errors.append(f"id must match GP-NNN, got {data['id']!r}")
@@ -233,8 +242,12 @@ def validate_snapshot(data: dict[str, Any]) -> list[str]:
     errors: list[str] = []
 
     required = [
-        "snapshot_id", "frozen_at", "gate_policy_ref",
-        "requirements", "threshold_sets", "concept_refs",
+        "snapshot_id",
+        "frozen_at",
+        "gate_policy_ref",
+        "requirements",
+        "threshold_sets",
+        "concept_refs",
         "assessments",
     ]
     missing = [f for f in required if f not in data]
@@ -242,14 +255,10 @@ def validate_snapshot(data: dict[str, Any]) -> list[str]:
         errors.append(f"missing required fields: {', '.join(missing)}")
 
     if "schema" in data and data["schema"] != SNAPSHOT_SCHEMA:
-        errors.append(
-            f"schema must be {SNAPSHOT_SCHEMA!r}, got {data['schema']!r}"
-        )
+        errors.append(f"schema must be {SNAPSHOT_SCHEMA!r}, got {data['schema']!r}")
 
     if "snapshot_id" in data and not _SNAP_ID_RE.match(str(data["snapshot_id"])):
-        errors.append(
-            f"snapshot_id must match SNAP-NNN, got {data['snapshot_id']!r}"
-        )
+        errors.append(f"snapshot_id must match SNAP-NNN, got {data['snapshot_id']!r}")
 
     if "requirements" in data and not isinstance(data["requirements"], list):
         errors.append("requirements must be a list")
@@ -289,8 +298,9 @@ def validate_snapshot(data: dict[str, Any]) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-def requirement_applies(requirement: dict[str, Any], concept: dict[str, Any],
-                        *, stage: int | None = None) -> bool:
+def requirement_applies(
+    requirement: dict[str, Any], concept: dict[str, Any], *, stage: int | None = None
+) -> bool:
     """Check whether a requirement applies to a concept.
 
     A requirement applies when all non-null applicability fields match
@@ -332,7 +342,8 @@ def requirement_applies(requirement: dict[str, Any], concept: dict[str, Any],
     if indication_filter is not None:
         disease_context = concept.get("disease_context", {})
         concept_indication = (
-            disease_context.get("indication") if isinstance(disease_context, dict)
+            disease_context.get("indication")
+            if isinstance(disease_context, dict)
             else None
         )
         if concept_indication not in indication_filter:
@@ -390,13 +401,9 @@ def match_assessment_to_requirement(
                 f"evidence has {evidence_units!r}"
             )
     elif req_units is not None and evidence_units is None:
-        result["warnings"].append(
-            "requirement specifies units but evidence does not"
-        )
+        result["warnings"].append("requirement specifies units but evidence does not")
     elif req_units is None and evidence_units is not None:
-        result["warnings"].append(
-            "evidence specifies units but requirement does not"
-        )
+        result["warnings"].append("evidence specifies units but requirement does not")
 
     # Rule 3: method_required applicability filter.
     app = requirement.get("applicability", {})
@@ -531,6 +538,7 @@ def load_program_config(project_root: Any) -> dict[str, Any]:
     ``program.yaml`` is valid.
     """
     from pathlib import Path
+
     root = Path(project_root)
     path = root / ".dde" / "program.yaml"
 
@@ -549,14 +557,10 @@ def load_program_config(project_root: Any) -> dict[str, Any]:
     try:
         data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     except Exception as exc:
-        raise SchemaError(
-            f"could not parse {path}", detail=str(exc)
-        )
+        raise SchemaError(f"could not parse {path}", detail=str(exc))
 
     if not isinstance(data, dict):
-        raise SchemaError(
-            f"{path} must contain a YAML mapping"
-        )
+        raise SchemaError(f"{path} must contain a YAML mapping")
 
     errors = _validate_program_config(data)
     if errors:

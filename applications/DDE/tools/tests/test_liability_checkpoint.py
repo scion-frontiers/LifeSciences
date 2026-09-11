@@ -36,8 +36,6 @@ from typing import Any
 from dde.commands.workorder import _find_critical_liabilities, _perform_commit
 from dde.core import controlstore
 from dde.core.errors import Refusal
-from dde.core.statemachine import validate_transition
-
 
 # ---------------------------------------------------------------------------
 # _find_critical_liabilities tests
@@ -209,7 +207,7 @@ class TestCommitLiabilityCheckpoint(unittest.TestCase):
     def test_commit_succeeds_without_tracker(self):
         """No liability tracker => commit proceeds normally."""
         _make_proposed_wo(self.root)
-        record, snapshot_path, record_path = _perform_commit(self.root, "WO-001")
+        record, _snapshot_path, _record_path = _perform_commit(self.root, "WO-001")
         self.assertEqual(record["state"], "committed")
 
     def test_commit_succeeds_with_justification(self):
@@ -230,7 +228,7 @@ class TestCommitLiabilityCheckpoint(unittest.TestCase):
                 "L-2": "This WO is the investigation of L-2",
             },
         )
-        record, snapshot_path, record_path = _perform_commit(self.root, "WO-001")
+        record, _snapshot_path, _record_path = _perform_commit(self.root, "WO-001")
         self.assertEqual(record["state"], "committed")
         # Justification is preserved in the record.
         self.assertIn("liability_justification", record)
@@ -300,7 +298,7 @@ class TestCommitLiabilityCheckpoint(unittest.TestCase):
             encoding="utf-8",
         )
         _make_proposed_wo(self.root)
-        record, snapshot_path, record_path = _perform_commit(self.root, "WO-001")
+        record, _snapshot_path, _record_path = _perform_commit(self.root, "WO-001")
         self.assertEqual(record["state"], "committed")
 
 

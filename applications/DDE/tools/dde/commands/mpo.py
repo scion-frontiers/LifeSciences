@@ -159,7 +159,9 @@ def _extract_metrics(doc: dict[str, Any]) -> dict[str, Any]:
             elif isinstance(value, dict):
                 # One level of nesting: e.g. endpoints.metabolic_stability
                 for sub_key, sub_val in value.items():
-                    if isinstance(sub_val, (int, float)) and not isinstance(sub_val, bool):
+                    if isinstance(sub_val, (int, float)) and not isinstance(
+                        sub_val, bool
+                    ):
                         flat_key = f"{key}.{sub_key}" if sub_key != key else key
                         if flat_key in flat and flat[flat_key] != sub_val:
                             click.echo(
@@ -172,7 +174,8 @@ def _extract_metrics(doc: dict[str, Any]) -> dict[str, Any]:
                         # Nested list of dicts under a dict key.
                         if sub_val and isinstance(sub_val[0], dict):
                             projected = _flatten_list_of_dicts(
-                                f"{key}.{sub_key}", sub_val,
+                                f"{key}.{sub_key}",
+                                sub_val,
                             )
                             for pk, pv in projected.items():
                                 if pk in flat and flat[pk] != pv:
@@ -185,7 +188,9 @@ def _extract_metrics(doc: dict[str, Any]) -> dict[str, Any]:
                     elif isinstance(sub_val, dict):
                         # Two levels: e.g. endpoints.metabolic_stability.contributing_descriptors
                         for deep_key, deep_val in sub_val.items():
-                            if isinstance(deep_val, (int, float)) and not isinstance(deep_val, bool):
+                            if isinstance(deep_val, (int, float)) and not isinstance(
+                                deep_val, bool
+                            ):
                                 if deep_key in flat and flat[deep_key] != deep_val:
                                     click.echo(
                                         f"warning: metric {deep_key!r} appears at multiple paths; "
@@ -311,7 +316,7 @@ def _normalize_absolute(
 
     span = high - low
     if span == 0:
-        return {cid: 0.5 for cid in compound_values}
+        return dict.fromkeys(compound_values, 0.5)
 
     normalized: dict[str, float] = {}
     for compound, raw in compound_values.items():
@@ -532,7 +537,10 @@ def score_cmd(
             direction = weight_specs[param].get("direction", "maximize")
             low, high = abs_bounds[param]
             param_normalized[param] = _normalize_absolute(
-                param_raw[param], direction, low, high,
+                param_raw[param],
+                direction,
+                low,
+                high,
             )
     else:
         # Min-max normalization.
@@ -607,7 +615,11 @@ def score_cmd(
                 continue
             raw = param_raw[param].get(cid)
             if raw is None:
-                threshold_results[param] = {"threshold": threshold, "pass": False, "reason": "missing"}
+                threshold_results[param] = {
+                    "threshold": threshold,
+                    "pass": False,
+                    "reason": "missing",
+                }
                 all_pass = False
                 continue
             direction = weight_specs[param].get("direction", "maximize")
@@ -627,7 +639,9 @@ def score_cmd(
         scores["passes_all_thresholds"] = all_pass
 
     # --- rank by total score descending ---
-    ranked = sorted(compound_scores.values(), key=lambda x: x["total_score"], reverse=True)
+    ranked = sorted(
+        compound_scores.values(), key=lambda x: x["total_score"], reverse=True
+    )
     for i, entry in enumerate(ranked, start=1):
         entry["rank"] = i
 
@@ -696,9 +710,9 @@ def score_cmd(
     sidecar.note("weights_applied", weights_summary)
     sidecar.note("parameter_names", param_names)
     if scoring_mode == "absolute":
-        sidecar.note("bounds", {
-            m: {"low": lo, "high": hi} for m, (lo, hi) in abs_bounds.items()
-        })
+        sidecar.note(
+            "bounds", {m: {"low": lo, "high": hi} for m, (lo, hi) in abs_bounds.items()}
+        )
     for r in relays:
         sidecar.warn(r["message"], code=r["code"])
     sidecar.add_output(result_path)
@@ -720,8 +734,7 @@ def score_cmd(
     # --- emit ranked table ---
     for entry in ranked:
         failures = [
-            p for p, t in entry.get("thresholds", {}).items()
-            if not t.get("pass", True)
+            p for p, t in entry.get("thresholds", {}).items() if not t.get("pass", True)
         ]
         fail_str = f"  FAIL: {', '.join(failures)}" if failures else ""
         emit.line(

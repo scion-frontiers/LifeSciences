@@ -113,7 +113,9 @@ def _parse_arxiv_entries(xml_bytes: bytes) -> tuple[list[dict[str, Any]], int]:
 
         # Title
         title_el = entry.find(f"{{{ATOM_NS}}}title")
-        title = title_el.text.strip() if title_el is not None and title_el.text else None
+        title = (
+            title_el.text.strip() if title_el is not None and title_el.text else None
+        )
         # Clean up whitespace in title
         if title:
             title = re.sub(r"\s+", " ", title)
@@ -133,11 +135,19 @@ def _parse_arxiv_entries(xml_bytes: bytes) -> tuple[list[dict[str, Any]], int]:
 
         # Published date
         published_el = entry.find(f"{{{ATOM_NS}}}published")
-        published = published_el.text.strip() if published_el is not None and published_el.text else None
+        published = (
+            published_el.text.strip()
+            if published_el is not None and published_el.text
+            else None
+        )
 
         # Updated date
         updated_el = entry.find(f"{{{ATOM_NS}}}updated")
-        updated = updated_el.text.strip() if updated_el is not None and updated_el.text else None
+        updated = (
+            updated_el.text.strip()
+            if updated_el is not None and updated_el.text
+            else None
+        )
 
         # Categories
         categories: list[str] = []
@@ -162,18 +172,20 @@ def _parse_arxiv_entries(xml_bytes: bytes) -> tuple[list[dict[str, Any]], int]:
         if doi_el is not None and doi_el.text:
             doi = doi_el.text.strip()
 
-        results.append({
-            "id": arxiv_id_base,
-            "title": title,
-            "authors": authors,
-            "abstract": abstract,
-            "published": published,
-            "updated": updated,
-            "categories": categories,
-            "pdf_url": pdf_url,
-            "doi": doi,
-            "source": "arxiv",
-        })
+        results.append(
+            {
+                "id": arxiv_id_base,
+                "title": title,
+                "authors": authors,
+                "abstract": abstract,
+                "published": published,
+                "updated": updated,
+                "categories": categories,
+                "pdf_url": pdf_url,
+                "doi": doi,
+                "source": "arxiv",
+            }
+        )
 
     return results, total_results
 
@@ -210,9 +222,7 @@ def _parse_biorxiv_collection(
 
         # Authors — bioRxiv returns a single comma-separated string.
         raw_authors = item.get("authors") or ""
-        authors: list[str] = [
-            a.strip() for a in raw_authors.split(";") if a.strip()
-        ]
+        authors: list[str] = [a.strip() for a in raw_authors.split(";") if a.strip()]
         if not authors and raw_authors:
             # Fallback: some records use comma separation.
             authors = [a.strip() for a in raw_authors.split(",") if a.strip()]
@@ -223,20 +233,26 @@ def _parse_biorxiv_collection(
         category = (item.get("category") or "").strip() or None
 
         # Build a PDF URL from the DOI when available.
-        pdf_url = f"https://www.biorxiv.org/content/{doi}v{version}.full.pdf" if doi and version else None
+        pdf_url = (
+            f"https://www.biorxiv.org/content/{doi}v{version}.full.pdf"
+            if doi and version
+            else None
+        )
 
-        results.append({
-            "id": doi or "",
-            "title": title or None,
-            "authors": authors,
-            "abstract": abstract or None,
-            "published": date,
-            "updated": date,  # bioRxiv does not distinguish published/updated per version
-            "categories": [category] if category else [],
-            "pdf_url": pdf_url,
-            "doi": doi,
-            "source": "biorxiv",
-        })
+        results.append(
+            {
+                "id": doi or "",
+                "title": title or None,
+                "authors": authors,
+                "abstract": abstract or None,
+                "published": date,
+                "updated": date,  # bioRxiv does not distinguish published/updated per version
+                "categories": [category] if category else [],
+                "pdf_url": pdf_url,
+                "doi": doi,
+                "source": "biorxiv",
+            }
+        )
 
     return results
 
@@ -318,7 +334,8 @@ def _search_arxiv(
     )
 
     response = http.request(
-        "GET", url,
+        "GET",
+        url,
         qps=qps_for_host("export.arxiv.org"),
         timeout=60.0,
     )
@@ -343,9 +360,7 @@ def _search_arxiv(
     }
 
     artifact_path = target_dir / f"{slug}.preprint-search.json"
-    artifact_path.write_text(
-        json.dumps(artifact, indent=2) + "\n", encoding="utf-8"
-    )
+    artifact_path.write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
 
     # Sidecar
     sidecar = provenance.Sidecar(
@@ -455,9 +470,7 @@ def _search_biorxiv(
 
     # Save verbatim API response (aggregated collection items).
     raw_path = target_dir / f"{slug}.biorxiv-response.json"
-    raw_path.write_text(
-        json.dumps(raw_collections, indent=2) + "\n", encoding="utf-8"
-    )
+    raw_path.write_text(json.dumps(raw_collections, indent=2) + "\n", encoding="utf-8")
 
     # Build structured artifact
     searched_at = datetime.now(timezone.utc).isoformat()
@@ -471,9 +484,7 @@ def _search_biorxiv(
     }
 
     artifact_path = target_dir / f"{slug}.preprint-search.json"
-    artifact_path.write_text(
-        json.dumps(artifact, indent=2) + "\n", encoding="utf-8"
-    )
+    artifact_path.write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
 
     # Sidecar
     sidecar = provenance.Sidecar(
@@ -622,7 +633,8 @@ def analyze_cmd(
     )
 
     analysis_path = provenance.write_analysis(
-        target_dir / artifact_path.name.replace(
+        target_dir
+        / artifact_path.name.replace(
             ".preprint-search.json", ".preprint-search.analysis.json"
         ),
         source=source_ref,

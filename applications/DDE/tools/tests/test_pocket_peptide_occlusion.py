@@ -26,23 +26,21 @@ Covers (#133 Items 2 and 3):
 
 from __future__ import annotations
 
-import textwrap
 import tempfile
 import unittest
 from pathlib import Path
 
 from dde.commands.pocket import (
+    _LOW_DRUGGABILITY_THRESHOLD,
     _detect_short_chains,
     _strip_chains,
-    _detect_non_protein_chains,
-    _LOW_DRUGGABILITY_THRESHOLD,
 )
 from dde.core import provenance
-
 
 # ---------------------------------------------------------------------------
 # Minimal test fixtures
 # ---------------------------------------------------------------------------
+
 
 #: Two-chain PDB: chain A has 25 residues (protein), chain B has 8 residues
 #: (peptide ligand).  Chain B should be flagged as a short chain.
@@ -64,16 +62,12 @@ def _make_chain_pdb(chain: str, start_resnum: int, n_residues: int) -> str:
 
 
 PROTEIN_PEPTIDE_PDB = (
-    _make_chain_pdb("A", 1, 25) + "\n"
-    + _make_chain_pdb("B", 1, 8) + "\n"
-    + "END\n"
+    _make_chain_pdb("A", 1, 25) + "\n" + _make_chain_pdb("B", 1, 8) + "\n" + "END\n"
 )
 
 #: Both chains are long proteins — no short chains.
 TWO_LONG_CHAINS_PDB = (
-    _make_chain_pdb("A", 1, 30) + "\n"
-    + _make_chain_pdb("B", 1, 25) + "\n"
-    + "END\n"
+    _make_chain_pdb("A", 1, 30) + "\n" + _make_chain_pdb("B", 1, 25) + "\n" + "END\n"
 )
 
 #: Single long chain — no short chains, no non-protein.
@@ -82,24 +76,22 @@ SINGLE_CHAIN_PDB = _make_chain_pdb("A", 1, 50) + "\nEND\n"
 #: Structure with a ligand chain (non-protein, HETATM with non-standard residue)
 #: and a short protein chain.
 COMPLEX_PDB = (
-    _make_chain_pdb("A", 1, 30) + "\n"
-    + _make_chain_pdb("B", 1, 5) + "\n"
+    _make_chain_pdb("A", 1, 30)
+    + "\n"
+    + _make_chain_pdb("B", 1, 5)
+    + "\n"
     + "HETATM 9001  C1  LIG C   1       5.000   5.000   5.000  1.00 20.00           C  \n"
     + "END\n"
 )
 
 #: PDB with chain exactly at threshold (20 residues) — should NOT be flagged.
 AT_THRESHOLD_PDB = (
-    _make_chain_pdb("A", 1, 50) + "\n"
-    + _make_chain_pdb("B", 1, 20) + "\n"
-    + "END\n"
+    _make_chain_pdb("A", 1, 50) + "\n" + _make_chain_pdb("B", 1, 20) + "\n" + "END\n"
 )
 
 #: PDB with chain just below threshold (19 residues) — SHOULD be flagged.
 BELOW_THRESHOLD_PDB = (
-    _make_chain_pdb("A", 1, 50) + "\n"
-    + _make_chain_pdb("B", 1, 19) + "\n"
-    + "END\n"
+    _make_chain_pdb("A", 1, 50) + "\n" + _make_chain_pdb("B", 1, 19) + "\n" + "END\n"
 )
 
 
@@ -217,8 +209,7 @@ class TestStripChains(unittest.TestCase):
             for line in text.splitlines():
                 if line.startswith(("ATOM  ", "HETATM")):
                     chain = line[21:22].strip()
-                    self.assertNotEqual(chain, "B",
-                                       "Chain B atoms should be stripped")
+                    self.assertNotEqual(chain, "B", "Chain B atoms should be stripped")
         finally:
             path.unlink()
             output.unlink()
@@ -258,11 +249,13 @@ class TestStripChains(unittest.TestCase):
             self.assertEqual(result["removed_atom_count"], 0)
             # All atoms should be preserved.
             original_atoms = sum(
-                1 for line in PROTEIN_PEPTIDE_PDB.splitlines()
+                1
+                for line in PROTEIN_PEPTIDE_PDB.splitlines()
                 if line.startswith(("ATOM  ", "HETATM"))
             )
             output_atoms = sum(
-                1 for line in output.read_text().splitlines()
+                1
+                for line in output.read_text().splitlines()
                 if line.startswith(("ATOM  ", "HETATM"))
             )
             self.assertEqual(original_atoms, output_atoms)
@@ -282,7 +275,9 @@ class TestPeptideOcclusionRelay(unittest.TestCase):
     def test_relay_fires_low_score_short_chains(self):
         """Relay fpocket.possible_peptide_occlusion fires when low score
         AND short chains are retained."""
-        short_chains = [{"chain": "B", "residues": 8, "note": "Possible peptide ligand"}]
+        short_chains = [
+            {"chain": "B", "residues": 8, "note": "Possible peptide ligand"}
+        ]
         pockets = [{"rank": 1, "druggability_score": 0.004}]
         chains_stripped: set[str] = set()
 
@@ -291,17 +286,23 @@ class TestPeptideOcclusionRelay(unittest.TestCase):
         # Simulate the relay logic from pocket.py run()
         should_fire = False
         if retained and pockets:
-            low = [p for p in pockets
-                   if (p.get("druggability_score") or 0.0) < _LOW_DRUGGABILITY_THRESHOLD]
+            low = [
+                p
+                for p in pockets
+                if (p.get("druggability_score") or 0.0) < _LOW_DRUGGABILITY_THRESHOLD
+            ]
             if low:
                 should_fire = True
 
-        self.assertTrue(should_fire,
-                       "Relay should fire when low score + short chains retained")
+        self.assertTrue(
+            should_fire, "Relay should fire when low score + short chains retained"
+        )
 
     def test_relay_not_fired_high_score(self):
         """Relay does NOT fire when score is high, even with short chains."""
-        short_chains = [{"chain": "B", "residues": 8, "note": "Possible peptide ligand"}]
+        short_chains = [
+            {"chain": "B", "residues": 8, "note": "Possible peptide ligand"}
+        ]
         pockets = [{"rank": 1, "druggability_score": 0.968}]
         chains_stripped: set[str] = set()
 
@@ -309,17 +310,21 @@ class TestPeptideOcclusionRelay(unittest.TestCase):
 
         should_fire = False
         if retained and pockets:
-            low = [p for p in pockets
-                   if (p.get("druggability_score") or 0.0) < _LOW_DRUGGABILITY_THRESHOLD]
+            low = [
+                p
+                for p in pockets
+                if (p.get("druggability_score") or 0.0) < _LOW_DRUGGABILITY_THRESHOLD
+            ]
             if low:
                 should_fire = True
 
-        self.assertFalse(should_fire,
-                        "Relay should NOT fire when score is high")
+        self.assertFalse(should_fire, "Relay should NOT fire when score is high")
 
     def test_relay_not_fired_when_stripped(self):
         """Relay does NOT fire when short chains were stripped."""
-        short_chains = [{"chain": "B", "residues": 8, "note": "Possible peptide ligand"}]
+        short_chains = [
+            {"chain": "B", "residues": 8, "note": "Possible peptide ligand"}
+        ]
         pockets = [{"rank": 1, "druggability_score": 0.004}]
         chains_stripped = {"B"}
 
@@ -327,13 +332,17 @@ class TestPeptideOcclusionRelay(unittest.TestCase):
 
         should_fire = False
         if retained and pockets:
-            low = [p for p in pockets
-                   if (p.get("druggability_score") or 0.0) < _LOW_DRUGGABILITY_THRESHOLD]
+            low = [
+                p
+                for p in pockets
+                if (p.get("druggability_score") or 0.0) < _LOW_DRUGGABILITY_THRESHOLD
+            ]
             if low:
                 should_fire = True
 
-        self.assertFalse(should_fire,
-                        "Relay should NOT fire when short chains were stripped")
+        self.assertFalse(
+            should_fire, "Relay should NOT fire when short chains were stripped"
+        )
 
     def test_relay_not_fired_no_short_chains(self):
         """Relay does NOT fire when there are no short chains."""
@@ -345,29 +354,35 @@ class TestPeptideOcclusionRelay(unittest.TestCase):
 
         should_fire = False
         if retained and pockets:
-            low = [p for p in pockets
-                   if (p.get("druggability_score") or 0.0) < _LOW_DRUGGABILITY_THRESHOLD]
+            low = [
+                p
+                for p in pockets
+                if (p.get("druggability_score") or 0.0) < _LOW_DRUGGABILITY_THRESHOLD
+            ]
             if low:
                 should_fire = True
 
-        self.assertFalse(should_fire,
-                        "Relay should NOT fire with no short chains")
+        self.assertFalse(should_fire, "Relay should NOT fire with no short chains")
 
     def test_relay_threshold_boundary(self):
         """Relay fires at exactly the boundary (score < 0.5, not <=)."""
-        short_chains = [{"chain": "B", "residues": 8, "note": "Possible peptide ligand"}]
 
         # Score exactly AT threshold — should NOT fire (< not <=)
         pockets_at = [{"rank": 1, "druggability_score": 0.5}]
-        retained = short_chains
-        low = [p for p in pockets_at
-               if (p.get("druggability_score") or 0.0) < _LOW_DRUGGABILITY_THRESHOLD]
+        low = [
+            p
+            for p in pockets_at
+            if (p.get("druggability_score") or 0.0) < _LOW_DRUGGABILITY_THRESHOLD
+        ]
         self.assertEqual(len(low), 0, "Score exactly at 0.5 should not trigger")
 
         # Score just below threshold — SHOULD fire
         pockets_below = [{"rank": 1, "druggability_score": 0.499}]
-        low = [p for p in pockets_below
-               if (p.get("druggability_score") or 0.0) < _LOW_DRUGGABILITY_THRESHOLD]
+        low = [
+            p
+            for p in pockets_below
+            if (p.get("druggability_score") or 0.0) < _LOW_DRUGGABILITY_THRESHOLD
+        ]
         self.assertEqual(len(low), 1, "Score at 0.499 should trigger")
 
 
@@ -383,8 +398,11 @@ class TestLowScoreHoloRelay(unittest.TestCase):
         has_non_receptor_content = has_non_protein or bool(retained_short)
         should_fire = False
         if has_non_receptor_content and pockets:
-            low = [p for p in pockets
-                   if (p.get("druggability_score") or 0.0) < _LOW_DRUGGABILITY_THRESHOLD]
+            low = [
+                p
+                for p in pockets
+                if (p.get("druggability_score") or 0.0) < _LOW_DRUGGABILITY_THRESHOLD
+            ]
             if low:
                 should_fire = True
 
@@ -399,8 +417,11 @@ class TestLowScoreHoloRelay(unittest.TestCase):
         has_non_receptor_content = has_non_protein or bool(retained_short)
         should_fire = False
         if has_non_receptor_content and pockets:
-            low = [p for p in pockets
-                   if (p.get("druggability_score") or 0.0) < _LOW_DRUGGABILITY_THRESHOLD]
+            low = [
+                p
+                for p in pockets
+                if (p.get("druggability_score") or 0.0) < _LOW_DRUGGABILITY_THRESHOLD
+            ]
             if low:
                 should_fire = True
 
@@ -415,8 +436,11 @@ class TestLowScoreHoloRelay(unittest.TestCase):
         has_non_receptor_content = has_non_protein or bool(retained_short)
         should_fire = False
         if has_non_receptor_content and pockets:
-            low = [p for p in pockets
-                   if (p.get("druggability_score") or 0.0) < _LOW_DRUGGABILITY_THRESHOLD]
+            low = [
+                p
+                for p in pockets
+                if (p.get("druggability_score") or 0.0) < _LOW_DRUGGABILITY_THRESHOLD
+            ]
             if low:
                 should_fire = True
 

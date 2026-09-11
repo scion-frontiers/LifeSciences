@@ -183,7 +183,7 @@ def _query_gnomad(symbol: str) -> tuple[bytes, dict[str, Any]]:
                 ),
             )
         if attempt < MAX_GNOMAD_ATTEMPTS:
-            time.sleep(2.0 ** attempt)
+            time.sleep(2.0**attempt)
 
     raise EndpointUnavailable(
         f"gnomAD stayed overloaded for {symbol!r} across "
@@ -232,6 +232,7 @@ def genetics() -> None:
 # verb for this group is ``fetch`` (gnomAD resolves one symbol to one
 # gene); ``search`` is the alias.
 
+
 @genetics.command("fetch")
 @click.argument("symbol")
 @out_option
@@ -257,7 +258,9 @@ def fetch_cmd(
         )
         raise Refusal(
             f"could not resolve {symbol!r} to a known gene via HGNC",
-            detail=f"suggestions: {suggestions}" if suggestions else "no near matches found",
+            detail=f"suggestions: {suggestions}"
+            if suggestions
+            else "no near matches found",
             remedy="check the gene symbol or pass an Ensembl gene ID (ENSG...)",
         )
     echo = gene_res.echo_line()
@@ -281,8 +284,7 @@ def fetch_cmd(
         raise Refusal(
             f"gene {canonical!r} resolved via HGNC but gnomAD has no record",
             detail=(
-                f"HGNC resolved {symbol!r} to {canonical} "
-                f"(source: {gene_res.source})"
+                f"HGNC resolved {symbol!r} to {canonical} (source: {gene_res.source})"
             ),
             remedy=(
                 "gnomAD may not have constraint data for this gene. "
@@ -321,10 +323,20 @@ def fetch_cmd(
 
 @genetics.command("analyze")
 @click.argument("symbol")
-@click.option("--pli", "pli_override", type=float, default=None,
-              help="Override lof_intolerant_pli for this invocation.")
-@click.option("--loeuf", "loeuf_override", type=float, default=None,
-              help="Override loeuf_constrained for this invocation.")
+@click.option(
+    "--pli",
+    "pli_override",
+    type=float,
+    default=None,
+    help="Override lof_intolerant_pli for this invocation.",
+)
+@click.option(
+    "--loeuf",
+    "loeuf_override",
+    type=float,
+    default=None,
+    help="Override loeuf_constrained for this invocation.",
+)
 @from_option
 @out_option
 @output_options
@@ -387,7 +399,11 @@ def analyze_cmd(
             "intolerance could not be assessed",
         )
     else:
-        by_pli = "intolerant" if pli >= pli_cut else ("tolerant" if pli < pli_floor else "indeterminate")
+        by_pli = (
+            "intolerant"
+            if pli >= pli_cut
+            else ("tolerant" if pli < pli_floor else "indeterminate")
+        )
         by_loeuf = "intolerant" if loeuf < loeuf_cut else "tolerant"
 
         if by_pli == "intolerant" or by_loeuf == "intolerant":

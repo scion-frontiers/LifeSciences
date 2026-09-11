@@ -17,9 +17,10 @@
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import click
 
@@ -139,7 +140,9 @@ def enforce_phase_two(group: click.Group) -> None:
         if not any(p.name == "overwrite_cross_wo" for p in command.params):
             command.params.append(OVERWRITE_CROSS_WO_OPTION)
 
-        def guarded(*args: Any, _original=original, _group=group.name, _name=name, **kwargs: Any):
+        def guarded(
+            *args: Any, _original=original, _group=group.name, _name=name, **kwargs: Any
+        ):
             # Injected by this wrapper, so consumed by it: the wrapped
             # callback never declared the parameter.
             provenance.allow_overwrite(bool(kwargs.pop("overwrite", False)))
@@ -255,7 +258,9 @@ def resolve_artifact(state: AppState, path: str, what: str = "artifact") -> Path
     silently reading the wrong file is worse than failing.
     """
     candidate = Path(path)
-    resolved = candidate if candidate.is_absolute() else state.project().root / candidate
+    resolved = (
+        candidate if candidate.is_absolute() else state.project().root / candidate
+    )
     if not resolved.is_file():
         raise ArtifactError(
             f"{what} not found: {resolved}",

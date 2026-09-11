@@ -22,7 +22,6 @@ from pathlib import Path
 import pytest
 
 from prox.cluster import (
-    _connected_components_partition,
     detect_communities,
     format_cluster_label,
     graph_json_to_nx,
@@ -30,7 +29,6 @@ from prox.cluster import (
 )
 
 from .conftest import make_graph_data
-
 
 # --- format_cluster_label ---
 
@@ -76,7 +74,7 @@ def test_detect_communities_connected_components() -> None:
     G.add_edge("H-0001", "H-0002", weight=0.8)
     G.add_edge("H-0003", "H-0004", weight=0.9)
 
-    partition, algo = detect_communities(G)
+    partition, _algo = detect_communities(G)
     # Should have exactly 2 communities
     assert len(set(partition.values())) == 2
     # Nodes in same component get same label
@@ -90,7 +88,7 @@ def test_detect_communities_single_node() -> None:
 
     G = nx.Graph()
     G.add_node("H-0001")
-    partition, algo = detect_communities(G)
+    partition, _algo = detect_communities(G)
     assert len(partition) == 1
     assert "H-0001" in partition
 
@@ -99,7 +97,7 @@ def test_detect_communities_empty_graph() -> None:
     import networkx as nx
 
     G = nx.Graph()
-    partition, algo = detect_communities(G)
+    partition, _algo = detect_communities(G)
     assert partition == {}
 
 
@@ -111,10 +109,12 @@ def graph_dir(tmp_path: Path) -> Path:
     """Create a run directory with a pre-built graph.json."""
     prox = tmp_path / "proximity"
     prox.mkdir()
-    data = make_graph_data([
-        ("H-0001", "H-0002", 0.8),
-        ("H-0003", "H-0004", 0.9),
-    ])
+    data = make_graph_data(
+        [
+            ("H-0001", "H-0002", 0.8),
+            ("H-0003", "H-0004", 0.9),
+        ]
+    )
     with open(prox / "graph.json", "w") as fh:
         json.dump(data, fh)
     return tmp_path
@@ -167,5 +167,6 @@ def test_run_clusters_labels_format(graph_dir: Path) -> None:
 
     clusters = json.loads((prox / "clusters.json").read_text())
     import re
+
     for label in clusters["clusters"]:
         assert re.match(r"^C-\d{2}$", label), f"Bad label: {label}"

@@ -40,7 +40,6 @@ may differ if Meeko changes).
 
 from __future__ import annotations
 
-import hashlib
 import json
 import shutil
 import subprocess
@@ -69,14 +68,32 @@ ARTIFACT_CLASS = "docking"
 
 #: Standard amino acid three-letter codes recognised by Meeko/ProDy.
 #: Used by ``_strip_non_protein`` to filter input structures.
-_STANDARD_AMINO_ACIDS: frozenset[str] = frozenset({
-    "ALA", "ARG", "ASN", "ASP", "CYS",
-    "GLN", "GLU", "GLY", "HIS", "ILE",
-    "LEU", "LYS", "MET", "PHE", "PRO",
-    "SER", "THR", "TRP", "TYR", "VAL",
-    # Common variants that ProDy / Meeko treat as protein
-    "MSE",  # selenomethionine
-})
+_STANDARD_AMINO_ACIDS: frozenset[str] = frozenset(
+    {
+        "ALA",
+        "ARG",
+        "ASN",
+        "ASP",
+        "CYS",
+        "GLN",
+        "GLU",
+        "GLY",
+        "HIS",
+        "ILE",
+        "LEU",
+        "LYS",
+        "MET",
+        "PHE",
+        "PRO",
+        "SER",
+        "THR",
+        "TRP",
+        "TYR",
+        "VAL",
+        # Common variants that ProDy / Meeko treat as protein
+        "MSE",  # selenomethionine
+    }
+)
 
 
 # ---------------------------------------------------------------------------
@@ -130,9 +147,7 @@ def _read_pocket_record(pocket_path: Path) -> dict[str, Any]:
     return provenance.read_json(pocket_path, "pocket record")
 
 
-def _find_pocket_by_rank(
-    pockets: list[dict[str, Any]], rank: int
-) -> dict[str, Any]:
+def _find_pocket_by_rank(pockets: list[dict[str, Any]], rank: int) -> dict[str, Any]:
     """Find a pocket entry by rank, raising UsageError if absent."""
     for entry in pockets:
         if entry.get("rank") == rank:
@@ -145,9 +160,7 @@ def _find_pocket_by_rank(
     )
 
 
-def _locate_pocket_atoms(
-    fpocket_output_dir: Path, rank: int
-) -> Path:
+def _locate_pocket_atoms(fpocket_output_dir: Path, rank: int) -> Path:
     """Locate the pocket atom file in the fpocket output tree.
 
     fpocket writes ``pocketN_atm.pdb`` for PDB input and
@@ -159,8 +172,7 @@ def _locate_pocket_atoms(
         if candidate.is_file():
             return candidate
     raise ArtifactError(
-        f"pocket atom file not found for pocket {rank} "
-        f"in {fpocket_output_dir}",
+        f"pocket atom file not found for pocket {rank} in {fpocket_output_dir}",
         detail=f"looked for pockets/pocket{rank}_atm.pdb and "
         f"pockets/pocket{rank}_atm.cif",
         remedy="check that the fpocket output directory is intact and "
@@ -213,11 +225,13 @@ def _compute_grid_box(
                     continue
                 fields = line.split()
                 try:
-                    coords.append((
-                        float(fields[col_x]),
-                        float(fields[col_y]),
-                        float(fields[col_z]),
-                    ))
+                    coords.append(
+                        (
+                            float(fields[col_x]),
+                            float(fields[col_y]),
+                            float(fields[col_z]),
+                        )
+                    )
                 except (ValueError, IndexError):
                     continue
     else:
@@ -305,8 +319,12 @@ def _strip_non_protein(
                 data_start = i
                 break
 
-        col_comp = columns.index("label_comp_id") if "label_comp_id" in columns else None
-        col_chain = columns.index("label_asym_id") if "label_asym_id" in columns else None
+        col_comp = (
+            columns.index("label_comp_id") if "label_comp_id" in columns else None
+        )
+        col_chain = (
+            columns.index("label_asym_id") if "label_asym_id" in columns else None
+        )
         col_group = columns.index("group_PDB") if "group_PDB" in columns else None
 
         # Copy lines up to the data block unchanged
@@ -491,9 +509,15 @@ def _convert_receptor_to_pdbqt(
         effective_altloc = _resolve_highest_occupancy_altloc(structure_path)
 
     completed = subprocess.run(
-        [script, "--read_with_prody", str(structure_path),
-         "--default_altloc", effective_altloc,
-         "-p", str(output_path)],
+        [
+            script,
+            "--read_with_prody",
+            str(structure_path),
+            "--default_altloc",
+            effective_altloc,
+            "-p",
+            str(output_path),
+        ],
         capture_output=True,
         text=True,
         check=False,
@@ -503,8 +527,11 @@ def _convert_receptor_to_pdbqt(
         raw_detail = (completed.stderr or completed.stdout or "no output").strip()[:500]
         # Detect non-protein residue failures and suggest --protein-only.
         _non_protein_hints = (
-            "unknown residue", "unrecognized residue", "non-standard residue",
-            "UNK", "UNL",
+            "unknown residue",
+            "unrecognized residue",
+            "non-standard residue",
+            "UNK",
+            "UNL",
         )
         if any(hint.lower() in raw_detail.lower() for hint in _non_protein_hints):
             remedy = (
@@ -534,6 +561,7 @@ def _meeko_version() -> str | None:
     """Return the installed Meeko version, or None if unavailable."""
     try:
         import meeko
+
         return getattr(meeko, "__version__", None)
     except ImportError:
         return None
@@ -548,7 +576,7 @@ def _vina_version(vina_path: str) -> str | None:
             text=True,
             check=False,
         )
-        version = (result.stdout.strip() or result.stderr.strip())
+        version = result.stdout.strip() or result.stderr.strip()
         return version or None
     except OSError:
         return None
@@ -606,8 +634,7 @@ def _parse_flexible_residues(spec: str) -> list[dict[str, str]]:
         if ":" not in token:
             raise UsageError(
                 f"invalid flexible residue spec: {token!r}",
-                detail="expected format <chain>:<resname><resnum> "
-                "(e.g. A:ARG455)",
+                detail="expected format <chain>:<resname><resnum> (e.g. A:ARG455)",
                 remedy="use --flexible-residues 'A:ARG455,A:GLU526'",
             )
         chain, residue_part = token.split(":", 1)
@@ -624,16 +651,17 @@ def _parse_flexible_residues(spec: str) -> list[dict[str, str]]:
             )
         res_name = residue_part[:i]
         res_num = residue_part[i:]
-        residues.append({
-            "chain": chain,
-            "res_name": res_name,
-            "res_num": res_num,
-        })
+        residues.append(
+            {
+                "chain": chain,
+                "res_name": res_name,
+                "res_num": res_num,
+            }
+        )
     if not residues:
         raise UsageError(
             "empty flexible residue specification",
-            remedy="provide at least one residue, e.g. "
-            "--flexible-residues 'A:ARG455'",
+            remedy="provide at least one residue, e.g. --flexible-residues 'A:ARG455'",
         )
     return residues
 
@@ -692,10 +720,8 @@ def _split_flexible_receptor(
     if missing:
         missing_strs = [f"{c}:{n}{r}" for c, n, r in sorted(missing)]
         raise ArtifactError(
-            f"flexible residue(s) not found in receptor: "
-            f"{', '.join(missing_strs)}",
-            detail="the specified residues do not exist in the receptor "
-            "PDBQT file",
+            f"flexible residue(s) not found in receptor: {', '.join(missing_strs)}",
+            detail="the specified residues do not exist in the receptor PDBQT file",
             remedy="check chain IDs, residue names, and residue numbers "
             "against the receptor structure",
         )
@@ -756,14 +782,16 @@ def _parse_vina_poses(pdbqt_text: str) -> list[dict[str, Any]]:
     poses: list[dict[str, Any]] = []
     for line in pdbqt_text.splitlines():
         if line.startswith("REMARK VINA RESULT:"):
-            parts = line[len("REMARK VINA RESULT:"):].split()
+            parts = line[len("REMARK VINA RESULT:") :].split()
             if len(parts) >= 3:
-                poses.append({
-                    "rank": len(poses) + 1,
-                    "affinity_kcalmol": float(parts[0]),
-                    "rmsd_lb": float(parts[1]),
-                    "rmsd_ub": float(parts[2]),
-                })
+                poses.append(
+                    {
+                        "rank": len(poses) + 1,
+                        "affinity_kcalmol": float(parts[0]),
+                        "rmsd_lb": float(parts[1]),
+                        "rmsd_ub": float(parts[2]),
+                    }
+                )
     return poses
 
 
@@ -789,14 +817,16 @@ def _parse_pdbqt_atoms(text: str) -> list[dict[str, Any]]:
             res_num = int(line[22:26].strip())
         except ValueError:
             res_num = 0
-        atoms.append({
-            "chain": chain,
-            "res_name": res_name,
-            "res_num": res_num,
-            "x": x,
-            "y": y,
-            "z": z,
-        })
+        atoms.append(
+            {
+                "chain": chain,
+                "res_name": res_name,
+                "res_num": res_num,
+                "x": x,
+                "y": y,
+                "z": z,
+            }
+        )
     return atoms
 
 
@@ -860,12 +890,14 @@ def _compute_contacts(
                 if d_sq < min_dist_sq:
                     min_dist_sq = d_sq
         if min_dist_sq <= cutoff_sq:
-            contacts.append({
-                "chain": chain,
-                "res_name": res_name,
-                "res_num": res_num,
-                "min_distance": round(min_dist_sq ** 0.5, 3),
-            })
+            contacts.append(
+                {
+                    "chain": chain,
+                    "res_name": res_name,
+                    "res_num": res_num,
+                    "min_distance": round(min_dist_sq**0.5, 3),
+                }
+            )
 
     contacts.sort(key=lambda c: c["min_distance"])
     return contacts
@@ -989,8 +1021,7 @@ def prepare_cmd(
         raise ArtifactError(
             f"fpocket output directory not found: {fpocket_output_dir}",
             detail=f"the pocket record references {fpocket_output_dir_name!r}",
-            remedy="check that the fpocket output tree has not been moved "
-            "or deleted",
+            remedy="check that the fpocket output tree has not been moved or deleted",
         )
 
     pocket_atm_path = _locate_pocket_atoms(fpocket_output_dir, pocket_rank)
@@ -1029,9 +1060,7 @@ def prepare_cmd(
         "padding_angstrom": padding,
     }
     gridbox_path = target_dir / f"{stem}.gridbox.json"
-    gridbox_path.write_text(
-        json.dumps(gridbox, indent=2) + "\n", encoding="utf-8"
-    )
+    gridbox_path.write_text(json.dumps(gridbox, indent=2) + "\n", encoding="utf-8")
 
     # --- provenance sidecar ---
     # DISTINCT filename from what `run` will use ({stem}.docking.meta.json)
@@ -1198,7 +1227,10 @@ def run_cmd(
         rigid_receptor = Path(_flex_tmpdir) / "rigid_receptor.pdbqt"
         flex_pdbqt: Path | None = Path(_flex_tmpdir) / "flexible_residues.pdbqt"
         _split_flexible_receptor(
-            receptor_path, flex_specs, rigid_receptor, flex_pdbqt,
+            receptor_path,
+            flex_specs,
+            rigid_receptor,
+            flex_pdbqt,
         )
         effective_receptor = rigid_receptor
     else:
@@ -1235,17 +1267,28 @@ def run_cmd(
             poses_path = target_dir / f"{ligand_stem}_{receptor_id}.poses.pdbqt"
             cmd = [
                 vina_path,
-                "--receptor", str(effective_receptor),
-                "--ligand", str(ligand_pdbqt),
-                "--center_x", str(center[0]),
-                "--center_y", str(center[1]),
-                "--center_z", str(center[2]),
-                "--size_x", str(size[0]),
-                "--size_y", str(size[1]),
-                "--size_z", str(size[2]),
-                "--exhaustiveness", str(exhaustiveness),
-                "--num_modes", str(n_poses),
-                "--out", str(poses_path),
+                "--receptor",
+                str(effective_receptor),
+                "--ligand",
+                str(ligand_pdbqt),
+                "--center_x",
+                str(center[0]),
+                "--center_y",
+                str(center[1]),
+                "--center_z",
+                str(center[2]),
+                "--size_x",
+                str(size[0]),
+                "--size_y",
+                str(size[1]),
+                "--size_z",
+                str(size[2]),
+                "--exhaustiveness",
+                str(exhaustiveness),
+                "--num_modes",
+                str(n_poses),
+                "--out",
+                str(poses_path),
             ]
             if flex_pdbqt is not None:
                 cmd.extend(["--flex", str(flex_pdbqt)])
@@ -1260,9 +1303,9 @@ def run_cmd(
         if completed.returncode != 0:
             raise ArtifactError(
                 f"Vina failed for ligand {ligand_path.name}",
-                detail=(
-                    completed.stderr or completed.stdout or "no output"
-                ).strip()[:500],
+                detail=(completed.stderr or completed.stdout or "no output").strip()[
+                    :500
+                ],
                 remedy="check that the receptor PDBQT, ligand, and grid box "
                 "parameters are valid",
             )
@@ -1281,10 +1324,8 @@ def run_cmd(
         if not poses:
             raise ArtifactError(
                 f"Vina produced no poses for ligand {ligand_path.name}",
-                detail="the output PDBQT contains no REMARK VINA RESULT "
-                "lines",
-                remedy="increase exhaustiveness or check ligand/receptor "
-                "compatibility",
+                detail="the output PDBQT contains no REMARK VINA RESULT lines",
+                remedy="increase exhaustiveness or check ligand/receptor compatibility",
             )
 
         best_score = min(p["affinity_kcalmol"] for p in poses)
@@ -1466,13 +1507,15 @@ def analyze_cmd(
                 # tool failure rather than a missing threshold).
                 band = "above-moderate"
 
-            classified_poses.append({
-                "rank": pose["rank"],
-                "affinity_kcalmol": score,
-                "rmsd_lb": pose.get("rmsd_lb"),
-                "rmsd_ub": pose.get("rmsd_ub"),
-                "band": band,
-            })
+            classified_poses.append(
+                {
+                    "rank": pose["rank"],
+                    "affinity_kcalmol": score,
+                    "rmsd_lb": pose.get("rmsd_lb"),
+                    "rmsd_ub": pose.get("rmsd_ub"),
+                    "band": band,
+                }
+            )
 
         best_score = result_doc.get("best_score")
         if best_score is None and classified_poses:
@@ -1672,8 +1715,7 @@ def contacts_cmd(
         raise ArtifactError(
             f"no atom coordinates found in receptor {receptor_path.name}",
             detail="the receptor PDBQT appears empty or unparseable",
-            remedy="check that the file is a valid PDBQT from "
-            "`dde docking prepare`",
+            remedy="check that the file is a valid PDBQT from `dde docking prepare`",
         )
 
     # --- parse poses and compute contacts ---
@@ -1689,17 +1731,21 @@ def contacts_cmd(
         for contact in contacts:
             if contact["min_distance"] < min_distance:
                 contact["steric_clash_warning"] = True
-                steric_clashes.append({
-                    "residue": f"{contact['res_name']}{contact['res_num']}",
-                    "distance": contact["min_distance"],
-                    "pose": i,
-                })
-        per_pose_contacts.append({
-            "pose": i,
-            "rank": i,  # rank from docking output; pose 1 = best affinity
-            "n_contacts": len(contacts),
-            "residues": contacts,
-        })
+                steric_clashes.append(
+                    {
+                        "residue": f"{contact['res_name']}{contact['res_num']}",
+                        "distance": contact["min_distance"],
+                        "pose": i,
+                    }
+                )
+        per_pose_contacts.append(
+            {
+                "pose": i,
+                "rank": i,  # rank from docking output; pose 1 = best affinity
+                "n_contacts": len(contacts),
+                "residues": contacts,
+            }
+        )
 
     # --- emit steric clash warning to stderr ---
     if steric_clashes:
@@ -1763,13 +1809,10 @@ def contacts_cmd(
         for suffix in suffixes:
             meta_candidate = input_path.parent / f"{base}.{suffix}.meta.json"
             if meta_candidate.is_file():
-                meta = provenance.read_json(
-                    meta_candidate, f"{suffix} sidecar"
-                )
+                meta = provenance.read_json(meta_candidate, f"{suffix} sidecar")
                 for r in meta.get("mandatory_relays", []) or []:
                     if not any(
-                        existing["code"] == r["code"]
-                        for existing in sidecar.relays
+                        existing["code"] == r["code"] for existing in sidecar.relays
                     ):
                         sidecar.relays.append(r)
 
@@ -1785,14 +1828,10 @@ def contacts_cmd(
 
     # --- emit contacts summary per pose ---
     for pose_result in per_pose_contacts:
-        emit.line(
-            f"pose {pose_result['pose']}: "
-            f"{pose_result['n_contacts']} contact(s)"
-        )
+        emit.line(f"pose {pose_result['pose']}: {pose_result['n_contacts']} contact(s)")
     if steric_clashes:
         emit.line(
-            f"steric clashes: {len(steric_clashes)} contact(s) below "
-            f"{min_distance} A"
+            f"steric clashes: {len(steric_clashes)} contact(s) below {min_distance} A"
         )
     if sidecar.relays:
         for record in sidecar.relays:
@@ -1841,12 +1880,14 @@ def _compute_contacts_for_file(
     for (chain, res_name, res_num), min_dist in sorted(
         residue_min.items(), key=lambda x: x[1]
     ):
-        result.append({
-            "chain": chain,
-            "res_name": res_name,
-            "res_num": res_num,
-            "min_distance": min_dist,
-        })
+        result.append(
+            {
+                "chain": chain,
+                "res_name": res_name,
+                "res_num": res_num,
+                "min_distance": min_dist,
+            }
+        )
     return result
 
 
@@ -1905,8 +1946,7 @@ def contacts_matrix_cmd(
         raise ArtifactError(
             f"no atom coordinates found in receptor {receptor_path.name}",
             detail="the receptor PDBQT appears empty or unparseable",
-            remedy="check that the file is a valid PDBQT from "
-            "`dde docking prepare`",
+            remedy="check that the file is a valid PDBQT from `dde docking prepare`",
         )
 
     # --- process each compound's pose file ---
@@ -1942,28 +1982,28 @@ def contacts_matrix_cmd(
         compound_names.append(compound_stem)
 
         try:
-            contacts = _compute_contacts_for_file(
-                poses_path, receptor_atoms, cutoff
-            )
+            contacts = _compute_contacts_for_file(poses_path, receptor_atoms, cutoff)
 
             for contact in contacts:
                 key = (contact["chain"], contact["res_name"], contact["res_num"])
-                all_residues.setdefault(key, {})[compound_stem] = contact["min_distance"]
+                all_residues.setdefault(key, {})[compound_stem] = contact[
+                    "min_distance"
+                ]
 
             sidecar.note(
                 f"poses_sha256_{compound_stem}",
                 provenance.sha256_file(poses_path),
             )
             n_succeeded += 1
-            emit.line(
-                f"{compound_stem}: {len(contacts)} residue(s) within {cutoff} A"
-            )
+            emit.line(f"{compound_stem}: {len(contacts)} residue(s) within {cutoff} A")
         except Exception as exc:
             n_failed += 1
-            failed_compounds.append({
-                "compound": compound_stem,
-                "error": str(exc),
-            })
+            failed_compounds.append(
+                {
+                    "compound": compound_stem,
+                    "error": str(exc),
+                }
+            )
             emit.line(f"{compound_stem}: error — {str(exc)[:100]}")
 
     # --- build matrix ---
@@ -1977,7 +2017,9 @@ def contacts_matrix_cmd(
             "chain": chain,
             "res_name": res_name,
             "res_num": res_num,
-            "residue_label": f"{chain}:{res_name}{res_num}" if chain else f"{res_name}{res_num}",
+            "residue_label": f"{chain}:{res_name}{res_num}"
+            if chain
+            else f"{res_name}{res_num}",
             "distances": {},
             "n_compounds": len(distances),
         }
@@ -1990,30 +2032,33 @@ def contacts_matrix_cmd(
     consensus_contacts: list[dict[str, Any]] = []
     for row in matrix_rows:
         if row["n_compounds"] == n_compounds:
-            consensus_contacts.append({
-                "residue_label": row["residue_label"],
-                "chain": row["chain"],
-                "res_name": row["res_name"],
-                "res_num": row["res_num"],
-                "contacted_by_all": True,
-                "distances": row["distances"],
-            })
+            consensus_contacts.append(
+                {
+                    "residue_label": row["residue_label"],
+                    "chain": row["chain"],
+                    "res_name": row["res_name"],
+                    "res_num": row["res_num"],
+                    "contacted_by_all": True,
+                    "distances": row["distances"],
+                }
+            )
 
     # Also identify near-consensus: contacted by majority (> 50%)
     majority_threshold = n_compounds / 2.0
     near_consensus: list[dict[str, Any]] = []
     for row in matrix_rows:
-        if (row["n_compounds"] > majority_threshold
-                and row["n_compounds"] < n_compounds):
-            near_consensus.append({
-                "residue_label": row["residue_label"],
-                "chain": row["chain"],
-                "res_name": row["res_name"],
-                "res_num": row["res_num"],
-                "n_compounds": row["n_compounds"],
-                "fraction": round(row["n_compounds"] / n_compounds, 3),
-                "distances": row["distances"],
-            })
+        if row["n_compounds"] > majority_threshold and row["n_compounds"] < n_compounds:
+            near_consensus.append(
+                {
+                    "residue_label": row["residue_label"],
+                    "chain": row["chain"],
+                    "res_name": row["res_name"],
+                    "res_num": row["res_num"],
+                    "n_compounds": row["n_compounds"],
+                    "fraction": round(row["n_compounds"] / n_compounds, 3),
+                    "distances": row["distances"],
+                }
+            )
 
     # --- write matrix artifact ---
     matrix_record: dict[str, Any] = {
@@ -2033,9 +2078,7 @@ def contacts_matrix_cmd(
     }
 
     matrix_path = target_dir / "matrix.contacts-matrix.json"
-    matrix_path.write_text(
-        json.dumps(matrix_record, indent=2) + "\n", encoding="utf-8"
-    )
+    matrix_path.write_text(json.dumps(matrix_record, indent=2) + "\n", encoding="utf-8")
     sidecar.add_output(matrix_path)
 
     # --- propagate upstream relays from input sidecars ---
@@ -2050,9 +2093,7 @@ def contacts_matrix_cmd(
         for suffix in ("docking", "prepare"):
             meta_candidate = poses_path.parent / f"{base}.{suffix}.meta.json"
             if meta_candidate.is_file():
-                meta = provenance.read_json(
-                    meta_candidate, f"{suffix} sidecar"
-                )
+                meta = provenance.read_json(meta_candidate, f"{suffix} sidecar")
                 for r in meta.get("mandatory_relays", []) or []:
                     if r["code"] not in seen_codes:
                         sidecar.relays.append(r)
@@ -2075,15 +2116,13 @@ def contacts_matrix_cmd(
     meta_path = sidecar.write(target_dir / "matrix.contacts-matrix.meta.json")
 
     # --- emit summary ---
-    emit.line(
-        f"matrix: {len(matrix_rows)} residue(s) across "
-        f"{n_compounds} compound(s)"
-    )
+    emit.line(f"matrix: {len(matrix_rows)} residue(s) across {n_compounds} compound(s)")
     if consensus_contacts:
         labels = ", ".join(c["residue_label"] for c in consensus_contacts[:5])
         suffix = (
             f" (+{len(consensus_contacts) - 5} more)"
-            if len(consensus_contacts) > 5 else ""
+            if len(consensus_contacts) > 5
+            else ""
         )
         emit.line(f"consensus ({len(consensus_contacts)}): {labels}{suffix}")
     else:

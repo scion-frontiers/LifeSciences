@@ -169,15 +169,17 @@ def _fetch_askcos_retro(
         # Templates may be fewer than reactants/scores.
         template = templates_list[i] if i < len(templates_list) else {}
 
-        suggestions.append({
-            "rank": i + 1,
-            "reactants": reactant_smiles.split("."),
-            "reactants_smiles": reactant_smiles,
-            "score": score,
-            "template_smarts": template.get("reaction_smarts", ""),
-            "template_rank": template.get("template_rank"),
-            "num_examples": template.get("num_examples"),
-        })
+        suggestions.append(
+            {
+                "rank": i + 1,
+                "reactants": reactant_smiles.split("."),
+                "reactants_smiles": reactant_smiles,
+                "score": score,
+                "template_smarts": template.get("reaction_smarts", ""),
+                "template_rank": template.get("template_rank"),
+                "num_examples": template.get("num_examples"),
+            }
+        )
 
     artifact = _build_artifact(smiles, suggestions)
     return raw, artifact
@@ -197,9 +199,7 @@ def _build_artifact(
         "summary": {
             "n_suggestions": len(suggestions),
             "top_score": suggestions[0]["score"] if suggestions else None,
-            "top_reactants": (
-                suggestions[0]["reactants"] if suggestions else []
-            ),
+            "top_reactants": (suggestions[0]["reactants"] if suggestions else []),
         },
         "suggestions": suggestions,
     }
@@ -269,15 +269,11 @@ def search_cmd(
 
     # Write structured artifact.
     artifact_path = target_dir / f"{slug}.retro-{source}.artifact.json"
-    artifact_path.write_text(
-        json.dumps(artifact, indent=2) + "\n", encoding="utf-8"
-    )
+    artifact_path.write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
     sidecar.add_output(artifact_path)
 
     # Write sidecar.
-    meta_path = sidecar.write(
-        target_dir / f"{slug}.retro-{source}.meta.json"
-    )
+    meta_path = sidecar.write(target_dir / f"{slug}.retro-{source}.meta.json")
 
     emit.data("smiles", smiles)
     emit.data("source", source)
@@ -341,9 +337,7 @@ def analyze_cmd(
         )
 
     suggestions = artifact.get("suggestions", [])
-    top_score_cutoff = (
-        score_threshold if score_threshold is not None else 0.3
-    )
+    top_score_cutoff = score_threshold if score_threshold is not None else 0.3
 
     # Compute metrics.
     scores = [s["score"] for s in suggestions if s.get("score") is not None]
@@ -402,8 +396,7 @@ def analyze_cmd(
     if suggestions:
         top = suggestions[0]
         emit.line(
-            f"top route (score {top['score']:.4f}): "
-            f"{' + '.join(top['reactants'])}"
+            f"top route (score {top['score']:.4f}): {' + '.join(top['reactants'])}"
         )
     emit.path(analysis_path, role="analysis")
     emit.flush()

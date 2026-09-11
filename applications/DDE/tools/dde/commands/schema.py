@@ -59,7 +59,9 @@ def list_cmd() -> None:
 
 @schema.command("show")
 @click.argument("schema_id")
-@click.option("--json", "as_json", is_flag=True, help="Emit machine-readable JSON schema dump.")
+@click.option(
+    "--json", "as_json", is_flag=True, help="Emit machine-readable JSON schema dump."
+)
 def show_cmd(schema_id: str, as_json: bool) -> None:
     """Print a readable field table for a schema.
 
@@ -75,7 +77,7 @@ def show_cmd(schema_id: str, as_json: bool) -> None:
         msg = f"Unknown schema: {schema_id!r}"
         if matches:
             msg += f"\n  Did you mean: {', '.join(matches)}"
-        msg += f"\n  Run 'dde schema list' to see all known schemas."
+        msg += "\n  Run 'dde schema list' to see all known schemas."
         raise click.ClickException(msg)
 
     if as_json:
@@ -120,7 +122,7 @@ def template_cmd(schema_id: str) -> None:
         msg = f"Unknown schema: {schema_id!r}"
         if matches:
             msg += f"\n  Did you mean: {', '.join(matches)}"
-        msg += f"\n  Run 'dde schema list' to see all known schemas."
+        msg += "\n  Run 'dde schema list' to see all known schemas."
         raise click.ClickException(msg)
 
     doc = make_template(schema_id)

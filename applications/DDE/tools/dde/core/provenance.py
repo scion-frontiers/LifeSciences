@@ -1111,6 +1111,7 @@ def _get_project_root() -> Path | None:
     """Try to discover the project root. Returns None if unavailable."""
     try:
         from .context import resolve_project
+
         return resolve_project().root.resolve()
     except Exception:
         return None
@@ -1390,13 +1391,18 @@ def _emit_volatile_stamp_warning(
         "Provenance stamps differ from stored record:",
     ]
     for field, (old_val, new_val) in sorted(changes.items()):
-        old_repr = json.dumps(old_val) if not isinstance(old_val, str) else f'"{old_val}"'
-        new_repr = json.dumps(new_val) if not isinstance(new_val, str) else f'"{new_val}"'
+        old_repr = (
+            json.dumps(old_val) if not isinstance(old_val, str) else f'"{old_val}"'
+        )
+        new_repr = (
+            json.dumps(new_val) if not isinstance(new_val, str) else f'"{new_val}"'
+        )
 
         # For dict-type fields like capability_state, show per-key diffs.
         if isinstance(old_val, dict) and isinstance(new_val, dict):
             diff_keys = sorted(
-                k for k in set(old_val) | set(new_val)
+                k
+                for k in set(old_val) | set(new_val)
                 if old_val.get(k) != new_val.get(k)
             )
             for k in diff_keys:
@@ -1421,17 +1427,17 @@ def _emit_volatile_stamp_warning(
                 "--overwrite would update the record with current capabilities."
             )
 
-    lines.append(
-        "The stored record was produced under different toolchain conditions."
-    )
+    lines.append("The stored record was produced under different toolchain conditions.")
     # Emit as a single block to stderr via click.echo (click is
     # already a dependency via the output module).
-    import click  # noqa: F811 — local import avoids top-level coupling
+    import click
 
     click.echo("\n".join(lines), err=True)
 
 
-def _may_write(path: Path, record: dict[str, Any], *, suppress_warnings: bool = False) -> bool:
+def _may_write(
+    path: Path, record: dict[str, Any], *, suppress_warnings: bool = False
+) -> bool:
     """Decide whether this analysis may land at this path.
 
     Three outcomes, and the middle one is the reason this is a decision
@@ -1478,7 +1484,9 @@ def _may_write(path: Path, record: dict[str, Any], *, suppress_warnings: bool = 
         existing = None
 
     try:
-        records_agree = isinstance(existing, dict) and _comparable(existing) == _comparable(record)
+        records_agree = isinstance(existing, dict) and _comparable(
+            existing
+        ) == _comparable(record)
     except ArtifactError:
         records_agree = False
 

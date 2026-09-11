@@ -124,7 +124,7 @@ def _load_yaml(path: Path) -> dict[str, Any]:
             remedy="provide a valid path to a work-order YAML file",
         )
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
     except yaml.YAMLError as exc:
         raise SchemaError(
@@ -234,15 +234,18 @@ def _log_transition(
     to_state: str,
 ) -> None:
     """Append a ``workorder.transition`` event to the event log."""
-    controlstore.append_event(project_root, {
-        "type": "workorder.transition",
-        "subject_id": wo_id,
-        "revision": revision,
-        "from_state": from_state,
-        "to_state": to_state,
-        "actor": None,
-        "detail": None,
-    })
+    controlstore.append_event(
+        project_root,
+        {
+            "type": "workorder.transition",
+            "subject_id": wo_id,
+            "revision": revision,
+            "from_state": from_state,
+            "to_state": to_state,
+            "actor": None,
+            "detail": None,
+        },
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -262,13 +265,15 @@ def workorder() -> None:
 
 @workorder.command("create")
 @click.option(
-    "--from", "from_file",
+    "--from",
+    "from_file",
     required=True,
     type=click.Path(),
     help="Path to a YAML file containing work-order fields.",
 )
 @click.option(
-    "--commit", "do_commit",
+    "--commit",
+    "do_commit",
     is_flag=True,
     default=False,
     help="Immediately commit the work order after creation (create + commit in one step).",
@@ -276,7 +281,11 @@ def workorder() -> None:
 @output_options
 @pass_state
 def create_cmd(
-    state: AppState, from_file: str, do_commit: bool, as_json: bool, quiet: bool,
+    state: AppState,
+    from_file: str,
+    do_commit: bool,
+    as_json: bool,
+    quiet: bool,
 ) -> None:
     """Create a new work order from a YAML specification.
 
@@ -315,7 +324,10 @@ def create_cmd(
     # Write the record.
     identifier = f"{wo_id}-r{revision}"
     record_path = controlstore.write_record(
-        project.root, "work-order", identifier, record,
+        project.root,
+        "work-order",
+        identifier,
+        record,
     )
 
     # Log the transition event.
@@ -325,7 +337,8 @@ def create_cmd(
         # Immediately commit: runs the full commit validation and
         # context-snapshot logic, identical to a separate `commit` call.
         committed_record, snapshot_path, record_path = _perform_commit(
-            project.root, wo_id,
+            project.root,
+            wo_id,
         )
         revision = committed_record["revision"]
 
@@ -333,8 +346,7 @@ def create_cmd(
         emit.data("revision", revision)
         emit.data("state", "committed")
         emit.line(
-            f"{wo_id} created and committed "
-            f"(revision {revision}, state: committed)"
+            f"{wo_id} created and committed (revision {revision}, state: committed)"
         )
         emit.path(snapshot_path, role="context_snapshot")
         emit.path(record_path, role="record")
@@ -357,7 +369,8 @@ def create_cmd(
 @workorder.command("update")
 @click.argument("id", metavar="ID")
 @click.option(
-    "--from", "from_file",
+    "--from",
+    "from_file",
     required=True,
     type=click.Path(),
     help="Path to a YAML file with updated work-order fields.",
@@ -365,7 +378,11 @@ def create_cmd(
 @output_options
 @pass_state
 def update_cmd(
-    state: AppState, id: str, from_file: str, as_json: bool, quiet: bool,
+    state: AppState,
+    id: str,
+    from_file: str,
+    as_json: bool,
+    quiet: bool,
 ) -> None:
     """Update a proposed work order's content fields."""
     emit = emitter(as_json, quiet)
@@ -395,7 +412,10 @@ def update_cmd(
     revision = record["revision"]
     identifier = f"{id}-r{revision}"
     record_path = controlstore.write_record(
-        project.root, "work-order", identifier, record,
+        project.root,
+        "work-order",
+        identifier,
+        record,
     )
 
     emit.data("id", id)
@@ -481,8 +501,9 @@ def _perform_commit(
                 ),
             )
         if isinstance(justification, dict):
-            unjustified = [lid for lid in critical_liabilities
-                           if lid not in justification]
+            unjustified = [
+                lid for lid in critical_liabilities if lid not in justification
+            ]
             if unjustified:
                 raise Refusal(
                     f"liability_justification does not cover all active Critical "
@@ -519,7 +540,10 @@ def _perform_commit(
 
     snapshot_identifier = f"{wo_id}-r{revision}"
     snapshot_path = controlstore.write_record(
-        project_root, "context", snapshot_identifier, snapshot_data,
+        project_root,
+        "context",
+        snapshot_identifier,
+        snapshot_data,
     )
 
     # Compute snapshot file sha256 for reference integrity.
@@ -538,7 +562,10 @@ def _perform_commit(
 
     identifier = f"{wo_id}-r{revision}"
     record_path = controlstore.write_record(
-        project_root, "work-order", identifier, record,
+        project_root,
+        "work-order",
+        identifier,
+        record,
     )
 
     # Log the transition event.
@@ -552,7 +579,10 @@ def _perform_commit(
 @output_options
 @pass_state
 def commit_cmd(
-    state: AppState, id: str, as_json: bool, quiet: bool,
+    state: AppState,
+    id: str,
+    as_json: bool,
+    quiet: bool,
 ) -> None:
     """Commit a proposed work order: freeze content, create context snapshot."""
     emit = emitter(as_json, quiet)
@@ -581,7 +611,10 @@ def commit_cmd(
 @output_options
 @pass_state
 def revise_cmd(
-    state: AppState, id: str, as_json: bool, quiet: bool,
+    state: AppState,
+    id: str,
+    as_json: bool,
+    quiet: bool,
 ) -> None:
     """Create a new revision of an existing work order."""
     emit = emitter(as_json, quiet)
@@ -616,7 +649,10 @@ def revise_cmd(
 
     identifier = f"{id}-r{new_revision}"
     record_path = controlstore.write_record(
-        project.root, "work-order", identifier, record,
+        project.root,
+        "work-order",
+        identifier,
+        record,
     )
 
     # Log the transition event (new revision, from_state=None → proposed).
@@ -660,7 +696,10 @@ def transition_cmd(
     # override subcommand, which enforces mandatory audit metadata
     # (reason, evidence, checks, actor).  Allowing it here would
     # bypass those guardrails entirely.
-    if current_state == "validation_failed" and target_state == "mechanically_validated":
+    if (
+        current_state == "validation_failed"
+        and target_state == "mechanically_validated"
+    ):
         raise Refusal(
             "cannot transition directly from 'validation_failed' to "
             "'mechanically_validated'",
@@ -677,12 +716,8 @@ def transition_cmd(
     # here would bypass the entire mechanical validation system.
     if current_state == "submitted" and target_state == "mechanically_validated":
         raise Refusal(
-            "cannot transition directly from 'submitted' to "
-            "'mechanically_validated'",
-            detail=(
-                "this transition requires all 8 mechanical checks "
-                "to pass"
-            ),
+            "cannot transition directly from 'submitted' to 'mechanically_validated'",
+            detail=("this transition requires all 8 mechanical checks to pass"),
             remedy=f"use `dde validate check {id}` instead",
         )
 
@@ -791,9 +826,7 @@ def override_cmd(
         )
 
     # Parse and validate --checks.  Deduplicate while preserving order.
-    check_names = list(dict.fromkeys(
-        c.strip() for c in checks.split(",") if c.strip()
-    ))
+    check_names = list(dict.fromkeys(c.strip() for c in checks.split(",") if c.strip()))
     if not check_names:
         raise Refusal(
             "at least one check must be named for override",
@@ -804,9 +837,7 @@ def override_cmd(
         )
 
     # Validate each check name against the allow-list.
-    non_overridable_requested = [
-        c for c in check_names if c in NON_OVERRIDABLE_CHECKS
-    ]
+    non_overridable_requested = [c for c in check_names if c in NON_OVERRIDABLE_CHECKS]
     if non_overridable_requested:
         raise Refusal(
             f"cannot override non-overridable check(s): "
@@ -821,17 +852,11 @@ def override_cmd(
             ),
         )
 
-    unknown_checks = [
-        c for c in check_names if c not in OVERRIDABLE_CHECKS
-    ]
+    unknown_checks = [c for c in check_names if c not in OVERRIDABLE_CHECKS]
     if unknown_checks:
         raise Refusal(
-            f"unknown or non-overridable check(s): "
-            f"{', '.join(unknown_checks)}",
-            detail=(
-                f"overridable checks: "
-                f"{', '.join(sorted(OVERRIDABLE_CHECKS))}"
-            ),
+            f"unknown or non-overridable check(s): {', '.join(unknown_checks)}",
+            detail=(f"overridable checks: {', '.join(sorted(OVERRIDABLE_CHECKS))}"),
             remedy="provide only check names from the overridable set",
         )
 
@@ -849,32 +874,27 @@ def override_cmd(
                 "overrides are only available for work orders "
                 "that have failed validation"
             ),
-            remedy=(
-                "only work orders in 'validation_failed' state "
-                "can be overridden"
-            ),
+            remedy=("only work orders in 'validation_failed' state can be overridden"),
         )
 
     # Read the latest validation record to get checks_failed.
     val_identifier = f"{id}-r{revision}"
     val_record = controlstore.read_record(
-        project.root, "validation", val_identifier,
+        project.root,
+        "validation",
+        val_identifier,
     )
     val_checks = val_record.get("checks", [])
-    checks_failed = [
-        c["name"] for c in val_checks if c.get("result") == "fail"
-    ]
+    checks_failed = [c["name"] for c in val_checks if c.get("result") == "fail"]
 
     # Validate each named check actually failed.
     not_failed = [c for c in check_names if c not in checks_failed]
     if not_failed:
         raise Refusal(
-            f"check(s) not in current checks_failed: "
-            f"{', '.join(not_failed)}",
+            f"check(s) not in current checks_failed: {', '.join(not_failed)}",
             detail=f"current checks_failed: {', '.join(checks_failed)}",
             remedy=(
-                "only name checks that actually failed in the "
-                "most recent validation"
+                "only name checks that actually failed in the most recent validation"
             ),
         )
 
@@ -931,25 +951,31 @@ def override_cmd(
     record["state"] = target_state
     identifier = f"{id}-r{revision}"
     controlstore.write_record(
-        project.root, "work-order", identifier, record,
+        project.root,
+        "work-order",
+        identifier,
+        record,
     )
 
     # Log the transition event with populated detail and actor.
     # This is the first transition event to ever populate these fields.
-    controlstore.append_event(project.root, {
-        "type": "workorder.transition",
-        "subject_id": id,
-        "revision": revision,
-        "from_state": current_state,
-        "to_state": target_state,
-        "actor": actor_str,
-        "detail": {
-            "override": True,
-            "reason": reason,
-            "evidence": evidence,
-            "checks_overridden": check_names,
+    controlstore.append_event(
+        project.root,
+        {
+            "type": "workorder.transition",
+            "subject_id": id,
+            "revision": revision,
+            "from_state": current_state,
+            "to_state": target_state,
+            "actor": actor_str,
+            "detail": {
+                "override": True,
+                "reason": reason,
+                "evidence": evidence,
+                "checks_overridden": check_names,
+            },
         },
-    })
+    )
 
     # Output.
     emit.data("id", id)
@@ -974,7 +1000,8 @@ def override_cmd(
 @workorder.command("show")
 @click.argument("id", metavar="ID")
 @click.option(
-    "--revision", "revision_num",
+    "--revision",
+    "revision_num",
     type=int,
     default=None,
     help="Show a specific revision (default: latest).",
@@ -1001,10 +1028,7 @@ def show_cmd(
 
     identifier = f"{id}-r{revision_num}"
     record_path = (
-        project.root
-        / controlstore.CONTROL_DIR
-        / "work-orders"
-        / f"{identifier}.json"
+        project.root / controlstore.CONTROL_DIR / "work-orders" / f"{identifier}.json"
     )
 
     if as_json:
@@ -1030,8 +1054,7 @@ def show_cmd(
     emit.line(f"  Question:    {clip(question, 100)}")
     emit.line(f"  Role:        {record.get('requested_role', '')}")
     emit.line(
-        f"  Stage:       {record.get('stage', '')}  "
-        f"Cycle: {record.get('cycle', '')}"
+        f"  Stage:       {record.get('stage', '')}  Cycle: {record.get('cycle', '')}"
     )
     emit.line(
         f"  Priority:    {record.get('priority', '')}  "
@@ -1051,8 +1074,7 @@ def show_cmd(
             emit.line(f"    [{i}] {entry.get('overridden_at', '?')}")
             emit.line(f"        Actor:    {entry.get('actor', '?')}")
             emit.line(
-                f"        Checks:   "
-                f"{', '.join(entry.get('checks_overridden', []))}"
+                f"        Checks:   {', '.join(entry.get('checks_overridden', []))}"
             )
             emit.line(f"        Reason:   {clip(entry.get('reason', ''), 80)}")
             emit.line(f"        Evidence: {clip(entry.get('evidence', ''), 80)}")
@@ -1205,14 +1227,9 @@ def accept_cmd(
         emit.data("id", id)
         emit.data("revision", revision)
         emit.data("state", current_state)
-        emit.line(
-            f"{id} is already mechanically_validated "
-            f"(revision {revision})."
-        )
+        emit.line(f"{id} is already mechanically_validated (revision {revision}).")
         emit.line("Ready for scientific acceptance:")
-        emit.line(
-            f"  dde workorder transition {id} scientifically_accepted"
-        )
+        emit.line(f"  dde workorder transition {id} scientifically_accepted")
         emit.flush()
         return
 
@@ -1259,7 +1276,10 @@ def accept_cmd(
         record["state"] = to_state
         identifier = f"{id}-r{revision}"
         controlstore.write_record(
-            project.root, "work-order", identifier, record,
+            project.root,
+            "work-order",
+            identifier,
+            record,
         )
         _log_transition(project.root, id, revision, from_state, to_state)
 
@@ -1274,7 +1294,7 @@ def accept_cmd(
     # validate module is a sibling in the same commands package.
     from .validate import _perform_validation
 
-    wo_record, val_path, overall_result, checks, checks_failed, val_from, val_to = (
+    _wo_record, val_path, overall_result, checks, checks_failed, val_from, val_to = (
         _perform_validation(project.root, id)
     )
 
@@ -1290,18 +1310,12 @@ def accept_cmd(
         emit.data("from_state", current_state)
         emit.data("to_state", val_to)
         emit.data("validation_result", overall_result)
-        emit.line(
-            f"{id}: {val_from} → {val_to}  "
-            f"[validation {overall_result.upper()}]"
-        )
+        emit.line(f"{id}: {val_from} → {val_to}  [validation {overall_result.upper()}]")
         emit.line("")
         emit.line(
-            f"{id} is now mechanically_validated and ready for "
-            f"scientific acceptance."
+            f"{id} is now mechanically_validated and ready for scientific acceptance."
         )
-        emit.line(
-            f"  dde workorder transition {id} scientifically_accepted"
-        )
+        emit.line(f"  dde workorder transition {id} scientifically_accepted")
         emit.path(val_path, role="validation_record")
     else:
         emit.data("id", id)
@@ -1310,21 +1324,13 @@ def accept_cmd(
         emit.data("to_state", val_to)
         emit.data("validation_result", overall_result)
         emit.data("checks_failed", checks_failed)
-        emit.line(
-            f"{id}: {val_from} → {val_to}  "
-            f"[validation {overall_result.upper()}]"
-        )
+        emit.line(f"{id}: {val_from} → {val_to}  [validation {overall_result.upper()}]")
         emit.line("")
         emit.line(f"Failed checks: {', '.join(checks_failed)}")
         emit.line("")
         emit.line("Remedy:")
-        emit.line(
-            "  1. Fix the failing deliverables and resubmit, or"
-        )
-        emit.line(
-            f"  2. Use `dde workorder override {id}` to override "
-            f"eligible checks"
-        )
+        emit.line("  1. Fix the failing deliverables and resubmit, or")
+        emit.line(f"  2. Use `dde workorder override {id}` to override eligible checks")
         emit.path(val_path, role="validation_record")
 
     emit.flush()
@@ -1389,7 +1395,10 @@ def _try_accept_single(
             "checks": [],
         }
 
-    if current_state not in _MECHANICAL_CHAIN and current_state != "mechanically_validated":
+    if (
+        current_state not in _MECHANICAL_CHAIN
+        and current_state != "mechanically_validated"
+    ):
         return {
             "id": wo_id,
             "revision": revision,
@@ -1410,7 +1419,10 @@ def _try_accept_single(
             record["state"] = to_state
             identifier = f"{wo_id}-r{revision}"
             controlstore.write_record(
-                project_root, "work-order", identifier, record,
+                project_root,
+                "work-order",
+                identifier,
+                record,
             )
             _log_transition(project_root, wo_id, revision, from_state, to_state)
 
@@ -1418,9 +1430,15 @@ def _try_accept_single(
         from .validate import _perform_validation
 
         try:
-            wo_record, val_path, overall_result, checks, checks_failed, val_from, val_to = (
-                _perform_validation(project_root, wo_id)
-            )
+            (
+                wo_record,
+                _val_path,
+                overall_result,
+                checks,
+                _checks_failed,
+                _val_from,
+                _val_to,
+            ) = _perform_validation(project_root, wo_id)
         except Exception as exc:
             return {
                 "id": wo_id,
@@ -1449,18 +1467,21 @@ def _try_accept_single(
         record = wo_record  # Updated by _perform_validation.
 
     # At mechanically_validated — transition to scientifically_accepted.
-    validate_transition("workorder", "mechanically_validated", "scientifically_accepted")
+    validate_transition(
+        "workorder", "mechanically_validated", "scientifically_accepted"
+    )
     record["state"] = "scientifically_accepted"
     identifier = f"{wo_id}-r{revision}"
     controlstore.write_record(project_root, "work-order", identifier, record)
     _log_transition(
-        project_root, wo_id, revision,
-        "mechanically_validated", "scientifically_accepted",
+        project_root,
+        wo_id,
+        revision,
+        "mechanically_validated",
+        "scientifically_accepted",
     )
 
-    has_warnings = any(
-        c.get("result") == "warning" for c in ran_checks
-    )
+    has_warnings = any(c.get("result") == "warning" for c in ran_checks)
     outcome = "pass_with_warnings" if has_warnings else "pass"
 
     return {
@@ -1518,7 +1539,9 @@ def accept_all_cmd(
 
     # Build consolidated output.
     accepted_count = sum(
-        1 for r in results if r["outcome"] in ("pass", "pass_with_warnings", "already_accepted")
+        1
+        for r in results
+        if r["outcome"] in ("pass", "pass_with_warnings", "already_accepted")
     )
     failed_count = sum(1 for r in results if r["outcome"] == "fail")
     skipped_count = sum(1 for r in results if r["outcome"] == "skip")
@@ -1563,9 +1586,7 @@ def accept_all_cmd(
 
     emit.line("")
     emit.line(
-        f"Accepted: {accepted_count}  "
-        f"Failed: {failed_count}  "
-        f"Skipped: {skipped_count}"
+        f"Accepted: {accepted_count}  Failed: {failed_count}  Skipped: {skipped_count}"
     )
 
     if failed_count > 0:

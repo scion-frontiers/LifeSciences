@@ -28,7 +28,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from dde.commands.doctor import Report, _check_project, OK, FAIL
+from dde.commands.doctor import FAIL, OK, Report, _check_project
 from dde.common import AppState
 
 

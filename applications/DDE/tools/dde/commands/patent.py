@@ -55,12 +55,12 @@ from ..common import (
     pass_state,
 )
 from ..core import http, provenance
-from ..core.qps import qps_for_host
 from ..core.errors import (
     ArtifactError,
     Refusal,
     SchemaError,
 )
+from ..core.qps import qps_for_host
 
 GOOGLE_PATENTS_API = "https://patents.google.com/xhr/query"
 TOOL = "dde.patent"
@@ -95,10 +95,7 @@ def _fetch_google_patents(query: str) -> tuple[bytes, dict[str, Any]]:
         if page == 0:
             url = f"{GOOGLE_PATENTS_API}?url=q%3D{encoded_query}&exp="
         else:
-            url = (
-                f"{GOOGLE_PATENTS_API}"
-                f"?url=q%3D{encoded_query}%26page%3D{page}&exp="
-            )
+            url = f"{GOOGLE_PATENTS_API}?url=q%3D{encoded_query}%26page%3D{page}&exp="
 
         response = http.request(
             "GET",
@@ -127,9 +124,7 @@ def _fetch_google_patents(query: str) -> tuple[bytes, dict[str, Any]]:
         try:
             payload = json.loads(response.content.decode("utf-8"))
         except Exception as exc:
-            raise SchemaError(
-                "Google Patents did not return JSON", detail=str(exc)
-            )
+            raise SchemaError("Google Patents did not return JSON", detail=str(exc))
 
         # Extract patents from the response structure.
         results = payload.get("results") or {}
@@ -243,6 +238,7 @@ def patent() -> None:
 # verb for this group is ``search`` (Google Patents returns a result set
 # for a text query); ``fetch`` is the alias.
 
+
 @patent.command("search")
 @click.argument("query")
 @click.option(
@@ -272,9 +268,7 @@ def search_cmd(
     """
     emit = emitter(as_json, quiet)
     target_dir = state.project().artifact_dir(ARTIFACT_CLASS, out)
-    slug = (
-        re.sub(r"[^a-z0-9._-]+", "-", query.lower()).strip("-")[:80] or "query"
-    )
+    slug = re.sub(r"[^a-z0-9._-]+", "-", query.lower()).strip("-")[:80] or "query"
 
     raw, artifact = _fetch_google_patents(query)
 
@@ -311,15 +305,11 @@ def search_cmd(
 
     # Write structured artifact.
     artifact_path = target_dir / f"{slug}.patent-{source}.artifact.json"
-    artifact_path.write_text(
-        json.dumps(artifact, indent=2) + "\n", encoding="utf-8"
-    )
+    artifact_path.write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
     sidecar.add_output(artifact_path)
 
     # Write sidecar.
-    meta_path = sidecar.write(
-        target_dir / f"{slug}.patent-{source}.meta.json"
-    )
+    meta_path = sidecar.write(target_dir / f"{slug}.patent-{source}.meta.json")
 
     emit.data("query", query)
     emit.data("source", source)
@@ -352,10 +342,7 @@ def analyze_cmd(
     source_dir = state.project().artifact_dir(ARTIFACT_CLASS, from_dir)
     target_dir = state.project().artifact_dir(ARTIFACT_CLASS, out)
 
-    slug = (
-        re.sub(r"[^a-z0-9._-]+", "-", query_term.lower()).strip("-")[:80]
-        or "query"
-    )
+    slug = re.sub(r"[^a-z0-9._-]+", "-", query_term.lower()).strip("-")[:80] or "query"
     artifact_path = source_dir / f"{slug}.patent-google-patents.artifact.json"
     if not artifact_path.is_file():
         raise ArtifactError(
@@ -455,7 +442,8 @@ def _analyze_patents(
 
     # Top assignees by count.
     top_assignees = [
-        name for name, _ in sorted(
+        name
+        for name, _ in sorted(
             assignee_counts.items(), key=lambda x: x[1], reverse=True
         )[:10]
     ]

@@ -21,7 +21,6 @@ from pathlib import Path
 
 import yaml
 
-
 DDE_ROOT = Path(__file__).resolve().parents[2]
 TEMPLATES = DDE_ROOT / "templates"
 SKILLS = DDE_ROOT / "skills"
@@ -32,7 +31,11 @@ ROLE_SKILLS = {
     "hypex-reflection": {"citation-verification", "review-rubric", "safety-screen"},
     "hypex-proximity": {"proximity-protocol"},
     "hypex-tournament": {"elo-tournament", "debate-protocol"},
-    "hypex-evolution": {"literature-search", "evolution-operators", "hypothesis-schema"},
+    "hypex-evolution": {
+        "literature-search",
+        "evolution-operators",
+        "hypothesis-schema",
+    },
     "hypex-meta-review": {"citation-verification", "meta-review-protocol"},
 }
 
@@ -61,8 +64,10 @@ def test_ported_instructions_do_not_invoke_standalone_lit_cli() -> None:
     standalone_lit = re.compile(r"(?m)^\s*lit\s+")
     files = [TEMPLATES / role / "agents.md" for role in ROLE_SKILLS]
     files.extend(
-        path for path in SKILLS.glob("*/SKILL.md")
-        if path.parent.name in {
+        path
+        for path in SKILLS.glob("*/SKILL.md")
+        if path.parent.name
+        in {
             "debate-protocol",
             "evolution-operators",
             "hypothesis-schema",
@@ -77,8 +82,10 @@ def test_ported_instructions_do_not_invoke_standalone_lit_cli() -> None:
 
 def test_supervisor_declares_termination_before_dde_ingest() -> None:
     instructions = (TEMPLATES / "hypex-supervisor" / "agents.md").read_text()
-    termination = instructions.index('Write `meta/termination.json` with the actual reason')
-    ingest = instructions.index('Run `dde hypex ingest')
+    termination = instructions.index(
+        "Write `meta/termination.json` with the actual reason"
+    )
+    ingest = instructions.index("Run `dde hypex ingest")
     assert termination < ingest
 
 

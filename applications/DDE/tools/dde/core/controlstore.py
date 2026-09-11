@@ -29,11 +29,12 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
-from .concepts import CONCEPT_STATES, validate_concept
+from .concepts import validate_concept
 from .errors import ArtifactError, SchemaError
 from .evidence import validate_assessment, validate_decision
 from .statemachine import RUN_STATES, WORK_ORDER_STATES
@@ -181,7 +182,9 @@ def normalize_deliverables(deliverables: dict[str, Any]) -> dict[str, Any]:
         normalized["required_classes"] = normalized.pop("layer_0")
 
     # --- Normalize required_classes entries ---
-    if "required_classes" in normalized and isinstance(normalized["required_classes"], list):
+    if "required_classes" in normalized and isinstance(
+        normalized["required_classes"], list
+    ):
         req_raw = normalized["required_classes"]
         # Build layer_0_classes (flattened strings for backward compat)
         # and keep required_classes with not_applicable dicts preserved.
@@ -209,7 +212,9 @@ def normalize_deliverables(deliverables: dict[str, Any]) -> dict[str, Any]:
         normalized.setdefault("layer_0_classes", [])
 
     # --- authorized_classes passes through as-is ---
-    if "authorized_classes" in normalized and isinstance(normalized["authorized_classes"], list):
+    if "authorized_classes" in normalized and isinstance(
+        normalized["authorized_classes"], list
+    ):
         normalized["authorized_classes"] = [
             _flatten_entry(e, "class") for e in normalized["authorized_classes"]
         ]
@@ -227,7 +232,9 @@ def normalize_deliverables(deliverables: dict[str, Any]) -> dict[str, Any]:
     # Normalize `layer_0_classes_optional` entries (#132).
     # Classes listed here are checked for existence but do not fail
     # validation if absent.
-    if "layer_0_classes_optional" in normalized and isinstance(normalized["layer_0_classes_optional"], list):
+    if "layer_0_classes_optional" in normalized and isinstance(
+        normalized["layer_0_classes_optional"], list
+    ):
         normalized["layer_0_classes_optional"] = [
             _flatten_entry(e, "class") for e in normalized["layer_0_classes_optional"]
         ]
@@ -238,10 +245,23 @@ def normalize_deliverables(deliverables: dict[str, Any]) -> dict[str, Any]:
 def _validate_work_order(data: dict[str, Any]) -> list[str]:
     """Return a list of validation error strings (empty if valid)."""
     required = [
-        "id", "revision", "state", "decision_question", "requested_role",
-        "stage", "cycle", "context", "dependencies", "capabilities",
-        "deliverables", "acceptance_criteria", "alert_policy", "priority",
-        "resource_class", "report_to", "created_at",
+        "id",
+        "revision",
+        "state",
+        "decision_question",
+        "requested_role",
+        "stage",
+        "cycle",
+        "context",
+        "dependencies",
+        "capabilities",
+        "deliverables",
+        "acceptance_criteria",
+        "alert_policy",
+        "priority",
+        "resource_class",
+        "report_to",
+        "created_at",
     ]
     errors: list[str] = []
     missing = [f for f in required if f not in data]
@@ -266,8 +286,11 @@ def _validate_work_order(data: dict[str, Any]) -> list[str]:
     # field types").  Deep validation of nested structure is deferred to
     # the command layer (e.g. commit checksums artifact links).
     _FIELD_TYPES: dict[str, type] = {
-        "context": dict, "dependencies": list, "capabilities": list,
-        "deliverables": dict, "alert_policy": dict,
+        "context": dict,
+        "dependencies": list,
+        "capabilities": list,
+        "deliverables": dict,
+        "alert_policy": dict,
     }
     for field, expected_type in _FIELD_TYPES.items():
         if field in data and not isinstance(data[field], expected_type):
@@ -282,8 +305,12 @@ def _validate_work_order(data: dict[str, Any]) -> list[str]:
 def _validate_run(data: dict[str, Any]) -> list[str]:
     """Return a list of validation error strings (empty if valid)."""
     required = [
-        "run_id", "work_order_id", "work_order_revision",
-        "state", "attempt", "created_at",
+        "run_id",
+        "work_order_id",
+        "work_order_revision",
+        "state",
+        "attempt",
+        "created_at",
     ]
     errors: list[str] = []
     missing = [f for f in required if f not in data]
@@ -310,8 +337,12 @@ def _validate_run(data: dict[str, Any]) -> list[str]:
 def _validate_context(data: dict[str, Any]) -> list[str]:
     """Return a list of validation error strings (empty if valid)."""
     required = [
-        "work_order_id", "revision", "artifact_links",
-        "content", "content_sha256", "created_at",
+        "work_order_id",
+        "revision",
+        "artifact_links",
+        "content",
+        "content_sha256",
+        "created_at",
     ]
     errors: list[str] = []
     missing = [f for f in required if f not in data]
@@ -323,8 +354,12 @@ def _validate_context(data: dict[str, Any]) -> list[str]:
 def _validate_validation(data: dict[str, Any]) -> list[str]:
     """Return a list of validation error strings (empty if valid)."""
     required = [
-        "work_order_id", "work_order_revision", "run_id",
-        "validated_at", "result", "checks",
+        "work_order_id",
+        "work_order_revision",
+        "run_id",
+        "validated_at",
+        "result",
+        "checks",
     ]
     errors: list[str] = []
     missing = [f for f in required if f not in data]
@@ -336,8 +371,15 @@ def _validate_validation(data: dict[str, Any]) -> list[str]:
 def _validate_lease(data: dict[str, Any]) -> list[str]:
     """Return a list of validation error strings (empty if valid)."""
     required = [
-        "resource", "state", "work_order_id", "work_order_revision",
-        "run_id", "holder_agent", "granted_at", "ttl_minutes", "expires_at",
+        "resource",
+        "state",
+        "work_order_id",
+        "work_order_revision",
+        "run_id",
+        "holder_agent",
+        "granted_at",
+        "ttl_minutes",
+        "expires_at",
         "extensions",
     ]
     errors: list[str] = []
@@ -367,12 +409,14 @@ def _validate_lease(data: dict[str, Any]) -> list[str]:
 def _validate_policy_record(data: dict[str, Any]) -> list[str]:
     """Delegate to policy module's validator."""
     from .policy import validate_policy
+
     return validate_policy(data)
 
 
 def _validate_snapshot_record(data: dict[str, Any]) -> list[str]:
     """Delegate to policy module's validator."""
     from .policy import validate_snapshot
+
     return validate_snapshot(data)
 
 
@@ -395,7 +439,9 @@ _VALIDATORS: dict[str, Callable[[dict[str, Any]], list[str]]] = {
 # ---------------------------------------------------------------------------
 
 
-def read_record(project_root: str | Path, record_type: str, identifier: str) -> dict[str, Any]:
+def read_record(
+    project_root: str | Path, record_type: str, identifier: str
+) -> dict[str, Any]:
     """Read a JSON record from the state store.
 
     Parameters
@@ -443,6 +489,7 @@ def _default_concept_loader(project_root: Path):
     been merged), or the record does not exist, returns ``None`` —
     the validator treats unknown authority as ``"human"`` (safe default).
     """
+
     def _load(concept_id: str) -> dict[str, Any] | None:
         # Defense-in-depth: validate concept_id format before touching
         # the filesystem.  Upstream entity_ref validation should already
@@ -468,9 +515,8 @@ def _default_concept_loader(project_root: Path):
         # Scan for revisions (IC-NNN-r1.json, IC-NNN-r2.json, ...)
         # and return the latest.
         import re as _re
-        revision_re = _re.compile(
-            r"^" + _re.escape(concept_id) + r"-r(\d+)\.json$"
-        )
+
+        revision_re = _re.compile(r"^" + _re.escape(concept_id) + r"-r(\d+)\.json$")
         best: tuple[int, Path] | None = None
         for p in concepts_dir.iterdir():
             m = revision_re.match(p.name)
@@ -620,7 +666,9 @@ def append_event(project_root: str | Path, event: dict[str, Any]) -> None:
 
     # Ensure a timestamp is present.
     if "timestamp" not in event:
-        event = dict(event, timestamp=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
+        event = dict(
+            event, timestamp=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        )
 
     line = json.dumps(event, separators=(",", ":")) + "\n"
     with open(events_path, "a", encoding="utf-8") as f:
