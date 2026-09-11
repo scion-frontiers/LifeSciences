@@ -42,14 +42,13 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 from dde.commands.preprint import (
-    _slugify,
-    _parse_arxiv_entries,
-    _parse_biorxiv_collection,
     _BIORXIV_MAX_PAGES,
     _BIORXIV_PAGE_SIZE,
+    _parse_arxiv_entries,
+    _parse_biorxiv_collection,
+    _slugify,
 )
 from dde.core import provenance
-
 
 # ---------------------------------------------------------------------------
 # Helper: project setup and canned arXiv responses
@@ -65,7 +64,9 @@ def _make_project(base: Path) -> Path:
     return project
 
 
-def _arxiv_atom_response(entries: list[dict[str, Any]], total: int | None = None) -> bytes:
+def _arxiv_atom_response(
+    entries: list[dict[str, Any]], total: int | None = None
+) -> bytes:
     """Build a canned arXiv Atom XML response.
 
     Each entry dict should have: id, title, authors (list of str),
@@ -79,9 +80,9 @@ def _arxiv_atom_response(entries: list[dict[str, Any]], total: int | None = None
         '<feed xmlns="http://www.w3.org/2005/Atom"'
         ' xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/"'
         ' xmlns:arxiv="http://arxiv.org/schemas/atom">',
-        f'  <opensearch:totalResults>{total}</opensearch:totalResults>',
-        '  <opensearch:startIndex>0</opensearch:startIndex>',
-        f'  <opensearch:itemsPerPage>{len(entries)}</opensearch:itemsPerPage>',
+        f"  <opensearch:totalResults>{total}</opensearch:totalResults>",
+        "  <opensearch:startIndex>0</opensearch:startIndex>",
+        f"  <opensearch:itemsPerPage>{len(entries)}</opensearch:itemsPerPage>",
     ]
 
     for e in entries:
@@ -180,9 +181,12 @@ def test_search_three_results() -> None:
             result = runner.invoke(
                 cli,
                 [
-                    "--project", str(project),
-                    "preprint", "search",
-                    "--source", "arxiv",
+                    "--project",
+                    str(project),
+                    "preprint",
+                    "search",
+                    "--source",
+                    "arxiv",
                     "drug discovery machine learning",
                 ],
                 catch_exceptions=False,
@@ -225,9 +229,12 @@ def test_search_zero_results() -> None:
             result = runner.invoke(
                 cli,
                 [
-                    "--project", str(project),
-                    "preprint", "search",
-                    "--source", "arxiv",
+                    "--project",
+                    str(project),
+                    "preprint",
+                    "search",
+                    "--source",
+                    "arxiv",
                     "xyznonexistentquery42",
                 ],
                 catch_exceptions=False,
@@ -285,9 +292,7 @@ def test_relay_codes_registered() -> None:
         "preprint.query_truncated",
     ]
     for code in expected:
-        assert code in provenance.RELAY_CODES, (
-            f"{code} not registered in RELAY_CODES"
-        )
+        assert code in provenance.RELAY_CODES, f"{code} not registered in RELAY_CODES"
     print("  PASS: all preprint.* relay codes registered")
 
 
@@ -338,9 +343,12 @@ def test_relay_no_results_does_not_fire_when_results_exist() -> None:
             result = runner.invoke(
                 cli,
                 [
-                    "--project", str(project),
-                    "preprint", "search",
-                    "--source", "arxiv",
+                    "--project",
+                    str(project),
+                    "preprint",
+                    "search",
+                    "--source",
+                    "arxiv",
                     "test query",
                 ],
                 catch_exceptions=False,
@@ -392,9 +400,12 @@ def test_manifest_schema() -> None:
             result = runner.invoke(
                 cli,
                 [
-                    "--project", str(project),
-                    "preprint", "search",
-                    "--source", "arxiv",
+                    "--project",
+                    str(project),
+                    "preprint",
+                    "search",
+                    "--source",
+                    "arxiv",
                     "schema test",
                 ],
                 catch_exceptions=False,
@@ -418,8 +429,16 @@ def test_manifest_schema() -> None:
         # Result record required fields
         r = artifact["results"][0]
         for field in (
-            "id", "title", "authors", "abstract", "published",
-            "updated", "categories", "pdf_url", "doi", "source",
+            "id",
+            "title",
+            "authors",
+            "abstract",
+            "published",
+            "updated",
+            "categories",
+            "pdf_url",
+            "doi",
+            "source",
         ):
             assert field in r, f"Missing result field: {field}"
 
@@ -539,10 +558,14 @@ def test_query_truncated_fires() -> None:
             result = runner.invoke(
                 cli,
                 [
-                    "--project", str(project),
-                    "preprint", "search",
-                    "--source", "arxiv",
-                    "--max-results", "2",
+                    "--project",
+                    str(project),
+                    "preprint",
+                    "search",
+                    "--source",
+                    "arxiv",
+                    "--max-results",
+                    "2",
                     "truncation test query",
                 ],
                 catch_exceptions=False,
@@ -625,10 +648,14 @@ def test_query_truncated_no_fire() -> None:
             result = runner.invoke(
                 cli,
                 [
-                    "--project", str(project),
-                    "preprint", "search",
-                    "--source", "arxiv",
-                    "--max-results", "5",
+                    "--project",
+                    str(project),
+                    "preprint",
+                    "search",
+                    "--source",
+                    "arxiv",
+                    "--max-results",
+                    "5",
                     "non truncated query",
                 ],
                 catch_exceptions=False,
@@ -702,9 +729,12 @@ def test_analyze_end_to_end() -> None:
             search_result = runner.invoke(
                 cli,
                 [
-                    "--project", str(project),
-                    "preprint", "search",
-                    "--source", "arxiv",
+                    "--project",
+                    str(project),
+                    "preprint",
+                    "search",
+                    "--source",
+                    "arxiv",
                     "analysis end to end test",
                 ],
                 catch_exceptions=False,
@@ -724,10 +754,13 @@ def test_analyze_end_to_end() -> None:
         analyze_result = runner.invoke(
             cli,
             [
-                "--project", str(project),
-                "preprint", "analyze",
+                "--project",
+                str(project),
+                "preprint",
+                "analyze",
                 artifact_name,
-                "--from", str(lit_dir),
+                "--from",
+                str(lit_dir),
             ],
             catch_exceptions=False,
         )
@@ -782,24 +815,26 @@ def _biorxiv_api_response(
     """
     collection = []
     for item in items:
-        collection.append({
-            "doi": item.get("doi", "10.1101/2023.01.01.000001"),
-            "title": item.get("title", "Untitled"),
-            "authors": item.get("authors", "Author One; Author Two"),
-            "author_corresponding": item.get("author_corresponding", "Author One"),
-            "author_corresponding_institution": item.get(
-                "author_corresponding_institution", "Test University"
-            ),
-            "date": item.get("date", "2023-01-15"),
-            "version": item.get("version", "1"),
-            "type": item.get("type", "new results"),
-            "license": item.get("license", "cc_by_nc_nd"),
-            "category": item.get("category", "bioinformatics"),
-            "jatsxml": item.get("jatsxml", ""),
-            "abstract": item.get("abstract", "No abstract."),
-            "published": item.get("published", "NA"),
-            "server": item.get("server", "bioRxiv"),
-        })
+        collection.append(
+            {
+                "doi": item.get("doi", "10.1101/2023.01.01.000001"),
+                "title": item.get("title", "Untitled"),
+                "authors": item.get("authors", "Author One; Author Two"),
+                "author_corresponding": item.get("author_corresponding", "Author One"),
+                "author_corresponding_institution": item.get(
+                    "author_corresponding_institution", "Test University"
+                ),
+                "date": item.get("date", "2023-01-15"),
+                "version": item.get("version", "1"),
+                "type": item.get("type", "new results"),
+                "license": item.get("license", "cc_by_nc_nd"),
+                "category": item.get("category", "bioinformatics"),
+                "jatsxml": item.get("jatsxml", ""),
+                "abstract": item.get("abstract", "No abstract."),
+                "published": item.get("published", "NA"),
+                "server": item.get("server", "bioRxiv"),
+            }
+        )
 
     if total is None:
         total = len(collection)
@@ -869,9 +904,12 @@ def test_biorxiv_search_results() -> None:
             result = runner.invoke(
                 cli,
                 [
-                    "--project", str(project),
-                    "preprint", "search",
-                    "--source", "biorxiv",
+                    "--project",
+                    str(project),
+                    "preprint",
+                    "search",
+                    "--source",
+                    "biorxiv",
                     "gene editing",
                 ],
                 catch_exceptions=False,
@@ -918,9 +956,12 @@ def test_biorxiv_search_zero_results() -> None:
             result = runner.invoke(
                 cli,
                 [
-                    "--project", str(project),
-                    "preprint", "search",
-                    "--source", "biorxiv",
+                    "--project",
+                    str(project),
+                    "preprint",
+                    "search",
+                    "--source",
+                    "biorxiv",
                     "xyznonexistentquery42",
                 ],
                 catch_exceptions=False,
@@ -977,9 +1018,12 @@ def test_biorxiv_source_accepted() -> None:
             result = runner.invoke(
                 cli,
                 [
-                    "--project", str(project),
-                    "preprint", "search",
-                    "--source", "biorxiv",
+                    "--project",
+                    str(project),
+                    "preprint",
+                    "search",
+                    "--source",
+                    "biorxiv",
                     "test",
                 ],
                 catch_exceptions=False,
@@ -1088,14 +1132,20 @@ def test_biorxiv_pagination_cap() -> None:
         project = _make_project(Path(td))
         runner = CliRunner()
 
-        with mock.patch("dde.commands.preprint.http.get_json", side_effect=mock_get_json):
+        with mock.patch(
+            "dde.commands.preprint.http.get_json", side_effect=mock_get_json
+        ):
             result = runner.invoke(
                 cli,
                 [
-                    "--project", str(project),
-                    "preprint", "search",
-                    "--source", "biorxiv",
-                    "--max-results", "20",
+                    "--project",
+                    str(project),
+                    "preprint",
+                    "search",
+                    "--source",
+                    "biorxiv",
+                    "--max-results",
+                    "20",
                     "xyzuniquequerythatwontmatch42",
                 ],
                 catch_exceptions=False,
@@ -1135,7 +1185,10 @@ def main() -> None:
         ("test_analyze_phase_two_contract", test_analyze_phase_two_contract),
         ("test_relay_codes_registered", test_relay_codes_registered),
         ("test_threshold_set_registered", test_threshold_set_registered),
-        ("test_relay_no_results_does_not_fire_when_results_exist", test_relay_no_results_does_not_fire_when_results_exist),
+        (
+            "test_relay_no_results_does_not_fire_when_results_exist",
+            test_relay_no_results_does_not_fire_when_results_exist,
+        ),
         ("test_manifest_schema", test_manifest_schema),
         ("test_slugify", test_slugify),
         ("test_parse_arxiv_entries", test_parse_arxiv_entries),
@@ -1158,10 +1211,11 @@ def main() -> None:
         except Exception as exc:
             print(f"  FAIL: {name} — {exc}")
             import traceback
+
             traceback.print_exc()
             failed += 1
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Results: {passed} passed, {failed} failed, {passed + failed} total")
     if failed:
         sys.exit(1)

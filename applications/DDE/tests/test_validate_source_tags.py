@@ -13,6 +13,7 @@
 # limitations under the License.
 
 """Tests for _check_source_tags_resolve (#100)."""
+
 from __future__ import annotations
 
 import json
@@ -26,10 +27,10 @@ if str(TOOLS_DIR) not in sys.path:
 
 from dde.commands.validate import _check_source_tags_resolve
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _write(path: Path, content: str | bytes) -> None:
     """Write a file, creating parent directories as needed."""
@@ -47,6 +48,7 @@ def _make_deliverables(layer_1_paths: list[str]) -> dict:
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 def test_no_source_tags() -> None:
     """File with no source tags → pass/ok."""
@@ -71,7 +73,10 @@ def test_scalar_tag_value_match() -> None:
         _write(artifact, json.dumps({"pocket_volume": 419.7}))
         # Create finding
         finding = root / "findings" / "report.md"
-        _write(finding, "The pocket volume is 420 {source: raw/data.json $.pocket_volume} cubic angstroms.\n")
+        _write(
+            finding,
+            "The pocket volume is 420 {source: raw/data.json $.pocket_volume} cubic angstroms.\n",
+        )
         deliverables = _make_deliverables(["findings/report.md"])
         result = _check_source_tags_resolve(root, deliverables)
         assert result["result"] == "pass", f"expected pass, got {result}"
@@ -126,7 +131,10 @@ def test_scalar_tag_non_numerical_no_locator() -> None:
         _write(artifact, json.dumps({"gene": "TP53"}))
         finding = root / "findings" / "report.md"
         # No number before the tag — just a text reference.
-        _write(finding, "The data was obtained from {source: raw/data.json} the artifact.\n")
+        _write(
+            finding,
+            "The data was obtained from {source: raw/data.json} the artifact.\n",
+        )
         deliverables = _make_deliverables(["findings/report.md"])
         result = _check_source_tags_resolve(root, deliverables)
         assert result["result"] == "pass"
@@ -175,7 +183,10 @@ def test_scalar_tag_non_scalar_resolution() -> None:
         artifact = root / "raw" / "data.json"
         _write(artifact, json.dumps({"nested": {"a": 1, "b": 2}}))
         finding = root / "findings" / "report.md"
-        _write(finding, "The metrics are 99 {source: raw/data.json $.nested} interesting.\n")
+        _write(
+            finding,
+            "The metrics are 99 {source: raw/data.json $.nested} interesting.\n",
+        )
         deliverables = _make_deliverables(["findings/report.md"])
         result = _check_source_tags_resolve(root, deliverables)
         assert result["result"] == "pass"
@@ -193,7 +204,10 @@ def test_source_table_tag_resolution() -> None:
         artifact = root / "raw" / "data.json"
         _write(artifact, json.dumps({"properties": {"MW": 342.4, "LogP": 2.1}}))
         finding = root / "findings" / "report.md"
-        _write(finding, "| Prop | Value |\n|------|-------|\n| MW | 342.4 |\n\n{source-table: raw/data.json $.properties}\n")
+        _write(
+            finding,
+            "| Prop | Value |\n|------|-------|\n| MW | 342.4 |\n\n{source-table: raw/data.json $.properties}\n",
+        )
         deliverables = _make_deliverables(["findings/report.md"])
         result = _check_source_tags_resolve(root, deliverables)
         assert result["result"] == "pass"
@@ -228,7 +242,9 @@ def test_identifier_not_extracted() -> None:
         _write(artifact, json.dumps({"id": "Q99650"}))
         finding = root / "findings" / "report.md"
         # "Q99650" should NOT be extracted as the number 99650.
-        _write(finding, "UniProt entry Q99650 {source: raw/data.json $.id} was found.\n")
+        _write(
+            finding, "UniProt entry Q99650 {source: raw/data.json $.id} was found.\n"
+        )
         deliverables = _make_deliverables(["findings/report.md"])
         result = _check_source_tags_resolve(root, deliverables)
         # Since no numerical claim is extracted, this should be ok
@@ -265,7 +281,9 @@ def test_inline_code_tags_skipped() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         finding = root / "findings" / "report.md"
-        content = "Use the tag like `{source: raw/file.json $.field}` in your findings.\n"
+        content = (
+            "Use the tag like `{source: raw/file.json $.field}` in your findings.\n"
+        )
         _write(finding, content)
         deliverables = _make_deliverables(["findings/report.md"])
         result = _check_source_tags_resolve(root, deliverables)
@@ -280,9 +298,10 @@ def test_tolerance_matching_close() -> None:
         artifact = root / "raw" / "data.json"
         _write(artifact, json.dumps({"score": 0.9387, "volume": 419.7}))
         finding = root / "findings" / "report.md"
-        _write(finding,
+        _write(
+            finding,
             "Score is 0.94 {source: raw/data.json $.score} and "
-            "volume is 420 {source: raw/data.json $.volume} units.\n"
+            "volume is 420 {source: raw/data.json $.volume} units.\n",
         )
         deliverables = _make_deliverables(["findings/report.md"])
         result = _check_source_tags_resolve(root, deliverables)
@@ -324,7 +343,9 @@ def test_non_dict_json() -> None:
 
 def test_no_layer1_deliverables() -> None:
     """No layer_1 → skip."""
-    result = _check_source_tags_resolve(Path("/nonexistent"), {"layer_0_classes": ["foo"]})
+    result = _check_source_tags_resolve(
+        Path("/nonexistent"), {"layer_0_classes": ["foo"]}
+    )
     assert result["result"] == "skip"
     assert result["status"] == "skip"
 
@@ -378,9 +399,10 @@ def test_multiple_tags_one_line() -> None:
         artifact = root / "raw" / "data.json"
         _write(artifact, json.dumps({"total": 687, "retrieved": 30}))
         finding = root / "findings" / "report.md"
-        _write(finding,
+        _write(
+            finding,
             "Found 687 {source: raw/data.json $.total} total results, "
-            "30 {source: raw/data.json $.retrieved} retrieved.\n"
+            "30 {source: raw/data.json $.retrieved} retrieved.\n",
         )
         deliverables = _make_deliverables(["findings/report.md"])
         result = _check_source_tags_resolve(root, deliverables)
@@ -412,9 +434,10 @@ def test_mixed_ok_and_warn() -> None:
         artifact = root / "raw" / "data.json"
         _write(artifact, json.dumps({"score": 0.95, "count": 42}))
         finding = root / "findings" / "report.md"
-        _write(finding,
+        _write(
+            finding,
             "Score is 0.95 {source: raw/data.json $.score} good. "
-            "Count is 42 {source: raw/data.json}\n"  # missing locator on numerical
+            "Count is 42 {source: raw/data.json}\n",  # missing locator on numerical
         )
         deliverables = _make_deliverables(["findings/report.md"])
         result = _check_source_tags_resolve(root, deliverables)
@@ -430,9 +453,10 @@ def test_mixed_ok_and_fail() -> None:
         artifact = root / "raw" / "data.json"
         _write(artifact, json.dumps({"score": 0.95, "count": 42}))
         finding = root / "findings" / "report.md"
-        _write(finding,
+        _write(
+            finding,
             "Score is 0.95 {source: raw/data.json $.score} good. "
-            "Count is 999 {source: raw/data.json $.count} wrong.\n"
+            "Count is 999 {source: raw/data.json $.count} wrong.\n",
         )
         deliverables = _make_deliverables(["findings/report.md"])
         result = _check_source_tags_resolve(root, deliverables)
@@ -444,6 +468,7 @@ def test_mixed_ok_and_fail() -> None:
 # ---------------------------------------------------------------------------
 # Line-locator tests (R-1 from Phase 2 review)
 # ---------------------------------------------------------------------------
+
 
 def test_line_locator_match() -> None:
     """Line-number locator pointing to a line with a matching value → ok."""
@@ -499,16 +524,23 @@ def test_line_locator_no_number() -> None:
 # Runner
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     tests = [
         ("test_no_source_tags", test_no_source_tags),
         ("test_scalar_tag_value_match", test_scalar_tag_value_match),
         ("test_scalar_tag_value_mismatch", test_scalar_tag_value_mismatch),
         ("test_scalar_tag_missing_locator", test_scalar_tag_missing_locator),
-        ("test_scalar_tag_non_numerical_no_locator", test_scalar_tag_non_numerical_no_locator),
+        (
+            "test_scalar_tag_non_numerical_no_locator",
+            test_scalar_tag_non_numerical_no_locator,
+        ),
         ("test_scalar_tag_unresolvable_path", test_scalar_tag_unresolvable_path),
         ("test_scalar_tag_unresolvable_locator", test_scalar_tag_unresolvable_locator),
-        ("test_scalar_tag_non_scalar_resolution", test_scalar_tag_non_scalar_resolution),
+        (
+            "test_scalar_tag_non_scalar_resolution",
+            test_scalar_tag_non_scalar_resolution,
+        ),
         ("test_source_table_tag_resolution", test_source_table_tag_resolution),
         ("test_source_table_tag_non_scalar_ok", test_source_table_tag_non_scalar_ok),
         ("test_identifier_not_extracted", test_identifier_not_extracted),

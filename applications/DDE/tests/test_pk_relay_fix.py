@@ -41,7 +41,6 @@ if str(TOOLS_DIR) not in sys.path:
 
 from dde.core.provenance import RELAY_CODES
 
-
 # ---------------------------------------------------------------------------
 # Helpers: project and fixture setup
 # ---------------------------------------------------------------------------
@@ -370,9 +369,12 @@ def test_scale_multi_species_no_allometric_relay() -> None:
         result = runner.invoke(
             cli,
             [
-                "--project", str(project),
-                "pk", "scale",
-                str(nca_rat), str(nca_dog),
+                "--project",
+                str(project),
+                "pk",
+                "scale",
+                str(nca_rat),
+                str(nca_dog),
             ],
             catch_exceptions=False,
         )
@@ -479,11 +481,23 @@ def main() -> None:
         ("test_nca_has_method_caveat", test_nca_has_method_caveat),
         ("test_ddi_no_static_model_relay", test_ddi_no_static_model_relay),
         ("test_ddi_has_method_caveat", test_ddi_has_method_caveat),
-        ("test_scale_single_species_relay_fires", test_scale_single_species_relay_fires),
-        ("test_scale_multi_species_no_allometric_relay", test_scale_multi_species_no_allometric_relay),
+        (
+            "test_scale_single_species_relay_fires",
+            test_scale_single_species_relay_fires,
+        ),
+        (
+            "test_scale_multi_species_no_allometric_relay",
+            test_scale_multi_species_no_allometric_relay,
+        ),
         ("test_scale_has_method_caveat", test_scale_has_method_caveat),
-        ("test_removed_codes_not_in_relay_codes", test_removed_codes_not_in_relay_codes),
-        ("test_single_species_scaling_still_registered", test_single_species_scaling_still_registered),
+        (
+            "test_removed_codes_not_in_relay_codes",
+            test_removed_codes_not_in_relay_codes,
+        ),
+        (
+            "test_single_species_scaling_still_registered",
+            test_single_species_scaling_still_registered,
+        ),
     ]
 
     passed = 0
@@ -495,10 +509,11 @@ def main() -> None:
         except Exception as exc:
             print(f"  FAIL: {name} -- {exc}")
             import traceback
+
             traceback.print_exc()
             failed += 1
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Results: {passed} passed, {failed} failed, {passed + failed} total")
     if failed:
         sys.exit(1)

@@ -27,9 +27,9 @@ Also verifies improved error messages and severity adjustment:
 - Non-standard form -> warn (not fail)
 - Missing identifier entirely -> fail with helpful error message
 """
+
 from __future__ import annotations
 
-import hashlib
 import sys
 import tempfile
 from pathlib import Path
@@ -40,10 +40,10 @@ if str(TOOLS_DIR) not in sys.path:
 
 from dde.commands.validate import _check_report_headings
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _write(path: Path, content: str) -> None:
     """Write a file, creating parent directories as needed."""
@@ -67,11 +67,14 @@ def test_concatenated_form_passes() -> None:
     """Canonical WO-004-r1 form passes with status ok."""
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        deliverables = _make_report(root, (
-            "# Report WO-004-r1\n\n"
-            "## Summary\n\nSummary text.\n\n"
-            "## Key Findings\n\nFindings text.\n"
-        ))
+        deliverables = _make_report(
+            root,
+            (
+                "# Report WO-004-r1\n\n"
+                "## Summary\n\nSummary text.\n\n"
+                "## Key Findings\n\nFindings text.\n"
+            ),
+        )
         result = _check_report_headings(root, deliverables, "WO-004", 1)
         assert result["result"] == "pass", f"expected pass, got {result}"
         assert result["status"] == "ok"
@@ -84,13 +87,16 @@ def test_split_form_passes() -> None:
     """Split metadata (Work Order: WO-004 + Revision: 1) passes with warn."""
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        deliverables = _make_report(root, (
-            "# Report\n\n"
-            "Work Order: WO-004\n"
-            "Revision: 1\n\n"
-            "## Summary\n\nSummary text.\n\n"
-            "## Key Findings\n\nFindings text.\n"
-        ))
+        deliverables = _make_report(
+            root,
+            (
+                "# Report\n\n"
+                "Work Order: WO-004\n"
+                "Revision: 1\n\n"
+                "## Summary\n\nSummary text.\n\n"
+                "## Key Findings\n\nFindings text.\n"
+            ),
+        )
         result = _check_report_headings(root, deliverables, "WO-004", 1)
         assert result["result"] == "pass", f"expected pass, got {result}"
         assert result["status"] == "warn"
@@ -104,11 +110,14 @@ def test_inline_r_form_passes() -> None:
     """Inline form WO-004 r1 passes with warn."""
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        deliverables = _make_report(root, (
-            "# Report WO-004 r1\n\n"
-            "## Summary\n\nSummary text.\n\n"
-            "## Key Findings\n\nFindings text.\n"
-        ))
+        deliverables = _make_report(
+            root,
+            (
+                "# Report WO-004 r1\n\n"
+                "## Summary\n\nSummary text.\n\n"
+                "## Key Findings\n\nFindings text.\n"
+            ),
+        )
         result = _check_report_headings(root, deliverables, "WO-004", 1)
         assert result["result"] == "pass", f"expected pass, got {result}"
         assert result["status"] == "warn"
@@ -121,11 +130,14 @@ def test_paren_rev_form_passes() -> None:
     """Parenthesised form WO-004 (rev 1) passes with warn."""
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        deliverables = _make_report(root, (
-            "# Report WO-004 (rev 1)\n\n"
-            "## Summary\n\nSummary text.\n\n"
-            "## Key Findings\n\nFindings text.\n"
-        ))
+        deliverables = _make_report(
+            root,
+            (
+                "# Report WO-004 (rev 1)\n\n"
+                "## Summary\n\nSummary text.\n\n"
+                "## Key Findings\n\nFindings text.\n"
+            ),
+        )
         result = _check_report_headings(root, deliverables, "WO-004", 1)
         assert result["result"] == "pass", f"expected pass, got {result}"
         assert result["status"] == "warn"
@@ -138,11 +150,14 @@ def test_comma_revision_form_passes() -> None:
     """Comma-separated form WO-004, Revision 1 passes with warn."""
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        deliverables = _make_report(root, (
-            "# Report WO-004, Revision 1\n\n"
-            "## Summary\n\nSummary text.\n\n"
-            "## Key Findings\n\nFindings text.\n"
-        ))
+        deliverables = _make_report(
+            root,
+            (
+                "# Report WO-004, Revision 1\n\n"
+                "## Summary\n\nSummary text.\n\n"
+                "## Key Findings\n\nFindings text.\n"
+            ),
+        )
         result = _check_report_headings(root, deliverables, "WO-004", 1)
         assert result["result"] == "pass", f"expected pass, got {result}"
         assert result["status"] == "warn"
@@ -155,13 +170,16 @@ def test_case_insensitive_revision_label() -> None:
     """Case-insensitive field labels: 'revision', 'Rev' accepted."""
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        deliverables = _make_report(root, (
-            "# Report\n\n"
-            "work order: WO-004\n"
-            "rev: 1\n\n"
-            "## Summary\n\nSummary text.\n\n"
-            "## Key Findings\n\nFindings text.\n"
-        ))
+        deliverables = _make_report(
+            root,
+            (
+                "# Report\n\n"
+                "work order: WO-004\n"
+                "rev: 1\n\n"
+                "## Summary\n\nSummary text.\n\n"
+                "## Key Findings\n\nFindings text.\n"
+            ),
+        )
         result = _check_report_headings(root, deliverables, "WO-004", 1)
         assert result["result"] == "pass", f"expected pass, got {result}"
         assert result["status"] == "warn"
@@ -178,11 +196,14 @@ def test_wrong_wo_identifier_fails() -> None:
     """Wrong WO identifier (different number) fails."""
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        deliverables = _make_report(root, (
-            "# Report WO-999-r1\n\n"
-            "## Summary\n\nSummary text.\n\n"
-            "## Key Findings\n\nFindings text.\n"
-        ))
+        deliverables = _make_report(
+            root,
+            (
+                "# Report WO-999-r1\n\n"
+                "## Summary\n\nSummary text.\n\n"
+                "## Key Findings\n\nFindings text.\n"
+            ),
+        )
         result = _check_report_headings(root, deliverables, "WO-004", 1)
         assert result["result"] == "fail", f"expected fail, got {result}"
         assert result["status"] == "fail"
@@ -194,11 +215,14 @@ def test_missing_wo_identifier_fails() -> None:
     """No WO identifier at all fails."""
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        deliverables = _make_report(root, (
-            "# Report\n\n"
-            "## Summary\n\nSummary text.\n\n"
-            "## Key Findings\n\nFindings text.\n"
-        ))
+        deliverables = _make_report(
+            root,
+            (
+                "# Report\n\n"
+                "## Summary\n\nSummary text.\n\n"
+                "## Key Findings\n\nFindings text.\n"
+            ),
+        )
         result = _check_report_headings(root, deliverables, "WO-004", 1)
         assert result["result"] == "fail", f"expected fail, got {result}"
         assert result["status"] == "fail"
@@ -210,11 +234,14 @@ def test_error_message_shows_expected_forms() -> None:
     """Error message includes accepted forms and what was found."""
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        deliverables = _make_report(root, (
-            "# Report\n\n"
-            "## Summary\n\nSummary text.\n\n"
-            "## Key Findings\n\nFindings text.\n"
-        ))
+        deliverables = _make_report(
+            root,
+            (
+                "# Report\n\n"
+                "## Summary\n\nSummary text.\n\n"
+                "## Key Findings\n\nFindings text.\n"
+            ),
+        )
         result = _check_report_headings(root, deliverables, "WO-004", 1)
         assert result["result"] == "fail"
         detail = result["detail"]
@@ -222,7 +249,9 @@ def test_error_message_shows_expected_forms() -> None:
         assert "error_message" in detail, f"expected error_message in detail: {detail}"
         msg = detail["error_message"]
         assert "WO-004-r1" in msg, f"expected WO-004-r1 in error message: {msg}"
-        assert "Accepted forms" in msg, f"expected 'Accepted forms' in error message: {msg}"
+        assert "Accepted forms" in msg, (
+            f"expected 'Accepted forms' in error message: {msg}"
+        )
         assert "Work Order: WO-004" in msg
         # accepted_forms should list recognised patterns.
         assert "accepted_forms" in detail
@@ -239,13 +268,16 @@ def test_nonstandard_form_is_warning_not_failure() -> None:
     """Non-standard but unambiguous form emits warn, not fail."""
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        deliverables = _make_report(root, (
-            "# Report\n\n"
-            "Work Order: WO-004\n"
-            "Revision: 1\n\n"
-            "## Summary\n\nSummary text.\n\n"
-            "## Key Findings\n\nFindings text.\n"
-        ))
+        deliverables = _make_report(
+            root,
+            (
+                "# Report\n\n"
+                "Work Order: WO-004\n"
+                "Revision: 1\n\n"
+                "## Summary\n\nSummary text.\n\n"
+                "## Key Findings\n\nFindings text.\n"
+            ),
+        )
         result = _check_report_headings(root, deliverables, "WO-004", 1)
         # Must NOT be a failure — the WO identity is not in doubt.
         assert result["result"] == "pass", f"expected pass, got {result}"
@@ -258,11 +290,14 @@ def test_no_identifier_is_failure() -> None:
     """Completely missing identifier -> fail / COMPLETENESS."""
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        deliverables = _make_report(root, (
-            "# Report\n\n"
-            "## Summary\n\nSummary text.\n\n"
-            "## Key Findings\n\nFindings text.\n"
-        ))
+        deliverables = _make_report(
+            root,
+            (
+                "# Report\n\n"
+                "## Summary\n\nSummary text.\n\n"
+                "## Key Findings\n\nFindings text.\n"
+            ),
+        )
         result = _check_report_headings(root, deliverables, "WO-004", 1)
         assert result["result"] == "fail"
         assert result["status"] == "fail"
@@ -279,11 +314,14 @@ def test_wo_id_with_prefix_stripped() -> None:
     """wo_id passed as 'WO-004' works (prefix stripped internally)."""
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        deliverables = _make_report(root, (
-            "# Report WO-004-r2\n\n"
-            "## Summary\n\nSummary text.\n\n"
-            "## Key Findings\n\nFindings text.\n"
-        ))
+        deliverables = _make_report(
+            root,
+            (
+                "# Report WO-004-r2\n\n"
+                "## Summary\n\nSummary text.\n\n"
+                "## Key Findings\n\nFindings text.\n"
+            ),
+        )
         result = _check_report_headings(root, deliverables, "WO-004", 2)
         assert result["result"] == "pass"
         assert result["status"] == "ok"
@@ -294,13 +332,16 @@ def test_split_fields_wrong_revision_fails() -> None:
     """Split fields with wrong revision number fails."""
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        deliverables = _make_report(root, (
-            "# Report\n\n"
-            "Work Order: WO-004\n"
-            "Revision: 99\n\n"
-            "## Summary\n\nSummary text.\n\n"
-            "## Key Findings\n\nFindings text.\n"
-        ))
+        deliverables = _make_report(
+            root,
+            (
+                "# Report\n\n"
+                "Work Order: WO-004\n"
+                "Revision: 99\n\n"
+                "## Summary\n\nSummary text.\n\n"
+                "## Key Findings\n\nFindings text.\n"
+            ),
+        )
         result = _check_report_headings(root, deliverables, "WO-004", 1)
         assert result["result"] == "fail", f"expected fail, got {result}"
         assert "files_missing_reference" in result["detail"]
@@ -311,13 +352,16 @@ def test_split_fields_wrong_wo_number_fails() -> None:
     """Split fields with wrong WO number fails."""
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        deliverables = _make_report(root, (
-            "# Report\n\n"
-            "Work Order: WO-999\n"
-            "Revision: 1\n\n"
-            "## Summary\n\nSummary text.\n\n"
-            "## Key Findings\n\nFindings text.\n"
-        ))
+        deliverables = _make_report(
+            root,
+            (
+                "# Report\n\n"
+                "Work Order: WO-999\n"
+                "Revision: 1\n\n"
+                "## Summary\n\nSummary text.\n\n"
+                "## Key Findings\n\nFindings text.\n"
+            ),
+        )
         result = _check_report_headings(root, deliverables, "WO-004", 1)
         assert result["result"] == "fail", f"expected fail, got {result}"
         assert "files_missing_reference" in result["detail"]
@@ -328,13 +372,16 @@ def test_canonical_form_takes_precedence_over_split() -> None:
     """When both canonical and split forms present, result is ok (not warn)."""
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        deliverables = _make_report(root, (
-            "# Report WO-004-r1\n\n"
-            "Work Order: WO-004\n"
-            "Revision: 1\n\n"
-            "## Summary\n\nSummary text.\n\n"
-            "## Key Findings\n\nFindings text.\n"
-        ))
+        deliverables = _make_report(
+            root,
+            (
+                "# Report WO-004-r1\n\n"
+                "Work Order: WO-004\n"
+                "Revision: 1\n\n"
+                "## Summary\n\nSummary text.\n\n"
+                "## Key Findings\n\nFindings text.\n"
+            ),
+        )
         result = _check_report_headings(root, deliverables, "WO-004", 1)
         assert result["result"] == "pass"
         assert result["status"] == "ok"

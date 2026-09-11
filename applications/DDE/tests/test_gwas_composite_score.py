@@ -27,7 +27,6 @@ from __future__ import annotations
 import json
 import sys
 import tempfile
-import unittest.mock as mock
 from pathlib import Path
 from typing import Any
 
@@ -37,7 +36,6 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 from dde.core import provenance
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -128,9 +126,13 @@ def test_genetic_association_score_in_output() -> None:
         result = runner.invoke(
             cli,
             [
-                "--project", str(project),
-                "gwas", "analyze", "APOE",
-                "--source", "opentargets",
+                "--project",
+                str(project),
+                "gwas",
+                "analyze",
+                "APOE",
+                "--source",
+                "opentargets",
             ],
             catch_exceptions=False,
         )
@@ -201,9 +203,13 @@ def test_composite_not_genetic_relay() -> None:
         result = runner.invoke(
             cli,
             [
-                "--project", str(project),
-                "gwas", "analyze", "TESTGENE",
-                "--source", "opentargets",
+                "--project",
+                str(project),
+                "gwas",
+                "analyze",
+                "TESTGENE",
+                "--source",
+                "opentargets",
             ],
             catch_exceptions=False,
         )
@@ -259,9 +265,13 @@ def test_no_relay_when_genetic_passes() -> None:
         result = runner.invoke(
             cli,
             [
-                "--project", str(project),
-                "gwas", "analyze", "GOODGENE",
-                "--source", "opentargets",
+                "--project",
+                str(project),
+                "gwas",
+                "analyze",
+                "GOODGENE",
+                "--source",
+                "opentargets",
             ],
             catch_exceptions=False,
         )
@@ -317,10 +327,15 @@ def test_disease_filter_match() -> None:
         result = runner.invoke(
             cli,
             [
-                "--project", str(project),
-                "gwas", "analyze", "OSMR",
-                "--source", "opentargets",
-                "--disease-filter", "atopic",
+                "--project",
+                str(project),
+                "gwas",
+                "analyze",
+                "OSMR",
+                "--source",
+                "opentargets",
+                "--disease-filter",
+                "atopic",
             ],
             catch_exceptions=False,
         )
@@ -337,7 +352,10 @@ def test_disease_filter_match() -> None:
 
         assert assessment["disease_filter_match"] is True
         assert len(assessment["disease_filter_details"]) == 1
-        assert assessment["disease_filter_details"][0]["disease_name"] == "atopic dermatitis"
+        assert (
+            assessment["disease_filter_details"][0]["disease_name"]
+            == "atopic dermatitis"
+        )
         assert assessment["disease_filter_details"][0]["score"] == 0.28
 
     print("  PASS: --disease-filter match works")
@@ -372,10 +390,15 @@ def test_disease_filter_no_match() -> None:
         result = runner.invoke(
             cli,
             [
-                "--project", str(project),
-                "gwas", "analyze", "APOE",
-                "--source", "opentargets",
-                "--disease-filter", "psoriasis",
+                "--project",
+                str(project),
+                "gwas",
+                "analyze",
+                "APOE",
+                "--source",
+                "opentargets",
+                "--disease-filter",
+                "psoriasis",
             ],
             catch_exceptions=False,
         )
@@ -414,7 +437,10 @@ def test_relay_code_registered() -> None:
 
 def main() -> None:
     tests = [
-        ("test_genetic_association_score_in_output", test_genetic_association_score_in_output),
+        (
+            "test_genetic_association_score_in_output",
+            test_genetic_association_score_in_output,
+        ),
         ("test_composite_not_genetic_relay", test_composite_not_genetic_relay),
         ("test_no_relay_when_genetic_passes", test_no_relay_when_genetic_passes),
         ("test_disease_filter_match", test_disease_filter_match),
@@ -431,10 +457,11 @@ def main() -> None:
         except Exception as exc:
             print(f"  FAIL: {name} -- {exc}")
             import traceback
+
             traceback.print_exc()
             failed += 1
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Results: {passed} passed, {failed} failed, {passed + failed} total")
     if failed:
         sys.exit(1)

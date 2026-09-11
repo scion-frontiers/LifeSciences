@@ -54,24 +54,18 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from click.testing import CliRunner
 from dde.cli import cli
-
 from eval.comparison import (
     ComparisonReport,
-    DeclinedCandidateComparison,
-    FixtureComparison,
-    MetricComparison,
     generate_comparison,
     load_baseline_report,
 )
 from eval.fixtures.definitions import (
     ALL_FIXTURES,
-    DECLINED_CANDIDATE_SAMPLE,
 )
-from eval.metrics import BaselineReport, FixtureMetrics
+from eval.metrics import BaselineReport
 from eval.stage0_harness import (
     fixture_to_concept,
     run_all_fixtures_stage0,
-    run_fixture_stage0,
 )
 
 # ---------------------------------------------------------------------------
@@ -83,6 +77,7 @@ _results: list[tuple[str, bool, str]] = []
 
 def _test(name: str):
     """Decorator that runs a test at decoration time."""
+
     def decorator(fn):
         try:
             fn()
@@ -93,6 +88,7 @@ def _test(name: str):
             print(f"  FAIL: {name} -- {exc}")
             traceback.print_exc()
         return fn
+
     return decorator
 
 
@@ -109,9 +105,7 @@ for _bf in [
     _BASELINE_DIR / "run-manifest.json",
 ]:
     if _bf.exists():
-        _BASELINE_CHECKSUMS[str(_bf)] = hashlib.sha256(
-            _bf.read_bytes()
-        ).hexdigest()
+        _BASELINE_CHECKSUMS[str(_bf)] = hashlib.sha256(_bf.read_bytes()).hexdigest()
 
 
 # ---------------------------------------------------------------------------
@@ -137,7 +131,8 @@ def _get_baseline_data() -> dict[str, Any]:
 def _get_comparison() -> ComparisonReport:
     if "comparison" not in _SHARED:
         _SHARED["comparison"] = generate_comparison(
-            _get_baseline_data(), _get_stage0_report(),
+            _get_baseline_data(),
+            _get_stage0_report(),
         )
     return _SHARED["comparison"]
 
@@ -170,8 +165,7 @@ def test_fixture_to_concept_modality():
     assert fixture.fixture_id == "EVAL-004"
     concept = fixture_to_concept(fixture)
     assert concept["modality"] == "antibody", (
-        f"EVAL-004 should have modality='antibody', "
-        f"got {concept['modality']!r}"
+        f"EVAL-004 should have modality='antibody', got {concept['modality']!r}"
     )
 
 
@@ -181,8 +175,7 @@ def test_fixture_to_concept_empty_entity():
     assert fixture.fixture_id == "EVAL-005"
     concept = fixture_to_concept(fixture)
     assert concept["entity_ref"] is None, (
-        f"EVAL-005 should have entity_ref=None, "
-        f"got {concept['entity_ref']!r}"
+        f"EVAL-005 should have entity_ref=None, got {concept['entity_ref']!r}"
     )
 
 
@@ -221,9 +214,7 @@ def test_stage0_workstream_invocations():
         # Each fixture should have at least one workstream invocation
         # (manufacturing) or at least Stage 0 observations.
         has_invocation = result.invocation_count >= 1
-        has_observations = any(
-            "Stage 0 disposition:" in o for o in result.observations
-        )
+        has_observations = any("Stage 0 disposition:" in o for o in result.observations)
         assert has_invocation or has_observations, (
             f"{result.fixture_id}: no workstream invocations or "
             f"Stage 0 observations recorded"
@@ -237,12 +228,9 @@ def test_stage0_baseline_unchanged():
 
     # Verify all baseline artifact checksums are unchanged.
     for f_path, expected_hash in _BASELINE_CHECKSUMS.items():
-        actual_hash = hashlib.sha256(
-            Path(f_path).read_bytes()
-        ).hexdigest()
+        actual_hash = hashlib.sha256(Path(f_path).read_bytes()).hexdigest()
         assert actual_hash == expected_hash, (
-            f"Baseline artifact {f_path} was modified by "
-            f"the Stage 0 harness!"
+            f"Baseline artifact {f_path} was modified by the Stage 0 harness!"
         )
 
 
@@ -268,9 +256,7 @@ def test_comparison_fixture_count():
     assert len(comparison.fixture_comparisons) == 8
     ids = {fc.fixture_id for fc in comparison.fixture_comparisons}
     expected_ids = {f.fixture_id for f in ALL_FIXTURES}
-    assert ids == expected_ids, (
-        f"Missing fixture comparisons: {expected_ids - ids}"
-    )
+    assert ids == expected_ids, f"Missing fixture comparisons: {expected_ids - ids}"
 
 
 @_test("N/A metrics are honest about what is not measurable")
@@ -289,9 +275,7 @@ def test_na_metrics_honest():
             assert mc.baseline_value == "N/A", (
                 f"{mc.metric_name}: baseline should be N/A"
             )
-            assert mc.stage0_value == "N/A", (
-                f"{mc.metric_name}: stage0 should be N/A"
-            )
+            assert mc.stage0_value == "N/A", f"{mc.metric_name}: stage0 should be N/A"
             assert (
                 "N/A" in mc.comparison_note
                 or "not measured" in mc.comparison_note.lower()
@@ -311,20 +295,18 @@ def test_declined_eval001():
             eval001 = dc
             break
 
-    assert eval001 is not None, (
-        "EVAL-001 must be in declined comparisons"
-    )
+    assert eval001 is not None, "EVAL-001 must be in declined comparisons"
     assert len(eval001.baseline_observations) > 0, (
         "EVAL-001 should have baseline observations"
     )
     assert len(eval001.stage0_observations) > 0, (
         "EVAL-001 should have Stage 0 observations"
     )
-    assert eval001.comparison_note, (
-        "EVAL-001 should have a comparison note"
-    )
-    assert "not auto-terminate" in eval001.comparison_note.lower() or \
-        "does not auto-terminate" in eval001.comparison_note.lower(), (
+    assert eval001.comparison_note, "EVAL-001 should have a comparison note"
+    assert (
+        "not auto-terminate" in eval001.comparison_note.lower()
+        or "does not auto-terminate" in eval001.comparison_note.lower()
+    ), (
         "EVAL-001 comparison should note that Stage 0 does not "
         "auto-terminate for missing evidence"
     )
@@ -340,18 +322,14 @@ def test_declined_eval002():
             eval002 = dc
             break
 
-    assert eval002 is not None, (
-        "EVAL-002 must be in declined comparisons"
-    )
+    assert eval002 is not None, "EVAL-002 must be in declined comparisons"
     assert len(eval002.baseline_observations) > 0, (
         "EVAL-002 should have baseline observations"
     )
     assert len(eval002.stage0_observations) > 0, (
         "EVAL-002 should have Stage 0 observations"
     )
-    assert eval002.comparison_note, (
-        "EVAL-002 should have a comparison note"
-    )
+    assert eval002.comparison_note, "EVAL-002 should have a comparison note"
 
 
 @_test("scope notes document #77 evidence reuse as out of scope")
@@ -359,18 +337,13 @@ def test_scope_limitation_77():
     comparison = _get_comparison()
 
     scope_text = " ".join(comparison.scope_notes)
-    assert "#77" in scope_text, (
-        "Scope notes must mention issue #77"
-    )
+    assert "#77" in scope_text, "Scope notes must mention issue #77"
     assert "evidence reuse" in scope_text.lower(), (
         "Scope notes must mention evidence reuse"
     )
     assert (
-        "out of scope" in scope_text.lower()
-        or "not implemented" in scope_text.lower()
-    ), (
-        "Scope notes must state evidence reuse is out of scope"
-    )
+        "out of scope" in scope_text.lower() or "not implemented" in scope_text.lower()
+    ), "Scope notes must state evidence reuse is out of scope"
 
 
 @_test("resource characteristics recorded for Stage 0")
@@ -403,25 +376,28 @@ def test_cli_runner_end_to_end():
         concept_file = Path(td) / "concept.json"
         concept_file.write_text(json.dumps(concept, indent=2))
 
-        result = runner.invoke(cli, [
-            "triage", "run",
-            str(concept_file),
-            "--max-concepts", "1",
-            "--json",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "triage",
+                "run",
+                str(concept_file),
+                "--max-concepts",
+                "1",
+                "--json",
+            ],
+        )
 
         # Exit 0 = success, exit 2 = project-root issue.
         # Both prove the CLI wiring works and the Stage 0 code is
         # genuinely invoked.
         assert result.exit_code in (0, 2), (
-            f"dde triage run exited {result.exit_code}: "
-            f"{result.output[:500]}"
+            f"dde triage run exited {result.exit_code}: {result.output[:500]}"
         )
 
         if result.exit_code == 0:
             assert (
-                "n_concepts" in result.output
-                or "concept" in result.output.lower()
+                "n_concepts" in result.output or "concept" in result.output.lower()
             ), "CLI output should contain triage results"
 
 
@@ -528,10 +504,7 @@ def main() -> None:
     print(f"\n{'=' * 60}")
     passed = sum(1 for _, ok, _ in _results if ok)
     failed = sum(1 for _, ok, _ in _results if not ok)
-    print(
-        f"Results: {passed} passed, {failed} failed, "
-        f"{passed + failed} total"
-    )
+    print(f"Results: {passed} passed, {failed} failed, {passed + failed} total")
     if failed:
         print("\nFailed tests:")
         for name, ok, msg in _results:

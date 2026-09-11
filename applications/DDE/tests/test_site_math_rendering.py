@@ -53,7 +53,7 @@ import mistune
 _RESULTS: list[tuple[str, bool, str]] = []
 
 
-def _run(name: str, fn):  # noqa: ANN001
+def _run(name: str, fn):
     try:
         fn()
         _RESULTS.append((name, True, ""))
@@ -65,9 +65,7 @@ def _run(name: str, fn):  # noqa: ANN001
 # Shared markdown renderer (mirrors site.py configuration)
 # ---------------------------------------------------------------------------
 
-_md = mistune.create_markdown(
-    escape=True, plugins=["table", "strikethrough", "math"]
-)
+_md = mistune.create_markdown(escape=True, plugins=["table", "strikethrough", "math"])
 
 # ---------------------------------------------------------------------------
 # Item 1 — Math tokenisation
@@ -257,10 +255,8 @@ def test_base_template_includes_katex():
 def test_katex_not_installed_error():
     """site.py raises a clear error when KaTeX is not npm-installed."""
     # Import the ArtifactError to verify the error type
-    from dde.core.errors import ArtifactError
 
     # Test with a non-existent path by temporarily overriding the env var
-    import dde.commands.site as site_mod
 
     old_val = os.environ.get("DDE_TOOLS_HOME")
     try:

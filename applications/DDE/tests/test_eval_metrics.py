@@ -56,6 +56,7 @@ _results: list[tuple[str, bool, str]] = []
 
 def _test(name: str):
     """Decorator that runs a test at decoration time."""
+
     def decorator(fn):
         try:
             fn()
@@ -66,6 +67,7 @@ def _test(name: str):
             print(f"  FAIL: {name} -- {exc}")
             traceback.print_exc()
         return fn
+
     return decorator
 
 
@@ -77,7 +79,9 @@ def _test(name: str):
 @_test("success_count and failure_count partition correctly")
 def test_success_failure_partition():
     m = FixtureMetrics(
-        fixture_id="T1", fixture_label="Test", scenario_category="test",
+        fixture_id="T1",
+        fixture_label="Test",
+        scenario_category="test",
     )
     m.record_invocation("cmd-a", exit_code=0)
     m.record_invocation("cmd-b", exit_code=2)
@@ -95,7 +99,9 @@ def test_success_failure_partition():
 @_test("success_count zero when no invocations")
 def test_success_count_zero():
     m = FixtureMetrics(
-        fixture_id="T2", fixture_label="Test", scenario_category="test",
+        fixture_id="T2",
+        fixture_label="Test",
+        scenario_category="test",
     )
     assert m.success_count == 0
     assert m.failure_count == 0
@@ -105,7 +111,9 @@ def test_success_count_zero():
 @_test("completed=True when stop() with no errors")
 def test_completed_true_no_errors():
     m = FixtureMetrics(
-        fixture_id="T3", fixture_label="Test", scenario_category="test",
+        fixture_id="T3",
+        fixture_label="Test",
+        scenario_category="test",
     )
     m.start()
     m.stop()
@@ -115,7 +123,9 @@ def test_completed_true_no_errors():
 @_test("completed=False when stop() after error")
 def test_completed_false_with_errors():
     m = FixtureMetrics(
-        fixture_id="T4", fixture_label="Test", scenario_category="test",
+        fixture_id="T4",
+        fixture_label="Test",
+        scenario_category="test",
     )
     m.start()
     m.error_messages.append("Something went wrong")
@@ -126,7 +136,9 @@ def test_completed_false_with_errors():
 @_test("completed=False when stop() after multiple errors")
 def test_completed_false_multiple_errors():
     m = FixtureMetrics(
-        fixture_id="T5", fixture_label="Test", scenario_category="test",
+        fixture_id="T5",
+        fixture_label="Test",
+        scenario_category="test",
     )
     m.start()
     m.error_messages.append("Error 1")
@@ -139,7 +151,9 @@ def test_completed_false_multiple_errors():
 @_test("completed=False initially (before stop)")
 def test_completed_default_false():
     m = FixtureMetrics(
-        fixture_id="T6", fixture_label="Test", scenario_category="test",
+        fixture_id="T6",
+        fixture_label="Test",
+        scenario_category="test",
     )
     assert m.completed is False
 
@@ -147,7 +161,9 @@ def test_completed_default_false():
 @_test("wall_clock_seconds with known start/end times")
 def test_wall_clock_known_times():
     m = FixtureMetrics(
-        fixture_id="T7", fixture_label="Test", scenario_category="test",
+        fixture_id="T7",
+        fixture_label="Test",
+        scenario_category="test",
     )
     m.start_time = 100.0
     m.end_time = 103.5
@@ -157,7 +173,9 @@ def test_wall_clock_known_times():
 @_test("wall_clock_seconds zero when not started")
 def test_wall_clock_zero():
     m = FixtureMetrics(
-        fixture_id="T8", fixture_label="Test", scenario_category="test",
+        fixture_id="T8",
+        fixture_label="Test",
+        scenario_category="test",
     )
     assert m.wall_clock_seconds == 0.0
 
@@ -165,7 +183,9 @@ def test_wall_clock_zero():
 @_test("wall_clock_seconds uses monotonic (positive after start/stop)")
 def test_wall_clock_monotonic():
     m = FixtureMetrics(
-        fixture_id="T9", fixture_label="Test", scenario_category="test",
+        fixture_id="T9",
+        fixture_label="Test",
+        scenario_category="test",
     )
     m.start()
     time.sleep(0.005)
@@ -177,7 +197,9 @@ def test_wall_clock_monotonic():
 @_test("repeated_operations increments on duplicate commands")
 def test_repeated_operations_tracking():
     m = FixtureMetrics(
-        fixture_id="T10", fixture_label="Test", scenario_category="test",
+        fixture_id="T10",
+        fixture_label="Test",
+        scenario_category="test",
     )
     m.record_invocation("hypothesis adopt", 0)
     assert m.repeated_operations == 0
@@ -194,7 +216,9 @@ def test_repeated_operations_tracking():
 @_test("repeated_operations zero when all commands unique")
 def test_repeated_operations_all_unique():
     m = FixtureMetrics(
-        fixture_id="T11", fixture_label="Test", scenario_category="test",
+        fixture_id="T11",
+        fixture_label="Test",
+        scenario_category="test",
     )
     m.record_invocation("cmd-a", 0)
     m.record_invocation("cmd-b", 0)
@@ -205,7 +229,9 @@ def test_repeated_operations_all_unique():
 @_test("record_transition stores from/to pairs")
 def test_record_transition():
     m = FixtureMetrics(
-        fixture_id="T12", fixture_label="Test", scenario_category="test",
+        fixture_id="T12",
+        fixture_label="Test",
+        scenario_category="test",
     )
     m.record_transition(None, "proposed")
     m.record_transition("proposed", "committed")
@@ -217,7 +243,9 @@ def test_record_transition():
 @_test("record_relay deduplicates")
 def test_record_relay_dedup():
     m = FixtureMetrics(
-        fixture_id="T13", fixture_label="Test", scenario_category="test",
+        fixture_id="T13",
+        fixture_label="Test",
+        scenario_category="test",
     )
     m.record_relay("relay.one")
     m.record_relay("relay.two")
@@ -230,16 +258,29 @@ def test_record_relay_dedup():
 @_test("to_dict produces expected keys")
 def test_to_dict_keys():
     m = FixtureMetrics(
-        fixture_id="T14", fixture_label="Test Label", scenario_category="test_cat",
+        fixture_id="T14",
+        fixture_label="Test Label",
+        scenario_category="test_cat",
     )
     d = m.to_dict()
     expected_keys = {
-        "fixture_id", "fixture_label", "scenario_category",
-        "wall_clock_seconds", "state_transitions", "transition_count",
-        "cli_invocations", "invocation_count", "success_count",
-        "failure_count", "validation_checks", "relay_codes_fired",
-        "artifacts_produced", "repeated_operations", "error_messages",
-        "completed", "observations",
+        "fixture_id",
+        "fixture_label",
+        "scenario_category",
+        "wall_clock_seconds",
+        "state_transitions",
+        "transition_count",
+        "cli_invocations",
+        "invocation_count",
+        "success_count",
+        "failure_count",
+        "validation_checks",
+        "relay_codes_fired",
+        "artifacts_produced",
+        "repeated_operations",
+        "error_messages",
+        "completed",
+        "observations",
     }
     assert set(d.keys()) == expected_keys, (
         f"Key mismatch: missing={expected_keys - set(d.keys())}, "
@@ -283,9 +324,9 @@ def _make_fixture_metrics(
         m.error_messages.extend(errors)
 
     for i in range(transitions):
-        m.record_transition(f"state-{i}", f"state-{i+1}")
+        m.record_transition(f"state-{i}", f"state-{i + 1}")
 
-    for code in (relays or []):
+    for code in relays or []:
         m.record_relay(code)
 
     for i in range(artifacts):
@@ -367,8 +408,10 @@ def test_summary_na_metrics():
 
     summary = report.summary_metrics()
     na_keys = [
-        "unsupported_claims_accepted", "mistaken_rejections",
-        "decision_reversals", "expensive_work_avoided",
+        "unsupported_claims_accepted",
+        "mistaken_rejections",
+        "decision_reversals",
+        "expensive_work_avoided",
     ]
     for key in na_keys:
         assert key in summary, f"Missing N/A metric: {key}"
@@ -384,7 +427,9 @@ def test_total_wall_clock():
     report.add_result(_make_fixture_metrics("F2", wall_clock=2.3))
     report.add_result(_make_fixture_metrics("F3", wall_clock=0.7))
 
-    assert report.total_wall_clock == 4.5, f"Expected 4.5, got {report.total_wall_clock}"
+    assert report.total_wall_clock == 4.5, (
+        f"Expected 4.5, got {report.total_wall_clock}"
+    )
 
 
 @_test("total_transitions sums per-fixture transitions")
@@ -408,14 +453,26 @@ def test_total_artifacts():
 @_test("JSON round-trip preserves report structure")
 def test_json_round_trip():
     report = BaselineReport(run_timestamp="2026-09-08T12:00:00Z")
-    report.add_result(_make_fixture_metrics(
-        "F1", n_success=2, n_failure=1, transitions=5,
-        relays=["relay.a"], artifacts=3, wall_clock=1.5,
-    ))
-    report.add_result(_make_fixture_metrics(
-        "F2", n_success=1, errors=["test error"], transitions=3,
-        wall_clock=0.8,
-    ))
+    report.add_result(
+        _make_fixture_metrics(
+            "F1",
+            n_success=2,
+            n_failure=1,
+            transitions=5,
+            relays=["relay.a"],
+            artifacts=3,
+            wall_clock=1.5,
+        )
+    )
+    report.add_result(
+        _make_fixture_metrics(
+            "F2",
+            n_success=1,
+            errors=["test error"],
+            transitions=3,
+            wall_clock=0.8,
+        )
+    )
 
     # Serialize
     d = report.to_dict()
@@ -471,9 +528,14 @@ def test_json_file_round_trip():
 @_test("Markdown report writes without error")
 def test_markdown_report_writes():
     report = BaselineReport(run_timestamp="2026-09-08T12:00:00Z")
-    report.add_result(_make_fixture_metrics(
-        "F1", n_success=2, transitions=5, wall_clock=0.5,
-    ))
+    report.add_result(
+        _make_fixture_metrics(
+            "F1",
+            n_success=2,
+            transitions=5,
+            wall_clock=0.5,
+        )
+    )
 
     with tempfile.TemporaryDirectory() as td:
         md_path = Path(td) / "test-report.md"
@@ -495,7 +557,7 @@ def test_markdown_report_writes():
 
 
 def main() -> None:
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     passed = sum(1 for _, ok, _ in _results if ok)
     failed = sum(1 for _, ok, _ in _results if not ok)
     print(f"Results: {passed} passed, {failed} failed, {passed + failed} total")

@@ -28,7 +28,6 @@ Exit 0 = all tests passed, exit 1 = at least one failure.
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import sys
 import tempfile
@@ -44,7 +43,6 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 
 from click.testing import CliRunner
-
 from dde.cli import cli
 from dde.core import controlstore
 from dde.core.controlstore import (
@@ -150,7 +148,9 @@ def _validation_data(
     }
 
 
-def _write_wo(project: Path, wo_id: str, revision: int, state: str, **overrides) -> None:
+def _write_wo(
+    project: Path, wo_id: str, revision: int, state: str, **overrides
+) -> None:
     """Write a work-order record to a project's control plane."""
     ident = f"{wo_id}-r{revision}"
     data = _wo_data(wo_id, revision, state, **overrides)
@@ -223,7 +223,13 @@ def _test(name: str):
         except AssertionError as exc:
             _results.append((name, "FAIL", str(exc)))
         except Exception as exc:
-            _results.append((name, "ERROR", f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"))
+            _results.append(
+                (
+                    name,
+                    "ERROR",
+                    f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}",
+                )
+            )
         return fn
 
     return decorator
@@ -271,7 +277,9 @@ def test_happy_path():
     dest = _make_project(base, "phase2")
 
     result = _run_resume(dest, str(source))
-    assert result.exit_code == 0, f"exit code {result.exit_code}, output: {result.output}"
+    assert result.exit_code == 0, (
+        f"exit code {result.exit_code}, output: {result.output}"
+    )
 
     # Verify accepted WOs imported (both revisions of WO-001)
     wo_dir = dest / CONTROL_DIR / "work-orders"
@@ -310,7 +318,9 @@ def test_happy_path():
 
 
 # ---- Test 2: next_id continuity ----
-@_test("2. next_id continuity — after importing WO-001 and WO-002, next_id returns WO-003")
+@_test(
+    "2. next_id continuity — after importing WO-001 and WO-002, next_id returns WO-003"
+)
 def test_next_id_continuity():
     base = _TMPBASE / "t2"
     base.mkdir()
@@ -323,7 +333,9 @@ def test_next_id_continuity():
 
     dest = _make_project(base, "phase2")
     result = _run_resume(dest, str(source))
-    assert result.exit_code == 0, f"exit code {result.exit_code}, output: {result.output}"
+    assert result.exit_code == 0, (
+        f"exit code {result.exit_code}, output: {result.output}"
+    )
 
     # next_id for work-orders should be WO-003
     nid = next_id(dest, "work-order")
@@ -374,7 +386,9 @@ def test_empty_source():
 
     dest = _make_project(base, "phase2")
     result = _run_resume(dest, str(source))
-    assert result.exit_code == 0, f"exit code {result.exit_code}, output: {result.output}"
+    assert result.exit_code == 0, (
+        f"exit code {result.exit_code}, output: {result.output}"
+    )
 
     # No WOs in destination
     wo_dir = dest / CONTROL_DIR / "work-orders"
@@ -389,8 +403,12 @@ def test_empty_source():
     # Event should still be logged
     events = _read_events(dest)
     resumed_events = [e for e in events if e.get("type") == "program.resumed"]
-    assert len(resumed_events) == 1, f"expected 1 program.resumed event, got {len(resumed_events)}"
-    assert resumed_events[0]["imported_work_orders"] == [], "imported_work_orders should be empty"
+    assert len(resumed_events) == 1, (
+        f"expected 1 program.resumed event, got {len(resumed_events)}"
+    )
+    assert resumed_events[0]["imported_work_orders"] == [], (
+        "imported_work_orders should be empty"
+    )
 
 
 # ---- Test 5: Edge case — source path variants ----
@@ -414,10 +432,12 @@ def test_source_path_variants():
     assert result_b.exit_code == 0, f".dde/control/ path: exit {result_b.exit_code}"
 
     # Both should have imported the same WO
-    assert (dest_a / CONTROL_DIR / "work-orders" / "WO-001-r1.json").is_file(), \
+    assert (dest_a / CONTROL_DIR / "work-orders" / "WO-001-r1.json").is_file(), (
         "variant A: WO not imported"
-    assert (dest_b / CONTROL_DIR / "work-orders" / "WO-001-r1.json").is_file(), \
+    )
+    assert (dest_b / CONTROL_DIR / "work-orders" / "WO-001-r1.json").is_file(), (
         "variant B: WO not imported"
+    )
 
 
 # ---- Test 6: Edge case — invalid source ----
@@ -518,7 +538,9 @@ def test_events_ndjson():
     assert "imported_runs" in evt, "event missing 'imported_runs'"
     assert "skipped_work_orders" in evt, "event missing 'skipped_work_orders'"
 
-    assert "WO-001" in evt["imported_work_orders"], "WO-001 should be in imported_work_orders"
+    assert "WO-001" in evt["imported_work_orders"], (
+        "WO-001 should be in imported_work_orders"
+    )
     assert "WO-001" not in evt["skipped_work_orders"], "WO-001 should not be in skipped"
     assert "WO-002" in evt["skipped_work_orders"], "WO-002 should be in skipped"
     assert evt["skipped_work_orders"]["WO-002"] == "scientifically_rejected", (
@@ -544,13 +566,19 @@ def test_json_output():
     # Output should be valid JSON
     try:
         payload = json.loads(result.output)
-    except json.JSONDecodeError:
-        raise AssertionError(f"--json output is not valid JSON: {result.output[:500]}")
+    except json.JSONDecodeError as exc:
+        raise AssertionError(
+            f"--json output is not valid JSON: {result.output[:500]}"
+        ) from exc
 
     assert "imported_work_orders" in payload, "JSON missing imported_work_orders"
-    assert "WO-001" in payload["imported_work_orders"], "JSON missing WO-001 in imported list"
+    assert "WO-001" in payload["imported_work_orders"], (
+        "JSON missing WO-001 in imported list"
+    )
     assert "imported_runs" in payload, "JSON missing imported_runs"
-    assert "RUN-001" in payload["imported_runs"], "JSON missing RUN-001 in imported list"
+    assert "RUN-001" in payload["imported_runs"], (
+        "JSON missing RUN-001 in imported list"
+    )
     assert "source" in payload, "JSON missing source field"
     assert "skipped_work_orders" in payload, "JSON missing skipped_work_orders"
     assert "imported_contexts" in payload, "JSON missing imported_contexts count"
@@ -727,7 +755,9 @@ def test_md_happy_path():
 
     dest = _make_project(base, "phase2")
     result = _run_resume(dest, str(source))
-    assert result.exit_code == 0, f"exit code {result.exit_code}, output: {result.output}"
+    assert result.exit_code == 0, (
+        f"exit code {result.exit_code}, output: {result.output}"
+    )
 
     # WO-001 should be imported.
     imported = dest / CONTROL_DIR / "work-orders" / "WO-001-r1.json"
@@ -751,8 +781,9 @@ def test_md_happy_path():
     assert data["imported_from_format"] == "markdown"
 
     # WO-002 should NOT be imported (rejected).
-    assert not (dest / CONTROL_DIR / "work-orders" / "WO-002-r1.json").is_file(), \
+    assert not (dest / CONTROL_DIR / "work-orders" / "WO-002-r1.json").is_file(), (
         "WO-002 should not be imported"
+    )
 
     # Output should mention both.
     assert "WO-001" in result.output
@@ -774,7 +805,9 @@ def test_md_only_source():
 
     dest = _make_project(base, "phase2")
     result = _run_resume(dest, str(source))
-    assert result.exit_code == 0, f"exit code {result.exit_code}, output: {result.output}"
+    assert result.exit_code == 0, (
+        f"exit code {result.exit_code}, output: {result.output}"
+    )
 
     # WO should be imported.
     imported = dest / CONTROL_DIR / "work-orders" / "WO-001-r1.json"
@@ -804,13 +837,17 @@ def test_mixed_json_and_markdown():
 
     dest = _make_project(base, "phase2")
     result = _run_resume(dest, str(source))
-    assert result.exit_code == 0, f"exit code {result.exit_code}, output: {result.output}"
+    assert result.exit_code == 0, (
+        f"exit code {result.exit_code}, output: {result.output}"
+    )
 
     # Both should be imported.
-    assert (dest / CONTROL_DIR / "work-orders" / "WO-001-r1.json").is_file(), \
+    assert (dest / CONTROL_DIR / "work-orders" / "WO-001-r1.json").is_file(), (
         "JSON WO-001 not imported"
-    assert (dest / CONTROL_DIR / "work-orders" / "WO-002-r1.json").is_file(), \
+    )
+    assert (dest / CONTROL_DIR / "work-orders" / "WO-002-r1.json").is_file(), (
         "Markdown WO-002 not imported"
+    )
 
     assert "2 work orders imported" in result.output
 
@@ -830,7 +867,9 @@ def test_md_id_reconciliation():
 
     dest = _make_project(base, "phase2")
     result = _run_resume(dest, str(source))
-    assert result.exit_code == 0, f"exit code {result.exit_code}, output: {result.output}"
+    assert result.exit_code == 0, (
+        f"exit code {result.exit_code}, output: {result.output}"
+    )
 
     # Should be remapped to WO-001.
     imported = dest / CONTROL_DIR / "work-orders" / "WO-001-r1.json"
@@ -863,7 +902,9 @@ def test_md_missing_field():
 
     dest = _make_project(base, "phase2")
     result = _run_resume(dest, str(source))
-    assert result.exit_code == 0, f"exit code {result.exit_code}, output: {result.output}"
+    assert result.exit_code == 0, (
+        f"exit code {result.exit_code}, output: {result.output}"
+    )
 
     # No WOs should be imported (the only file was refused).
     wo_dir = dest / CONTROL_DIR / "work-orders"
@@ -957,7 +998,9 @@ def test_md_idempotency():
 
 
 # ---- Test 20b: Non-canonical ID idempotency (the #111 regression) ----
-@_test("20b. Non-canonical ID idempotency — second resume refuses (not silently re-imports)")
+@_test(
+    "20b. Non-canonical ID idempotency — second resume refuses (not silently re-imports)"
+)
 def test_md_noncanonical_idempotency():
     base = _TMPBASE / "t20b"
     base.mkdir()
@@ -976,7 +1019,9 @@ def test_md_noncanonical_idempotency():
     assert result1.exit_code == 0, f"first run exit {result1.exit_code}"
 
     wo_dir = dest / CONTROL_DIR / "work-orders"
-    assert (wo_dir / "WO-001-r1.json").is_file(), "WO-001-r1 should exist after first run"
+    assert (wo_dir / "WO-001-r1.json").is_file(), (
+        "WO-001-r1 should exist after first run"
+    )
 
     # Second run: must refuse, not silently create WO-002.
     runner = CliRunner()
@@ -1104,7 +1149,9 @@ def test_md_json_duplicate_id():
 
 
 # ---- Test 24: Markdown next_id continuity ----
-@_test("24. Markdown next_id continuity — after importing WO-001, next_id returns WO-002")
+@_test(
+    "24. Markdown next_id continuity — after importing WO-001, next_id returns WO-002"
+)
 def test_md_next_id_continuity():
     base = _TMPBASE / "t24"
     base.mkdir()

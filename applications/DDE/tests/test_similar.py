@@ -58,7 +58,6 @@ from dde.commands.similar import (
 from dde.core import provenance
 from dde.core.errors import ArtifactError, Refusal
 
-
 # ---------------------------------------------------------------------------
 # Helper: canned API responses
 # ---------------------------------------------------------------------------
@@ -78,13 +77,15 @@ def _pubchem_properties(cids: list[int]) -> dict[str, Any]:
     """PubChem compound property response."""
     props = []
     for cid in cids:
-        props.append({
-            "CID": cid,
-            "CanonicalSMILES": f"SMILES-{cid}",
-            "IUPACName": f"compound-{cid}",
-            "MolecularWeight": 180.0 + cid,
-            "InChIKey": f"INCHIKEY-{cid}",
-        })
+        props.append(
+            {
+                "CID": cid,
+                "CanonicalSMILES": f"SMILES-{cid}",
+                "IUPACName": f"compound-{cid}",
+                "MolecularWeight": 180.0 + cid,
+                "InChIKey": f"INCHIKEY-{cid}",
+            }
+        )
     return {"PropertyTable": {"Properties": props}}
 
 
@@ -211,8 +212,10 @@ def test_slug_short_smiles() -> None:
 
 def test_poll_pubchem_listkey_immediate() -> None:
     """Polling returns immediately when result is ready."""
-    with mock.patch("dde.commands.similar.http.get_json") as mock_get, \
-         mock.patch("dde.commands.similar.time.sleep"):
+    with (
+        mock.patch("dde.commands.similar.http.get_json") as mock_get,
+        mock.patch("dde.commands.similar.time.sleep"),
+    ):
         mock_get.return_value = _pubchem_listkey_result([2244, 3672])
         result = _poll_pubchem_listkey("test-key")
         assert result == [2244, 3672]
@@ -221,8 +224,10 @@ def test_poll_pubchem_listkey_immediate() -> None:
 
 def test_poll_pubchem_listkey_waiting() -> None:
     """Polling waits then returns result."""
-    with mock.patch("dde.commands.similar.http.get_json") as mock_get, \
-         mock.patch("dde.commands.similar.time.sleep"):
+    with (
+        mock.patch("dde.commands.similar.http.get_json") as mock_get,
+        mock.patch("dde.commands.similar.time.sleep"),
+    ):
         mock_get.side_effect = [
             {"Waiting": {"ListKey": "test-key"}},
             {"Waiting": {"ListKey": "test-key"}},
@@ -235,9 +240,11 @@ def test_poll_pubchem_listkey_waiting() -> None:
 
 def test_poll_pubchem_listkey_timeout() -> None:
     """Polling times out."""
-    with mock.patch("dde.commands.similar.http.get_json") as mock_get, \
-         mock.patch("dde.commands.similar.time.sleep"), \
-         mock.patch("dde.commands.similar.time.monotonic") as mock_time:
+    with (
+        mock.patch("dde.commands.similar.http.get_json") as mock_get,
+        mock.patch("dde.commands.similar.time.sleep"),
+        mock.patch("dde.commands.similar.time.monotonic") as mock_time,
+    ):
         # First call: t=0, second call: t=200 (past timeout)
         mock_time.side_effect = [0, 0, 200]
         mock_get.return_value = {"Waiting": {"ListKey": "test-key"}}
@@ -252,8 +259,10 @@ def test_poll_pubchem_listkey_timeout() -> None:
 
 def test_poll_pubchem_listkey_fault() -> None:
     """Polling raises on fault response."""
-    with mock.patch("dde.commands.similar.http.get_json") as mock_get, \
-         mock.patch("dde.commands.similar.time.sleep"):
+    with (
+        mock.patch("dde.commands.similar.http.get_json") as mock_get,
+        mock.patch("dde.commands.similar.time.sleep"),
+    ):
         mock_get.return_value = {"Fault": {"Code": "PUGREST.ServerBusy"}}
 
         try:
@@ -279,18 +288,26 @@ def test_merge_hits_dedup() -> None:
     """
     hits = [
         # PubChem hit: lower-bound score (server-filtered at threshold 0.85)
-        {"inchikey": "KEY-1", "tanimoto": 0.85, "tanimoto_is_lower_bound": True,
-         "source_db": "pubchem"},
+        {
+            "inchikey": "KEY-1",
+            "tanimoto": 0.85,
+            "tanimoto_is_lower_bound": True,
+            "source_db": "pubchem",
+        },
         # ChEMBL hit: exact score for same compound
         {"inchikey": "KEY-1", "tanimoto": 0.95, "source_db": "chembl"},
         # Unique PubChem hit
-        {"inchikey": "KEY-2", "tanimoto": 0.85, "tanimoto_is_lower_bound": True,
-         "source_db": "pubchem"},
+        {
+            "inchikey": "KEY-2",
+            "tanimoto": 0.85,
+            "tanimoto_is_lower_bound": True,
+            "source_db": "pubchem",
+        },
     ]
     merged = _merge_hits(hits, 10)
     assert len(merged) == 2
     # KEY-1 should prefer ChEMBL's exact score over PubChem's lower bound.
-    key1 = [h for h in merged if h["inchikey"] == "KEY-1"][0]
+    key1 = next(h for h in merged if h["inchikey"] == "KEY-1")
     assert key1["source_db"] == "chembl"
     assert key1["tanimoto"] == 0.95
     assert "tanimoto_is_lower_bound" not in key1 or not key1["tanimoto_is_lower_bound"]
@@ -339,7 +356,12 @@ def test_build_artifact_schema() -> None:
         },
     ]
     artifact = _build_artifact(
-        "CC(=O)Oc1ccccc1C(=O)O", "similarity", "pubchem", 0.85, 20, hits,
+        "CC(=O)Oc1ccccc1C(=O)O",
+        "similarity",
+        "pubchem",
+        0.85,
+        20,
+        hits,
     )
     assert artifact["schema"] == SCHEMA
     assert artifact["query"]["smiles"] == "CC(=O)Oc1ccccc1C(=O)O"
@@ -354,7 +376,12 @@ def test_build_artifact_schema() -> None:
 def test_build_artifact_no_hits() -> None:
     """Artifact with no hits has null closest_match."""
     artifact = _build_artifact(
-        "CCO", "similarity", "both", 0.85, 20, [],
+        "CCO",
+        "similarity",
+        "both",
+        0.85,
+        20,
+        [],
     )
     assert artifact["summary"]["n_hits"] == 0
     assert artifact["summary"]["closest_match"] is None
@@ -364,7 +391,12 @@ def test_build_artifact_no_hits() -> None:
 def test_build_artifact_substructure_no_threshold() -> None:
     """Substructure artifact has no threshold in query."""
     artifact = _build_artifact(
-        "c1ccccc1", "substructure", "both", None, 20, [],
+        "c1ccccc1",
+        "substructure",
+        "both",
+        None,
+        20,
+        [],
     )
     assert "threshold" not in artifact["query"]
     print("  PASS: build_artifact substructure no threshold")
@@ -390,30 +422,38 @@ def _make_similar_artifact(
 
 def test_classify_exact_match() -> None:
     """Tanimoto 1.0 -> exact-match verdict."""
-    artifact = _make_similar_artifact(hits=[
-        {"tanimoto": 1.0, "source_db": "pubchem", "inchikey": "KEY-1"},
-    ])
-    verdict, relays = _classify_results(artifact, 0.85, 1.0)
+    artifact = _make_similar_artifact(
+        hits=[
+            {"tanimoto": 1.0, "source_db": "pubchem", "inchikey": "KEY-1"},
+        ]
+    )
+    verdict, _relays = _classify_results(artifact, 0.85, 1.0)
     assert verdict == "exact-match", f"Expected exact-match, got {verdict}"
     print("  PASS: classify exact-match")
 
 
 def test_classify_known_compound_found() -> None:
     """Hit above threshold but below 1.0 -> known-compound-found."""
-    artifact = _make_similar_artifact(hits=[
-        {"tanimoto": 0.92, "source_db": "pubchem", "inchikey": "KEY-1"},
-    ])
-    verdict, relays = _classify_results(artifact, 0.85, 1.0)
-    assert verdict == "known-compound-found", f"Expected known-compound-found, got {verdict}"
+    artifact = _make_similar_artifact(
+        hits=[
+            {"tanimoto": 0.92, "source_db": "pubchem", "inchikey": "KEY-1"},
+        ]
+    )
+    verdict, _relays = _classify_results(artifact, 0.85, 1.0)
+    assert verdict == "known-compound-found", (
+        f"Expected known-compound-found, got {verdict}"
+    )
     print("  PASS: classify known-compound-found")
 
 
 def test_classify_novel() -> None:
     """No hits above threshold -> novel."""
-    artifact = _make_similar_artifact(hits=[
-        {"tanimoto": 0.60, "source_db": "pubchem", "inchikey": "KEY-1"},
-    ])
-    verdict, relays = _classify_results(artifact, 0.85, 1.0)
+    artifact = _make_similar_artifact(
+        hits=[
+            {"tanimoto": 0.60, "source_db": "pubchem", "inchikey": "KEY-1"},
+        ]
+    )
+    verdict, _relays = _classify_results(artifact, 0.85, 1.0)
     assert verdict == "novel", f"Expected novel, got {verdict}"
     print("  PASS: classify novel")
 
@@ -421,17 +461,19 @@ def test_classify_novel() -> None:
 def test_classify_novel_no_hits() -> None:
     """No hits at all -> novel."""
     artifact = _make_similar_artifact(hits=[])
-    verdict, relays = _classify_results(artifact, 0.85, 1.0)
+    verdict, _relays = _classify_results(artifact, 0.85, 1.0)
     assert verdict == "novel", f"Expected novel, got {verdict}"
     print("  PASS: classify novel (no hits)")
 
 
 def test_classify_novel_none_tanimoto() -> None:
     """Hits with None tanimoto (substructure) -> novel."""
-    artifact = _make_similar_artifact(hits=[
-        {"tanimoto": None, "source_db": "pubchem", "inchikey": "KEY-1"},
-    ])
-    verdict, relays = _classify_results(artifact, 0.85, 1.0)
+    artifact = _make_similar_artifact(
+        hits=[
+            {"tanimoto": None, "source_db": "pubchem", "inchikey": "KEY-1"},
+        ]
+    )
+    verdict, _relays = _classify_results(artifact, 0.85, 1.0)
     assert verdict == "novel", f"Expected novel, got {verdict}"
     print("  PASS: classify novel (None tanimoto)")
 
@@ -443,11 +485,17 @@ def test_classify_pubchem_lower_bound() -> None:
     tanimoto set to threshold (lower bound) should classify as
     known-compound-found, not novel.
     """
-    artifact = _make_similar_artifact(hits=[
-        {"tanimoto": 0.85, "tanimoto_is_lower_bound": True,
-         "source_db": "pubchem", "inchikey": "KEY-1"},
-    ])
-    verdict, relays = _classify_results(artifact, 0.85, 1.0)
+    artifact = _make_similar_artifact(
+        hits=[
+            {
+                "tanimoto": 0.85,
+                "tanimoto_is_lower_bound": True,
+                "source_db": "pubchem",
+                "inchikey": "KEY-1",
+            },
+        ]
+    )
+    verdict, _relays = _classify_results(artifact, 0.85, 1.0)
     assert verdict == "known-compound-found", (
         f"Expected known-compound-found for server-filtered PubChem hit, got {verdict}"
     )
@@ -461,10 +509,12 @@ def test_classify_pubchem_lower_bound() -> None:
 
 def test_relay_tanimoto_fires_with_hits() -> None:
     """tanimoto_is_2d_only fires ONLY when at least one hit is returned."""
-    artifact = _make_similar_artifact(hits=[
-        {"tanimoto": 0.95, "source_db": "pubchem", "inchikey": "KEY-1"},
-    ])
-    verdict, relays = _classify_results(artifact, 0.85, 1.0)
+    artifact = _make_similar_artifact(
+        hits=[
+            {"tanimoto": 0.95, "source_db": "pubchem", "inchikey": "KEY-1"},
+        ]
+    )
+    _verdict, relays = _classify_results(artifact, 0.85, 1.0)
     codes = {r["code"] for r in relays}
     assert "similar.tanimoto_is_2d_only" in codes, (
         "tanimoto_is_2d_only should fire when hits present"
@@ -475,7 +525,7 @@ def test_relay_tanimoto_fires_with_hits() -> None:
 def test_relay_tanimoto_silent_no_hits() -> None:
     """tanimoto_is_2d_only does NOT fire when no hits."""
     artifact = _make_similar_artifact(hits=[])
-    verdict, relays = _classify_results(artifact, 0.85, 1.0)
+    _verdict, relays = _classify_results(artifact, 0.85, 1.0)
     codes = {r["code"] for r in relays}
     assert "similar.tanimoto_is_2d_only" not in codes, (
         "tanimoto_is_2d_only should NOT fire when no hits"
@@ -486,9 +536,11 @@ def test_relay_tanimoto_silent_no_hits() -> None:
 def test_relay_coverage_always_fires() -> None:
     """database_coverage_limited fires unconditionally."""
     # With hits:
-    artifact1 = _make_similar_artifact(hits=[
-        {"tanimoto": 0.95, "source_db": "pubchem", "inchikey": "KEY-1"},
-    ])
+    artifact1 = _make_similar_artifact(
+        hits=[
+            {"tanimoto": 0.95, "source_db": "pubchem", "inchikey": "KEY-1"},
+        ]
+    )
     _, relays1 = _classify_results(artifact1, 0.85, 1.0)
     codes1 = {r["code"] for r in relays1}
     assert "similar.database_coverage_limited" in codes1, (
@@ -529,6 +581,7 @@ def test_relay_codes_registered() -> None:
 def test_threshold_set_registered() -> None:
     """similar-search threshold set is declared with expected values."""
     from dde.core.thresholds import UNRESOLVED, declared_sets
+
     sets = declared_sets()
     assert "similar-search" in sets, (
         f"similar-search not in declared sets: {sorted(sets.keys())}"
@@ -657,24 +710,32 @@ def test_cli_search_valid_smiles() -> None:
         project = _make_project(Path(td))
         runner = CliRunner()
 
-        with mock.patch("dde.commands.similar._validate_smiles") as mock_validate, \
-             mock.patch("dde.commands.similar._pubchem_similarity") as mock_pc, \
-             mock.patch("dde.commands.similar._chembl_similarity") as mock_ch:
+        with (
+            mock.patch("dde.commands.similar._validate_smiles") as mock_validate,
+            mock.patch("dde.commands.similar._pubchem_similarity") as mock_pc,
+            mock.patch("dde.commands.similar._chembl_similarity") as mock_ch,
+        ):
             mock_validate.return_value = "CCO"
             mock_pc.return_value = [
                 {
-                    "source_db": "pubchem", "cid": 702,
-                    "canonical_smiles": "CCO", "iupac_name": "ethanol",
-                    "tanimoto": 0.85, "tanimoto_is_lower_bound": True,
+                    "source_db": "pubchem",
+                    "cid": 702,
+                    "canonical_smiles": "CCO",
+                    "iupac_name": "ethanol",
+                    "tanimoto": 0.85,
+                    "tanimoto_is_lower_bound": True,
                     "molecular_weight": 46.07,
                     "inchikey": "LFQSCWFLJHTTHZ-UHFFFAOYSA-N",
                 },
             ]
             mock_ch.return_value = [
                 {
-                    "source_db": "chembl", "chembl_id": "CHEMBL545",
-                    "canonical_smiles": "CCO", "pref_name": "ETHANOL",
-                    "tanimoto": 1.0, "molecular_weight": None,
+                    "source_db": "chembl",
+                    "chembl_id": "CHEMBL545",
+                    "canonical_smiles": "CCO",
+                    "pref_name": "ETHANOL",
+                    "tanimoto": 1.0,
+                    "molecular_weight": None,
                     "inchikey": "LFQSCWFLJHTTHZ-UHFFFAOYSA-N",
                 },
             ]
@@ -730,15 +791,20 @@ def test_cli_search_source_pubchem() -> None:
         project = _make_project(Path(td))
         runner = CliRunner()
 
-        with mock.patch("dde.commands.similar._validate_smiles") as mock_validate, \
-             mock.patch("dde.commands.similar._pubchem_similarity") as mock_pc, \
-             mock.patch("dde.commands.similar._chembl_similarity") as mock_ch:
+        with (
+            mock.patch("dde.commands.similar._validate_smiles") as mock_validate,
+            mock.patch("dde.commands.similar._pubchem_similarity") as mock_pc,
+            mock.patch("dde.commands.similar._chembl_similarity") as mock_ch,
+        ):
             mock_validate.return_value = "CCO"
             mock_pc.return_value = [
                 {
-                    "source_db": "pubchem", "cid": 702,
-                    "canonical_smiles": "CCO", "iupac_name": "ethanol",
-                    "tanimoto": 0.85, "tanimoto_is_lower_bound": True,
+                    "source_db": "pubchem",
+                    "cid": 702,
+                    "canonical_smiles": "CCO",
+                    "iupac_name": "ethanol",
+                    "tanimoto": 0.85,
+                    "tanimoto_is_lower_bound": True,
                     "molecular_weight": 46.07,
                     "inchikey": "LFQSCWFLJHTTHZ-UHFFFAOYSA-N",
                 },
@@ -746,8 +812,15 @@ def test_cli_search_source_pubchem() -> None:
 
             result = runner.invoke(
                 cli,
-                ["--project", str(project), "similar", "search", "CCO",
-                 "--source", "pubchem"],
+                [
+                    "--project",
+                    str(project),
+                    "similar",
+                    "search",
+                    "CCO",
+                    "--source",
+                    "pubchem",
+                ],
                 catch_exceptions=False,
             )
 
@@ -768,23 +841,35 @@ def test_cli_search_source_chembl() -> None:
         project = _make_project(Path(td))
         runner = CliRunner()
 
-        with mock.patch("dde.commands.similar._validate_smiles") as mock_validate, \
-             mock.patch("dde.commands.similar._pubchem_similarity") as mock_pc, \
-             mock.patch("dde.commands.similar._chembl_similarity") as mock_ch:
+        with (
+            mock.patch("dde.commands.similar._validate_smiles") as mock_validate,
+            mock.patch("dde.commands.similar._pubchem_similarity") as mock_pc,
+            mock.patch("dde.commands.similar._chembl_similarity") as mock_ch,
+        ):
             mock_validate.return_value = "CCO"
             mock_ch.return_value = [
                 {
-                    "source_db": "chembl", "chembl_id": "CHEMBL545",
-                    "canonical_smiles": "CCO", "pref_name": "ETHANOL",
-                    "tanimoto": 1.0, "molecular_weight": None,
+                    "source_db": "chembl",
+                    "chembl_id": "CHEMBL545",
+                    "canonical_smiles": "CCO",
+                    "pref_name": "ETHANOL",
+                    "tanimoto": 1.0,
+                    "molecular_weight": None,
                     "inchikey": "LFQSCWFLJHTTHZ-UHFFFAOYSA-N",
                 },
             ]
 
             result = runner.invoke(
                 cli,
-                ["--project", str(project), "similar", "search", "CCO",
-                 "--source", "chembl"],
+                [
+                    "--project",
+                    str(project),
+                    "similar",
+                    "search",
+                    "CCO",
+                    "--source",
+                    "chembl",
+                ],
                 catch_exceptions=False,
             )
 
@@ -804,15 +889,20 @@ def test_cli_substructure_valid() -> None:
         project = _make_project(Path(td))
         runner = CliRunner()
 
-        with mock.patch("dde.commands.similar._validate_smiles") as mock_validate, \
-             mock.patch("dde.commands.similar._pubchem_substructure") as mock_pc, \
-             mock.patch("dde.commands.similar._chembl_substructure") as mock_ch:
+        with (
+            mock.patch("dde.commands.similar._validate_smiles") as mock_validate,
+            mock.patch("dde.commands.similar._pubchem_substructure") as mock_pc,
+            mock.patch("dde.commands.similar._chembl_substructure") as mock_ch,
+        ):
             mock_validate.return_value = "c1ccccc1"
             mock_pc.return_value = [
                 {
-                    "source_db": "pubchem", "cid": 241,
-                    "canonical_smiles": "c1ccccc1", "iupac_name": "benzene",
-                    "tanimoto": None, "molecular_weight": 78.11,
+                    "source_db": "pubchem",
+                    "cid": 241,
+                    "canonical_smiles": "c1ccccc1",
+                    "iupac_name": "benzene",
+                    "tanimoto": None,
+                    "molecular_weight": 78.11,
                     "inchikey": "UHOVQNZJYSORNB-UHFFFAOYSA-N",
                 },
             ]
@@ -843,9 +933,11 @@ def test_cli_search_json_flag() -> None:
         project = _make_project(Path(td))
         runner = CliRunner()
 
-        with mock.patch("dde.commands.similar._validate_smiles") as mock_validate, \
-             mock.patch("dde.commands.similar._pubchem_similarity") as mock_pc, \
-             mock.patch("dde.commands.similar._chembl_similarity") as mock_ch:
+        with (
+            mock.patch("dde.commands.similar._validate_smiles") as mock_validate,
+            mock.patch("dde.commands.similar._pubchem_similarity") as mock_pc,
+            mock.patch("dde.commands.similar._chembl_similarity") as mock_ch,
+        ):
             mock_validate.return_value = "CCO"
             mock_pc.return_value = []
             mock_ch.return_value = []
@@ -871,9 +963,11 @@ def test_cli_search_quiet_flag() -> None:
         project = _make_project(Path(td))
         runner = CliRunner()
 
-        with mock.patch("dde.commands.similar._validate_smiles") as mock_validate, \
-             mock.patch("dde.commands.similar._pubchem_similarity") as mock_pc, \
-             mock.patch("dde.commands.similar._chembl_similarity") as mock_ch:
+        with (
+            mock.patch("dde.commands.similar._validate_smiles") as mock_validate,
+            mock.patch("dde.commands.similar._pubchem_similarity") as mock_pc,
+            mock.patch("dde.commands.similar._chembl_similarity") as mock_ch,
+        ):
             mock_validate.return_value = "CCO"
             mock_pc.return_value = []
             mock_ch.return_value = []
@@ -909,9 +1003,12 @@ def _write_search_artifact(
     if hits is None:
         hits = [
             {
-                "source_db": "pubchem", "cid": 702,
-                "canonical_smiles": "CCO", "iupac_name": "ethanol",
-                "tanimoto": 1.0, "molecular_weight": 46.07,
+                "source_db": "pubchem",
+                "cid": 702,
+                "canonical_smiles": "CCO",
+                "iupac_name": "ethanol",
+                "tanimoto": 1.0,
+                "molecular_weight": 46.07,
                 "inchikey": "LFQSCWFLJHTTHZ-UHFFFAOYSA-N",
             },
         ]
@@ -924,7 +1021,8 @@ def _write_search_artifact(
 
     artifact_path = compounds_dir / artifact_name
     artifact_path.write_text(
-        json.dumps(artifact, indent=2) + "\n", encoding="utf-8",
+        json.dumps(artifact, indent=2) + "\n",
+        encoding="utf-8",
     )
 
     sidecar = {
@@ -938,7 +1036,8 @@ def _write_search_artifact(
     meta_name = artifact_name.replace(".json", ".meta.json")
     meta_path = compounds_dir / meta_name
     meta_path.write_text(
-        json.dumps(sidecar, indent=2) + "\n", encoding="utf-8",
+        json.dumps(sidecar, indent=2) + "\n",
+        encoding="utf-8",
     )
 
 
@@ -949,14 +1048,21 @@ def test_cli_analyze_exact_match() -> None:
 
     with tempfile.TemporaryDirectory() as td:
         project = _make_project(Path(td))
-        _write_search_artifact(project, "CCO", hits=[
-            {
-                "source_db": "pubchem", "cid": 702,
-                "canonical_smiles": "CCO", "iupac_name": "ethanol",
-                "tanimoto": 1.0, "molecular_weight": 46.07,
-                "inchikey": "LFQSCWFLJHTTHZ-UHFFFAOYSA-N",
-            },
-        ])
+        _write_search_artifact(
+            project,
+            "CCO",
+            hits=[
+                {
+                    "source_db": "pubchem",
+                    "cid": 702,
+                    "canonical_smiles": "CCO",
+                    "iupac_name": "ethanol",
+                    "tanimoto": 1.0,
+                    "molecular_weight": 46.07,
+                    "inchikey": "LFQSCWFLJHTTHZ-UHFFFAOYSA-N",
+                },
+            ],
+        )
 
         runner = CliRunner()
         with mock.patch("dde.commands.similar._validate_smiles") as mock_validate:
@@ -985,14 +1091,21 @@ def test_cli_analyze_known_compound() -> None:
 
     with tempfile.TemporaryDirectory() as td:
         project = _make_project(Path(td))
-        _write_search_artifact(project, "CCO", hits=[
-            {
-                "source_db": "pubchem", "cid": 702,
-                "canonical_smiles": "CCCO", "iupac_name": "propanol",
-                "tanimoto": 0.90, "molecular_weight": 60.10,
-                "inchikey": "BDERNNFJNOPAEC-UHFFFAOYSA-N",
-            },
-        ])
+        _write_search_artifact(
+            project,
+            "CCO",
+            hits=[
+                {
+                    "source_db": "pubchem",
+                    "cid": 702,
+                    "canonical_smiles": "CCCO",
+                    "iupac_name": "propanol",
+                    "tanimoto": 0.90,
+                    "molecular_weight": 60.10,
+                    "inchikey": "BDERNNFJNOPAEC-UHFFFAOYSA-N",
+                },
+            ],
+        )
 
         runner = CliRunner()
         with mock.patch("dde.commands.similar._validate_smiles") as mock_validate:
@@ -1015,14 +1128,21 @@ def test_cli_analyze_novel() -> None:
 
     with tempfile.TemporaryDirectory() as td:
         project = _make_project(Path(td))
-        _write_search_artifact(project, "CCO", hits=[
-            {
-                "source_db": "pubchem", "cid": 999,
-                "canonical_smiles": "C1CCCCC1", "iupac_name": "cyclohexane",
-                "tanimoto": 0.30, "molecular_weight": 84.16,
-                "inchikey": "XDTMQSROBMDMFD-UHFFFAOYSA-N",
-            },
-        ])
+        _write_search_artifact(
+            project,
+            "CCO",
+            hits=[
+                {
+                    "source_db": "pubchem",
+                    "cid": 999,
+                    "canonical_smiles": "C1CCCCC1",
+                    "iupac_name": "cyclohexane",
+                    "tanimoto": 0.30,
+                    "molecular_weight": 84.16,
+                    "inchikey": "XDTMQSROBMDMFD-UHFFFAOYSA-N",
+                },
+            ],
+        )
 
         runner = CliRunner()
         with mock.patch("dde.commands.similar._validate_smiles") as mock_validate:
@@ -1099,26 +1219,33 @@ def test_cli_analyze_from_flag() -> None:
         slug = _slug("CCO")
         hits = [
             {
-                "source_db": "pubchem", "cid": 702,
-                "canonical_smiles": "CCO", "iupac_name": "ethanol",
-                "tanimoto": 1.0, "molecular_weight": 46.07,
+                "source_db": "pubchem",
+                "cid": 702,
+                "canonical_smiles": "CCO",
+                "iupac_name": "ethanol",
+                "tanimoto": 1.0,
+                "molecular_weight": 46.07,
                 "inchikey": "LFQSCWFLJHTTHZ-UHFFFAOYSA-N",
             },
         ]
         artifact = _build_artifact("CCO", "similarity", "both", 0.85, 20, hits)
         artifact_path = alt_dir / f"{slug}.similar-both.json"
         artifact_path.write_text(
-            json.dumps(artifact, indent=2) + "\n", encoding="utf-8",
+            json.dumps(artifact, indent=2) + "\n",
+            encoding="utf-8",
         )
         sidecar = {
-            "tool": "similar", "subcommand": "search",
+            "tool": "similar",
+            "subcommand": "search",
             "endpoint": "https://example.com",
             "parameters": {"input_smiles": "CCO"},
-            "outputs": [], "mandatory_relays": [],
+            "outputs": [],
+            "mandatory_relays": [],
         }
         meta_path = alt_dir / f"{slug}.similar-both.meta.json"
         meta_path.write_text(
-            json.dumps(sidecar, indent=2) + "\n", encoding="utf-8",
+            json.dumps(sidecar, indent=2) + "\n",
+            encoding="utf-8",
         )
 
         runner = CliRunner()
@@ -1127,9 +1254,13 @@ def test_cli_analyze_from_flag() -> None:
             result = runner.invoke(
                 cli,
                 [
-                    "--project", str(project),
-                    "similar", "analyze", "CCO",
-                    "--from", str(alt_dir),
+                    "--project",
+                    str(project),
+                    "similar",
+                    "analyze",
+                    "CCO",
+                    "--from",
+                    str(alt_dir),
                 ],
                 catch_exceptions=False,
             )
@@ -1155,9 +1286,13 @@ def test_cli_analyze_out_flag() -> None:
             result = runner.invoke(
                 cli,
                 [
-                    "--project", str(project),
-                    "similar", "analyze", "CCO",
-                    "--out", str(alt_out),
+                    "--project",
+                    str(project),
+                    "similar",
+                    "analyze",
+                    "CCO",
+                    "--out",
+                    str(alt_out),
                 ],
                 catch_exceptions=False,
             )
@@ -1196,7 +1331,10 @@ def main() -> None:
         # Build artifact
         ("test_build_artifact_schema", test_build_artifact_schema),
         ("test_build_artifact_no_hits", test_build_artifact_no_hits),
-        ("test_build_artifact_substructure_no_threshold", test_build_artifact_substructure_no_threshold),
+        (
+            "test_build_artifact_substructure_no_threshold",
+            test_build_artifact_substructure_no_threshold,
+        ),
         # Classification
         ("test_classify_exact_match", test_classify_exact_match),
         ("test_classify_known_compound_found", test_classify_known_compound_found),
@@ -1244,10 +1382,11 @@ def main() -> None:
         except Exception as exc:
             print(f"  FAIL: {name} — {exc}")
             import traceback
+
             traceback.print_exc()
             failed += 1
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Results: {passed} passed, {failed} failed, {passed + failed} total")
     if failed:
         sys.exit(1)

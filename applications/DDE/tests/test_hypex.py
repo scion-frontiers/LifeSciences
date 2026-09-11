@@ -42,11 +42,9 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 from click.testing import CliRunner
-
 from dde.cli import cli
 from dde.core import provenance
-from dde.core.thresholds import declared_sets, UNRESOLVED
-
+from dde.core.thresholds import UNRESOLVED, declared_sets
 
 # ---------------------------------------------------------------------------
 # Helper: build minimal run directories
@@ -76,10 +74,18 @@ def _make_hypothesis(
         "mechanism": f"Mechanism for {h_id}",
         "predictions": [f"Prediction for {h_id}"],
         "experiments": [
-            {"design": "Test design", "readout": "Test readout", "est_difficulty": "low"}
+            {
+                "design": "Test design",
+                "readout": "Test readout",
+                "est_difficulty": "low",
+            }
         ],
         "evidence": [
-            {"lit_id": "PMID:12345678", "role": "supports", "note": "Supporting evidence"}
+            {
+                "lit_id": "PMID:12345678",
+                "role": "supports",
+                "note": "Supporting evidence",
+            }
         ],
         "focus_area": "test-area",
         "lineage": {
@@ -154,7 +160,7 @@ def _make_ratings(
     if elos is None:
         elos = [1500.0 + (i * 50) for i in range(len(hypotheses))]
     ratings = {}
-    for h_id, elo in zip(hypotheses, elos):
+    for h_id, elo in zip(hypotheses, elos, strict=True):
         ratings[h_id] = {
             "elo": elo,
             "matches": 10,
@@ -165,7 +171,7 @@ def _make_ratings(
         "epoch": epoch,
         "base_rating": 1500.0,
         "ratings": ratings,
-        "computed_from": f"matches/ ledger @ M-0010",
+        "computed_from": "matches/ ledger @ M-0010",
     }
 
 
@@ -193,7 +199,7 @@ def _make_run_dir(
         (run_dir / subdir).mkdir(exist_ok=True)
 
     # Write hypotheses
-    h_ids = [f"H-{i+1:04d}" for i in range(n_hypotheses)]
+    h_ids = [f"H-{i + 1:04d}" for i in range(n_hypotheses)]
     for h_id in h_ids:
         h = _make_hypothesis(h_id, title=f"Hypothesis {h_id}")
         (run_dir / "hypotheses" / f"{h_id}.json").write_text(
@@ -207,12 +213,12 @@ def _make_run_dir(
             b_id = h_ids[i + 1]
             winner = dangling_match_ref if (dangling_match_ref and i == 0) else a_id
             m = _make_match(
-                m_id=f"M-{i+1:04d}",
+                m_id=f"M-{i + 1:04d}",
                 a=dangling_match_ref if (dangling_match_ref and i == 0) else a_id,
                 b=b_id,
                 winner=winner,
             )
-            (run_dir / "matches" / f"M-{i+1:04d}.json").write_text(
+            (run_dir / "matches" / f"M-{i + 1:04d}.json").write_text(
                 json.dumps(m, indent=2), encoding="utf-8"
             )
 
@@ -271,14 +277,11 @@ def _make_run_dir(
     }
     try:
         import yaml
-        (run_dir / "run.yaml").write_text(
-            yaml.dump(run_yaml), encoding="utf-8"
-        )
+
+        (run_dir / "run.yaml").write_text(yaml.dump(run_yaml), encoding="utf-8")
     except ImportError:
         # Write as JSON with .yaml extension — tests can still run
-        (run_dir / "run.yaml").write_text(
-            json.dumps(run_yaml), encoding="utf-8"
-        )
+        (run_dir / "run.yaml").write_text(json.dumps(run_yaml), encoding="utf-8")
 
     return run_dir
 
@@ -424,7 +427,9 @@ def test_ingest_observed_counts_from_datastore():
         assert record["declared_budgets"]["max_matches"] == 200
 
         # They must differ — proving §3.6 is honoured
-        assert record["observed"]["n_matches"] != record["declared_budgets"]["max_matches"]
+        assert (
+            record["observed"]["n_matches"] != record["declared_budgets"]["max_matches"]
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -438,7 +443,9 @@ def test_ingest_dangling_match_ref():
         base = Path(tmp)
         project = _make_project(base)
         run_dir = _make_run_dir(
-            base, n_hypotheses=3, include_pacing=True,
+            base,
+            n_hypotheses=3,
+            include_pacing=True,
             dangling_match_ref="H-9999",
         )
 
@@ -452,7 +459,9 @@ def test_ingest_dangling_match_ref():
 
         # Dangling ref from M-0001.a = H-9999
         assert len(record["integrity"]["dangling_match_refs"]) > 0
-        assert any("H-9999" in ref for ref in record["integrity"]["dangling_match_refs"])
+        assert any(
+            "H-9999" in ref for ref in record["integrity"]["dangling_match_refs"]
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -466,7 +475,10 @@ def test_ingest_aborted_run():
         base = Path(tmp)
         project = _make_project(base)
         run_dir = _make_run_dir(
-            base, n_hypotheses=2, include_termination=False, include_pacing=True,
+            base,
+            n_hypotheses=2,
+            include_termination=False,
+            include_pacing=True,
         )
 
         runner = CliRunner()
@@ -492,7 +504,10 @@ def test_analyze_aborted_fires_run_aborted():
         base = Path(tmp)
         project = _make_project(base)
         run_dir = _make_run_dir(
-            base, n_hypotheses=2, include_termination=False, include_pacing=True,
+            base,
+            n_hypotheses=2,
+            include_termination=False,
+            include_pacing=True,
         )
 
         runner = CliRunner()
@@ -522,7 +537,9 @@ def test_analyze_unconverged_verdict():
         base = Path(tmp)
         project = _make_project(base)
         run_dir = _make_run_dir(
-            base, n_hypotheses=3, include_pacing=True,
+            base,
+            n_hypotheses=3,
+            include_pacing=True,
             termination_reason="budget_exhausted",
         )
 
@@ -554,7 +571,9 @@ def test_analyze_leader_gap_is_decisive_null():
         base = Path(tmp)
         project = _make_project(base)
         run_dir = _make_run_dir(
-            base, n_hypotheses=3, include_pacing=True,
+            base,
+            n_hypotheses=3,
+            include_pacing=True,
             elos=[1600.0, 1500.0, 1400.0],
         )
 
@@ -582,7 +601,9 @@ def test_analyze_integrity_violations_relay():
         base = Path(tmp)
         project = _make_project(base)
         run_dir = _make_run_dir(
-            base, n_hypotheses=3, include_pacing=True,
+            base,
+            n_hypotheses=3,
+            include_pacing=True,
             dangling_match_ref="H-9999",
         )
 
@@ -610,7 +631,9 @@ def test_analyze_quarantined_excluded_relay():
         base = Path(tmp)
         project = _make_project(base)
         run_dir = _make_run_dir(
-            base, n_hypotheses=2, include_pacing=True,
+            base,
+            n_hypotheses=2,
+            include_pacing=True,
             include_quarantine=True,
         )
 
@@ -639,7 +662,9 @@ def test_analyze_pacing_uncoordinated_missing():
         project = _make_project(base)
         # No pacing file
         run_dir = _make_run_dir(
-            base, n_hypotheses=2, include_pacing=False,
+            base,
+            n_hypotheses=2,
+            include_pacing=False,
         )
 
         runner = CliRunner()
@@ -666,7 +691,10 @@ def test_analyze_pacing_uncoordinated_bad_tier():
         base = Path(tmp)
         project = _make_project(base)
         run_dir = _make_run_dir(
-            base, n_hypotheses=2, include_pacing=True, pacing_tier="local",
+            base,
+            n_hypotheses=2,
+            include_pacing=True,
+            pacing_tier="local",
         )
 
         runner = CliRunner()
@@ -737,7 +765,10 @@ def test_assessment_core_unrated_score_null():
         project = _make_project(base)
         # Include ratings only for first 2 of 3 hypotheses
         run_dir = _make_run_dir(
-            base, n_hypotheses=3, include_ratings=False, include_pacing=True,
+            base,
+            n_hypotheses=3,
+            include_ratings=False,
+            include_pacing=True,
         )
         # Write ratings only for H-0001 and H-0002
         ratings = _make_ratings(["H-0001", "H-0002"], elos=[1600.0, 1500.0])
@@ -761,11 +792,13 @@ def test_assessment_core_unrated_score_null():
 
         core = analysis["assessment"]["assessment_core"]
         # Find H-0003 — it should have score: null
-        h3 = next(
-            c for c in core["candidates"] if c["candidate_id"] == "H-0003"
+        h3 = next(c for c in core["candidates"] if c["candidate_id"] == "H-0003")
+        assert h3["score"] is None, (
+            f"unrated hypothesis should have null score, got {h3['score']}"
         )
-        assert h3["score"] is None, f"unrated hypothesis should have null score, got {h3['score']}"
-        assert h3["rank"] is None, f"unrated hypothesis should have null rank, got {h3['rank']}"
+        assert h3["rank"] is None, (
+            f"unrated hypothesis should have null rank, got {h3['rank']}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -862,7 +895,10 @@ def test_converged_shared_pacing_no_pacing_relay():
         base = Path(tmp)
         project = _make_project(base)
         run_dir = _make_run_dir(
-            base, n_hypotheses=3, include_pacing=True, pacing_tier="shared",
+            base,
+            n_hypotheses=3,
+            include_pacing=True,
+            pacing_tier="shared",
         )
 
         runner = CliRunner()
@@ -892,7 +928,9 @@ def test_converged_no_integrity_no_quarantine():
         base = Path(tmp)
         project = _make_project(base)
         run_dir = _make_run_dir(
-            base, n_hypotheses=3, include_pacing=True,
+            base,
+            n_hypotheses=3,
+            include_pacing=True,
             include_quarantine=False,
         )
 
@@ -928,7 +966,10 @@ def test_analyze_unrated_hypotheses_relay():
         base = Path(tmp)
         project = _make_project(base)
         run_dir = _make_run_dir(
-            base, n_hypotheses=3, include_ratings=False, include_pacing=True,
+            base,
+            n_hypotheses=3,
+            include_ratings=False,
+            include_pacing=True,
         )
         # Only rate H-0001 and H-0002
         ratings = _make_ratings(["H-0001", "H-0002"], elos=[1600.0, 1500.0])
@@ -965,7 +1006,10 @@ def test_pacing_persisted_in_record():
         base = Path(tmp)
         project = _make_project(base)
         run_dir = _make_run_dir(
-            base, n_hypotheses=2, include_pacing=True, pacing_tier="shared",
+            base,
+            n_hypotheses=2,
+            include_pacing=True,
+            pacing_tier="shared",
         )
 
         runner = CliRunner()
@@ -991,7 +1035,10 @@ def test_pacing_relay_after_run_dir_deleted():
         base = Path(tmp)
         project = _make_project(base)
         run_dir = _make_run_dir(
-            base, n_hypotheses=2, include_pacing=True, pacing_tier="shared",
+            base,
+            n_hypotheses=2,
+            include_pacing=True,
+            pacing_tier="shared",
         )
 
         runner = CliRunner()
@@ -1000,6 +1047,7 @@ def test_pacing_relay_after_run_dir_deleted():
 
         # Delete the original run directory (simulates archival/cleanup)
         import shutil
+
         shutil.rmtree(run_dir)
 
         hyp_dir = project / "raw" / "hypotheses"
@@ -1030,19 +1078,23 @@ def test_composite_ranking_fires():
         base = Path(tmp)
         project = _make_project(base)
         run_dir = _make_run_dir(
-            base, n_hypotheses=2, include_pacing=True,
+            base,
+            n_hypotheses=2,
+            include_pacing=True,
         )
 
         # Patch run.yaml to include composite_preset
         run_yaml_path = run_dir / "run.yaml"
         try:
             import yaml
+
             run_yaml = yaml.safe_load(run_yaml_path.read_text(encoding="utf-8"))
         except ImportError:
             run_yaml = json.loads(run_yaml_path.read_text(encoding="utf-8"))
         run_yaml["composite_preset"] = "balanced-v2"
         try:
             import yaml
+
             run_yaml_path.write_text(yaml.dump(run_yaml), encoding="utf-8")
         except ImportError:
             run_yaml_path.write_text(json.dumps(run_yaml), encoding="utf-8")
@@ -1077,7 +1129,9 @@ def test_no_composite_no_relay():
         base = Path(tmp)
         project = _make_project(base)
         run_dir = _make_run_dir(
-            base, n_hypotheses=2, include_pacing=True,
+            base,
+            n_hypotheses=2,
+            include_pacing=True,
         )
 
         runner = CliRunner()
@@ -1109,7 +1163,9 @@ def test_roster_ingested():
         base = Path(tmp)
         project = _make_project(base)
         run_dir = _make_run_dir(
-            base, n_hypotheses=2, include_pacing=True,
+            base,
+            n_hypotheses=2,
+            include_pacing=True,
         )
 
         # Write roster.ndjson
@@ -1155,9 +1211,7 @@ def test_ingest_produces_archive():
 
         hyp_dir = project / "raw" / "hypotheses"
         archives = list(hyp_dir.glob("hx-*.run.tar.zst"))
-        assert len(archives) == 1, (
-            f"expected 1 .tar.zst archive, got {len(archives)}"
-        )
+        assert len(archives) == 1, f"expected 1 .tar.zst archive, got {len(archives)}"
         assert archives[0].stat().st_size > 0
 
 
@@ -1172,7 +1226,9 @@ def test_converged_run_no_run_not_converged_relay():
         base = Path(tmp)
         project = _make_project(base)
         run_dir = _make_run_dir(
-            base, n_hypotheses=2, include_pacing=True,
+            base,
+            n_hypotheses=2,
+            include_pacing=True,
             termination_reason="converged",
         )
 
@@ -1201,4 +1257,5 @@ def test_converged_run_no_run_not_converged_relay():
 
 if __name__ == "__main__":
     import pytest
+
     pytest.main([__file__, "-v"])

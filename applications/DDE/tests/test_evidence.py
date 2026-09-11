@@ -45,7 +45,13 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 
-from dde.core.errors import Refusal, SchemaError
+from dde.core.controlstore import (
+    CONTROL_DIR,
+    ensure_control_dirs,
+    read_record,
+    write_record,
+)
+from dde.core.errors import Refusal
 from dde.core.evidence import (
     ACTIONS,
     EVIDENCE_STATUSES,
@@ -53,12 +59,6 @@ from dde.core.evidence import (
     EvidenceReference,
     validate_assessment,
     validate_decision,
-)
-from dde.core.controlstore import (
-    CONTROL_DIR,
-    ensure_control_dirs,
-    read_record,
-    write_record,
 )
 
 # ---------------------------------------------------------------------------
@@ -131,6 +131,7 @@ def _write_concept_to_disk(
 # ---------------------------------------------------------------------------
 # Fixture: assessment record from design SS7 Step 3
 # ---------------------------------------------------------------------------
+
 
 def _step3_assessment() -> dict[str, Any]:
     """The worked example from design SS7 Step 3."""
@@ -217,8 +218,10 @@ def test_real_write_path_human_auth_no_approval_raises_refusal():
             assert "human approval" in exc.message.lower(), exc.message
 
 
-_check("REAL write_record: terminate + human concept + no approval => Refusal(9)",
-       test_real_write_path_human_auth_no_approval_raises_refusal)
+_check(
+    "REAL write_record: terminate + human concept + no approval => Refusal(9)",
+    test_real_write_path_human_auth_no_approval_raises_refusal,
+)
 
 
 def test_real_write_path_human_auth_with_approval_succeeds():
@@ -240,8 +243,10 @@ def test_real_write_path_human_auth_with_approval_succeeds():
         assert path.is_file()
 
 
-_check("REAL write_record: terminate + human concept + approval => success",
-       test_real_write_path_human_auth_with_approval_succeeds)
+_check(
+    "REAL write_record: terminate + human concept + approval => success",
+    test_real_write_path_human_auth_with_approval_succeeds,
+)
 
 
 def test_real_write_path_program_lead_no_approval_succeeds():
@@ -259,8 +264,10 @@ def test_real_write_path_program_lead_no_approval_succeeds():
         assert path.is_file()
 
 
-_check("REAL write_record: terminate + program_lead concept + no approval => success",
-       test_real_write_path_program_lead_no_approval_succeeds)
+_check(
+    "REAL write_record: terminate + program_lead concept + no approval => success",
+    test_real_write_path_program_lead_no_approval_succeeds,
+)
 
 
 def test_real_write_path_versioned_concept_ref():
@@ -280,8 +287,10 @@ def test_real_write_path_versioned_concept_ref():
             assert exc.exit_code == 9
 
 
-_check("REAL write_record: versioned entity_ref (IC-001-r3) => finds concept",
-       test_real_write_path_versioned_concept_ref)
+_check(
+    "REAL write_record: versioned entity_ref (IC-001-r3) => finds concept",
+    test_real_write_path_versioned_concept_ref,
+)
 
 
 def test_real_write_path_unknown_concept_safe_default():
@@ -302,8 +311,10 @@ def test_real_write_path_unknown_concept_safe_default():
             assert exc.exit_code == 9
 
 
-_check("REAL write_record: unknown concept => safe default => Refusal(9)",
-       test_real_write_path_unknown_concept_safe_default)
+_check(
+    "REAL write_record: unknown concept => safe default => Refusal(9)",
+    test_real_write_path_unknown_concept_safe_default,
+)
 
 
 def test_real_write_path_unknown_concept_with_approval_succeeds():
@@ -325,8 +336,10 @@ def test_real_write_path_unknown_concept_with_approval_succeeds():
         assert path.is_file()
 
 
-_check("REAL write_record: unknown concept + approval => success",
-       test_real_write_path_unknown_concept_with_approval_succeeds)
+_check(
+    "REAL write_record: unknown concept + approval => success",
+    test_real_write_path_unknown_concept_with_approval_succeeds,
+)
 
 
 # --- Unit tests for validate_decision with explicit concept_loader ---
@@ -336,6 +349,7 @@ print("\n--- Human-approval Refusal (unit tests) ---")
 
 def test_validate_decision_concept_loader_human():
     """Refusal fires when concept_loader returns termination_authority='human'."""
+
     def loader(concept_id: str) -> dict[str, Any] | None:
         if concept_id == "IC-001":
             return {"termination_authority": "human"}
@@ -353,13 +367,16 @@ def test_validate_decision_concept_loader_human():
         assert exc.exit_code == 9
 
 
-_check("validate_decision: concept_loader(human) + no approval => Refusal(9)",
-       test_validate_decision_concept_loader_human)
+_check(
+    "validate_decision: concept_loader(human) + no approval => Refusal(9)",
+    test_validate_decision_concept_loader_human,
+)
 
 
 def test_validate_decision_concept_loader_program_lead():
     """concept_loader returning termination_authority='program_lead'
     allows termination without approval."""
+
     def loader(concept_id: str) -> dict[str, Any] | None:
         if concept_id == "IC-001":
             return {"termination_authority": "program_lead"}
@@ -374,8 +391,10 @@ def test_validate_decision_concept_loader_program_lead():
     assert errors == [], f"unexpected errors: {errors}"
 
 
-_check("validate_decision: concept_loader(program_lead) + no approval => success",
-       test_validate_decision_concept_loader_program_lead)
+_check(
+    "validate_decision: concept_loader(program_lead) + no approval => success",
+    test_validate_decision_concept_loader_program_lead,
+)
 
 
 def test_validate_decision_no_loader_safe_default():
@@ -393,8 +412,10 @@ def test_validate_decision_no_loader_safe_default():
         assert exc.exit_code == 9
 
 
-_check("validate_decision: no loader + no approval => safe default => Refusal(9)",
-       test_validate_decision_no_loader_safe_default)
+_check(
+    "validate_decision: no loader + no approval => safe default => Refusal(9)",
+    test_validate_decision_no_loader_safe_default,
+)
 
 
 def test_non_terminate_no_approval_ok():
@@ -405,8 +426,10 @@ def test_non_terminate_no_approval_ok():
         assert errors == [], f"{action}: unexpected errors: {errors}"
 
 
-_check("non-terminate actions do not require human_approval",
-       test_non_terminate_no_approval_ok)
+_check(
+    "non-terminate actions do not require human_approval",
+    test_non_terminate_no_approval_ok,
+)
 
 
 def test_terminate_series_claim_no_approval_ok():
@@ -424,8 +447,10 @@ def test_terminate_series_claim_no_approval_ok():
         assert errors == [], f"{etype}: unexpected errors: {errors}"
 
 
-_check("terminate on series/claim => no Refusal",
-       test_terminate_series_claim_no_approval_ok)
+_check(
+    "terminate on series/claim => no Refusal",
+    test_terminate_series_claim_no_approval_ok,
+)
 
 
 # --- Program termination gate (security audit fix) ---
@@ -452,8 +477,10 @@ def test_terminate_program_no_approval_raises_refusal():
             assert "program" in exc.message.lower(), exc.message
 
 
-_check("REAL write_record: terminate program + no approval => Refusal(9)",
-       test_terminate_program_no_approval_raises_refusal)
+_check(
+    "REAL write_record: terminate program + no approval => Refusal(9)",
+    test_terminate_program_no_approval_raises_refusal,
+)
 
 
 def test_terminate_program_with_approval_succeeds():
@@ -474,8 +501,10 @@ def test_terminate_program_with_approval_succeeds():
         assert path.is_file()
 
 
-_check("REAL write_record: terminate program + approval => success",
-       test_terminate_program_with_approval_succeeds)
+_check(
+    "REAL write_record: terminate program + approval => success",
+    test_terminate_program_with_approval_succeeds,
+)
 
 
 def test_terminate_program_unit_test():
@@ -493,8 +522,10 @@ def test_terminate_program_unit_test():
         assert exc.exit_code == 9
 
 
-_check("validate_decision: terminate program + no approval => Refusal(9)",
-       test_terminate_program_unit_test)
+_check(
+    "validate_decision: terminate program + no approval => Refusal(9)",
+    test_terminate_program_unit_test,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -507,7 +538,12 @@ def test_incomplete_execution_must_be_not_assessed():
     """execution_outcome != 'completed' with evidence_status != 'not_assessed'
     must be rejected."""
     for outcome in ("tool_unavailable", "tool_failed", "data_unavailable", "blocked"):
-        for status in ("supported", "contradicted", "insufficient", "not_yet_applicable"):
+        for status in (
+            "supported",
+            "contradicted",
+            "insufficient",
+            "not_yet_applicable",
+        ):
             record = _step3_assessment()
             record["execution_outcome"] = outcome
             record["evidence_status"] = status
@@ -518,8 +554,10 @@ def test_incomplete_execution_must_be_not_assessed():
             )
 
 
-_check("execution_outcome != completed + evidence_status != not_assessed => error",
-       test_incomplete_execution_must_be_not_assessed)
+_check(
+    "execution_outcome != completed + evidence_status != not_assessed => error",
+    test_incomplete_execution_must_be_not_assessed,
+)
 
 
 def test_incomplete_execution_with_not_assessed_passes():
@@ -532,8 +570,10 @@ def test_incomplete_execution_with_not_assessed_passes():
     assert errors == [], f"unexpected errors: {errors}"
 
 
-_check("execution_outcome != completed + evidence_status = not_assessed => valid",
-       test_incomplete_execution_with_not_assessed_passes)
+_check(
+    "execution_outcome != completed + evidence_status = not_assessed => valid",
+    test_incomplete_execution_with_not_assessed_passes,
+)
 
 
 def test_completed_with_any_status_passes():
@@ -546,8 +586,10 @@ def test_completed_with_any_status_passes():
         assert errors == [], f"status {status}: unexpected errors: {errors}"
 
 
-_check("execution_outcome = completed + any evidence_status => valid",
-       test_completed_with_any_status_passes)
+_check(
+    "execution_outcome = completed + any evidence_status => valid",
+    test_completed_with_any_status_passes,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -569,8 +611,10 @@ def test_ood_insufficient_with_relay_is_valid():
     assert errors == [], f"unexpected errors: {errors}"
 
 
-_check("OOD mapping: completed + insufficient => valid",
-       test_ood_insufficient_with_relay_is_valid)
+_check(
+    "OOD mapping: completed + insufficient => valid",
+    test_ood_insufficient_with_relay_is_valid,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -589,8 +633,7 @@ def test_entity_ref_concept_valid():
         assert errors == [], f"concept ref {ref}: unexpected errors: {errors}"
 
 
-_check("entity_ref concept (IC-NNN, IC-NNN-rN) => valid",
-       test_entity_ref_concept_valid)
+_check("entity_ref concept (IC-NNN, IC-NNN-rN) => valid", test_entity_ref_concept_valid)
 
 
 def test_entity_ref_concept_invalid():
@@ -605,8 +648,7 @@ def test_entity_ref_concept_invalid():
         )
 
 
-_check("entity_ref concept invalid format => error",
-       test_entity_ref_concept_invalid)
+_check("entity_ref concept invalid format => error", test_entity_ref_concept_invalid)
 
 
 def test_entity_ref_claim_valid():
@@ -654,8 +696,7 @@ def test_entity_ref_program_invalid():
     assert any("entity_ref" in e for e in errors), f"should fail: {errors}"
 
 
-_check("entity_ref program invalid format => error",
-       test_entity_ref_program_invalid)
+_check("entity_ref program invalid format => error", test_entity_ref_program_invalid)
 
 
 def test_entity_ref_series_valid():
@@ -668,8 +709,9 @@ def test_entity_ref_series_valid():
         assert errors == [], f"series ref {ref}: unexpected errors: {errors}"
 
 
-_check("entity_ref series (hyphenated lowercase) => valid",
-       test_entity_ref_series_valid)
+_check(
+    "entity_ref series (hyphenated lowercase) => valid", test_entity_ref_series_valid
+)
 
 
 def test_entity_ref_series_invalid():
@@ -684,8 +726,7 @@ def test_entity_ref_series_invalid():
         )
 
 
-_check("entity_ref series invalid format => error",
-       test_entity_ref_series_invalid)
+_check("entity_ref series invalid format => error", test_entity_ref_series_invalid)
 
 
 def test_entity_type_invalid():
@@ -769,8 +810,10 @@ def test_evidence_reference_distinguishability():
     assert ref_s.metric_value != ref_c.metric_value
 
 
-_check("EvidenceReference distinguishability (supported vs contradicted)",
-       test_evidence_reference_distinguishability)
+_check(
+    "EvidenceReference distinguishability (supported vs contradicted)",
+    test_evidence_reference_distinguishability,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -791,8 +834,10 @@ def test_assessment_controlstore_round_trip():
         assert loaded["evidence_status"] == "supported"
 
 
-_check("assessment controlstore write/read round-trip",
-       test_assessment_controlstore_round_trip)
+_check(
+    "assessment controlstore write/read round-trip",
+    test_assessment_controlstore_round_trip,
+)
 
 
 def test_decision_controlstore_round_trip():
@@ -807,8 +852,9 @@ def test_decision_controlstore_round_trip():
         assert loaded["action"] == "advance_with_budget"
 
 
-_check("decision controlstore write/read round-trip",
-       test_decision_controlstore_round_trip)
+_check(
+    "decision controlstore write/read round-trip", test_decision_controlstore_round_trip
+)
 
 
 # ---------------------------------------------------------------------------
@@ -823,8 +869,10 @@ def test_assessment_missing_required_fields():
     assert any("missing required fields" in e for e in errors)
 
 
-_check("assessment missing required fields => error",
-       test_assessment_missing_required_fields)
+_check(
+    "assessment missing required fields => error",
+    test_assessment_missing_required_fields,
+)
 
 
 def test_assessment_schema_required():
@@ -859,8 +907,10 @@ def test_assessment_invalid_evidence_status():
     assert any("evidence_status" in e for e in errors)
 
 
-_check("assessment invalid evidence_status => error",
-       test_assessment_invalid_evidence_status)
+_check(
+    "assessment invalid evidence_status => error",
+    test_assessment_invalid_evidence_status,
+)
 
 
 def test_assessment_invalid_execution_outcome():
@@ -871,8 +921,10 @@ def test_assessment_invalid_execution_outcome():
     assert any("execution_outcome" in e for e in errors)
 
 
-_check("assessment invalid execution_outcome => error",
-       test_assessment_invalid_execution_outcome)
+_check(
+    "assessment invalid execution_outcome => error",
+    test_assessment_invalid_execution_outcome,
+)
 
 
 def test_assessment_bad_schema():
@@ -883,8 +935,7 @@ def test_assessment_bad_schema():
     assert any("schema" in e for e in errors)
 
 
-_check("assessment wrong schema string => error",
-       test_assessment_bad_schema)
+_check("assessment wrong schema string => error", test_assessment_bad_schema)
 
 
 def test_assessment_supersedes_format():
@@ -895,8 +946,7 @@ def test_assessment_supersedes_format():
     assert any("supersedes" in e for e in errors)
 
 
-_check("assessment supersedes bad format => error",
-       test_assessment_supersedes_format)
+_check("assessment supersedes bad format => error", test_assessment_supersedes_format)
 
 
 # ---------------------------------------------------------------------------
@@ -911,8 +961,9 @@ def test_decision_missing_required_fields():
     assert any("missing required fields" in e for e in errors)
 
 
-_check("decision missing required fields => error",
-       test_decision_missing_required_fields)
+_check(
+    "decision missing required fields => error", test_decision_missing_required_fields
+)
 
 
 def test_decision_schema_required():
@@ -955,12 +1006,15 @@ def test_decision_bad_supporting_assessments():
     assert any("supporting_assessments" in e for e in errors)
 
 
-_check("decision bad supporting_assessments entry => error",
-       test_decision_bad_supporting_assessments)
+_check(
+    "decision bad supporting_assessments entry => error",
+    test_decision_bad_supporting_assessments,
+)
 
 
 def test_decision_human_approval_missing_fields():
     """human_approval with missing required sub-fields."""
+
     # Use a concept_loader returning program_lead so the Refusal gate
     # doesn't fire — we're testing the sub-schema validation here.
     def loader(cid: str) -> dict[str, Any] | None:
@@ -975,8 +1029,10 @@ def test_decision_human_approval_missing_fields():
     assert any("human_approval missing required fields" in e for e in errors)
 
 
-_check("decision human_approval missing sub-fields => error",
-       test_decision_human_approval_missing_fields)
+_check(
+    "decision human_approval missing sub-fields => error",
+    test_decision_human_approval_missing_fields,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -1025,8 +1081,7 @@ def test_step3_fixture_validates():
     assert errors == [], f"Step 3 fixture errors: {errors}"
 
 
-_check("design SS7 Step 3 fixture validates cleanly",
-       test_step3_fixture_validates)
+_check("design SS7 Step 3 fixture validates cleanly", test_step3_fixture_validates)
 
 
 def test_step3_fixture_controlstore_write():
@@ -1040,8 +1095,10 @@ def test_step3_fixture_controlstore_write():
         assert loaded["evidence"]["metric_value"] == 0.95
 
 
-_check("design SS7 Step 3 fixture writes via controlstore",
-       test_step3_fixture_controlstore_write)
+_check(
+    "design SS7 Step 3 fixture writes via controlstore",
+    test_step3_fixture_controlstore_write,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -1061,8 +1118,10 @@ def test_ensure_control_dirs_creates_assessment_decision_dirs():
         assert (project / ".dde" / "control" / "decisions").is_dir()
 
 
-_check("ensure_control_dirs creates assessments/ and decisions/",
-       test_ensure_control_dirs_creates_assessment_decision_dirs)
+_check(
+    "ensure_control_dirs creates assessments/ and decisions/",
+    test_ensure_control_dirs_creates_assessment_decision_dirs,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -1081,7 +1140,7 @@ def test_concept_loader_rejects_malformed_id():
         # Write a file with a malformed name to disk
         concepts_dir = project / CONTROL_DIR / "concepts"
         concepts_dir.mkdir(parents=True, exist_ok=True)
-        bad_path = concepts_dir / "../../evil.json"
+        concepts_dir / "../../evil.json"
         # Don't actually write — just confirm the loader rejects the ID
         loader = _default_concept_loader(project)
         result = loader("../../evil")
@@ -1092,8 +1151,10 @@ def test_concept_loader_rejects_malformed_id():
         assert result is None, "should reject wrong prefix"
 
 
-_check("concept_loader rejects malformed IDs (defense-in-depth)",
-       test_concept_loader_rejects_malformed_id)
+_check(
+    "concept_loader rejects malformed IDs (defense-in-depth)",
+    test_concept_loader_rejects_malformed_id,
+)
 
 
 # ===========================================================================

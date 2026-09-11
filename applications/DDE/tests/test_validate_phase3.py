@@ -19,6 +19,7 @@ Phase 3b: layer_0_classes (#103) — required/authorized split.
 Phase 3c: Relay Addressing (#104) — label-format checking.
 Phase 3d: Path Resolution (#109) — root-resolvable link detection.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -40,10 +41,10 @@ from dde.commands.validate import (
 )
 from dde.core.controlstore import normalize_deliverables
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _write(path: Path, content: str | bytes) -> str:
     """Write a file and return its sha256."""
@@ -198,15 +199,27 @@ def test_authorized_classes_missing_ok() -> None:
         art_dir = root / "raw" / "structures"
         art_dir.mkdir(parents=True)
         _write(art_dir / "model.pdb", "ATOM mock")
-        _write(art_dir / "model.meta.json", json.dumps({
-            "outputs": [{"sha256": hashlib.sha256(b"ATOM mock").hexdigest(), "path": "model.pdb"}],
-        }))
+        _write(
+            art_dir / "model.meta.json",
+            json.dumps(
+                {
+                    "outputs": [
+                        {
+                            "sha256": hashlib.sha256(b"ATOM mock").hexdigest(),
+                            "path": "model.pdb",
+                        }
+                    ],
+                }
+            ),
+        )
         # dde.genomics dir does NOT exist (authorized but missing → ok)
-        deliverables = normalize_deliverables({
-            "required_classes": ["dde.structures"],
-            "authorized_classes": ["dde.genomics"],
-            "layer_1": [],
-        })
+        deliverables = normalize_deliverables(
+            {
+                "required_classes": ["dde.structures"],
+                "authorized_classes": ["dde.genomics"],
+                "layer_1": [],
+            }
+        )
         result = _check_deliverables_exist(root, deliverables)
         assert result["result"] == "pass", f"expected pass, got {result}"
         assert result["status"] == "ok"
@@ -221,16 +234,31 @@ def test_not_applicable_skip() -> None:
         art_dir = root / "raw" / "structures"
         art_dir.mkdir(parents=True)
         _write(art_dir / "model.pdb", "ATOM mock")
-        _write(art_dir / "model.meta.json", json.dumps({
-            "outputs": [{"sha256": hashlib.sha256(b"ATOM mock").hexdigest(), "path": "model.pdb"}],
-        }))
-        deliverables = normalize_deliverables({
-            "required_classes": [
-                "dde.structures",
-                {"class": "dde.genomics", "not_applicable": "no target-CID pathway"},
-            ],
-            "layer_1": [],
-        })
+        _write(
+            art_dir / "model.meta.json",
+            json.dumps(
+                {
+                    "outputs": [
+                        {
+                            "sha256": hashlib.sha256(b"ATOM mock").hexdigest(),
+                            "path": "model.pdb",
+                        }
+                    ],
+                }
+            ),
+        )
+        deliverables = normalize_deliverables(
+            {
+                "required_classes": [
+                    "dde.structures",
+                    {
+                        "class": "dde.genomics",
+                        "not_applicable": "no target-CID pathway",
+                    },
+                ],
+                "layer_1": [],
+            }
+        )
         result = _check_deliverables_exist(root, deliverables)
         assert result["result"] == "pass", f"expected pass, got {result}"
         # Verify skipped entry is reported
@@ -272,7 +300,9 @@ def _setup_relay_project(tmp: str, finding_content: str, relay_code: str) -> Pat
     art_dir.mkdir(parents=True)
     _write(art_dir / "mol.sdf", "fake sdf data")
     meta = {
-        "outputs": [{"sha256": hashlib.sha256(b"fake sdf data").hexdigest(), "path": "mol.sdf"}],
+        "outputs": [
+            {"sha256": hashlib.sha256(b"fake sdf data").hexdigest(), "path": "mol.sdf"}
+        ],
         "mandatory_relays": [{"code": relay_code, "message": "check this"}],
     }
     _write(art_dir / "mol.meta.json", json.dumps(meta))
@@ -307,10 +337,7 @@ def test_relay_found_no_label() -> None:
     """Relay code found in text but not in label format → warn/FORMAT."""
     with tempfile.TemporaryDirectory() as tmp:
         code = "compound.alerts_not_toxicology"
-        content = (
-            "# Report\n\n"
-            f"We addressed the relay {code} in this section.\n"
-        )
+        content = f"# Report\n\nWe addressed the relay {code} in this section.\n"
         root = _setup_relay_project(tmp, content, code)
         deliverables = {
             "layer_0_classes": ["dde.compounds"],
@@ -354,7 +381,9 @@ def test_collect_relay_codes_helper() -> None:
         art_dir.mkdir(parents=True)
         _write(art_dir / "mol.sdf", "data")
         meta = {
-            "outputs": [{"sha256": hashlib.sha256(b"data").hexdigest(), "path": "mol.sdf"}],
+            "outputs": [
+                {"sha256": hashlib.sha256(b"data").hexdigest(), "path": "mol.sdf"}
+            ],
             "mandatory_relays": [
                 {"code": "relay.one", "message": "msg1"},
                 {"code": "relay.two", "message": "msg2"},

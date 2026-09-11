@@ -39,7 +39,6 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 from dde.commands.dossier import (
-    CTD_SECTION_MAP,
     ICH_GUIDANCE_REFERENCES,
     _build_export,
     _export_to_json,
@@ -47,7 +46,6 @@ from dde.commands.dossier import (
     _export_to_tsv,
 )
 from dde.core.provenance import RELAY_CODES
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -186,16 +184,14 @@ def test_export_with_tox_records_populates_2_6_6() -> None:
 
         export = _build_export(project, "WO-001")
 
-        tox_section = next(
-            s for s in export["sections"] if s["ctd_section"] == "2.6.6"
-        )
+        tox_section = next(s for s in export["sections"] if s["ctd_section"] == "2.6.6")
         repeat_dose = next(
-            ss for ss in tox_section["subsections"]
+            ss
+            for ss in tox_section["subsections"]
             if ss["name"] == "Repeat-Dose Toxicity"
         )
         genotox = next(
-            ss for ss in tox_section["subsections"]
-            if ss["name"] == "Genotoxicity"
+            ss for ss in tox_section["subsections"] if ss["name"] == "Genotoxicity"
         )
 
         assert repeat_dose["status"] == "POPULATED"
@@ -219,12 +215,9 @@ def test_export_with_pk_records_populates_2_6_4() -> None:
 
         export = _build_export(project, "WO-001")
 
-        pk_section = next(
-            s for s in export["sections"] if s["ctd_section"] == "2.6.4"
-        )
+        pk_section = next(s for s in export["sections"] if s["ctd_section"] == "2.6.4")
         absorption = next(
-            ss for ss in pk_section["subsections"]
-            if ss["name"] == "Absorption"
+            ss for ss in pk_section["subsections"] if ss["name"] == "Absorption"
         )
 
         assert absorption["status"] == "POPULATED"
@@ -248,9 +241,7 @@ def test_missing_section_shows_not_available() -> None:
 
         export = _build_export(project, "WO-001")
 
-        pk_section = next(
-            s for s in export["sections"] if s["ctd_section"] == "2.6.4"
-        )
+        pk_section = next(s for s in export["sections"] if s["ctd_section"] == "2.6.4")
         for ss in pk_section["subsections"]:
             assert ss["status"] == "NOT_AVAILABLE", (
                 f"Expected NOT_AVAILABLE for {ss['name']}, got {ss['status']}"
@@ -385,10 +376,11 @@ def test_tsv_output_is_tabular() -> None:
 
         # Must contain tab characters in data rows.
         data_lines = [
-            l for l in tsv.splitlines()
-            if l and not l.startswith("#") and not l.startswith("##")
+            line
+            for line in tsv.splitlines()
+            if line and not line.startswith("#") and not line.startswith("##")
         ]
-        tab_lines = [l for l in data_lines if "\t" in l]
+        tab_lines = [line for line in data_lines if "\t" in line]
         assert len(tab_lines) > 0
 
         print("  PASS: TSV output is tabular")
@@ -483,11 +475,10 @@ def test_multiple_artifacts_same_section() -> None:
 
         export = _build_export(project, "WO-001")
 
-        tox_section = next(
-            s for s in export["sections"] if s["ctd_section"] == "2.6.6"
-        )
+        tox_section = next(s for s in export["sections"] if s["ctd_section"] == "2.6.6")
         repeat_dose = next(
-            ss for ss in tox_section["subsections"]
+            ss
+            for ss in tox_section["subsections"]
             if ss["name"] == "Repeat-Dose Toxicity"
         )
 
@@ -556,11 +547,10 @@ def test_fields_not_in_artifact_labelled_as_not_available() -> None:
 
         export = _build_export(project, "WO-001")
 
-        tox_section = next(
-            s for s in export["sections"] if s["ctd_section"] == "2.6.6"
-        )
+        tox_section = next(s for s in export["sections"] if s["ctd_section"] == "2.6.6")
         repeat_dose = next(
-            ss for ss in tox_section["subsections"]
+            ss
+            for ss in tox_section["subsections"]
             if ss["name"] == "Repeat-Dose Toxicity"
         )
         assert repeat_dose["status"] == "POPULATED"

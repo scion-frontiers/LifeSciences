@@ -35,7 +35,6 @@ from __future__ import annotations
 
 import json
 import sys
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -44,8 +43,9 @@ TOOLS_DIR = Path(__file__).resolve().parent.parent / "tools"
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
+from dde.core.controlstore import _VALIDATORS, RECORD_TYPES
+from dde.core.errors import SchemaError
 from dde.core.policy import (
-    POLICY_SCHEMA,
     REQUIREMENT_TYPES,
     SNAPSHOT_SCHEMA,
     freeze_policy,
@@ -56,9 +56,6 @@ from dde.core.policy import (
     validate_snapshot,
 )
 from dde.core.thresholds import UNRESOLVED, ThresholdSet, load
-from dde.core.controlstore import RECORD_TYPES, _VALIDATORS
-from dde.core.errors import SchemaError
-
 
 # ---------------------------------------------------------------------------
 # Fixtures — design §7 worked example
@@ -199,7 +196,7 @@ def test_indication_filter():
         },
     }
     sm = _small_molecule_concept()  # indication: solid_tumors
-    bio = _biologic_concept()       # indication: autoimmune
+    bio = _biologic_concept()  # indication: autoimmune
     assert requirement_applies(req, sm) is True
     assert requirement_applies(req, bio) is False
 
@@ -855,6 +852,7 @@ def test_snapshot_validator_registered():
 def test_controlstore_creates_policy_dirs(tmp_path):
     """ensure_control_dirs creates policies/ and snapshots/ subdirectories."""
     from dde.core.controlstore import ensure_control_dirs
+
     ensure_control_dirs(tmp_path)
     assert (tmp_path / ".dde" / "control" / "policies").is_dir()
     assert (tmp_path / ".dde" / "control" / "snapshots").is_dir()
@@ -862,7 +860,8 @@ def test_controlstore_creates_policy_dirs(tmp_path):
 
 def test_controlstore_write_and_read_policy(tmp_path):
     """Round-trip a policy record through the control store."""
-    from dde.core.controlstore import ensure_control_dirs, write_record, read_record
+    from dde.core.controlstore import ensure_control_dirs, read_record, write_record
+
     ensure_control_dirs(tmp_path)
 
     policy = _worked_example_policy()
@@ -876,6 +875,7 @@ def test_controlstore_write_and_read_policy(tmp_path):
 def test_controlstore_write_invalid_policy_raises(tmp_path):
     """Writing an invalid policy record raises SchemaError."""
     from dde.core.controlstore import ensure_control_dirs, write_record
+
     ensure_control_dirs(tmp_path)
 
     bad_policy = {"id": "INVALID"}  # Missing required fields
@@ -935,8 +935,7 @@ def test_load_program_config_invalid_structure(tmp_path):
     dde_dir.mkdir()
     program_yaml = dde_dir / "program.yaml"
     program_yaml.write_text(
-        "program: not_a_dict_value\n"
-        "gate_policies: also_not_a_dict\n",
+        "program: not_a_dict_value\ngate_policies: also_not_a_dict\n",
         encoding="utf-8",
     )
 

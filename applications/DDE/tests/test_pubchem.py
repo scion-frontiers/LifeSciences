@@ -51,7 +51,6 @@ from dde.commands.pubchem import (
 )
 from dde.core import provenance
 
-
 # ---------------------------------------------------------------------------
 # Helper: canned API responses
 # ---------------------------------------------------------------------------
@@ -73,26 +72,28 @@ def _pubchem_synonyms_not_found(cid: int) -> dict[str, Any]:
 
 
 def _pubchem_classification_response(
-    cid: int, classification: list[str], actions: list[str],
+    cid: int,
+    classification: list[str],
+    actions: list[str],
 ) -> dict[str, Any]:
     """Build a canned PubChem classification response."""
-    nodes_class = [
-        {"Information": {"Name": c}} for c in classification
-    ]
-    nodes_action = [
-        {"Information": {"Name": a}} for a in actions
-    ]
+    nodes_class = [{"Information": {"Name": c}} for c in classification]
+    nodes_action = [{"Information": {"Name": a}} for a in actions]
     hierarchies = []
     if classification:
-        hierarchies.append({
-            "SourceName": "ChEBI Ontology",
-            "Node": nodes_class,
-        })
+        hierarchies.append(
+            {
+                "SourceName": "ChEBI Ontology",
+                "Node": nodes_class,
+            }
+        )
     if actions:
-        hierarchies.append({
-            "SourceName": "MeSH Pharmacological Actions",
-            "Node": nodes_action,
-        })
+        hierarchies.append(
+            {
+                "SourceName": "MeSH Pharmacological Actions",
+                "Node": nodes_action,
+            }
+        )
     return {"Hierarchies": {"Hierarchy": hierarchies}}
 
 
@@ -105,7 +106,9 @@ def _pubchem_inchikey_response(cid: int, inchikey: str) -> dict[str, Any]:
 
 
 def _chembl_molecule_response(
-    chembl_id: str, max_phase: int, molecule_type: str,
+    chembl_id: str,
+    max_phase: int,
+    molecule_type: str,
 ) -> dict[str, Any]:
     return {
         "molecule_chembl_id": chembl_id,
@@ -162,6 +165,7 @@ def test_extract_synonyms_not_found() -> None:
 def test_extract_synonyms_bounded() -> None:
     """Synonyms are bounded to MAX_SYNONYMS (20)."""
     from dde.commands.pubchem import MAX_SYNONYMS
+
     payload = _pubchem_synonyms_response(2244, [f"syn-{i}" for i in range(50)])
     result = _extract_synonyms(payload)
     assert len(result) == MAX_SYNONYMS, f"Expected {MAX_SYNONYMS}, got {len(result)}"
@@ -226,7 +230,10 @@ def test_extract_chembl_data_valid() -> None:
     """Extract drug status and MoA from ChEMBL responses."""
     mol = _chembl_molecule_response("CHEMBL25", 4, "Small molecule")
     moa = _chembl_mechanism_response(
-        "CHEMBL25", "Cyclooxygenase-2", "INHIBITOR", "CHEMBL2094253",
+        "CHEMBL25",
+        "Cyclooxygenase-2",
+        "INHIBITOR",
+        "CHEMBL2094253",
     )
     result = _extract_chembl_data(mol, moa)
     assert result["chembl_id"] == "CHEMBL25"
@@ -367,9 +374,11 @@ def test_analyze_known_drug() -> None:
         classification=["Anti-Inflammatory Agents"],
         max_phase=4,
         chembl_id="CHEMBL25",
-        mechanisms=[{"target_name": "COX-2", "action_type": "INHIBITOR", "source": "chembl"}],
+        mechanisms=[
+            {"target_name": "COX-2", "action_type": "INHIBITOR", "source": "chembl"}
+        ],
     )
-    verdict, relays = _classify(annotation)
+    verdict, _relays = _classify(annotation)
     assert verdict == "known-drug", f"Expected known-drug, got {verdict}"
     print("  PASS: analyze verdict — known-drug")
 
@@ -383,7 +392,7 @@ def test_analyze_known_compound() -> None:
         max_phase=None,
         chembl_id=None,
     )
-    verdict, relays = _classify(annotation)
+    verdict, _relays = _classify(annotation)
     assert verdict == "known-compound", f"Expected known-compound, got {verdict}"
     print("  PASS: analyze verdict — known-compound")
 
@@ -398,7 +407,7 @@ def test_analyze_unknown() -> None:
         max_phase=None,
         chembl_id=None,
     )
-    verdict, relays = _classify(annotation)
+    verdict, _relays = _classify(annotation)
     assert verdict == "unknown", f"Expected unknown, got {verdict}"
     print("  PASS: analyze verdict — unknown")
 
@@ -411,7 +420,7 @@ def test_analyze_known_drug_max_phase_1() -> None:
         max_phase=1,
         chembl_id="CHEMBL9999",
     )
-    verdict, relays = _classify(annotation)
+    verdict, _relays = _classify(annotation)
     assert verdict == "known-drug", f"Expected known-drug, got {verdict}"
     print("  PASS: analyze verdict — known-drug (max_phase=1)")
 
@@ -424,7 +433,7 @@ def test_analyze_max_phase_0_is_not_drug() -> None:
         max_phase=0,
         chembl_id="CHEMBL8888",
     )
-    verdict, relays = _classify(annotation)
+    verdict, _relays = _classify(annotation)
     assert verdict == "known-compound", f"Expected known-compound, got {verdict}"
     print("  PASS: analyze verdict — max_phase=0 is known-compound, not known-drug")
 
@@ -437,9 +446,12 @@ def test_analyze_max_phase_0_is_not_drug() -> None:
 def test_relay_fires_known_drug() -> None:
     """Both relays fire on known-drug verdict."""
     annotation = _make_annotation_artifact(
-        cid=2244, synonyms=["aspirin"], max_phase=4, chembl_id="CHEMBL25",
+        cid=2244,
+        synonyms=["aspirin"],
+        max_phase=4,
+        chembl_id="CHEMBL25",
     )
-    verdict, relays = _classify(annotation)
+    _verdict, relays = _classify(annotation)
     codes = {r["code"] for r in relays}
     assert "pubchem.annotation_is_not_validation" in codes, (
         "annotation_is_not_validation should fire on known-drug"
@@ -453,9 +465,12 @@ def test_relay_fires_known_drug() -> None:
 def test_relay_fires_known_compound() -> None:
     """Only annotation_is_not_validation fires on known-compound (no drug data)."""
     annotation = _make_annotation_artifact(
-        cid=12345, synonyms=["some-compound"], max_phase=None, chembl_id=None,
+        cid=12345,
+        synonyms=["some-compound"],
+        max_phase=None,
+        chembl_id=None,
     )
-    verdict, relays = _classify(annotation)
+    _verdict, relays = _classify(annotation)
     codes = {r["code"] for r in relays}
     assert "pubchem.annotation_is_not_validation" in codes, (
         "annotation_is_not_validation should fire on known-compound"
@@ -469,7 +484,11 @@ def test_relay_fires_known_compound() -> None:
 def test_relay_silent_on_unknown() -> None:
     """No relays fire on unknown verdict."""
     annotation = _make_annotation_artifact(
-        cid=99999, synonyms=[], classification=[], max_phase=None, chembl_id=None,
+        cid=99999,
+        synonyms=[],
+        classification=[],
+        max_phase=None,
+        chembl_id=None,
     )
     verdict, relays = _classify(annotation)
     assert verdict == "unknown", f"Expected unknown, got {verdict}"
@@ -504,6 +523,7 @@ def test_relay_codes_registered() -> None:
 def test_threshold_set_registered() -> None:
     """pubchem-annotation threshold set is declared."""
     from dde.core.thresholds import declared_sets
+
     sets = declared_sets()
     assert "pubchem-annotation" in sets, (
         f"pubchem-annotation not in declared sets: {sorted(sets.keys())}"
@@ -536,7 +556,7 @@ def test_chembl_fallback_pubchem_only() -> None:
     assert artifact["drug_status"]["source"] is None
     assert artifact["mechanisms"] == []
     # Verdict should be known-compound (has synonyms), not an error
-    verdict, relays = _classify(artifact)
+    verdict, _relays = _classify(artifact)
     assert verdict == "known-compound", f"Expected known-compound, got {verdict}"
     print("  PASS: ChEMBL fallback — PubChem-only annotation valid")
 
@@ -602,7 +622,10 @@ def _annotate_http_side_effect(
     ik_resp = _pubchem_inchikey_response(cid, inchikey)
     mol_resp = _chembl_molecule_response(chembl_id, max_phase, "Small molecule")
     moa_resp = _chembl_mechanism_response(
-        chembl_id, "Cyclooxygenase-2", "INHIBITOR", "CHEMBL2094253",
+        chembl_id,
+        "Cyclooxygenase-2",
+        "INHIBITOR",
+        "CHEMBL2094253",
     )
     not_found_resp_body = {"_not_found": True, "cid": cid, "http_status": 404}
 
@@ -652,13 +675,17 @@ def test_cli_annotate_valid_cid() -> None:
             f"Expected exit 0, got {result.exit_code}\n{result.output}"
         )
         # Check artifact was written.
-        artifact_path = project / "raw" / "compounds" / "cid-2244.pubchem-annotation.json"
+        artifact_path = (
+            project / "raw" / "compounds" / "cid-2244.pubchem-annotation.json"
+        )
         assert artifact_path.is_file(), f"Artifact not found: {artifact_path}"
         artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
         assert artifact["schema"] == SCHEMA
         assert artifact["query"]["cid"] == 2244
         # Check sidecar was written.
-        sidecar_path = project / "raw" / "compounds" / "cid-2244.pubchem-annotation.meta.json"
+        sidecar_path = (
+            project / "raw" / "compounds" / "cid-2244.pubchem-annotation.meta.json"
+        )
         assert sidecar_path.is_file(), f"Sidecar not found: {sidecar_path}"
         sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
         assert sidecar["tool"] == "pubchem"
@@ -686,8 +713,10 @@ def test_cli_annotate_not_found_cid() -> None:
         assert result.exit_code == 0, (
             f"Expected exit 0, got {result.exit_code}\n{result.output}"
         )
-        artifact_path = project / "raw" / "compounds" / "cid-99999.pubchem-annotation.json"
-        assert artifact_path.is_file(), f"Not-found artifact not written"
+        artifact_path = (
+            project / "raw" / "compounds" / "cid-99999.pubchem-annotation.json"
+        )
+        assert artifact_path.is_file(), "Not-found artifact not written"
         artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
         assert artifact["_not_found"] is True
         assert artifact["query"]["cid"] == 99999
@@ -758,7 +787,8 @@ def _write_annotation_and_sidecar(
 
     artifact_path = compounds_dir / f"{slug}.pubchem-annotation.json"
     artifact_path.write_text(
-        json.dumps(annotation, indent=2) + "\n", encoding="utf-8",
+        json.dumps(annotation, indent=2) + "\n",
+        encoding="utf-8",
     )
 
     sidecar = {
@@ -771,7 +801,8 @@ def _write_annotation_and_sidecar(
     }
     sidecar_path = compounds_dir / f"{slug}.pubchem-annotation.meta.json"
     sidecar_path.write_text(
-        json.dumps(sidecar, indent=2) + "\n", encoding="utf-8",
+        json.dumps(sidecar, indent=2) + "\n",
+        encoding="utf-8",
     )
 
 
@@ -788,7 +819,9 @@ def test_cli_analyze_known_drug() -> None:
             classification=["Anti-Inflammatory Agents"],
             max_phase=4,
             chembl_id="CHEMBL25",
-            mechanisms=[{"target_name": "COX-2", "action_type": "INHIBITOR", "source": "chembl"}],
+            mechanisms=[
+                {"target_name": "COX-2", "action_type": "INHIBITOR", "source": "chembl"}
+            ],
         )
         _write_annotation_and_sidecar(project, 2244, annotation)
 
@@ -806,7 +839,9 @@ def test_cli_analyze_known_drug() -> None:
             f"Expected 'KNOWN-DRUG' in output: {result.output}"
         )
         # Check analysis artifact was written.
-        analysis_path = project / "raw" / "compounds" / "cid-2244.pubchem-annotation.analysis.json"
+        analysis_path = (
+            project / "raw" / "compounds" / "cid-2244.pubchem-annotation.analysis.json"
+        )
         assert analysis_path.is_file(), f"Analysis not found: {analysis_path}"
         analysis = json.loads(analysis_path.read_text(encoding="utf-8"))
         assert analysis["assessment"]["outcome"] == "known-drug"
@@ -896,7 +931,14 @@ def test_cli_analyze_json_flag() -> None:
         runner = CliRunner()
         result = runner.invoke(
             cli,
-            ["--project", str(project), "pubchem", "analyze-annotation", "2244", "--json"],
+            [
+                "--project",
+                str(project),
+                "pubchem",
+                "analyze-annotation",
+                "2244",
+                "--json",
+            ],
             catch_exceptions=False,
         )
 
@@ -927,7 +969,14 @@ def test_cli_analyze_quiet_flag() -> None:
         runner = CliRunner()
         result = runner.invoke(
             cli,
-            ["--project", str(project), "pubchem", "analyze-annotation", "2244", "--quiet"],
+            [
+                "--project",
+                str(project),
+                "pubchem",
+                "analyze-annotation",
+                "2244",
+                "--quiet",
+            ],
             catch_exceptions=False,
         )
 
@@ -952,29 +1001,40 @@ def test_cli_analyze_from_flag() -> None:
         alt_dir = project / "alt-input"
         alt_dir.mkdir(parents=True, exist_ok=True)
         annotation = _make_annotation_artifact(
-            cid=2244, synonyms=["aspirin"], max_phase=4, chembl_id="CHEMBL25",
+            cid=2244,
+            synonyms=["aspirin"],
+            max_phase=4,
+            chembl_id="CHEMBL25",
         )
         slug = "cid-2244"
         (alt_dir / f"{slug}.pubchem-annotation.json").write_text(
-            json.dumps(annotation, indent=2) + "\n", encoding="utf-8",
+            json.dumps(annotation, indent=2) + "\n",
+            encoding="utf-8",
         )
         sidecar = {
-            "tool": "pubchem", "subcommand": "annotate",
+            "tool": "pubchem",
+            "subcommand": "annotate",
             "endpoint": "https://example.com",
             "parameters": {"cid": 2244},
-            "outputs": [], "mandatory_relays": [],
+            "outputs": [],
+            "mandatory_relays": [],
         }
         (alt_dir / f"{slug}.pubchem-annotation.meta.json").write_text(
-            json.dumps(sidecar, indent=2) + "\n", encoding="utf-8",
+            json.dumps(sidecar, indent=2) + "\n",
+            encoding="utf-8",
         )
 
         runner = CliRunner()
         result = runner.invoke(
             cli,
             [
-                "--project", str(project),
-                "pubchem", "analyze-annotation", "2244",
-                "--from", str(alt_dir),
+                "--project",
+                str(project),
+                "pubchem",
+                "analyze-annotation",
+                "2244",
+                "--from",
+                str(alt_dir),
             ],
             catch_exceptions=False,
         )
@@ -994,7 +1054,10 @@ def test_cli_analyze_out_flag() -> None:
     with tempfile.TemporaryDirectory() as td:
         project = _make_project(Path(td))
         annotation = _make_annotation_artifact(
-            cid=2244, synonyms=["aspirin"], max_phase=4, chembl_id="CHEMBL25",
+            cid=2244,
+            synonyms=["aspirin"],
+            max_phase=4,
+            chembl_id="CHEMBL25",
         )
         _write_annotation_and_sidecar(project, 2244, annotation)
 
@@ -1003,9 +1066,13 @@ def test_cli_analyze_out_flag() -> None:
         result = runner.invoke(
             cli,
             [
-                "--project", str(project),
-                "pubchem", "analyze-annotation", "2244",
-                "--out", str(alt_out),
+                "--project",
+                str(project),
+                "pubchem",
+                "analyze-annotation",
+                "2244",
+                "--out",
+                str(alt_out),
             ],
             catch_exceptions=False,
         )
@@ -1032,7 +1099,10 @@ def main() -> None:
         ("test_extract_synonyms_not_found", test_extract_synonyms_not_found),
         ("test_extract_synonyms_bounded", test_extract_synonyms_bounded),
         ("test_extract_classification_valid", test_extract_classification_valid),
-        ("test_extract_classification_not_found", test_extract_classification_not_found),
+        (
+            "test_extract_classification_not_found",
+            test_extract_classification_not_found,
+        ),
         ("test_extract_inchikey_valid", test_extract_inchikey_valid),
         ("test_extract_inchikey_not_found", test_extract_inchikey_not_found),
         ("test_extract_chembl_data_valid", test_extract_chembl_data_valid),
@@ -1083,7 +1153,7 @@ def main() -> None:
             print(f"  FAIL: {name} — {exc}")
             failed += 1
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Results: {passed} passed, {failed} failed, {passed + failed} total")
     if failed:
         sys.exit(1)

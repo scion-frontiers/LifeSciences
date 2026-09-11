@@ -28,7 +28,6 @@ Covers:
 
 from __future__ import annotations
 
-import json
 import math
 import sys
 import tempfile
@@ -42,25 +41,21 @@ TOOLS_DIR = Path(__file__).resolve().parent.parent / "tools"
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
-from dde.commands.structure import (
-    _parse_atoms_with_names_pdb,
-    _collect_residues,
-    _sequence_from_residues,
-    _align_sequences,
-    _kabsch_superimpose,
-    _write_transformed_pdb,
-    _AA_3TO1,
-)
-
 from dde.commands.docking import (
+    _compute_ligand_rmsd,
+    _parse_heavy_atoms_mol2,
     _parse_heavy_atoms_pdb,
     _parse_heavy_atoms_sdf,
-    _parse_heavy_atoms_mol2,
-    _compute_ligand_rmsd,
 )
-
+from dde.commands.structure import (
+    _align_sequences,
+    _collect_residues,
+    _kabsch_superimpose,
+    _parse_atoms_with_names_pdb,
+    _sequence_from_residues,
+    _write_transformed_pdb,
+)
 from dde.core.errors import ArtifactError
-
 
 # ---------------------------------------------------------------------------
 # Sample PDB content — identical structures
@@ -238,47 +233,55 @@ def test_align_empty() -> None:
 
 def test_kabsch_identical_coordinates() -> None:
     """Identical coordinates produce RMSD = 0.0."""
-    coords = np.array([
-        [1.0, 2.0, 3.0],
-        [4.0, 5.0, 6.0],
-        [7.0, 8.0, 9.0],
-        [10.0, 11.0, 12.0],
-    ])
-    rotation, translation, rmsd = _kabsch_superimpose(coords, coords.copy())
+    coords = np.array(
+        [
+            [1.0, 2.0, 3.0],
+            [4.0, 5.0, 6.0],
+            [7.0, 8.0, 9.0],
+            [10.0, 11.0, 12.0],
+        ]
+    )
+    _rotation, _translation, rmsd = _kabsch_superimpose(coords, coords.copy())
     assert rmsd < 1e-10
 
 
 def test_kabsch_known_translation() -> None:
     """Pure translation produces correct RMSD = 0.0 after alignment."""
-    ref = np.array([
-        [1.0, 2.0, 3.0],
-        [4.0, 5.0, 6.0],
-        [7.0, 8.0, 9.0],
-        [10.0, 11.0, 12.0],
-    ])
+    ref = np.array(
+        [
+            [1.0, 2.0, 3.0],
+            [4.0, 5.0, 6.0],
+            [7.0, 8.0, 9.0],
+            [10.0, 11.0, 12.0],
+        ]
+    )
     offset = np.array([5.0, 10.0, 15.0])
     mob = ref + offset
-    rotation, translation, rmsd = _kabsch_superimpose(ref, mob)
+    _rotation, _translation, rmsd = _kabsch_superimpose(ref, mob)
     # After optimal superposition, RMSD should be ~0
     assert rmsd < 1e-6
 
 
 def test_kabsch_known_rotation() -> None:
     """Known 90-degree rotation produces RMSD ≈ 0 after alignment."""
-    ref = np.array([
-        [1.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0],
-        [0.0, 0.0, 1.0],
-        [1.0, 1.0, 1.0],
-    ])
+    ref = np.array(
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [1.0, 1.0, 1.0],
+        ]
+    )
     # Rotate 90 degrees around z-axis: (x,y,z) -> (-y,x,z)
-    mob = np.array([
-        [0.0, 1.0, 0.0],
-        [-1.0, 0.0, 0.0],
-        [0.0, 0.0, 1.0],
-        [-1.0, 1.0, 1.0],
-    ])
-    rotation, translation, rmsd = _kabsch_superimpose(ref, mob)
+    mob = np.array(
+        [
+            [0.0, 1.0, 0.0],
+            [-1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [-1.0, 1.0, 1.0],
+        ]
+    )
+    _rotation, _translation, rmsd = _kabsch_superimpose(ref, mob)
     assert rmsd < 1e-6
 
 
@@ -301,17 +304,19 @@ def test_kabsch_known_offset_rmsd() -> None:
     be 0, but if we add a *non-rigid* distortion (e.g. move one atom
     extra), RMSD should reflect that distortion only.
     """
-    ref = np.array([
-        [0.0, 0.0, 0.0],
-        [10.0, 0.0, 0.0],
-        [0.0, 10.0, 0.0],
-        [0.0, 0.0, 10.0],
-    ])
+    ref = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [10.0, 0.0, 0.0],
+            [0.0, 10.0, 0.0],
+            [0.0, 0.0, 10.0],
+        ]
+    )
     # Translate by (5, 5, 5) and then perturb one atom by 2.0 A
     mob = ref + np.array([5.0, 5.0, 5.0])
     mob[0] += np.array([2.0, 0.0, 0.0])  # perturb atom 0
 
-    rotation, translation, rmsd = _kabsch_superimpose(ref, mob)
+    _rotation, _translation, rmsd = _kabsch_superimpose(ref, mob)
     # RMSD should be > 0 because of the per-atom distortion
     assert rmsd > 0.0
     # But should be moderate (around 1.0 A since only 1 of 4 atoms moves 2 A)
@@ -330,7 +335,7 @@ def test_per_residue_distances_identical() -> None:
     mob_residues = _collect_residues(atoms, None)
 
     # All Ca atoms match
-    for ref_res, mob_res in zip(ref_residues, mob_residues):
+    for ref_res, mob_res in zip(ref_residues, mob_residues, strict=True):
         if "CA" in ref_res["atom_coords"] and "CA" in mob_res["atom_coords"]:
             ref_ca = np.array(ref_res["atom_coords"]["CA"])
             mob_ca = np.array(mob_res["atom_coords"]["CA"])
@@ -350,7 +355,7 @@ def test_per_residue_distances_translated() -> None:
     mob_residues = _collect_residues(mob_atoms, None)
 
     expected_dist = math.sqrt(dx * dx + dy * dy + dz * dz)
-    for ref_res, mob_res in zip(ref_residues, mob_residues):
+    for ref_res, mob_res in zip(ref_residues, mob_residues, strict=True):
         if "CA" in ref_res["atom_coords"] and "CA" in mob_res["atom_coords"]:
             ref_ca = np.array(ref_res["atom_coords"]["CA"])
             mob_ca = np.array(mob_res["atom_coords"]["CA"])
@@ -489,7 +494,7 @@ def test_write_transformed_pdb() -> None:
         # Re-parse the output and check that coordinates are shifted
         transformed_atoms = _parse_atoms_with_names_pdb(content)
         assert len(transformed_atoms) == len(atoms)
-        for orig, trans in zip(atoms, transformed_atoms):
+        for orig, trans in zip(atoms, transformed_atoms, strict=True):
             assert abs(trans["x"] - (orig["x"] + 1.0)) < 0.01
             assert abs(trans["y"] - (orig["y"] + 2.0)) < 0.01
             assert abs(trans["z"] - (orig["z"] + 3.0)) < 0.01
@@ -722,4 +727,5 @@ def test_relay_codes_registered() -> None:
 
 if __name__ == "__main__":
     import pytest
+
     pytest.main([__file__, "-v"])

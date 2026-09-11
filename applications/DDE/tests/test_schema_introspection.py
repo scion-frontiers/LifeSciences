@@ -36,9 +36,9 @@ TOOLS_DIR = Path(__file__).resolve().parent.parent / "tools"
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
+from dde.core.errors import Refusal, SchemaError
 from dde.core.schema_registry import (
     FieldDef,
-    SchemaDef,
     get_schema,
     list_schemas,
     make_template,
@@ -47,8 +47,6 @@ from dde.core.schema_registry import (
     validate_enum,
     validate_required_fields,
 )
-from dde.core.errors import SchemaError, Refusal
-
 
 # ---------------------------------------------------------------------------
 # schema list
@@ -281,6 +279,7 @@ class TestSchemaErrorEnum:
     def test_pk_route_error_includes_accepted_values(self):
         """Test that pk.py route validation includes accepted values."""
         from dde.commands.pk import _validate_study
+
         doc = {
             "schema": "dde.pk-study.v1",
             "study_id": "test",
@@ -301,6 +300,7 @@ class TestSchemaErrorEnum:
     def test_tox_glp_error_includes_accepted_values(self):
         """Test that tox.py glp_status validation includes accepted values."""
         from dde.commands.tox import _validate_repeat_dose
+
         doc = {
             "schema": "dde.tox-repeat-dose.v1",
             "study_id": "test",
@@ -340,8 +340,11 @@ class TestSchemaErrorFuzzyMatch:
 
     def test_validate_enum_suggests_nearest(self):
         try:
-            validate_enum("glp_status", "non-complant",
-                         {"compliant", "non-compliant", "not_stated"})
+            validate_enum(
+                "glp_status",
+                "non-complant",
+                {"compliant", "non-compliant", "not_stated"},
+            )
             assert False, "Expected SchemaError"
         except SchemaError as exc:
             assert "Did you mean" in exc.message
@@ -350,6 +353,7 @@ class TestSchemaErrorFuzzyMatch:
     def test_pk_route_suggests_nearest(self):
         """Test that pk.py route validation suggests nearest match."""
         from dde.commands.pk import _validate_study
+
         doc = {
             "schema": "dde.pk-study.v1",
             "study_id": "test",
@@ -371,6 +375,7 @@ class TestSchemaErrorFuzzyMatch:
     def test_tox_severity_suggests_nearest(self):
         """Test that tox.py severity validation suggests nearest match."""
         from dde.commands.tox import _validate_finding
+
         finding = {
             "finding": "hepatocellular hypertrophy",
             "organ_system": "liver",
@@ -428,6 +433,7 @@ class TestSchemaErrorMissingField:
     def test_pk_missing_field_lists_required(self):
         """Test that pk.py missing-field errors list required fields."""
         from dde.commands.pk import _validate_study
+
         doc = {
             "schema": "dde.pk-study.v1",
             "study_id": "test",
@@ -488,6 +494,7 @@ class TestRegistryConsistency:
 
 if __name__ == "__main__":
     import subprocess
+
     result = subprocess.run(
         [sys.executable, "-m", "pytest", __file__, "-v"],
         cwd=str(Path(__file__).parent.parent),

@@ -50,7 +50,6 @@ from dde.commands.cite import (
 )
 from dde.core import provenance
 
-
 # ---------------------------------------------------------------------------
 # Helper: project setup and mock HTTP
 # ---------------------------------------------------------------------------
@@ -82,9 +81,7 @@ def _write_document(project: Path, name: str, content: str) -> Path:
     return path
 
 
-def _write_json_document(
-    project: Path, name: str, data: dict[str, Any]
-) -> Path:
+def _write_json_document(project: Path, name: str, data: dict[str, Any]) -> Path:
     path = project / name
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
     return path
@@ -212,7 +209,7 @@ def test_classify_nct() -> None:
 
 
 def test_classify_title() -> None:
-    kind, value = _classify("Some paper about proteins")
+    kind, _value = _classify("Some paper about proteins")
     assert kind == "title"
     print("  PASS: classify title")
 
@@ -336,7 +333,9 @@ def test_suspect_not_verified_regression() -> None:
             doi_responses={
                 "good-doi": _crossref_found("Exact matching title here"),
                 "phantom-doi": _crossref_not_found(),
-                "suspect-doi": _crossref_found("A quite different title that partially matches"),
+                "suspect-doi": _crossref_found(
+                    "A quite different title that partially matches"
+                ),
             },
         )
 
@@ -469,7 +468,9 @@ def test_tolerance_flag_changes_status() -> None:
         }
         doc_path = _write_json_document(project, "tol-doc.json", doc)
 
-        similar_title = "Study of drug effects in patients undergoing cancer treatment today"
+        similar_title = (
+            "Study of drug effects in patients undergoing cancer treatment today"
+        )
         side_effect = _verify_side_effect(
             doi_responses={
                 "tolerance-test": _crossref_found(similar_title),
@@ -489,8 +490,9 @@ def test_tolerance_flag_changes_status() -> None:
         assert result1.exit_code == 0
 
         m1 = json.loads(
-            (project / "raw" / "literature" / "tol-doc.citations.json")
-            .read_text(encoding="utf-8")
+            (project / "raw" / "literature" / "tol-doc.citations.json").read_text(
+                encoding="utf-8"
+            )
         )
         status1 = m1["citations"][0]["status"]
 
@@ -504,16 +506,22 @@ def test_tolerance_flag_changes_status() -> None:
             result2 = runner.invoke(
                 cli,
                 [
-                    "--project", str(project), "cite", "verify",
-                    str(doc_path), "--tolerance", "0.95",
+                    "--project",
+                    str(project),
+                    "cite",
+                    "verify",
+                    str(doc_path),
+                    "--tolerance",
+                    "0.95",
                 ],
                 catch_exceptions=False,
             )
         assert result2.exit_code == 0
 
         m2 = json.loads(
-            (project / "raw" / "literature" / "tol-doc.citations.json")
-            .read_text(encoding="utf-8")
+            (project / "raw" / "literature" / "tol-doc.citations.json").read_text(
+                encoding="utf-8"
+            )
         )
         status2 = m2["citations"][0]["status"]
 
@@ -539,7 +547,7 @@ def test_no_citations_exit_zero() -> None:
         doc_path = _write_document(project, "empty.txt", "No references at all.")
 
         runner = CliRunner()
-        with mock.patch("dde.commands.cite.http.request") as mock_req:
+        with mock.patch("dde.commands.cite.http.request"):
             result = runner.invoke(
                 cli,
                 ["--project", str(project), "cite", "verify", str(doc_path)],
@@ -556,8 +564,14 @@ def test_no_citations_exit_zero() -> None:
         # Now run analyze
         result2 = runner.invoke(
             cli,
-            ["--project", str(project), "cite", "analyze", "--from",
-             str(project / "raw" / "literature")],
+            [
+                "--project",
+                str(project),
+                "cite",
+                "analyze",
+                "--from",
+                str(project / "raw" / "literature"),
+            ],
             catch_exceptions=False,
         )
         assert result2.exit_code == 0
@@ -590,8 +604,8 @@ def test_analyze_phase_two_contract() -> None:
     The enforce_phase_two guard on the CLI forbids network access during
     analyze. We verify this by checking the guard is wired.
     """
-    from dde.cli import cli
     import click
+    from dde.cli import cli
 
     # Find the analyze command
     cite_group = cli.commands.get("cite")
@@ -630,25 +644,40 @@ def test_analyze_overwrite_guard() -> None:
             "verified_at": "2026-09-08T00:00:00Z",
             "verifier": "dde-cite/0.3.0",
             "summary": {
-                "total": 2, "verified": 1, "suspect": 1,
-                "phantom": 0, "unverified": 0, "all_verified": False,
+                "total": 2,
+                "verified": 1,
+                "suspect": 1,
+                "phantom": 0,
+                "unverified": 0,
+                "all_verified": False,
             },
             "extraction_basis": "structured",
             "citations": [
                 {
-                    "id": "10.1056/good", "raw_id": "10.1056/good",
-                    "source": "crossref", "status": "verified", "reason": "ok",
-                    "claimed_title": "Title", "resolved_title": "Title",
-                    "title_similarity": 1.0, "verified_via": "https://example.com",
-                    "url": "https://doi.org/10.1056/good", "error": None,
+                    "id": "10.1056/good",
+                    "raw_id": "10.1056/good",
+                    "source": "crossref",
+                    "status": "verified",
+                    "reason": "ok",
+                    "claimed_title": "Title",
+                    "resolved_title": "Title",
+                    "title_similarity": 1.0,
+                    "verified_via": "https://example.com",
+                    "url": "https://doi.org/10.1056/good",
+                    "error": None,
                 },
                 {
-                    "id": "10.1056/suspect", "raw_id": "10.1056/suspect",
-                    "source": "crossref", "status": "suspect-title-match",
+                    "id": "10.1056/suspect",
+                    "raw_id": "10.1056/suspect",
+                    "source": "crossref",
+                    "status": "suspect-title-match",
                     "reason": "title_mismatch",
-                    "claimed_title": "Claimed", "resolved_title": "Different",
-                    "title_similarity": 0.55, "verified_via": "https://example.com",
-                    "url": "https://doi.org/10.1056/suspect", "error": None,
+                    "claimed_title": "Claimed",
+                    "resolved_title": "Different",
+                    "title_similarity": 0.55,
+                    "verified_via": "https://example.com",
+                    "url": "https://doi.org/10.1056/suspect",
+                    "error": None,
                 },
             ],
         }
@@ -661,8 +690,7 @@ def test_analyze_overwrite_guard() -> None:
         # First run — should succeed
         result1 = runner.invoke(
             cli,
-            ["--project", str(project), "cite", "analyze", "--from",
-             str(lit_dir)],
+            ["--project", str(project), "cite", "analyze", "--from", str(lit_dir)],
             catch_exceptions=False,
         )
         assert result1.exit_code == 0, f"First run failed: {result1.output}"
@@ -672,8 +700,7 @@ def test_analyze_overwrite_guard() -> None:
         # Second identical run — should succeed (same verdict, no change)
         result2 = runner.invoke(
             cli,
-            ["--project", str(project), "cite", "analyze", "--from",
-             str(lit_dir)],
+            ["--project", str(project), "cite", "analyze", "--from", str(lit_dir)],
             catch_exceptions=False,
         )
         assert result2.exit_code == 0, f"Second identical run failed: {result2.output}"
@@ -707,25 +734,40 @@ def test_analyze_overwrite_refusal() -> None:
             "verified_at": "2026-09-08T00:00:00Z",
             "verifier": "dde-cite/0.3.0",
             "summary": {
-                "total": 2, "verified": 1, "suspect": 1,
-                "phantom": 0, "unverified": 0, "all_verified": False,
+                "total": 2,
+                "verified": 1,
+                "suspect": 1,
+                "phantom": 0,
+                "unverified": 0,
+                "all_verified": False,
             },
             "extraction_basis": "structured",
             "citations": [
                 {
-                    "id": "10.1056/good", "raw_id": "10.1056/good",
-                    "source": "crossref", "status": "verified", "reason": "ok",
-                    "claimed_title": "Title", "resolved_title": "Title",
-                    "title_similarity": 1.0, "verified_via": "https://example.com",
-                    "url": "https://doi.org/10.1056/good", "error": None,
+                    "id": "10.1056/good",
+                    "raw_id": "10.1056/good",
+                    "source": "crossref",
+                    "status": "verified",
+                    "reason": "ok",
+                    "claimed_title": "Title",
+                    "resolved_title": "Title",
+                    "title_similarity": 1.0,
+                    "verified_via": "https://example.com",
+                    "url": "https://doi.org/10.1056/good",
+                    "error": None,
                 },
                 {
-                    "id": "10.1056/suspect", "raw_id": "10.1056/suspect",
-                    "source": "crossref", "status": "suspect-title-match",
+                    "id": "10.1056/suspect",
+                    "raw_id": "10.1056/suspect",
+                    "source": "crossref",
+                    "status": "suspect-title-match",
                     "reason": "title_mismatch",
-                    "claimed_title": "Claimed", "resolved_title": "Different",
-                    "title_similarity": 0.55, "verified_via": "https://example.com",
-                    "url": "https://doi.org/10.1056/suspect", "error": None,
+                    "claimed_title": "Claimed",
+                    "resolved_title": "Different",
+                    "title_similarity": 0.55,
+                    "verified_via": "https://example.com",
+                    "url": "https://doi.org/10.1056/suspect",
+                    "error": None,
                 },
             ],
         }
@@ -739,8 +781,7 @@ def test_analyze_overwrite_refusal() -> None:
         # First run — should succeed
         result1 = runner.invoke(
             cli,
-            ["--project", str(project), "cite", "analyze", "--from",
-             str(lit_dir)],
+            ["--project", str(project), "cite", "analyze", "--from", str(lit_dir)],
             catch_exceptions=False,
         )
         assert result1.exit_code == 0, f"First run failed: {result1.output}"
@@ -750,20 +791,36 @@ def test_analyze_overwrite_refusal() -> None:
         # Modify the manifest to produce a DIFFERENT verdict — add a phantom
         manifest["summary"]["phantom"] = 2
         manifest["summary"]["total"] = 4
-        manifest["citations"].append({
-            "id": "10.9999/phantom1", "raw_id": "10.9999/phantom1",
-            "source": "crossref", "status": "phantom", "reason": "not_found",
-            "claimed_title": "Phantom Paper", "resolved_title": None,
-            "title_similarity": 0.0, "verified_via": "https://example.com",
-            "url": None, "error": None,
-        })
-        manifest["citations"].append({
-            "id": "10.9999/phantom2", "raw_id": "10.9999/phantom2",
-            "source": "crossref", "status": "phantom", "reason": "not_found",
-            "claimed_title": "Another Phantom", "resolved_title": None,
-            "title_similarity": 0.0, "verified_via": "https://example.com",
-            "url": None, "error": None,
-        })
+        manifest["citations"].append(
+            {
+                "id": "10.9999/phantom1",
+                "raw_id": "10.9999/phantom1",
+                "source": "crossref",
+                "status": "phantom",
+                "reason": "not_found",
+                "claimed_title": "Phantom Paper",
+                "resolved_title": None,
+                "title_similarity": 0.0,
+                "verified_via": "https://example.com",
+                "url": None,
+                "error": None,
+            }
+        )
+        manifest["citations"].append(
+            {
+                "id": "10.9999/phantom2",
+                "raw_id": "10.9999/phantom2",
+                "source": "crossref",
+                "status": "phantom",
+                "reason": "not_found",
+                "claimed_title": "Another Phantom",
+                "resolved_title": None,
+                "title_similarity": 0.0,
+                "verified_via": "https://example.com",
+                "url": None,
+                "error": None,
+            }
+        )
         manifest_path.write_text(
             json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
         )
@@ -771,8 +828,7 @@ def test_analyze_overwrite_refusal() -> None:
         # Second run WITHOUT --overwrite — should fail (Refusal)
         result2 = runner.invoke(
             cli,
-            ["--project", str(project), "cite", "analyze", "--from",
-             str(lit_dir)],
+            ["--project", str(project), "cite", "analyze", "--from", str(lit_dir)],
             catch_exceptions=True,
         )
         assert result2.exit_code != 0, (
@@ -783,8 +839,15 @@ def test_analyze_overwrite_refusal() -> None:
         # Third run WITH --overwrite — should succeed
         result3 = runner.invoke(
             cli,
-            ["--project", str(project), "cite", "analyze", "--from",
-             str(lit_dir), "--overwrite"],
+            [
+                "--project",
+                str(project),
+                "cite",
+                "analyze",
+                "--from",
+                str(lit_dir),
+                "--overwrite",
+            ],
             catch_exceptions=False,
         )
         assert result3.exit_code == 0, (
@@ -808,15 +871,13 @@ def test_relay_codes_registered() -> None:
         "cite.extraction_incomplete",
     ]
     for code in expected:
-        assert code in provenance.RELAY_CODES, (
-            f"{code} not registered in RELAY_CODES"
-        )
+        assert code in provenance.RELAY_CODES, f"{code} not registered in RELAY_CODES"
     print("  PASS: all cite.* relay codes registered")
 
 
 def test_threshold_set_registered() -> None:
     """Threshold set citation-verification is in declared_sets()."""
-    from dde.core.thresholds import declared_sets, UNRESOLVED
+    from dde.core.thresholds import UNRESOLVED, declared_sets
 
     sets = declared_sets()
     assert "citation-verification" in sets, (
@@ -838,7 +899,7 @@ def test_threshold_set_registered() -> None:
 
 def test_validate_recognises_sidecars() -> None:
     """dde validate's _is_sidecar and _is_analysis recognise cite files."""
-    from dde.commands.validate import _is_sidecar, _is_analysis
+    from dde.commands.validate import _is_analysis, _is_sidecar
 
     assert _is_sidecar("test-doc.meta.json")
     assert _is_analysis("test-doc.analysis.json")
@@ -860,7 +921,9 @@ def test_relay_phantom_does_not_fire_unconditionally() -> None:
 
     with tempfile.TemporaryDirectory() as td:
         project = _make_project(Path(td))
-        doc = {"citations": [{"doi": "10.1056/verified-doi", "title": "A correct title"}]}
+        doc = {
+            "citations": [{"doi": "10.1056/verified-doi", "title": "A correct title"}]
+        }
         doc_path = _write_json_document(project, "no-phantom.json", doc)
 
         side_effect = _verify_side_effect(
@@ -962,7 +1025,9 @@ def test_relay_extraction_does_not_fire_on_structured() -> None:
 
     with tempfile.TemporaryDirectory() as td:
         project = _make_project(Path(td))
-        doc = {"citations": [{"doi": "10.1056/struct-doi", "title": "Structured title"}]}
+        doc = {
+            "citations": [{"doi": "10.1056/struct-doi", "title": "Structured title"}]
+        }
         doc_path = _write_json_document(project, "structured-only.json", doc)
 
         side_effect = _verify_side_effect(
@@ -1033,16 +1098,31 @@ def test_manifest_schema() -> None:
 
         # Summary fields
         summary = manifest["summary"]
-        for field in ("total", "verified", "suspect", "phantom", "unverified", "all_verified"):
+        for field in (
+            "total",
+            "verified",
+            "suspect",
+            "phantom",
+            "unverified",
+            "all_verified",
+        ):
             assert field in summary, f"Missing summary field: {field}"
 
         # Citation record fields
         if manifest["citations"]:
             c = manifest["citations"][0]
             for field in (
-                "id", "raw_id", "source", "status", "reason",
-                "claimed_title", "resolved_title", "title_similarity",
-                "verified_via", "url", "error",
+                "id",
+                "raw_id",
+                "source",
+                "status",
+                "reason",
+                "claimed_title",
+                "resolved_title",
+                "title_similarity",
+                "verified_via",
+                "url",
+                "error",
             ):
                 assert field in c, f"Missing citation field: {field}"
     print("  PASS: manifest schema correctness")
@@ -1102,10 +1182,22 @@ def main() -> None:
         # Validate recognition
         ("test_validate_recognises_sidecars", test_validate_recognises_sidecars),
         # Relay guards (criterion 27)
-        ("test_relay_phantom_does_not_fire_unconditionally", test_relay_phantom_does_not_fire_unconditionally),
-        ("test_relay_suspect_does_not_fire_unconditionally", test_relay_suspect_does_not_fire_unconditionally),
-        ("test_relay_unresolved_does_not_fire_unconditionally", test_relay_unresolved_does_not_fire_unconditionally),
-        ("test_relay_extraction_does_not_fire_on_structured", test_relay_extraction_does_not_fire_on_structured),
+        (
+            "test_relay_phantom_does_not_fire_unconditionally",
+            test_relay_phantom_does_not_fire_unconditionally,
+        ),
+        (
+            "test_relay_suspect_does_not_fire_unconditionally",
+            test_relay_suspect_does_not_fire_unconditionally,
+        ),
+        (
+            "test_relay_unresolved_does_not_fire_unconditionally",
+            test_relay_unresolved_does_not_fire_unconditionally,
+        ),
+        (
+            "test_relay_extraction_does_not_fire_on_structured",
+            test_relay_extraction_does_not_fire_on_structured,
+        ),
         # Manifest schema
         ("test_manifest_schema", test_manifest_schema),
         # Slug
@@ -1121,10 +1213,11 @@ def main() -> None:
         except Exception as exc:
             print(f"  FAIL: {name} — {exc}")
             import traceback
+
             traceback.print_exc()
             failed += 1
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Results: {passed} passed, {failed} failed, {passed + failed} total")
     if failed:
         sys.exit(1)

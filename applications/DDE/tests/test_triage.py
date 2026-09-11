@@ -42,7 +42,6 @@ Exit 0 = all tests passed, exit 1 = at least one failure.
 from __future__ import annotations
 
 import json
-import os
 import sys
 import tempfile
 import traceback
@@ -57,30 +56,26 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 
 from click.testing import CliRunner
-
 from dde.cli import cli
-from dde.core.errors import Refusal, SchemaError
-from dde.core.evidence import (
-    ACTIONS,
-    EVIDENCE_STATUSES,
-    validate_assessment,
-    validate_decision,
-)
 from dde.core.controlstore import (
     CONTROL_DIR,
     ensure_control_dirs,
-    write_record,
     read_record,
+    write_record,
+)
+from dde.core.errors import Refusal
+from dde.core.evidence import (
+    ACTIONS,
+    EVIDENCE_STATUSES,
 )
 from dde.core.triage import (
+    ConceptTriageResult,
     TriageBudget,
     TriageOutcome,
-    ConceptTriageResult,
     WorkstreamResult,
     build_budget_exhaustion_decision,
     build_triage_decision,
     cancel_competing_alternatives,
-    check_policy_exclusion,
     evaluate_concept_portfolio,
     run_differentiation_workstream,
     run_manufacturing_workstream,
@@ -201,9 +196,7 @@ def _biologic_concept(concept_id: str = "IC-002") -> dict[str, Any]:
             "gene": "PD-L1",
             "protein": "PD-L1",
             "pathway": "PD-1/PD-L1 immune checkpoint",
-            "mechanism_hypothesis": (
-                "PD-L1 blockade restores anti-tumor immunity"
-            ),
+            "mechanism_hypothesis": ("PD-L1 blockade restores anti-tumor immunity"),
         },
         "modality": "antibody",
         "entity_ref": "anti-PD-L1-mAb-001",
@@ -225,9 +218,7 @@ def _no_entity_concept(concept_id: str = "IC-003") -> dict[str, Any]:
             "gene": "GFRA3",
             "protein": "GFRalpha-3",
             "pathway": "GDNF/GFRalpha signaling",
-            "mechanism_hypothesis": (
-                "GFRA3 modulation affects neuronal survival"
-            ),
+            "mechanism_hypothesis": ("GFRA3 modulation affects neuronal survival"),
         },
         "modality": "small_molecule",
         "entity_ref": None,
@@ -299,6 +290,7 @@ def test_budget_invocation_limit():
 def test_budget_wall_clock():
     """Budget exhausts after max_wall_clock_seconds."""
     import time
+
     b = TriageBudget(max_wall_clock_seconds=0.01)
     time.sleep(0.02)
     exhausted, reason = b.is_exhausted()
@@ -399,7 +391,8 @@ def test_real_manufacturing_cli():
     concept = _small_molecule_concept()
 
     result = run_manufacturing_workstream(
-        concept, "IC-001-r1",
+        concept,
+        "IC-001-r1",
         runner=runner,
         cli=cli,
     )
@@ -424,7 +417,8 @@ def test_real_manufacturing_cli_biologic():
     concept = _biologic_concept()
 
     result = run_manufacturing_workstream(
-        concept, "IC-002-r1",
+        concept,
+        "IC-002-r1",
         runner=runner,
         cli=cli,
     )
@@ -440,7 +434,8 @@ def test_real_manufacturing_cli_no_entity():
     concept = _no_entity_concept()
 
     result = run_manufacturing_workstream(
-        concept, "IC-003-r1",
+        concept,
+        "IC-003-r1",
         runner=runner,
         cli=cli,
     )
@@ -465,7 +460,9 @@ def test_real_differentiation_cli():
     concept = _small_molecule_concept()
 
     result = run_differentiation_workstream(
-        concept, "IC-001-r1", "CDK4",
+        concept,
+        "IC-001-r1",
+        "CDK4",
         modality="small_molecule",
         runner=runner,
         cli=cli,
@@ -491,7 +488,9 @@ def test_real_structure_screening_cli_no_structures():
     concept = _small_molecule_concept()
 
     result = run_structure_screening_workstream(
-        concept, "IC-001-r1", [],
+        concept,
+        "IC-001-r1",
+        [],
         runner=runner,
         cli=cli,
     )
@@ -508,7 +507,9 @@ def test_real_structure_screening_cli_with_structures():
     concept = _small_molecule_concept()
 
     result = run_structure_screening_workstream(
-        concept, "IC-001-r1", ["AF-CDK4-F1-model_v4"],
+        concept,
+        "IC-001-r1",
+        ["AF-CDK4-F1-model_v4"],
         modality="small_molecule",
         runner=runner,
         cli=cli,
@@ -533,8 +534,10 @@ def test_no_auto_veto_absent_genetic_evidence():
 
     # Run manufacturing workstream — should produce not_yet_applicable, not terminate
     mfg_result = run_manufacturing_workstream(
-        concept, "IC-003-r1",
-        runner=runner, cli=cli,
+        concept,
+        "IC-003-r1",
+        runner=runner,
+        cli=cli,
     )
 
     # The manufacturing result should NOT trigger automatic termination
@@ -553,8 +556,10 @@ def test_no_auto_veto_missing_manufacturing_inputs():
     runner = CliRunner()
 
     result = run_manufacturing_workstream(
-        concept, "IC-003-r1",
-        runner=runner, cli=cli,
+        concept,
+        "IC-003-r1",
+        runner=runner,
+        cli=cli,
     )
 
     if not result.errors and result.assessments:
@@ -580,6 +585,7 @@ def test_no_naive_kill_rule_in_triage():
     # that would indicate naive kill rules in executable code lines
     # (not in comments or docstrings).
     import ast
+
     tree = ast.parse(source)
 
     # Walk the AST looking for if-statements that compare a score-like
@@ -591,7 +597,9 @@ def test_no_naive_kill_rule_in_triage():
             if isinstance(node.test, ast.Compare):
                 left = node.test.left
                 if isinstance(left, ast.Name) and left.id in (
-                    "pocket_score", "sa_score", "drug_score",
+                    "pocket_score",
+                    "sa_score",
+                    "drug_score",
                 ):
                     assert False, (
                         f"Forbidden score-threshold comparison found "
@@ -627,10 +635,8 @@ def test_multi_concept_triage():
     cancel_competing_alternatives(outcome.concept_results, "IC-001-r1")
 
     # IC-002's workstreams should now be cancelled
-    cr2 = [cr for cr in outcome.concept_results if cr.concept_id == "IC-002"][0]
-    any_cancelled = any(
-        ws.cancelled for ws in cr2.workstream_results.values()
-    )
+    cr2 = next(cr for cr in outcome.concept_results if cr.concept_id == "IC-002")
+    any_cancelled = any(ws.cancelled for ws in cr2.workstream_results.values())
     if cr2.workstream_results:
         assert any_cancelled, (
             "After IC-001 accepted, IC-002's workstreams should be cancelled"
@@ -647,7 +653,7 @@ def test_cancelled_alternatives_are_recorded():
 
     results = cancel_competing_alternatives([cr1, cr2], "IC-001-r1")
 
-    cr2_after = [r for r in results if r.concept_id == "IC-002"][0]
+    cr2_after = next(r for r in results if r.concept_id == "IC-002")
     mfg = cr2_after.workstream_results["manufacturing"]
     assert mfg.cancelled, "Competing alternative should be marked cancelled"
     assert "IC-001-r1" in mfg.cancel_reason, (
@@ -790,7 +796,10 @@ def test_terminate_requires_human_approval_via_write_record():
 
         # Write the concept record so the concept_loader can find it
         _write_concept_to_disk(
-            project, "IC-001", "human", revision=1,
+            project,
+            "IC-001",
+            "human",
+            revision=1,
         )
 
         # Build a terminate decision without human_approval
@@ -823,7 +832,10 @@ def test_terminate_with_human_approval_succeeds():
         project = _make_project(Path(td))
 
         _write_concept_to_disk(
-            project, "IC-001", "human", revision=1,
+            project,
+            "IC-001",
+            "human",
+            revision=1,
         )
 
         decision = build_triage_decision(
@@ -934,10 +946,12 @@ def test_portfolio_evaluation_annotates_not_decides():
     """evaluate_concept_portfolio annotates but does not auto-terminate."""
     cr1 = ConceptTriageResult(concept_ref="IC-001-r1", concept_id="IC-001")
     ws1 = WorkstreamResult(workstream="rationale", concept_ref="IC-001-r1")
-    ws1.assessments.append({
-        "evidence_status": "contradicted",
-        "execution_outcome": "completed",
-    })
+    ws1.assessments.append(
+        {
+            "evidence_status": "contradicted",
+            "execution_outcome": "completed",
+        }
+    )
     cr1.workstream_results["rationale"] = ws1
 
     results = evaluate_concept_portfolio([cr1])
@@ -947,8 +961,10 @@ def test_portfolio_evaluation_annotates_not_decides():
         "Portfolio evaluation must annotate, not auto-terminate"
     )
     # Should annotate with the finding
-    assert "contradicted" in results[0].disposition_reason.lower() or \
-        "rationale" in results[0].disposition_reason.lower()
+    assert (
+        "contradicted" in results[0].disposition_reason.lower()
+        or "rationale" in results[0].disposition_reason.lower()
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1022,8 +1038,7 @@ def test_triage_outcome_shortlist():
 
     outcome.concept_results = [cr1, cr2, cr3]
     outcome.shortlist = [
-        cr.concept_ref for cr in outcome.concept_results
-        if not cr.is_terminal
+        cr.concept_ref for cr in outcome.concept_results if not cr.is_terminal
     ]
 
     assert "IC-001-r1" in outcome.shortlist
@@ -1181,6 +1196,7 @@ def test_write_triage_assessment():
         }
 
         from dde.core.triage import write_triage_assessment
+
         result = write_triage_assessment(str(project), assessment, "AR-001")
         assert result["id"] == "AR-001"
 
@@ -1234,8 +1250,7 @@ def test_persistence_end_to_end():
         # Read it back through the real control-store API
         dr = read_record(project, "decision", decision_files[0].stem)
         assert dr["action"] == "investigate", (
-            f"Budget-exhausted decision should use 'investigate', "
-            f"got {dr['action']!r}"
+            f"Budget-exhausted decision should use 'investigate', got {dr['action']!r}"
         )
         assert dr["schema"] == "dde.decision-record.v1"
         assert "budget" in dr["rationale"].lower()
@@ -1264,19 +1279,13 @@ def test_cancellation_persistence():
         )
 
         # IC-002 should be parked (cancelled alternative)
-        cr2 = [
-            cr for cr in outcome.concept_results
-            if cr.concept_id == "IC-002"
-        ][0]
+        cr2 = next(cr for cr in outcome.concept_results if cr.concept_id == "IC-002")
         assert cr2.disposition == "parked", (
-            f"IC-002 should be parked after IC-001 accepted, "
-            f"got {cr2.disposition!r}"
+            f"IC-002 should be parked after IC-001 accepted, got {cr2.disposition!r}"
         )
 
         # Its workstreams should be cancelled
-        any_cancelled = any(
-            ws.cancelled for ws in cr2.workstream_results.values()
-        )
+        any_cancelled = any(ws.cancelled for ws in cr2.workstream_results.values())
         assert any_cancelled, (
             "IC-002's workstreams should be cancelled after IC-001 accepted"
         )
@@ -1327,13 +1336,20 @@ def test_cli_triage_run_with_project_persists_records():
         f1.write_text(json.dumps(c1, indent=2))
         f2.write_text(json.dumps(c2, indent=2))
 
-        result = runner.invoke(cli, [
-            "--project", str(project),
-            "triage", "run",
-            str(f1), str(f2),
-            "--max-concepts", "1",
-            "--json",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "--project",
+                str(project),
+                "triage",
+                "run",
+                str(f1),
+                str(f2),
+                "--max-concepts",
+                "1",
+                "--json",
+            ],
+        )
 
         assert result.exit_code in (0, 2), (
             f"CLI triage with --project exited {result.exit_code}: "
@@ -1371,10 +1387,12 @@ def test_all_functions_reachable():
     """
     import ast
     import inspect
+
     import dde.core.triage as triage_mod
 
     public_functions = [
-        name for name, obj in inspect.getmembers(triage_mod)
+        name
+        for name, obj in inspect.getmembers(triage_mod)
         if inspect.isfunction(obj)
         and not name.startswith("_")
         and obj.__module__ == "dde.core.triage"
@@ -1419,9 +1437,7 @@ def test_cli_triage_command_registered():
     """The 'triage' command group is registered in the CLI."""
     runner = CliRunner()
     result = runner.invoke(cli, ["triage", "--help"])
-    assert result.exit_code == 0, (
-        f"'dde triage --help' failed: {result.output}"
-    )
+    assert result.exit_code == 0, f"'dde triage --help' failed: {result.output}"
     assert "Stage 0" in result.output or "triage" in result.output
 
 
@@ -1429,9 +1445,7 @@ def test_cli_triage_run_help():
     """The 'triage run' subcommand is registered and shows help."""
     runner = CliRunner()
     result = runner.invoke(cli, ["triage", "run", "--help"])
-    assert result.exit_code == 0, (
-        f"'dde triage run --help' failed: {result.output}"
-    )
+    assert result.exit_code == 0, f"'dde triage run --help' failed: {result.output}"
     assert "CONCEPT_PATHS" in result.output
     assert "--max-seconds" in result.output
     assert "--max-concepts" in result.output
@@ -1451,19 +1465,23 @@ def test_cli_triage_run_end_to_end():
         concept_file = Path(td) / "concept.json"
         concept_file.write_text(json.dumps(concept, indent=2))
 
-        result = runner.invoke(cli, [
-            "triage", "run",
-            str(concept_file),
-            "--max-concepts", "1",
-            "--json",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "triage",
+                "run",
+                str(concept_file),
+                "--max-concepts",
+                "1",
+                "--json",
+            ],
+        )
 
         # The command should complete (exit 0) or fail gracefully
         # with a project-root error (exit 2) — both prove the CLI
         # wiring works and the orchestration code is invoked.
         assert result.exit_code in (0, 2), (
-            f"'dde triage run' exited {result.exit_code}: "
-            f"{result.output[:500]}"
+            f"'dde triage run' exited {result.exit_code}: {result.output[:500]}"
         )
 
         if result.exit_code == 0:
@@ -1483,16 +1501,21 @@ def test_cli_triage_run_multiple_concepts():
         f1.write_text(json.dumps(c1, indent=2))
         f2.write_text(json.dumps(c2, indent=2))
 
-        result = runner.invoke(cli, [
-            "triage", "run",
-            str(f1), str(f2),
-            "--max-concepts", "2",
-            "--json",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "triage",
+                "run",
+                str(f1),
+                str(f2),
+                "--max-concepts",
+                "2",
+                "--json",
+            ],
+        )
 
         assert result.exit_code in (0, 2), (
-            f"Multi-concept triage exited {result.exit_code}: "
-            f"{result.output[:500]}"
+            f"Multi-concept triage exited {result.exit_code}: {result.output[:500]}"
         )
 
 
@@ -1509,16 +1532,21 @@ def test_cli_triage_run_with_budget():
         f2.write_text(json.dumps(c2, indent=2))
 
         # Budget of 1 concept should leave the second as investigate
-        result = runner.invoke(cli, [
-            "triage", "run",
-            str(f1), str(f2),
-            "--max-concepts", "1",
-            "--json",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "triage",
+                "run",
+                str(f1),
+                str(f2),
+                "--max-concepts",
+                "1",
+                "--json",
+            ],
+        )
 
         assert result.exit_code in (0, 2), (
-            f"Budget triage exited {result.exit_code}: "
-            f"{result.output[:500]}"
+            f"Budget triage exited {result.exit_code}: {result.output[:500]}"
         )
 
 
@@ -1613,12 +1641,14 @@ def test_persistence_error_validation_failure_recorded():
         # Malformed assessment — has the right schema tag to enter the
         # persistence branch, but is missing required fields (claim,
         # evidence_status, etc.) so write_record() raises SchemaError.
-        ws.assessments.append({
-            "schema": "dde.evidence-assessment.v1",
-            "id": "AR-PENDING",
-            # Missing: concept_ref, claim, evidence_status, execution_outcome,
-            # assessed_at, assessed_by
-        })
+        ws.assessments.append(
+            {
+                "schema": "dde.evidence-assessment.v1",
+                "id": "AR-PENDING",
+                # Missing: concept_ref, claim, evidence_status, execution_outcome,
+                # assessed_at, assessed_by
+            }
+        )
         cr.workstream_results["manufacturing"] = ws
         outcome.concept_results.append(cr)
         outcome.all_assessments.extend(ws.assessments)
@@ -1635,19 +1665,23 @@ def test_persistence_error_validation_failure_recorded():
                         aid = next_id(str(project), "assessment")
                         write_triage_assessment(str(project), assessment, aid)
                     except Refusal as exc:
-                        outcome.persistence_errors.append({
-                            "concept_ref": _cr.concept_ref,
-                            "record_type": "assessment",
-                            "type": "refusal",
-                            "message": str(exc),
-                        })
+                        outcome.persistence_errors.append(
+                            {
+                                "concept_ref": _cr.concept_ref,
+                                "record_type": "assessment",
+                                "type": "refusal",
+                                "message": str(exc),
+                            }
+                        )
                     except Exception as exc:
-                        outcome.persistence_errors.append({
-                            "concept_ref": _cr.concept_ref,
-                            "record_type": "assessment",
-                            "type": "validation_error",
-                            "message": str(exc),
-                        })
+                        outcome.persistence_errors.append(
+                            {
+                                "concept_ref": _cr.concept_ref,
+                                "record_type": "assessment",
+                                "type": "validation_error",
+                                "message": str(exc),
+                            }
+                        )
 
         assert len(outcome.persistence_errors) >= 1, (
             "A malformed assessment should produce a persistence_error entry"
@@ -1703,27 +1737,29 @@ def test_persistence_error_refusal_recorded_distinctly():
                 did = next_id(str(project), "decision")
                 write_triage_decision(str(project), _cr.decision_record, did)
             except Refusal as exc:
-                outcome.persistence_errors.append({
-                    "concept_ref": _cr.concept_ref,
-                    "record_type": "decision",
-                    "type": "refusal",
-                    "message": str(exc),
-                })
+                outcome.persistence_errors.append(
+                    {
+                        "concept_ref": _cr.concept_ref,
+                        "record_type": "decision",
+                        "type": "refusal",
+                        "message": str(exc),
+                    }
+                )
             except Exception as exc:
-                outcome.persistence_errors.append({
-                    "concept_ref": _cr.concept_ref,
-                    "record_type": "decision",
-                    "type": "validation_error",
-                    "message": str(exc),
-                })
+                outcome.persistence_errors.append(
+                    {
+                        "concept_ref": _cr.concept_ref,
+                        "record_type": "decision",
+                        "type": "validation_error",
+                        "message": str(exc),
+                    }
+                )
 
         assert len(outcome.persistence_errors) >= 1, (
             "A refused terminate should produce a persistence_error entry"
         )
         err = outcome.persistence_errors[0]
-        assert err["type"] == "refusal", (
-            f"Expected type='refusal', got {err['type']!r}"
-        )
+        assert err["type"] == "refusal", f"Expected type='refusal', got {err['type']!r}"
         assert err["concept_ref"] == "IC-001-r1"
         assert err["record_type"] == "decision"
 
@@ -1753,8 +1789,7 @@ def test_refused_decision_retains_pending_id():
 
         original_id = decision["id"]
         assert original_id == "DR-PENDING", (
-            f"Freshly built decision should have id='DR-PENDING', "
-            f"got {original_id!r}"
+            f"Freshly built decision should have id='DR-PENDING', got {original_id!r}"
         )
 
         # Attempt to write — this will be refused
@@ -1836,13 +1871,15 @@ def test_run_triage_refused_terminate_not_real_id_in_output():
         concept = _small_molecule_concept("IC-001")
         policy = {
             "id": "GP-TEST",
-            "requirements": [{
-                "type": "hard_constraint",
-                "description": "No small molecules allowed",
-                "exclusion": {
-                    "modalities": ["small_molecule"],
-                },
-            }],
+            "requirements": [
+                {
+                    "type": "hard_constraint",
+                    "description": "No small molecules allowed",
+                    "exclusion": {
+                        "modalities": ["small_molecule"],
+                    },
+                }
+            ],
         }
 
         outcome = run_triage(
@@ -1909,11 +1946,20 @@ _TESTS = [
     # Real CLI: Differentiation (HC#1)
     ("real_differentiation_cli", test_real_differentiation_cli),
     # Real CLI: Structure screening (HC#1)
-    ("real_structure_screening_cli_no_structures", test_real_structure_screening_cli_no_structures),
-    ("real_structure_screening_cli_with_structures", test_real_structure_screening_cli_with_structures),
+    (
+        "real_structure_screening_cli_no_structures",
+        test_real_structure_screening_cli_no_structures,
+    ),
+    (
+        "real_structure_screening_cli_with_structures",
+        test_real_structure_screening_cli_with_structures,
+    ),
     # No automatic veto (AC5)
     ("no_auto_veto_absent_genetic_evidence", test_no_auto_veto_absent_genetic_evidence),
-    ("no_auto_veto_missing_manufacturing_inputs", test_no_auto_veto_missing_manufacturing_inputs),
+    (
+        "no_auto_veto_missing_manufacturing_inputs",
+        test_no_auto_veto_missing_manufacturing_inputs,
+    ),
     ("no_naive_kill_rule_in_triage", test_no_naive_kill_rule_in_triage),
     # Multi-concept (AC1, AC4)
     ("multi_concept_triage", test_multi_concept_triage),
@@ -1924,17 +1970,32 @@ _TESTS = [
     # Budget exhaustion in triage (AC3)
     ("budget_exhaustion_in_triage", test_budget_exhaustion_in_triage),
     # Program-constraint vs scientific (AC5)
-    ("policy_exclusion_distinct_from_scientific", test_policy_exclusion_distinct_from_scientific),
+    (
+        "policy_exclusion_distinct_from_scientific",
+        test_policy_exclusion_distinct_from_scientific,
+    ),
     # Termination requires approval (HC#2)
-    ("terminate_requires_human_approval_via_write_record", test_terminate_requires_human_approval_via_write_record),
-    ("terminate_with_human_approval_succeeds", test_terminate_with_human_approval_succeeds),
-    ("terminate_program_also_requires_approval", test_terminate_program_also_requires_approval),
+    (
+        "terminate_requires_human_approval_via_write_record",
+        test_terminate_requires_human_approval_via_write_record,
+    ),
+    (
+        "terminate_with_human_approval_succeeds",
+        test_terminate_with_human_approval_succeeds,
+    ),
+    (
+        "terminate_program_also_requires_approval",
+        test_terminate_program_also_requires_approval,
+    ),
     # Cohort A reconciliation (AC7)
     ("cohort_a_reconciliation_in_template", test_cohort_a_reconciliation_in_template),
     ("stage0_hypothesis_entry_renamed", test_stage0_hypothesis_entry_renamed),
     ("hypothesis_entry_skill_updated", test_hypothesis_entry_skill_updated),
     # Portfolio evaluation
-    ("portfolio_evaluation_annotates_not_decides", test_portfolio_evaluation_annotates_not_decides),
+    (
+        "portfolio_evaluation_annotates_not_decides",
+        test_portfolio_evaluation_annotates_not_decides,
+    ),
     # WorkstreamResult
     ("workstream_result_evidence_statuses", test_workstream_result_evidence_statuses),
     ("workstream_result_has_contradicted", test_workstream_result_has_contradicted),
@@ -1950,13 +2011,19 @@ _TESTS = [
     ("full_triage_budget_exhaustion", test_full_triage_budget_exhaustion),
     # write_triage_decision (HC#2)
     ("write_triage_decision_advance", test_write_triage_decision_advance),
-    ("write_triage_decision_terminate_blocked", test_write_triage_decision_terminate_blocked),
+    (
+        "write_triage_decision_terminate_blocked",
+        test_write_triage_decision_terminate_blocked,
+    ),
     # write_triage_assessment
     ("write_triage_assessment", test_write_triage_assessment),
     # End-to-end persistence (round 2 fix)
     ("persistence_end_to_end", test_persistence_end_to_end),
     ("cancellation_persistence", test_cancellation_persistence),
-    ("cli_triage_run_with_project_persists_records", test_cli_triage_run_with_project_persists_records),
+    (
+        "cli_triage_run_with_project_persists_records",
+        test_cli_triage_run_with_project_persists_records,
+    ),
     # Hard Constraint #3
     ("all_functions_reachable", test_all_functions_reachable),
     # CLI entry point end-to-end
@@ -1966,19 +2033,37 @@ _TESTS = [
     ("cli_triage_run_multiple_concepts", test_cli_triage_run_multiple_concepts),
     ("cli_triage_run_with_budget", test_cli_triage_run_with_budget),
     # Template content
-    ("template_stage0_workstreams_documented", test_template_stage0_workstreams_documented),
+    (
+        "template_stage0_workstreams_documented",
+        test_template_stage0_workstreams_documented,
+    ),
     ("template_references_existing_tools", test_template_references_existing_tools),
     ("template_no_auto_veto_documented", test_template_no_auto_veto_documented),
-    ("template_budget_exhaustion_documented", test_template_budget_exhaustion_documented),
+    (
+        "template_budget_exhaustion_documented",
+        test_template_budget_exhaustion_documented,
+    ),
     ("template_rule_17_exists", test_template_rule_17_exists),
     # Persistence error recording (Finding 1)
-    ("persistence_error_validation_failure_recorded", test_persistence_error_validation_failure_recorded),
-    ("persistence_error_refusal_recorded_distinctly", test_persistence_error_refusal_recorded_distinctly),
+    (
+        "persistence_error_validation_failure_recorded",
+        test_persistence_error_validation_failure_recorded,
+    ),
+    (
+        "persistence_error_refusal_recorded_distinctly",
+        test_persistence_error_refusal_recorded_distinctly,
+    ),
     # ID mutation safety (Finding 2)
     ("refused_decision_retains_pending_id", test_refused_decision_retains_pending_id),
-    ("refused_assessment_retains_pending_id", test_refused_assessment_retains_pending_id),
+    (
+        "refused_assessment_retains_pending_id",
+        test_refused_assessment_retains_pending_id,
+    ),
     ("successful_write_does_mutate_id", test_successful_write_does_mutate_id),
-    ("run_triage_refused_terminate_not_real_id_in_output", test_run_triage_refused_terminate_not_real_id_in_output),
+    (
+        "run_triage_refused_terminate_not_real_id_in_output",
+        test_run_triage_refused_terminate_not_real_id_in_output,
+    ),
 ]
 
 

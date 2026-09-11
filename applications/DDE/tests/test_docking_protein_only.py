@@ -27,7 +27,6 @@ from __future__ import annotations
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any
 
 # Ensure the tools package is importable.
 TOOLS_DIR = Path(__file__).resolve().parent.parent / "tools"
@@ -38,8 +37,6 @@ from dde.commands.docking import (
     _STANDARD_AMINO_ACIDS,
     _strip_non_protein,
 )
-from dde.core.errors import ArtifactError
-
 
 # ---------------------------------------------------------------------------
 # Sample PDB content for testing
@@ -128,7 +125,7 @@ def test_strip_pdb_removes_hetatm() -> None:
         dst = Path(tmpdir) / "output.pdb"
         src.write_text(SAMPLE_PDB_WITH_LIGAND)
 
-        info = _strip_non_protein(src, dst)
+        _strip_non_protein(src, dst)
 
         output_text = dst.read_text()
         output_lines = output_text.splitlines()
@@ -137,11 +134,11 @@ def test_strip_pdb_removes_hetatm() -> None:
         assert "ALA A   1" in output_text
         assert "GLY A   2" in output_text
         # No HETATM lines remain
-        hetatm_lines = [l for l in output_lines if l.startswith("HETATM")]
+        hetatm_lines = [line for line in output_lines if line.startswith("HETATM")]
         assert len(hetatm_lines) == 0, f"HETATM lines remain: {hetatm_lines}"
         # Header and TER/END preserved
         assert "HEADER" in output_text
-        assert any(l.startswith("END") for l in output_lines)
+        assert any(line.startswith("END") for line in output_lines)
 
     print("  PASS: PDB HETATM records stripped")
 
@@ -203,7 +200,7 @@ def test_strip_pdb_multi_chain() -> None:
         assert "ARG A   2" in output_text
         assert "VAL B   1" in output_text
         # No HETATM lines remain (UNL was only in HETATM records)
-        hetatm_lines = [l for l in output_lines if l.startswith("HETATM")]
+        hetatm_lines = [line for line in output_lines if line.startswith("HETATM")]
         assert len(hetatm_lines) == 0, f"HETATM lines remain: {hetatm_lines}"
 
         assert info["removed_atom_count"] == 3
@@ -225,16 +222,16 @@ def test_strip_cif_removes_hetatm() -> None:
         dst = Path(tmpdir) / "output.cif"
         src.write_text(SAMPLE_CIF_WITH_LIGAND)
 
-        info = _strip_non_protein(src, dst)
+        _strip_non_protein(src, dst)
 
         output_text = dst.read_text()
         output_lines = output_text.splitlines()
 
         # Protein atoms kept
-        atom_lines = [l for l in output_lines if l.startswith("ATOM")]
-        assert any("ALA" in l for l in atom_lines), "ALA atom missing"
+        atom_lines = [line for line in output_lines if line.startswith("ATOM")]
+        assert any("ALA" in line for line in atom_lines), "ALA atom missing"
         # HETATM lines removed
-        hetatm_lines = [l for l in output_lines if l.startswith("HETATM")]
+        hetatm_lines = [line for line in output_lines if line.startswith("HETATM")]
         assert len(hetatm_lines) == 0, f"HETATM lines remain: {hetatm_lines}"
 
     print("  PASS: CIF HETATM records stripped")
@@ -321,8 +318,6 @@ def test_error_suggests_protein_only() -> None:
     # We test the error-path logic by importing _convert_receptor_to_pdbqt
     # and verifying the error message pattern.  Since mk_prepare_receptor.py
     # may not be installed, we test the detection logic directly.
-    from dde.commands.docking import _convert_receptor_to_pdbqt
-
     # The function raises ArtifactError on failure.  We can't easily run
     # mk_prepare_receptor.py without it being installed, so we verify
     # that the error detection hints are correctly defined by checking
@@ -333,9 +328,11 @@ def test_error_suggests_protein_only() -> None:
     # _require_mk_prepare_receptor DependencyError (different path),
     # or with a structure file that would fail.  The key assertion is
     # that the hint-detection code path exists and is reachable.
-
     # Verify the hint strings are defined in the function
     import inspect
+
+    from dde.commands.docking import _convert_receptor_to_pdbqt
+
     source = inspect.getsource(_convert_receptor_to_pdbqt)
     assert "unknown residue" in source
     assert "--protein-only" in source
@@ -352,10 +349,26 @@ def test_error_suggests_protein_only() -> None:
 def test_standard_amino_acids_complete() -> None:
     """The standard amino acid set contains the canonical 20."""
     canonical = {
-        "ALA", "ARG", "ASN", "ASP", "CYS",
-        "GLN", "GLU", "GLY", "HIS", "ILE",
-        "LEU", "LYS", "MET", "PHE", "PRO",
-        "SER", "THR", "TRP", "TYR", "VAL",
+        "ALA",
+        "ARG",
+        "ASN",
+        "ASP",
+        "CYS",
+        "GLN",
+        "GLU",
+        "GLY",
+        "HIS",
+        "ILE",
+        "LEU",
+        "LYS",
+        "MET",
+        "PHE",
+        "PRO",
+        "SER",
+        "THR",
+        "TRP",
+        "TYR",
+        "VAL",
     }
     assert canonical.issubset(_STANDARD_AMINO_ACIDS)
     # MSE (selenomethionine) is also included

@@ -32,7 +32,6 @@ Exit 0 = all tests passed, exit 1 = at least one failure.
 
 from __future__ import annotations
 
-import json
 import sys
 import traceback
 from datetime import datetime, timezone
@@ -48,7 +47,6 @@ sys.path.insert(0, str(REPO_ROOT / "tools"))
 from dde.commands.differentiation import (
     EVIDENCE_TYPE_COMPETITOR,
     EVIDENCE_TYPE_PATENT,
-    FTO_DISCLAIMER,
     assess_competitive_differentiation,
     build_assessment_records,
 )
@@ -85,21 +83,32 @@ def _crowded_patents() -> list[dict[str, Any]]:
     """A crowded field with many recent patents from multiple assignees."""
     patents = []
     assignees = [
-        "Pfizer Inc", "Novartis AG", "Eli Lilly", "AstraZeneca",
-        "Merck KGaA", "Roche AG", "BMS", "Sanofi SA",
-        "GSK plc", "AbbVie Inc", "Gilead Sciences", "Amgen Inc",
+        "Pfizer Inc",
+        "Novartis AG",
+        "Eli Lilly",
+        "AstraZeneca",
+        "Merck KGaA",
+        "Roche AG",
+        "BMS",
+        "Sanofi SA",
+        "GSK plc",
+        "AbbVie Inc",
+        "Gilead Sciences",
+        "Amgen Inc",
     ]
     for i in range(30):
-        patents.append({
-            "publication_number": f"US20240{i:05d}A1",
-            "title": f"CDK4 inhibitor compound {i}",
-            "snippet": f"Novel small molecule CDK4 inhibitor for solid tumors",
-            "assignee": assignees[i % len(assignees)],
-            "priority_date": "20230601",
-            "filing_date": "20240101",
-            "publication_date": "20240701",
-            "language": "en",
-        })
+        patents.append(
+            {
+                "publication_number": f"US20240{i:05d}A1",
+                "title": f"CDK4 inhibitor compound {i}",
+                "snippet": "Novel small molecule CDK4 inhibitor for solid tumors",
+                "assignee": assignees[i % len(assignees)],
+                "priority_date": "20230601",
+                "filing_date": "20240101",
+                "publication_date": "20240701",
+                "language": "en",
+            }
+        )
     return patents
 
 
@@ -168,7 +177,8 @@ print("\n--- Three-dimension separation ---")
 def test_three_dimensions_always_present():
     """Assessment always produces exactly three dimensions."""
     result = assess_competitive_differentiation(
-        _crowded_patents(), "CDK4 inhibitor",
+        _crowded_patents(),
+        "CDK4 inhibitor",
         modality="small_molecule",
         indication="solid_tumors",
     )
@@ -185,20 +195,21 @@ _check("three dimensions always present", test_three_dimensions_always_present)
 def test_dimensions_are_independent():
     """Dimensions are explicitly marked as independent, never blended."""
     result = assess_competitive_differentiation(
-        _crowded_patents(), "CDK4 inhibitor",
+        _crowded_patents(),
+        "CDK4 inhibitor",
     )
     assert result["dimensions_are_independent"] is True
     assert result["blended_score"] is None
 
 
-_check("dimensions are independent (never blended)",
-       test_dimensions_are_independent)
+_check("dimensions are independent (never blended)", test_dimensions_are_independent)
 
 
 def test_each_dimension_carries_search_metadata():
     """Each dimension carries search_date, search_scope, coverage_limits."""
     result = assess_competitive_differentiation(
-        _crowded_patents(), "CDK4 inhibitor",
+        _crowded_patents(),
+        "CDK4 inhibitor",
     )
     for dim_name, dim in result["dimensions"].items():
         assert "search_date" in dim, f"{dim_name}: missing search_date"
@@ -206,8 +217,10 @@ def test_each_dimension_carries_search_metadata():
         assert "coverage_limits" in dim, f"{dim_name}: missing coverage_limits"
 
 
-_check("each dimension carries search metadata",
-       test_each_dimension_carries_search_metadata)
+_check(
+    "each dimension carries search metadata",
+    test_each_dimension_carries_search_metadata,
+)
 
 
 def test_strong_differentiation_and_fto_concern_both_surface():
@@ -222,19 +235,22 @@ def test_strong_differentiation_and_fto_concern_both_surface():
     # different modality (so differentiation exists).
     patents = []
     for i in range(25):
-        patents.append({
-            "publication_number": f"US20240{i:05d}A1",
-            "title": f"CDK4 biologic therapy {i}",
-            "snippet": "Biologic antibody targeting CDK4",
-            "assignee": f"Company {i % 5}",
-            "priority_date": "20230601",
-            "filing_date": "20240101",
-            "publication_date": "20240701",
-            "language": "en",
-        })
+        patents.append(
+            {
+                "publication_number": f"US20240{i:05d}A1",
+                "title": f"CDK4 biologic therapy {i}",
+                "snippet": "Biologic antibody targeting CDK4",
+                "assignee": f"Company {i % 5}",
+                "priority_date": "20230601",
+                "filing_date": "20240101",
+                "publication_date": "20240701",
+                "language": "en",
+            }
+        )
 
     result = assess_competitive_differentiation(
-        patents, "CDK4",
+        patents,
+        "CDK4",
         modality="small_molecule",
         indication="solid_tumors",
     )
@@ -272,8 +288,10 @@ def test_strong_differentiation_and_fto_concern_both_surface():
     assert fto["recent_filings"] > 0
 
 
-_check("strong differentiation AND FTO concern both surface",
-       test_strong_differentiation_and_fto_concern_both_surface)
+_check(
+    "strong differentiation AND FTO concern both surface",
+    test_strong_differentiation_and_fto_concern_both_surface,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -289,7 +307,8 @@ def test_crowded_field_not_automatic_veto():
     itself a scientific or commercial veto.'
     """
     result = assess_competitive_differentiation(
-        _crowded_patents(), "CDK4 inhibitor",
+        _crowded_patents(),
+        "CDK4 inhibitor",
         modality="small_molecule",
         indication="solid_tumors",
     )
@@ -304,15 +323,12 @@ def test_crowded_field_not_automatic_veto():
     )
     # The note should say so explicitly.
     note_lower = comp["note"].lower()
-    assert ("not" in note_lower and (
+    assert "not" in note_lower and (
         "veto" in note_lower or "gate" in note_lower or "rejected" in note_lower
-    )), (
-        "note must explicitly state crowding is not a veto/gate"
-    )
+    ), "note must explicitly state crowding is not a veto/gate"
 
 
-_check("crowded field is not automatic veto",
-       test_crowded_field_not_automatic_veto)
+_check("crowded field is not automatic veto", test_crowded_field_not_automatic_veto)
 
 
 def test_differentiation_despite_crowding():
@@ -321,19 +337,22 @@ def test_differentiation_despite_crowding():
     # Crowded field with biologics; our concept is small_molecule.
     patents = []
     for i in range(20):
-        patents.append({
-            "publication_number": f"US20240{i:05d}A1",
-            "title": f"MDA5 antibody therapeutic {i}",
-            "snippet": "Biologic antibody targeting MDA5 for autoimmune disease",
-            "assignee": f"BioPharma {chr(65 + i % 10)}",
-            "priority_date": "20230601",
-            "filing_date": "20240101",
-            "publication_date": "20240701",
-            "language": "en",
-        })
+        patents.append(
+            {
+                "publication_number": f"US20240{i:05d}A1",
+                "title": f"MDA5 antibody therapeutic {i}",
+                "snippet": "Biologic antibody targeting MDA5 for autoimmune disease",
+                "assignee": f"BioPharma {chr(65 + i % 10)}",
+                "priority_date": "20230601",
+                "filing_date": "20240101",
+                "publication_date": "20240701",
+                "language": "en",
+            }
+        )
 
     result = assess_competitive_differentiation(
-        patents, "MDA5",
+        patents,
+        "MDA5",
         modality="small_molecule",
         indication="psoriatic_arthritis",
     )
@@ -351,8 +370,10 @@ def test_differentiation_despite_crowding():
     assert result["dimensions_are_independent"] is True
 
 
-_check("differentiation despite crowding (modality gap)",
-       test_differentiation_despite_crowding)
+_check(
+    "differentiation despite crowding (modality gap)",
+    test_differentiation_despite_crowding,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -369,23 +390,22 @@ def test_empty_search_records_coverage_gap():
     not silently absent.'
     """
     result = assess_competitive_differentiation(
-        _no_patents(), "NOVEL_TARGET_XYZ",
+        _no_patents(),
+        "NOVEL_TARGET_XYZ",
         modality="small_molecule",
     )
 
     # Coverage limits are present at the top level.
     meta = result["search_metadata"]
     assert meta["coverage_limits"], "coverage_limits must not be empty"
-    assert "exhaustive" in meta["coverage_limits"].lower() or \
-           "not" in meta["coverage_limits"].lower(), (
-        "coverage limits must state the search is not exhaustive"
-    )
+    assert (
+        "exhaustive" in meta["coverage_limits"].lower()
+        or "not" in meta["coverage_limits"].lower()
+    ), "coverage limits must state the search is not exhaustive"
 
     # Each dimension also carries its own coverage limits.
     for dim_name, dim in result["dimensions"].items():
-        assert dim["coverage_limits"], (
-            f"{dim_name}: coverage_limits must not be empty"
-        )
+        assert dim["coverage_limits"], f"{dim_name}: coverage_limits must not be empty"
 
     # FTO dimension should have unresolved questions even with no results.
     fto = result["dimensions"]["freedom_to_operate"]
@@ -399,37 +419,40 @@ def test_empty_search_records_coverage_gap():
     )
 
 
-_check("empty search result records coverage gap explicitly",
-       test_empty_search_records_coverage_gap)
+_check(
+    "empty search result records coverage gap explicitly",
+    test_empty_search_records_coverage_gap,
+)
 
 
 def test_incomplete_jurisdiction_coverage_stated():
     """When some major jurisdictions are missing from results, the
     coverage gap is explicitly stated."""
     result = assess_competitive_differentiation(
-        _mixed_jurisdiction_patents(), "Target X",
+        _mixed_jurisdiction_patents(),
+        "Target X",
     )
     fto = result["dimensions"]["freedom_to_operate"]
     unresolved_text = " ".join(fto["unresolved_questions"]).lower()
 
     # We have US and EP patents but missing CN, JP, KR, WO.
     # At least some of these should be listed as missing.
-    assert any(
-        j.lower() in unresolved_text
-        for j in ("cn", "jp", "kr", "wo")
-    ), (
+    assert any(j.lower() in unresolved_text for j in ("cn", "jp", "kr", "wo")), (
         "unresolved questions should mention missing jurisdictions"
     )
 
 
-_check("incomplete jurisdiction coverage is stated",
-       test_incomplete_jurisdiction_coverage_stated)
+_check(
+    "incomplete jurisdiction coverage is stated",
+    test_incomplete_jurisdiction_coverage_stated,
+)
 
 
 def test_coverage_disclaimer_present():
     """Every assessment carries a coverage disclaimer."""
     result = assess_competitive_differentiation(
-        _crowded_patents(), "CDK4 inhibitor",
+        _crowded_patents(),
+        "CDK4 inhibitor",
     )
     assert "coverage_disclaimer" in result
     assert "exhaustive" in result["coverage_disclaimer"].lower()
@@ -449,7 +472,8 @@ def test_charter_constraint_recorded():
     distinct from a scientific rejection."""
     constraint = "No oral formulations per charter DEC-003"
     result = assess_competitive_differentiation(
-        _sparse_patents(), "FBXL19",
+        _sparse_patents(),
+        "FBXL19",
         modality="small_molecule",
         indication="psoriatic_arthritis",
         charter_constraints=[constraint],
@@ -459,38 +483,38 @@ def test_charter_constraint_recorded():
     # Build assessment records and check the constraint record.
     records = build_assessment_records(result, "IC-042")
     constraint_records = [
-        r for r in records
-        if "charter constraint" in r["claim"].lower()
+        r for r in records if "charter constraint" in r["claim"].lower()
     ]
     assert len(constraint_records) >= 1, (
         "expected at least one charter constraint assessment record"
     )
     cr = constraint_records[0]
-    assert "program" in cr["rationale"].lower() or \
-           "charter" in cr["rationale"].lower(), (
-        "rationale must identify this as a program constraint"
-    )
-    assert "scientific rejection" in cr["rationale"].lower() or \
-           "not a scientific" in cr["rationale"].lower(), (
-        "rationale must distinguish from scientific rejection"
-    )
+    assert (
+        "program" in cr["rationale"].lower() or "charter" in cr["rationale"].lower()
+    ), "rationale must identify this as a program constraint"
+    assert (
+        "scientific rejection" in cr["rationale"].lower()
+        or "not a scientific" in cr["rationale"].lower()
+    ), "rationale must distinguish from scientific rejection"
 
 
-_check("charter constraint recorded as program constraint",
-       test_charter_constraint_recorded)
+_check(
+    "charter constraint recorded as program constraint",
+    test_charter_constraint_recorded,
+)
 
 
 def test_charter_constraint_distinct_from_science():
     """Charter constraint assessment records use the correct
     evidence_type and make the distinction explicit."""
     result = assess_competitive_differentiation(
-        _sparse_patents(), "FBXL19",
+        _sparse_patents(),
+        "FBXL19",
         charter_constraints=["Excluded: biologic modality per DEC-005"],
     )
     records = build_assessment_records(result, "IC-042")
     constraint_records = [
-        r for r in records
-        if "charter constraint" in r["claim"].lower()
+        r for r in records if "charter constraint" in r["claim"].lower()
     ]
     for cr in constraint_records:
         # Must use competitive_precedent evidence type.
@@ -499,8 +523,10 @@ def test_charter_constraint_distinct_from_science():
         assert "program" in cr["rationale"].lower()
 
 
-_check("charter constraint distinct from scientific rejection",
-       test_charter_constraint_distinct_from_science)
+_check(
+    "charter constraint distinct from scientific rejection",
+    test_charter_constraint_distinct_from_science,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -512,30 +538,31 @@ print("\n--- FTO disclaimer mandatory ---")
 def test_fto_disclaimer_on_assessment():
     """Top-level FTO disclaimer is always present."""
     result = assess_competitive_differentiation(
-        _crowded_patents(), "CDK4 inhibitor",
+        _crowded_patents(),
+        "CDK4 inhibitor",
     )
     assert "fto_disclaimer" in result
-    assert "not formal legal clearance" in result["fto_disclaimer"].lower() or \
-           "not formal legal clearance" in result["fto_disclaimer"], (
-        "FTO disclaimer must state this is not formal legal clearance"
-    )
+    assert (
+        "not formal legal clearance" in result["fto_disclaimer"].lower()
+        or "not formal legal clearance" in result["fto_disclaimer"]
+    ), "FTO disclaimer must state this is not formal legal clearance"
 
 
-_check("FTO disclaimer on top-level assessment",
-       test_fto_disclaimer_on_assessment)
+_check("FTO disclaimer on top-level assessment", test_fto_disclaimer_on_assessment)
 
 
 def test_fto_disclaimer_on_fto_dimension():
     """FTO dimension carries its own disclaimer."""
     result = assess_competitive_differentiation(
-        _crowded_patents(), "CDK4 inhibitor",
+        _crowded_patents(),
+        "CDK4 inhibitor",
     )
     fto = result["dimensions"]["freedom_to_operate"]
     assert "fto_disclaimer" in fto
-    assert "qualified" in fto["fto_disclaimer"].lower() or \
-           "counsel" in fto["fto_disclaimer"].lower(), (
-        "FTO disclaimer must mention qualified review"
-    )
+    assert (
+        "qualified" in fto["fto_disclaimer"].lower()
+        or "counsel" in fto["fto_disclaimer"].lower()
+    ), "FTO disclaimer must mention qualified review"
 
 
 _check("FTO disclaimer on FTO dimension", test_fto_disclaimer_on_fto_dimension)
@@ -544,38 +571,41 @@ _check("FTO disclaimer on FTO dimension", test_fto_disclaimer_on_fto_dimension)
 def test_fto_disclaimer_on_assessment_records():
     """Assessment records for FTO carry the disclaimer in rationale."""
     result = assess_competitive_differentiation(
-        _crowded_patents(), "CDK4 inhibitor",
+        _crowded_patents(),
+        "CDK4 inhibitor",
     )
     records = build_assessment_records(result, "IC-001")
-    fto_records = [
-        r for r in records
-        if "freedom to operate" in r["claim"].lower()
-    ]
+    fto_records = [r for r in records if "freedom to operate" in r["claim"].lower()]
     assert len(fto_records) >= 1, "expected at least one FTO assessment record"
     for r in fto_records:
-        assert "not formal legal clearance" in r["rationale"].lower() or \
-               "NOT formal legal clearance" in r["rationale"], (
-            "FTO assessment record must carry the legal clearance disclaimer"
-        )
+        assert (
+            "not formal legal clearance" in r["rationale"].lower()
+            or "NOT formal legal clearance" in r["rationale"]
+        ), "FTO assessment record must carry the legal clearance disclaimer"
 
 
-_check("FTO disclaimer on assessment records",
-       test_fto_disclaimer_on_assessment_records)
+_check(
+    "FTO disclaimer on assessment records", test_fto_disclaimer_on_assessment_records
+)
 
 
 def test_fto_disclaimer_even_when_no_risk():
     """FTO disclaimer is present even when there are no patents."""
     result = assess_competitive_differentiation(
-        _no_patents(), "NOVEL_TARGET_XYZ",
+        _no_patents(),
+        "NOVEL_TARGET_XYZ",
     )
     fto = result["dimensions"]["freedom_to_operate"]
     assert "fto_disclaimer" in fto
-    assert "not formal legal clearance" in fto["fto_disclaimer"].lower() or \
-           "NOT formal legal clearance" in fto["fto_disclaimer"]
+    assert (
+        "not formal legal clearance" in fto["fto_disclaimer"].lower()
+        or "NOT formal legal clearance" in fto["fto_disclaimer"]
+    )
 
 
-_check("FTO disclaimer present even with no patents",
-       test_fto_disclaimer_even_when_no_risk)
+_check(
+    "FTO disclaimer present even with no patents", test_fto_disclaimer_even_when_no_risk
+)
 
 
 # ---------------------------------------------------------------------------
@@ -587,7 +617,8 @@ print("\n--- Assessment record validation ---")
 def test_assessment_records_validate():
     """All generated assessment records pass evidence.validate_assessment()."""
     result = assess_competitive_differentiation(
-        _crowded_patents(), "CDK4 inhibitor",
+        _crowded_patents(),
+        "CDK4 inhibitor",
         modality="small_molecule",
         indication="solid_tumors",
         charter_constraints=["No biologic modality per DEC-001"],
@@ -607,14 +638,17 @@ def test_assessment_records_validate():
         )
 
 
-_check("all assessment records pass validate_assessment()",
-       test_assessment_records_validate)
+_check(
+    "all assessment records pass validate_assessment()",
+    test_assessment_records_validate,
+)
 
 
 def test_assessment_records_evidence_types():
     """Assessment records use the correct evidence types."""
     result = assess_competitive_differentiation(
-        _crowded_patents(), "CDK4 inhibitor",
+        _crowded_patents(),
+        "CDK4 inhibitor",
     )
     records = build_assessment_records(result, "IC-001")
 
@@ -627,22 +661,27 @@ def test_assessment_records_evidence_types():
     )
 
 
-_check("assessment records use correct evidence types",
-       test_assessment_records_evidence_types)
+_check(
+    "assessment records use correct evidence types",
+    test_assessment_records_evidence_types,
+)
 
 
 def test_assessment_records_concept_ref_preserved():
     """Assessment records preserve the concept reference."""
     result = assess_competitive_differentiation(
-        _sparse_patents(), "FBXL19",
+        _sparse_patents(),
+        "FBXL19",
     )
     records = build_assessment_records(result, "IC-042-r3")
     for r in records:
         assert r["concept_ref"] == "IC-042-r3"
 
 
-_check("concept_ref preserved in assessment records",
-       test_assessment_records_concept_ref_preserved)
+_check(
+    "concept_ref preserved in assessment records",
+    test_assessment_records_concept_ref_preserved,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -654,7 +693,8 @@ print("\n--- Scope preservation ---")
 def test_modality_indication_preserved():
     """The assessment preserves modality, indication, and entity scope."""
     result = assess_competitive_differentiation(
-        _sparse_patents(), "IFIH1",
+        _sparse_patents(),
+        "IFIH1",
         modality="small_molecule",
         indication="psoriatic_arthritis",
         entity="MDA5-inh-001",
@@ -665,8 +705,7 @@ def test_modality_indication_preserved():
     assert ctx["entity"] == "MDA5-inh-001"
 
 
-_check("modality, indication, entity preserved",
-       test_modality_indication_preserved)
+_check("modality, indication, entity preserved", test_modality_indication_preserved)
 
 
 # ---------------------------------------------------------------------------
@@ -678,7 +717,8 @@ print("\n--- Search metadata ---")
 def test_search_metadata_present():
     """Top-level search metadata is always present."""
     result = assess_competitive_differentiation(
-        _crowded_patents(), "CDK4 inhibitor",
+        _crowded_patents(),
+        "CDK4 inhibitor",
     )
     meta = result["search_metadata"]
     assert "search_date" in meta
@@ -693,7 +733,8 @@ _check("search metadata present", test_search_metadata_present)
 def test_custom_search_metadata():
     """Custom search scope and coverage limits are propagated."""
     result = assess_competitive_differentiation(
-        _crowded_patents(), "CDK4 inhibitor",
+        _crowded_patents(),
+        "CDK4 inhibitor",
         search_scope="Custom scope: EPO OPS API",
         coverage_limits="Only EP patents searched",
     )
@@ -711,8 +752,7 @@ def test_custom_search_metadata():
         )
 
 
-_check("custom search metadata propagated",
-       test_custom_search_metadata)
+_check("custom search metadata propagated", test_custom_search_metadata)
 
 
 # ---------------------------------------------------------------------------
@@ -724,7 +764,8 @@ print("\n--- Edge cases ---")
 def test_empty_patents_produces_valid_result():
     """Empty patent list produces a valid assessment, not an error."""
     result = assess_competitive_differentiation(
-        [], "NOVEL_GENE",
+        [],
+        "NOVEL_GENE",
     )
     dims = result["dimensions"]
     assert dims["competitor_activity"]["density"] == "uncrowded"
@@ -732,27 +773,33 @@ def test_empty_patents_produces_valid_result():
     assert dims["freedom_to_operate"]["risk_level"] == "no_recent_filings"
 
 
-_check("empty patent list produces valid assessment",
-       test_empty_patents_produces_valid_result)
+_check(
+    "empty patent list produces valid assessment",
+    test_empty_patents_produces_valid_result,
+)
 
 
 def test_no_modality_indication_still_works():
     """Assessment works without modality or indication context."""
     result = assess_competitive_differentiation(
-        _crowded_patents(), "CDK4 inhibitor",
+        _crowded_patents(),
+        "CDK4 inhibitor",
     )
     assert "dimensions" in result
     assert len(result["dimensions"]) == 3
 
 
-_check("assessment works without modality/indication",
-       test_no_modality_indication_still_works)
+_check(
+    "assessment works without modality/indication",
+    test_no_modality_indication_still_works,
+)
 
 
 def test_multiple_charter_constraints():
     """Multiple charter constraints produce multiple records."""
     result = assess_competitive_differentiation(
-        _sparse_patents(), "FBXL19",
+        _sparse_patents(),
+        "FBXL19",
         charter_constraints=[
             "No oral formulations per DEC-003",
             "Oncology indications only per DEC-004",
@@ -760,16 +807,17 @@ def test_multiple_charter_constraints():
     )
     records = build_assessment_records(result, "IC-042")
     constraint_records = [
-        r for r in records
-        if "charter constraint" in r["claim"].lower()
+        r for r in records if "charter constraint" in r["claim"].lower()
     ]
     assert len(constraint_records) == 2, (
         f"expected 2 charter constraint records, got {len(constraint_records)}"
     )
 
 
-_check("multiple charter constraints produce multiple records",
-       test_multiple_charter_constraints)
+_check(
+    "multiple charter constraints produce multiple records",
+    test_multiple_charter_constraints,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -792,8 +840,7 @@ def test_relay_codes_registered():
     assert "patent.fto_risk_identified" in RELAY_CODES
 
 
-_check("relay codes registered in provenance.RELAY_CODES",
-       test_relay_codes_registered)
+_check("relay codes registered in provenance.RELAY_CODES", test_relay_codes_registered)
 
 
 # ===========================================================================

@@ -35,7 +35,6 @@ import tempfile
 import unittest.mock as mock
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
 
 # Ensure the tools package is importable.
 TOOLS_DIR = Path(__file__).resolve().parent.parent / "tools"
@@ -43,9 +42,6 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 from dde.commands.pathway import (
-    QUICKGO_API,
-    REACTOME_API,
-    UNIPROT_API,
     _build_output,
     _resolve_uniprot_accession,
     _search_go,
@@ -53,7 +49,6 @@ from dde.commands.pathway import (
     analyze_cmd,
 )
 from dde.core.errors import ArtifactError, Refusal
-
 
 # ---------------------------------------------------------------------------
 # 1. _resolve_uniprot_accession tests
@@ -135,7 +130,7 @@ def test_search_reactome_happy() -> None:
         mock_resp.content = raw_bytes
         mock_req.return_value = mock_resp
 
-        raw, entries = _search_reactome("BRCA1")
+        _raw, entries = _search_reactome("BRCA1")
 
     assert len(entries) == 2, f"Expected 2 entries, got {len(entries)}"
     assert entries[0]["source_db"] == "reactome"
@@ -155,7 +150,7 @@ def test_search_reactome_empty() -> None:
         mock_resp.content = raw_bytes
         mock_req.return_value = mock_resp
 
-        raw, entries = _search_reactome("NOTAGENE")
+        _raw, entries = _search_reactome("NOTAGENE")
 
     assert len(entries) == 0, f"Expected 0 entries, got {len(entries)}"
     print("  PASS: _search_reactome empty results")
@@ -216,14 +211,16 @@ def test_search_go_happy() -> None:
     quickgo_payload = _make_quickgo_response(quickgo_annotations)
     quickgo_raw = json.dumps(quickgo_payload).encode("utf-8")
 
-    with mock.patch("dde.commands.pathway.http.get_json") as mock_get, \
-         mock.patch("dde.commands.pathway.http.request") as mock_req:
+    with (
+        mock.patch("dde.commands.pathway.http.get_json") as mock_get,
+        mock.patch("dde.commands.pathway.http.request") as mock_req,
+    ):
         mock_get.return_value = uniprot_response
         mock_resp = mock.Mock()
         mock_resp.content = quickgo_raw
         mock_req.return_value = mock_resp
 
-        raw, entries = _search_go("BRCA1")
+        _raw, entries = _search_go("BRCA1")
 
     assert len(entries) == 2, f"Expected 2 entries, got {len(entries)}"
     assert entries[0]["source_db"] == "go"
@@ -247,14 +244,16 @@ def test_search_go_empty() -> None:
     quickgo_payload: dict[str, Any] = {"results": []}
     quickgo_raw = json.dumps(quickgo_payload).encode("utf-8")
 
-    with mock.patch("dde.commands.pathway.http.get_json") as mock_get, \
-         mock.patch("dde.commands.pathway.http.request") as mock_req:
+    with (
+        mock.patch("dde.commands.pathway.http.get_json") as mock_get,
+        mock.patch("dde.commands.pathway.http.request") as mock_req,
+    ):
         mock_get.return_value = uniprot_response
         mock_resp = mock.Mock()
         mock_resp.content = quickgo_raw
         mock_req.return_value = mock_resp
 
-        raw, entries = _search_go("NOTAGENE")
+        _raw, entries = _search_go("NOTAGENE")
 
     assert len(entries) == 0, f"Expected 0 entries, got {len(entries)}"
     print("  PASS: _search_go empty results")
@@ -293,14 +292,16 @@ def test_search_go_evidence_diversity() -> None:
     quickgo_payload = _make_quickgo_response(quickgo_annotations)
     quickgo_raw = json.dumps(quickgo_payload).encode("utf-8")
 
-    with mock.patch("dde.commands.pathway.http.get_json") as mock_get, \
-         mock.patch("dde.commands.pathway.http.request") as mock_req:
+    with (
+        mock.patch("dde.commands.pathway.http.get_json") as mock_get,
+        mock.patch("dde.commands.pathway.http.request") as mock_req,
+    ):
         mock_get.return_value = uniprot_response
         mock_resp = mock.Mock()
         mock_resp.content = quickgo_raw
         mock_req.return_value = mock_resp
 
-        raw, entries = _search_go("BRCA1")
+        _raw, entries = _search_go("BRCA1")
 
     # Should deduplicate by term but keep all evidence codes
     assert len(entries) == 2, f"Expected 2 entries (deduplicated), got {len(entries)}"
@@ -334,14 +335,16 @@ def test_search_go_dedup_same_evidence() -> None:
     quickgo_payload = _make_quickgo_response(quickgo_annotations)
     quickgo_raw = json.dumps(quickgo_payload).encode("utf-8")
 
-    with mock.patch("dde.commands.pathway.http.get_json") as mock_get, \
-         mock.patch("dde.commands.pathway.http.request") as mock_req:
+    with (
+        mock.patch("dde.commands.pathway.http.get_json") as mock_get,
+        mock.patch("dde.commands.pathway.http.request") as mock_req,
+    ):
         mock_get.return_value = uniprot_response
         mock_resp = mock.Mock()
         mock_resp.content = quickgo_raw
         mock_req.return_value = mock_resp
 
-        raw, entries = _search_go("BRCA1")
+        _raw, entries = _search_go("BRCA1")
 
     assert len(entries) == 1
     assert entries[0]["evidence_codes"] == ["IDA"], (
@@ -356,8 +359,10 @@ def test_search_go_url_encoding() -> None:
     quickgo_payload: dict[str, Any] = {"results": []}
     quickgo_raw = json.dumps(quickgo_payload).encode("utf-8")
 
-    with mock.patch("dde.commands.pathway.http.get_json") as mock_get, \
-         mock.patch("dde.commands.pathway.http.request") as mock_req:
+    with (
+        mock.patch("dde.commands.pathway.http.get_json") as mock_get,
+        mock.patch("dde.commands.pathway.http.request") as mock_req,
+    ):
         mock_get.return_value = uniprot_response
         mock_resp = mock.Mock()
         mock_resp.content = quickgo_raw
@@ -395,8 +400,18 @@ def test_search_go_uniprot_resolution_failure() -> None:
 def test_build_output_reactome_schema() -> None:
     """Reactome output uses dde.pathway-reactome.v1 schema."""
     entries = [
-        {"source_db": "reactome", "pathway_id": "R-HSA-1", "name": "Pathway A", "species": "Homo sapiens"},
-        {"source_db": "reactome", "pathway_id": "R-HSA-2", "name": "Pathway B", "species": "Homo sapiens"},
+        {
+            "source_db": "reactome",
+            "pathway_id": "R-HSA-1",
+            "name": "Pathway A",
+            "species": "Homo sapiens",
+        },
+        {
+            "source_db": "reactome",
+            "pathway_id": "R-HSA-2",
+            "name": "Pathway B",
+            "species": "Homo sapiens",
+        },
     ]
     result = _build_output("BRCA1", "reactome", entries)
 
@@ -414,8 +429,13 @@ def test_build_output_reactome_schema() -> None:
 def test_build_output_go_schema() -> None:
     """GO output uses dde.pathway-go.v1 schema."""
     entries = [
-        {"source_db": "go", "term_id": "GO:0006281", "name": "DNA repair",
-         "aspect": "biological_process", "evidence_codes": ["IDA"]},
+        {
+            "source_db": "go",
+            "term_id": "GO:0006281",
+            "name": "DNA repair",
+            "aspect": "biological_process",
+            "evidence_codes": ["IDA"],
+        },
     ]
     result = _build_output("BRCA1", "go", entries)
 
@@ -432,7 +452,12 @@ def test_build_output_go_schema() -> None:
 def test_build_output_top_names_capped() -> None:
     """top_pathways / top_terms are capped at 5 entries."""
     entries = [
-        {"source_db": "reactome", "pathway_id": f"R-HSA-{i}", "name": f"P{i}", "species": "Homo sapiens"}
+        {
+            "source_db": "reactome",
+            "pathway_id": f"R-HSA-{i}",
+            "name": f"P{i}",
+            "species": "Homo sapiens",
+        }
         for i in range(10)
     ]
     result = _build_output("TP53", "reactome", entries)
@@ -450,7 +475,10 @@ def test_build_output_top_names_capped() -> None:
 
 
 def _invoke_analyze(
-    tmp: Path, gene: str, source: str, artifact_data: dict[str, Any],
+    tmp: Path,
+    gene: str,
+    source: str,
+    artifact_data: dict[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, str]]]:
     """Helper: write a canned artifact to *tmp*, invoke analyze_cmd logic.
 
@@ -481,39 +509,64 @@ def _invoke_analyze(
 
     analysis_out_path = tmp / f"{resolved}.{suffix}.analysis.json"
 
-    with mock.patch("dde.commands.pathway.emitter", return_value=mock_emit), \
-         mock.patch(
-             "dde.commands.pathway.provenance.write_analysis",
-             return_value=analysis_out_path,
-         ) as mock_wa:
+    with (
+        mock.patch("dde.commands.pathway.emitter", return_value=mock_emit),
+        mock.patch(
+            "dde.commands.pathway.provenance.write_analysis",
+            return_value=analysis_out_path,
+        ),
+    ):
         # Call the callback directly (unwrapped from Click decorators).
         analyze_cmd.callback(
-            mock_state, gene, source,
-            None,   # from_dir
-            None,   # out
+            mock_state,
+            gene,
+            source,
+            None,  # from_dir
+            None,  # out
             False,  # as_json
-            True,   # quiet
+            True,  # quiet
         )
 
     # Extract what was passed to write_analysis.
-    wa_kwargs = mock_wa.call_args
-    return captured.get("assessment", {}), captured.get("metrics", {}), captured.get("relays", [])
+    return (
+        captured.get("assessment", {}),
+        captured.get("metrics", {}),
+        captured.get("relays", []),
+    )
 
 
 def test_analyze_reactome_happy() -> None:
     """Analyze reactome: reads stored pathways and builds assessment/metrics."""
-    artifact = _build_output("BRCA1", "reactome", [
-        {"source_db": "reactome", "pathway_id": "R-HSA-1640170",
-         "name": "Cell Cycle", "species": "Homo sapiens"},
-        {"source_db": "reactome", "pathway_id": "R-HSA-69278",
-         "name": "Cell Cycle, Mitotic", "species": "Homo sapiens"},
-        {"source_db": "reactome", "pathway_id": "R-HSA-1640170",
-         "name": "Cell Cycle", "species": "Homo sapiens"},
-    ])
+    artifact = _build_output(
+        "BRCA1",
+        "reactome",
+        [
+            {
+                "source_db": "reactome",
+                "pathway_id": "R-HSA-1640170",
+                "name": "Cell Cycle",
+                "species": "Homo sapiens",
+            },
+            {
+                "source_db": "reactome",
+                "pathway_id": "R-HSA-69278",
+                "name": "Cell Cycle, Mitotic",
+                "species": "Homo sapiens",
+            },
+            {
+                "source_db": "reactome",
+                "pathway_id": "R-HSA-1640170",
+                "name": "Cell Cycle",
+                "species": "Homo sapiens",
+            },
+        ],
+    )
 
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
-        assessment, metrics, relays = _invoke_analyze(tmp, "brca1", "reactome", artifact)
+        assessment, metrics, _relays = _invoke_analyze(
+            tmp, "brca1", "reactome", artifact
+        )
 
     assert assessment["gene"] == "BRCA1"
     assert assessment["source"] == "reactome"
@@ -527,18 +580,37 @@ def test_analyze_reactome_happy() -> None:
 
 def test_analyze_go_happy() -> None:
     """Analyze GO: reads stored annotations and groups by aspect."""
-    artifact = _build_output("BRCA1", "go", [
-        {"source_db": "go", "term_id": "GO:0006281", "name": "DNA repair",
-         "aspect": "biological_process", "evidence_codes": ["IDA"]},
-        {"source_db": "go", "term_id": "GO:0005634", "name": "nucleus",
-         "aspect": "cellular_component", "evidence_codes": ["IDA"]},
-        {"source_db": "go", "term_id": "GO:0003677", "name": "DNA binding",
-         "aspect": "molecular_function", "evidence_codes": ["IEA"]},
-    ])
+    artifact = _build_output(
+        "BRCA1",
+        "go",
+        [
+            {
+                "source_db": "go",
+                "term_id": "GO:0006281",
+                "name": "DNA repair",
+                "aspect": "biological_process",
+                "evidence_codes": ["IDA"],
+            },
+            {
+                "source_db": "go",
+                "term_id": "GO:0005634",
+                "name": "nucleus",
+                "aspect": "cellular_component",
+                "evidence_codes": ["IDA"],
+            },
+            {
+                "source_db": "go",
+                "term_id": "GO:0003677",
+                "name": "DNA binding",
+                "aspect": "molecular_function",
+                "evidence_codes": ["IEA"],
+            },
+        ],
+    )
 
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
-        assessment, metrics, relays = _invoke_analyze(tmp, "brca1", "go", artifact)
+        assessment, metrics, _relays = _invoke_analyze(tmp, "brca1", "go", artifact)
 
     assert assessment["gene"] == "BRCA1"
     assert assessment["source"] == "go"
@@ -551,7 +623,9 @@ def test_analyze_go_happy() -> None:
     assert metrics["biological_process_count"] == 1
     assert metrics["cellular_component_count"] == 1
     assert sorted(metrics["aspects"]) == [
-        "biological_process", "cellular_component", "molecular_function"
+        "biological_process",
+        "cellular_component",
+        "molecular_function",
     ]
     print("  PASS: test_analyze_go_happy")
 
@@ -572,8 +646,13 @@ def test_analyze_missing_file() -> None:
         with mock.patch("dde.commands.pathway.emitter", return_value=mock_emit):
             try:
                 analyze_cmd.callback(
-                    mock_state, "BRCA1", "reactome",
-                    None, None, False, True,
+                    mock_state,
+                    "BRCA1",
+                    "reactome",
+                    None,
+                    None,
+                    False,
+                    True,
                 )
                 assert False, "Expected ArtifactError"
             except ArtifactError:
@@ -583,10 +662,18 @@ def test_analyze_missing_file() -> None:
 
 def test_analyze_relays_attached() -> None:
     """Analyze attaches the pathway.membership_not_activity relay."""
-    artifact = _build_output("TP53", "reactome", [
-        {"source_db": "reactome", "pathway_id": "R-HSA-1",
-         "name": "Apoptosis", "species": "Homo sapiens"},
-    ])
+    artifact = _build_output(
+        "TP53",
+        "reactome",
+        [
+            {
+                "source_db": "reactome",
+                "pathway_id": "R-HSA-1",
+                "name": "Apoptosis",
+                "species": "Homo sapiens",
+            },
+        ],
+    )
 
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
@@ -607,14 +694,21 @@ def test_analyze_relays_attached() -> None:
         mock_state = mock.MagicMock()
         mock_state.project.return_value = mock_project
 
-        with mock.patch("dde.commands.pathway.emitter", return_value=mock_emit), \
-             mock.patch(
-                 "dde.commands.pathway.provenance.write_analysis",
-                 return_value=analysis_out_path,
-             ) as mock_wa:
+        with (
+            mock.patch("dde.commands.pathway.emitter", return_value=mock_emit),
+            mock.patch(
+                "dde.commands.pathway.provenance.write_analysis",
+                return_value=analysis_out_path,
+            ) as mock_wa,
+        ):
             analyze_cmd.callback(
-                mock_state, "tp53", "reactome",
-                None, None, False, True,
+                mock_state,
+                "tp53",
+                "reactome",
+                None,
+                None,
+                False,
+                True,
             )
 
         # Check mandatory_relays passed to write_analysis.
@@ -639,17 +733,19 @@ def test_analyze_schema_key_consistency() -> None:
     """
     # Reactome round-trip
     reactome_entries = [
-        {"source_db": "reactome", "pathway_id": "R-HSA-1",
-         "name": "Test", "species": "Homo sapiens"},
+        {
+            "source_db": "reactome",
+            "pathway_id": "R-HSA-1",
+            "name": "Test",
+            "species": "Homo sapiens",
+        },
     ]
     reactome_artifact = _build_output("BRCA1", "reactome", reactome_entries)
     # Verify _build_output uses "pathways" — the key analyze_cmd reads
-    assert "pathways" in reactome_artifact, (
-        "Reactome artifact missing 'pathways' key"
-    )
+    assert "pathways" in reactome_artifact, "Reactome artifact missing 'pathways' key"
 
     with tempfile.TemporaryDirectory() as td:
-        assessment, metrics, _ = _invoke_analyze(
+        _assessment, metrics, _ = _invoke_analyze(
             Path(td), "brca1", "reactome", reactome_artifact
         )
     assert metrics["total_pathways"] == 1, (
@@ -658,18 +754,19 @@ def test_analyze_schema_key_consistency() -> None:
 
     # GO round-trip
     go_entries = [
-        {"source_db": "go", "term_id": "GO:001", "name": "Test",
-         "aspect": "biological_process", "evidence_codes": ["IDA"]},
+        {
+            "source_db": "go",
+            "term_id": "GO:001",
+            "name": "Test",
+            "aspect": "biological_process",
+            "evidence_codes": ["IDA"],
+        },
     ]
     go_artifact = _build_output("BRCA1", "go", go_entries)
-    assert "annotations" in go_artifact, (
-        "GO artifact missing 'annotations' key"
-    )
+    assert "annotations" in go_artifact, "GO artifact missing 'annotations' key"
 
     with tempfile.TemporaryDirectory() as td:
-        assessment, metrics, _ = _invoke_analyze(
-            Path(td), "brca1", "go", go_artifact
-        )
+        _assessment, metrics, _ = _invoke_analyze(Path(td), "brca1", "go", go_artifact)
     assert metrics["total_annotations"] == 1, (
         "Schema mismatch: analyze_cmd could not read GO annotations"
     )
@@ -687,8 +784,12 @@ def test_search_go_pagination() -> None:
 
     # Page 1: 2 annotations, pageInfo says 2 total pages
     page1_annotations = [
-        {"goId": "GO:0006915", "goName": "apoptotic process",
-         "goAspect": "biological_process", "goEvidence": "IDA"},
+        {
+            "goId": "GO:0006915",
+            "goName": "apoptotic process",
+            "goAspect": "biological_process",
+            "goEvidence": "IDA",
+        },
     ]
     page1_payload = {
         "results": page1_annotations,
@@ -696,8 +797,12 @@ def test_search_go_pagination() -> None:
     }
     # Page 2: 1 annotation
     page2_annotations = [
-        {"goId": "GO:0005634", "goName": "nucleus",
-         "goAspect": "cellular_component", "goEvidence": "IDA"},
+        {
+            "goId": "GO:0005634",
+            "goName": "nucleus",
+            "goAspect": "cellular_component",
+            "goEvidence": "IDA",
+        },
     ]
     page2_payload = {
         "results": page2_annotations,
@@ -715,12 +820,14 @@ def test_search_go_pagination() -> None:
             resp.content = page1_raw
         return resp
 
-    with mock.patch("dde.commands.pathway.http.get_json") as mock_get, \
-         mock.patch("dde.commands.pathway.http.request") as mock_req:
+    with (
+        mock.patch("dde.commands.pathway.http.get_json") as mock_get,
+        mock.patch("dde.commands.pathway.http.request") as mock_req,
+    ):
         mock_get.return_value = uniprot_response
         mock_req.side_effect = mock_request_side_effect
 
-        raw, entries = _search_go("TP53")
+        _raw, entries = _search_go("TP53")
 
     # Should have collected entries from both pages.
     assert len(entries) == 2, f"Expected 2 entries (2 pages), got {len(entries)}"
@@ -738,8 +845,12 @@ def test_search_go_single_page() -> None:
     """QuickGO single-page response does not trigger extra requests."""
     uniprot_response = {"results": [{"primaryAccession": "P38398"}]}
     quickgo_annotations = [
-        {"goId": "GO:0006281", "goName": "DNA repair",
-         "goAspect": "biological_process", "goEvidence": "IDA"},
+        {
+            "goId": "GO:0006281",
+            "goName": "DNA repair",
+            "goAspect": "biological_process",
+            "goEvidence": "IDA",
+        },
     ]
     quickgo_payload = {
         "results": quickgo_annotations,
@@ -747,14 +858,16 @@ def test_search_go_single_page() -> None:
     }
     quickgo_raw = json.dumps(quickgo_payload).encode("utf-8")
 
-    with mock.patch("dde.commands.pathway.http.get_json") as mock_get, \
-         mock.patch("dde.commands.pathway.http.request") as mock_req:
+    with (
+        mock.patch("dde.commands.pathway.http.get_json") as mock_get,
+        mock.patch("dde.commands.pathway.http.request") as mock_req,
+    ):
         mock_get.return_value = uniprot_response
         mock_resp = mock.Mock()
         mock_resp.content = quickgo_raw
         mock_req.return_value = mock_resp
 
-        raw, entries = _search_go("BRCA1")
+        _raw, entries = _search_go("BRCA1")
 
     assert len(entries) == 1
     assert mock_req.call_count == 1, (
@@ -778,6 +891,7 @@ def test_filename_uses_resolved_gene_not_name() -> None:
     # We verify this by checking the source code directly (the filename
     # construction) and by checking that _build_output uses the gene symbol.
     import inspect
+
     from dde.commands import pathway
 
     source = inspect.getsource(pathway.search_cmd.callback)
@@ -787,7 +901,7 @@ def test_filename_uses_resolved_gene_not_name() -> None:
         "R2 regression: search still uses --name for the filename"
     )
     # The new code should use `resolved` directly in the filename template
-    assert f"{{resolved}}.{{suffix}}" in source or "f\"{resolved}.{suffix}" in source, (
+    assert "{resolved}.{suffix}" in source or 'f"{resolved}.{suffix}' in source, (
         "Filename should use 'resolved' variable"
     )
     print("  PASS: filename uses resolved gene symbol, not --name")
@@ -814,9 +928,7 @@ def test_url_encoding_special_characters_reactome() -> None:
 
     call_url = mock_req.call_args[0][1]
     # + should be encoded as %2B, not left as a bare +
-    assert "GENE%2BSPACE" in call_url, (
-        f"Plus sign not URL-encoded: {call_url}"
-    )
+    assert "GENE%2BSPACE" in call_url, f"Plus sign not URL-encoded: {call_url}"
     print("  PASS: URL encoding of special characters in Reactome")
 
 
@@ -831,9 +943,7 @@ def test_url_encoding_uniprot_resolver() -> None:
             pass  # Expected — no results
 
     call_url = mock_get.call_args[0][0]
-    assert "GENE%23TAG" in call_url, (
-        f"Hash not URL-encoded in UniProt URL: {call_url}"
-    )
+    assert "GENE%23TAG" in call_url, f"Hash not URL-encoded in UniProt URL: {call_url}"
     print("  PASS: URL encoding in UniProt resolver")
 
 
@@ -865,8 +975,10 @@ def test_search_go_non_json_response() -> None:
 
     uniprot_response = {"results": [{"primaryAccession": "P38398"}]}
 
-    with mock.patch("dde.commands.pathway.http.get_json") as mock_get, \
-         mock.patch("dde.commands.pathway.http.request") as mock_req:
+    with (
+        mock.patch("dde.commands.pathway.http.get_json") as mock_get,
+        mock.patch("dde.commands.pathway.http.request") as mock_req,
+    ):
         mock_get.return_value = uniprot_response
         mock_resp = mock.Mock()
         mock_resp.content = b"<html>Server Error</html>"
@@ -905,13 +1017,31 @@ def test_dead_constants_removed() -> None:
 
 def test_schema_identifiers_distinct() -> None:
     """Reactome and GO use distinct schema identifiers (O2 fix)."""
-    reactome_output = _build_output("TP53", "reactome", [
-        {"source_db": "reactome", "pathway_id": "R-1", "name": "P1", "species": "Homo sapiens"},
-    ])
-    go_output = _build_output("TP53", "go", [
-        {"source_db": "go", "term_id": "GO:001", "name": "T1",
-         "aspect": "bp", "evidence_codes": ["IDA"]},
-    ])
+    reactome_output = _build_output(
+        "TP53",
+        "reactome",
+        [
+            {
+                "source_db": "reactome",
+                "pathway_id": "R-1",
+                "name": "P1",
+                "species": "Homo sapiens",
+            },
+        ],
+    )
+    go_output = _build_output(
+        "TP53",
+        "go",
+        [
+            {
+                "source_db": "go",
+                "term_id": "GO:001",
+                "name": "T1",
+                "aspect": "bp",
+                "evidence_codes": ["IDA"],
+            },
+        ],
+    )
 
     assert reactome_output["schema"] != go_output["schema"], (
         f"Reactome and GO schemas should be distinct: "
@@ -931,8 +1061,14 @@ def main() -> None:
     tests = [
         # UniProt accession resolution
         ("test_resolve_uniprot_accession_happy", test_resolve_uniprot_accession_happy),
-        ("test_resolve_uniprot_accession_not_found", test_resolve_uniprot_accession_not_found),
-        ("test_resolve_uniprot_accession_empty_accession", test_resolve_uniprot_accession_empty_accession),
+        (
+            "test_resolve_uniprot_accession_not_found",
+            test_resolve_uniprot_accession_not_found,
+        ),
+        (
+            "test_resolve_uniprot_accession_empty_accession",
+            test_resolve_uniprot_accession_empty_accession,
+        ),
         # Reactome search
         ("test_search_reactome_happy", test_search_reactome_happy),
         ("test_search_reactome_empty", test_search_reactome_empty),
@@ -943,7 +1079,10 @@ def main() -> None:
         ("test_search_go_evidence_diversity", test_search_go_evidence_diversity),
         ("test_search_go_dedup_same_evidence", test_search_go_dedup_same_evidence),
         ("test_search_go_url_encoding", test_search_go_url_encoding),
-        ("test_search_go_uniprot_resolution_failure", test_search_go_uniprot_resolution_failure),
+        (
+            "test_search_go_uniprot_resolution_failure",
+            test_search_go_uniprot_resolution_failure,
+        ),
         # Build output
         ("test_build_output_reactome_schema", test_build_output_reactome_schema),
         ("test_build_output_go_schema", test_build_output_go_schema),
@@ -958,12 +1097,21 @@ def main() -> None:
         ("test_search_go_pagination", test_search_go_pagination),
         ("test_search_go_single_page", test_search_go_single_page),
         # Filename / --name behavior
-        ("test_filename_uses_resolved_gene_not_name", test_filename_uses_resolved_gene_not_name),
+        (
+            "test_filename_uses_resolved_gene_not_name",
+            test_filename_uses_resolved_gene_not_name,
+        ),
         # URL encoding
-        ("test_url_encoding_special_characters_reactome", test_url_encoding_special_characters_reactome),
+        (
+            "test_url_encoding_special_characters_reactome",
+            test_url_encoding_special_characters_reactome,
+        ),
         ("test_url_encoding_uniprot_resolver", test_url_encoding_uniprot_resolver),
         # Error handling
-        ("test_search_reactome_non_json_response", test_search_reactome_non_json_response),
+        (
+            "test_search_reactome_non_json_response",
+            test_search_reactome_non_json_response,
+        ),
         ("test_search_go_non_json_response", test_search_go_non_json_response),
         # O1 fix — dead constants
         ("test_dead_constants_removed", test_dead_constants_removed),
@@ -981,7 +1129,7 @@ def main() -> None:
             print(f"  FAIL: {name} — {exc}")
             failed += 1
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Results: {passed} passed, {failed} failed, {passed + failed} total")
     if failed:
         sys.exit(1)

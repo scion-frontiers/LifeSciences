@@ -31,7 +31,6 @@ Exit 0 = all tests passed, exit 1 = at least one failure.
 
 from __future__ import annotations
 
-import json
 import sys
 import traceback
 from pathlib import Path
@@ -44,15 +43,11 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 
 from dde.commands.structure import (
-    _BUNDLE_VOID_MIN_ALPHA_SPHERES,
-    _BUNDLE_VOID_MIN_TM_SEGMENTS,
-    _BUNDLE_VOID_MIN_VOLUME,
-    _ORTHOSTERIC_TM,
     map_pocket_to_topology,
     parse_tm_regions,
     parse_topo_domains,
-    resolve_accession,
     residue_to_tm,
+    resolve_accession,
 )
 
 # ---------------------------------------------------------------------------
@@ -235,8 +230,8 @@ def test_residue_to_tm_hit():
 def test_residue_to_tm_boundary():
     """Residues at the exact boundary of a TM region are included."""
     regions = parse_tm_regions(GPCR_FEATURES)
-    assert residue_to_tm(34, regions) == "TM1"   # start boundary
-    assert residue_to_tm(58, regions) == "TM1"   # end boundary
+    assert residue_to_tm(34, regions) == "TM1"  # start boundary
+    assert residue_to_tm(58, regions) == "TM1"  # end boundary
 
 
 def test_residue_to_tm_miss():
@@ -323,14 +318,15 @@ def test_bundle_void_many_segments_high_alpha():
     regions = parse_tm_regions(GPCR_FEATURES)
     # Residues spanning TM1 through TM5 (5 segments)
     residues = [
-        _make_residue("A", 40),   # TM1
-        _make_residue("A", 80),   # TM2
+        _make_residue("A", 40),  # TM1
+        _make_residue("A", 80),  # TM2
         _make_residue("A", 120),  # TM3
         _make_residue("A", 160),  # TM4
         _make_residue("A", 210),  # TM5
     ]
     pocket = _make_pocket(
-        1, residues,
+        1,
+        residues,
         druggability_score=0.99,
         n_alpha_spheres=294,
         volume=1200.0,
@@ -345,14 +341,15 @@ def test_bundle_void_many_segments_high_volume():
     """Bundle-void fires when ≥5 TM segments AND volume >1500."""
     regions = parse_tm_regions(GPCR_FEATURES)
     residues = [
-        _make_residue("A", 40),   # TM1
-        _make_residue("A", 80),   # TM2
+        _make_residue("A", 40),  # TM1
+        _make_residue("A", 80),  # TM2
         _make_residue("A", 120),  # TM3
         _make_residue("A", 160),  # TM4
         _make_residue("A", 210),  # TM5
     ]
     pocket = _make_pocket(
-        1, residues,
+        1,
+        residues,
         druggability_score=0.99,
         n_alpha_spheres=50,
         volume=1800.0,
@@ -366,13 +363,14 @@ def test_bundle_void_not_enough_segments():
     """Bundle-void does NOT fire with <5 TM segments even if volume is large."""
     regions = parse_tm_regions(GPCR_FEATURES)
     residues = [
-        _make_residue("A", 40),   # TM1
-        _make_residue("A", 80),   # TM2
+        _make_residue("A", 40),  # TM1
+        _make_residue("A", 80),  # TM2
         _make_residue("A", 120),  # TM3
         _make_residue("A", 160),  # TM4
     ]
     pocket = _make_pocket(
-        1, residues,
+        1,
+        residues,
         druggability_score=0.99,
         n_alpha_spheres=500,
         volume=3000.0,
@@ -386,14 +384,15 @@ def test_bundle_void_enough_segments_low_metrics():
     """Bundle-void does NOT fire when ≥5 segments but alpha/volume both low."""
     regions = parse_tm_regions(GPCR_FEATURES)
     residues = [
-        _make_residue("A", 40),   # TM1
-        _make_residue("A", 80),   # TM2
+        _make_residue("A", 40),  # TM1
+        _make_residue("A", 80),  # TM2
         _make_residue("A", 120),  # TM3
         _make_residue("A", 160),  # TM4
         _make_residue("A", 210),  # TM5
     ]
     pocket = _make_pocket(
-        1, residues,
+        1,
+        residues,
         druggability_score=0.80,
         n_alpha_spheres=50,
         volume=500.0,
@@ -411,13 +410,17 @@ def test_bundle_void_enough_segments_low_metrics():
 def test_resolve_accession_direct():
     """A UniProt accession passes through without a network call."""
     # This should NOT make a network call — just pattern-match.
-    acc, gene = resolve_accession.__wrapped__(resolve_accession, "P07550") \
-        if hasattr(resolve_accession, "__wrapped__") else _test_resolve_accession_direct()
+    _acc, _gene = (
+        resolve_accession.__wrapped__(resolve_accession, "P07550")
+        if hasattr(resolve_accession, "__wrapped__")
+        else _test_resolve_accession_direct()
+    )
 
 
 def _test_resolve_accession_direct():
     """Direct accession recognized by regex."""
     from dde.commands.structure import _is_accession
+
     assert _is_accession("P07550") is True
     assert _is_accession("Q9UBS5") is True
     assert _is_accession("A0A1B2C3D4E5") is False  # too long
@@ -427,6 +430,7 @@ def _test_resolve_accession_direct():
 def test_is_accession_patterns():
     """Various UniProt accession patterns are correctly identified."""
     from dde.commands.structure import _is_accession
+
     # Standard 6-char
     assert _is_accession("P12345") is True
     assert _is_accession("Q9UBS5") is True
@@ -477,10 +481,10 @@ def test_seven_tm_bundle_void():
     """A pocket spanning all 7 TM segments with high volume triggers advisory."""
     regions = parse_tm_regions(GPCR_FEATURES)
     residues = [
-        _make_residue("A", 40),   # TM1
-        _make_residue("A", 45),   # TM1
-        _make_residue("A", 80),   # TM2
-        _make_residue("A", 85),   # TM2
+        _make_residue("A", 40),  # TM1
+        _make_residue("A", 45),  # TM1
+        _make_residue("A", 80),  # TM2
+        _make_residue("A", 85),  # TM2
         _make_residue("A", 120),  # TM3
         _make_residue("A", 125),  # TM3
         _make_residue("A", 160),  # TM4
@@ -493,7 +497,8 @@ def test_seven_tm_bundle_void():
         _make_residue("A", 300),  # TM7
     ]
     pocket = _make_pocket(
-        1, residues,
+        1,
+        residues,
         druggability_score=0.99,
         n_alpha_spheres=350,
         volume=2000.0,
@@ -529,10 +534,19 @@ if __name__ == "__main__":
     _check("map_pocket_non_orthosteric", test_map_pocket_non_orthosteric)
     _check("map_pocket_no_tm_residues", test_map_pocket_no_tm_residues)
 
-    _check("bundle_void_many_segments_high_alpha", test_bundle_void_many_segments_high_alpha)
-    _check("bundle_void_many_segments_high_volume", test_bundle_void_many_segments_high_volume)
+    _check(
+        "bundle_void_many_segments_high_alpha",
+        test_bundle_void_many_segments_high_alpha,
+    )
+    _check(
+        "bundle_void_many_segments_high_volume",
+        test_bundle_void_many_segments_high_volume,
+    )
     _check("bundle_void_not_enough_segments", test_bundle_void_not_enough_segments)
-    _check("bundle_void_enough_segments_low_metrics", test_bundle_void_enough_segments_low_metrics)
+    _check(
+        "bundle_void_enough_segments_low_metrics",
+        test_bundle_void_enough_segments_low_metrics,
+    )
 
     _check("resolve_accession_direct", _test_resolve_accession_direct)
     _check("is_accession_patterns", test_is_accession_patterns)
