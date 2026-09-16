@@ -195,12 +195,18 @@ mkdir -p "$BIN_DIR"
 # that is safe to re-run. Re-running must be free: an environment you
 # cannot re-provision without churning its identity is an environment
 # nobody will re-provision.
+#
+# Security note: ProDy (requirements-science.txt) includes C extensions
+# compiled by pip during install. Those extensions are not controllable
+# by install.sh; hardening them would require CFLAGS/LDFLAGS set before
+# pip install, which is a separate scope affecting all pip-built packages.
 
 # --- AutoDock Vina ---
 # Molecular docking engine used by structural-biologist and
 # computational-chemist skills for binding pose prediction.
 VINA_VERSION="1.2.5"
 VINA_URL="https://github.com/ccsb-scripps/AutoDock-Vina/releases/download/v${VINA_VERSION}/vina_1.2.5_linux_x86_64"
+VINA_SHA256="fa0126a28a9ea9162d1b161dfa92bc76e632416db28ca246278ea4b2dc6860cb"
 
 install_vina() {
     local target="${BIN_DIR}/vina"
@@ -209,14 +215,25 @@ install_vina() {
         return 0
     fi
     log "Downloading AutoDock Vina ${VINA_VERSION}"
-    if curl -fsSL -o "$target" "$VINA_URL" 2>/dev/null; then
-        chmod +x "$target"
-        log "AutoDock Vina installed at ${target}"
-    else
+    if ! curl -fsSL -o "$target" "$VINA_URL" 2>/dev/null; then
         warn "Could not download AutoDock Vina (network may be unavailable). Skipping."
         rm -f "$target"
         return 1
     fi
+
+    local got
+    got="$(sha256sum "$target" | cut -d' ' -f1)"
+    if [ "$got" != "$VINA_SHA256" ]; then
+        warn "Vina checksum mismatch; refusing to install."
+        warn "  expected ${VINA_SHA256}"
+        warn "  got      ${got}"
+        rm -f "$target"
+        return 1
+    fi
+    log "Vina SHA256 verification passed"
+
+    chmod +x "$target"
+    log "AutoDock Vina installed at ${target}"
 }
 
 # --- fpocket ---
@@ -273,8 +290,13 @@ install_fpocket() {
     # makes the binary write gmon.out into whatever directory an agent
     # happened to run it from, which would litter a program's raw/ tree
     # with build artefacts of ours.
+    # Hardening: -fstack-protector-strong and -D_FORTIFY_SOURCE=2 harden
+    # against stack and buffer overflows in PDB file parsing. PIE is not
+    # added — it is incompatible with the -static link (the ldd acceptance
+    # check requires "not a dynamic executable").
     local cflags="-W -Wextra -Wwrite-strings -Wstrict-prototypes -DM_OS_LINUX"
-    cflags="${cflags} -DMNO_MEM_DEBUG -O2 -std=gnu99 -Iplugins/include"
+    cflags="${cflags} -DMNO_MEM_DEBUG -O2 -fstack-protector-strong -D_FORTIFY_SOURCE=2"
+    cflags="${cflags} -std=gnu99 -Iplugins/include"
     cflags="${cflags} -Iplugins/LINUXAMD64/molfile"
     local lflags="-static -lm -Lplugins/LINUXAMD64/molfile"
     lflags="${lflags} plugins/LINUXAMD64/molfile/libmolfile_plugin.a -lstdc++"
@@ -517,7 +539,9 @@ install_rate4site() {
         rm -rf "$tmpdir"
         return 1
     fi
-    if ! (cd "$tmpdir/r4s" && make) 2>/dev/null; then
+    # Override upstream's default CXXFLAGS to add stack protection and
+    # FORTIFY_SOURCE while preserving its -O3 and -Wno-deprecated.
+    if ! (cd "$tmpdir/r4s" && make CXXFLAGS="-O3 -Wno-deprecated -fstack-protector-strong -D_FORTIFY_SOURCE=2") 2>/dev/null; then
         warn "rate4site build failed."
         rm -rf "$tmpdir"
         return 1
