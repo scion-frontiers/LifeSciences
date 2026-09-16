@@ -49,7 +49,7 @@ from ..core import controlstore
 from ..core.context import ARTIFACT_DIRS, normalize_artifact_class
 from ..core.controlstore import normalize_deliverables
 from ..core.env import CLI_VERSION
-from ..core.errors import ArtifactError, UsageError
+from ..core.errors import ArtifactError, Refusal, UsageError
 
 # ---------------------------------------------------------------------------
 # Viewer mapping — file extension to viewer HTML file
@@ -888,6 +888,88 @@ def _rewrite_md_links(html: str) -> str:
     return _MD_HREF_RE.sub(_replace, html)
 
 
+# ---------------------------------------------------------------------------
+# External URL sanitization (#170) — defense-in-depth Layer 1
+# ---------------------------------------------------------------------------
+
+# Match <img ...> tags
+_IMG_TAG_RE = re.compile(r"<img\s+[^>]*>", re.IGNORECASE)
+# Extract src="..." from an img tag
+_IMG_SRC_RE = re.compile(r'src="([^"]*)"', re.IGNORECASE)
+
+# Match <a href="..."> tags
+_A_TAG_RE = re.compile(r"<a\s+([^>]*)>", re.IGNORECASE)
+# Extract href="..." from an a tag
+_A_HREF_RE = re.compile(r'href="([^"]*)"', re.IGNORECASE)
+
+_EXTERNAL_URL_PREFIXES = ("http://", "https://", "//")
+_DANGEROUS_SCHEMES = ("javascript:", "data:", "vbscript:")
+
+# Module-level state for security warning aggregation across render calls.
+# Cleared at the start of each _render_site() invocation.
+_security_warnings: list[str] = []
+_current_source_path: str = "<unknown>"
+
+
+def _sanitize_external_urls(html: str) -> tuple[str, list[str]]:
+    """Neutralize external URLs in rendered HTML.
+
+    - External ``<img src>`` tags → visible placeholder
+    - ``data:`` URI ``<img>`` tags → visible placeholder
+    - Dangerous-scheme ``<a href>`` → href removed
+    - External ``<a href>`` → rel/target safety attributes added
+
+    Returns ``(sanitized_html, list_of_warning_strings)``.
+    """
+    from html import escape as html_escape
+
+    warnings: list[str] = []
+
+    def _replace_img(match: re.Match) -> str:  # type: ignore[type-arg]
+        tag = match.group(0)
+        src_match = _IMG_SRC_RE.search(tag)
+        if not src_match:
+            return tag
+        url = src_match.group(1)
+        if url.lower().startswith(_EXTERNAL_URL_PREFIXES):
+            safe_url = html_escape(url, quote=True)
+            warnings.append(f"blocked external image: {url}")
+            return (
+                f'<span class="blocked-image" '
+                f'title="External image blocked: {safe_url}">'
+                f"[external image removed — {safe_url}]</span>"
+            )
+        if url.lower().startswith(("data:",)):
+            warnings.append(f"blocked data URI image: {url[:80]}")
+            return (
+                '<span class="blocked-image">'
+                "[data URI image removed]</span>"
+            )
+        return tag  # relative/internal images are fine
+
+    def _replace_a(match: re.Match) -> str:  # type: ignore[type-arg]
+        attrs = match.group(1)
+        href_match = _A_HREF_RE.search(attrs)
+        if not href_match:
+            return match.group(0)
+        url = href_match.group(1)
+        if url.lower().lstrip().startswith(_DANGEROUS_SCHEMES):
+            warnings.append(f"blocked dangerous link scheme: {url[:80]}")
+            new_attrs = _A_HREF_RE.sub('href="#"', attrs)
+            return f'<a {new_attrs} class="blocked-link">'
+        if url.lower().startswith(_EXTERNAL_URL_PREFIXES):
+            if "rel=" not in attrs.lower():
+                attrs += ' rel="nofollow noopener noreferrer"'
+            if "target=" not in attrs.lower():
+                attrs += ' target="_blank"'
+            return f"<a {attrs}>"
+        return match.group(0)
+
+    html = _IMG_TAG_RE.sub(_replace_img, html)
+    html = _A_TAG_RE.sub(_replace_a, html)
+    return html, warnings
+
+
 def _dedent_tables(text: str) -> str:
     """Dedent pipe tables that are indented inside list items.
 
@@ -932,6 +1014,10 @@ def _render_site(
     retrospectives: list[dict[str, Any]] | None = None,
 ) -> int:
     """Render all pages into *output_dir* using Jinja2. Returns page count."""
+    global _security_warnings, _current_source_path
+    _security_warnings = []
+    _current_source_path = "<unknown>"
+
     import mistune
     from jinja2 import Environment, FileSystemLoader, select_autoescape
 
@@ -964,12 +1050,15 @@ def _render_site(
     )
 
     def _render_markdown(text: str) -> Markup:
-        """Render markdown with H1 de-dup, heading IDs, and .md link rewriting."""
+        """Render markdown with H1 de-dup, heading IDs, .md link rewriting, and URL sanitization."""
         text = _strip_leading_h1(text)
         text = _dedent_tables(text)
         html = _md(text)
         html = _add_heading_ids(html)
         html = _rewrite_md_links(html)
+        html, warnings = _sanitize_external_urls(html)
+        for w in warnings:
+            _security_warnings.append(f"{_current_source_path}: {w}")
         return Markup(html)
 
     env.filters["markdown"] = _render_markdown
@@ -1045,6 +1134,7 @@ def _render_site(
                 break
         executive_content = "\n\n".join(excerpt_parts)
 
+    _current_source_path = executive.get("source_file", "executive") if executive else "<unknown>"
     index_html = index_tmpl.render(
         cli_version=CLI_VERSION,
         work_orders=work_orders,
@@ -1065,6 +1155,7 @@ def _render_site(
 
     # --- Executive page ---
     if executive is not None:
+        _current_source_path = executive.get("source_file", "executive")
         exec_tmpl = env.get_template("executive.html")
         html = exec_tmpl.render(
             cli_version=CLI_VERSION,
@@ -1079,6 +1170,7 @@ def _render_site(
     if gates:
         gate_tmpl = env.get_template("gate.html")
         for gate in gates:
+            _current_source_path = gate.get("source_file", gate.get("html_filename", "<unknown>"))
             html = gate_tmpl.render(
                 cli_version=CLI_VERSION,
                 nav_sections=_nav(gate["html_filename"]),
@@ -1090,6 +1182,7 @@ def _render_site(
     # --- Finding pages ---
     finding_tmpl = env.get_template("finding.html")
     for finding in findings:
+        _current_source_path = finding.get("source_file", finding.get("html_filename", "<unknown>"))
         html = finding_tmpl.render(
             cli_version=CLI_VERSION,
             nav_sections=_nav(finding["html_filename"]),
@@ -1115,6 +1208,7 @@ def _render_site(
     # --- Program state pages ---
     ps_tmpl = env.get_template("program_state.html")
     for doc in program_state_docs:
+        _current_source_path = doc.get("source_file", doc.get("html_filename", "<unknown>"))
         html = ps_tmpl.render(
             cli_version=CLI_VERSION,
             title=doc["title"],
@@ -1150,6 +1244,7 @@ def _render_site(
 
     # --- Retrospectives page ---
     if retrospectives:
+        _current_source_path = "retrospectives"
         retro_tmpl = env.get_template("retrospectives.html")
         html = retro_tmpl.render(
             cli_version=CLI_VERSION,
@@ -1386,6 +1481,24 @@ def build_cmd(
         # Clean up temp dir on any failure
         shutil.rmtree(tmp_dir, ignore_errors=True)
         raise
+
+    # Check for security warnings from URL sanitization (#170)
+    if _security_warnings:
+        # Clean up temp dir — build is refused
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        detail_lines = []
+        for w in _security_warnings:
+            detail_lines.append(f"  • {w}")
+        raise Refusal(
+            f"site build refused: {len(_security_warnings)} external URL(s) "
+            f"blocked in rendered content",
+            detail="\n".join(detail_lines),
+            remedy=(
+                "Remove external image URLs from the source markdown files "
+                "listed above. If these are legitimate references, convert "
+                "them to text citations."
+            ),
+        )
 
     # Move into final location atomically
     trash_dir = None

