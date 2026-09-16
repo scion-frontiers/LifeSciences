@@ -905,6 +905,12 @@ _A_HREF_RE = re.compile(r'href="([^"]*)"', re.IGNORECASE)
 _EXTERNAL_URL_PREFIXES = ("http://", "https://", "//")
 _DANGEROUS_SCHEMES = ("javascript:", "data:", "vbscript:")
 
+
+def _is_external_url(url: str) -> bool:
+    """Return True if url is external (has a scheme or is protocol-relative)."""
+    lower = url.lower().strip()
+    return "://" in lower or lower.startswith("//")
+
 # Module-level state for security warning aggregation across render calls.
 # Cleared at the start of each _render_site() invocation.
 _security_warnings: list[str] = []
@@ -913,6 +919,10 @@ _current_source_path: str = "<unknown>"
 
 def _sanitize_external_urls(html: str) -> tuple[str, list[str]]:
     """Neutralize external URLs in rendered HTML.
+
+    Designed for mistune's HTML output format (double-quoted attributes,
+    no srcset). If reused for arbitrary HTML from other sources, additional
+    attribute quoting patterns would need to be handled.
 
     - External ``<img src>`` tags → visible placeholder
     - ``data:`` URI ``<img>`` tags → visible placeholder
@@ -931,7 +941,7 @@ def _sanitize_external_urls(html: str) -> tuple[str, list[str]]:
         if not src_match:
             return tag
         url = src_match.group(1)
-        if url.lower().startswith(_EXTERNAL_URL_PREFIXES):
+        if _is_external_url(url):
             safe_url = html_escape(url, quote=True)
             warnings.append(f"blocked external image: {url}")
             return (
@@ -957,7 +967,7 @@ def _sanitize_external_urls(html: str) -> tuple[str, list[str]]:
             warnings.append(f"blocked dangerous link scheme: {url[:80]}")
             new_attrs = _A_HREF_RE.sub('href="#"', attrs)
             return f'<a {new_attrs} class="blocked-link">'
-        if url.lower().startswith(_EXTERNAL_URL_PREFIXES):
+        if _is_external_url(url):
             if "rel=" not in attrs.lower():
                 attrs += ' rel="nofollow noopener noreferrer"'
             if "target=" not in attrs.lower():
@@ -1255,6 +1265,7 @@ def _render_site(
         pages_rendered += 1
 
     # Re-render index with actual page count for determinism
+    _current_source_path = executive.get("source_file", "executive") if executive else "<unknown>"
     index_html = index_tmpl.render(
         cli_version=CLI_VERSION,
         work_orders=work_orders,
@@ -1486,11 +1497,13 @@ def build_cmd(
     if _security_warnings:
         # Clean up temp dir — build is refused
         shutil.rmtree(tmp_dir, ignore_errors=True)
+        # Deduplicate warnings (index re-render can produce duplicates)
+        unique_warnings = list(dict.fromkeys(_security_warnings))
         detail_lines = []
-        for w in _security_warnings:
+        for w in unique_warnings:
             detail_lines.append(f"  • {w}")
         raise Refusal(
-            f"site build refused: {len(_security_warnings)} external URL(s) "
+            f"site build refused: {len(unique_warnings)} external URL(s) "
             f"blocked in rendered content",
             detail="\n".join(detail_lines),
             remedy=(
