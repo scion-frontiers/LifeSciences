@@ -18,6 +18,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self';">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="generator" content="dde {{ cli_version }}">
 <title>{% block title %}DDE Program{% endblock %}</title>
@@ -65,6 +67,10 @@
     .sidebar details { border-bottom: 1px solid #1a252f; }
     .sidebar details:not([open]) > summary { border-bottom: none; }
   }
+
+  /* Security: blocked external content markers (#170) */
+  .blocked-image { background: #fff3cd; border: 1px solid #ffc107; padding: 0.25rem 0.5rem; border-radius: 3px; font-size: 0.85rem; color: #856404; }
+  .blocked-link { color: #dc3545; text-decoration: line-through; }
 </style>
 <link rel="stylesheet" href="katex/katex.min.css">
 <script defer src="katex/katex.min.js"></script>
