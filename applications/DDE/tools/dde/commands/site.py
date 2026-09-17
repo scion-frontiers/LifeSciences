@@ -911,6 +911,7 @@ def _is_external_url(url: str) -> bool:
     lower = url.lower().strip()
     return "://" in lower or lower.startswith("//")
 
+
 # Module-level state for security warning aggregation across render calls.
 # Cleared at the start of each _render_site() invocation.
 _security_warnings: list[str] = []
@@ -951,10 +952,7 @@ def _sanitize_external_urls(html: str) -> tuple[str, list[str]]:
             )
         if url.lower().startswith(("data:",)):
             warnings.append(f"blocked data URI image: {url[:80]}")
-            return (
-                '<span class="blocked-image">'
-                "[data URI image removed]</span>"
-            )
+            return '<span class="blocked-image">[data URI image removed]</span>'
         return tag  # relative/internal images are fine
 
     def _replace_a(match: re.Match) -> str:  # type: ignore[type-arg]
@@ -1144,7 +1142,9 @@ def _render_site(
                 break
         executive_content = "\n\n".join(excerpt_parts)
 
-    _current_source_path = executive.get("source_file", "executive") if executive else "<unknown>"
+    _current_source_path = (
+        executive.get("source_file", "executive") if executive else "<unknown>"
+    )
     index_html = index_tmpl.render(
         cli_version=CLI_VERSION,
         work_orders=work_orders,
@@ -1180,7 +1180,9 @@ def _render_site(
     if gates:
         gate_tmpl = env.get_template("gate.html")
         for gate in gates:
-            _current_source_path = gate.get("source_file", gate.get("html_filename", "<unknown>"))
+            _current_source_path = gate.get(
+                "source_file", gate.get("html_filename", "<unknown>")
+            )
             html = gate_tmpl.render(
                 cli_version=CLI_VERSION,
                 nav_sections=_nav(gate["html_filename"]),
@@ -1192,7 +1194,9 @@ def _render_site(
     # --- Finding pages ---
     finding_tmpl = env.get_template("finding.html")
     for finding in findings:
-        _current_source_path = finding.get("source_file", finding.get("html_filename", "<unknown>"))
+        _current_source_path = finding.get(
+            "source_file", finding.get("html_filename", "<unknown>")
+        )
         html = finding_tmpl.render(
             cli_version=CLI_VERSION,
             nav_sections=_nav(finding["html_filename"]),
@@ -1218,7 +1222,9 @@ def _render_site(
     # --- Program state pages ---
     ps_tmpl = env.get_template("program_state.html")
     for doc in program_state_docs:
-        _current_source_path = doc.get("source_file", doc.get("html_filename", "<unknown>"))
+        _current_source_path = doc.get(
+            "source_file", doc.get("html_filename", "<unknown>")
+        )
         html = ps_tmpl.render(
             cli_version=CLI_VERSION,
             title=doc["title"],
@@ -1265,7 +1271,9 @@ def _render_site(
         pages_rendered += 1
 
     # Re-render index with actual page count for determinism
-    _current_source_path = executive.get("source_file", "executive") if executive else "<unknown>"
+    _current_source_path = (
+        executive.get("source_file", "executive") if executive else "<unknown>"
+    )
     index_html = index_tmpl.render(
         cli_version=CLI_VERSION,
         work_orders=work_orders,
