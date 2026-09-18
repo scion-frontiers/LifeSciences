@@ -72,7 +72,10 @@ func runAddMatch(_ *cobra.Command, args []string) error {
 	}
 
 	// Allocate the next match ID.
-	runDir := datastore.RunPath(flagRunDir, flagRunID)
+	runDir, err := datastore.RunPath(flagRunDir, flagRunID)
+	if err != nil {
+		return fmt.Errorf("invalid run ID: %w", err)
+	}
 	id, _, err := datastore.NextID(runDir, datastore.ArtifactMatch)
 	if err != nil {
 		return fmt.Errorf("allocating match ID: %w", err)

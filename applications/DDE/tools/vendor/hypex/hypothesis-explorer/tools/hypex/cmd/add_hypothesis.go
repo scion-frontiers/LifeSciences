@@ -78,7 +78,10 @@ func runAddHypothesis(_ *cobra.Command, args []string) error {
 	}
 
 	// Allocate the next hypothesis ID.
-	runDir := datastore.RunPath(flagRunDir, flagRunID)
+	runDir, err := datastore.RunPath(flagRunDir, flagRunID)
+	if err != nil {
+		return fmt.Errorf("invalid run ID: %w", err)
+	}
 	id, _, err := datastore.NextID(runDir, datastore.ArtifactHypothesis)
 	if err != nil {
 		return fmt.Errorf("allocating hypothesis ID: %w", err)

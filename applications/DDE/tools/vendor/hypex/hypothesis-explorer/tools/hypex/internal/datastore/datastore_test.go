@@ -111,9 +111,48 @@ func TestWriteFileAtomic(t *testing.T) {
 func TestRunPath(t *testing.T) {
 	base := "/tmp/runs"
 	id := "run-01"
-	got := RunPath(base, id)
+	got, err := RunPath(base, id)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	want := filepath.Join(base, id)
 	if got != want {
 		t.Errorf("RunPath(%q, %q) = %q, want %q", base, id, got, want)
+	}
+}
+
+func TestConfinePath_Valid(t *testing.T) {
+	base := t.TempDir()
+	got, err := ConfinePath(base, "my-run")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := filepath.Join(base, "my-run")
+	if got != want {
+		t.Errorf("ConfinePath(%q, %q) = %q, want %q", base, "my-run", got, want)
+	}
+}
+
+func TestConfinePath_TraversalBlocked(t *testing.T) {
+	base := t.TempDir()
+	_, err := ConfinePath(base, "../../../etc/shadow")
+	if err == nil {
+		t.Fatal("expected error for traversal path, got nil")
+	}
+}
+
+func TestConfinePath_AbsolutePathBlocked(t *testing.T) {
+	base := t.TempDir()
+	_, err := ConfinePath(base, "/etc/passwd")
+	if err == nil {
+		t.Fatal("expected error for absolute path, got nil")
+	}
+}
+
+func TestInitRun_TraversalBlocked(t *testing.T) {
+	base := t.TempDir()
+	err := InitRun(base, "../../escape", "goal: evil\n")
+	if err == nil {
+		t.Fatal("expected error for traversal runID, got nil")
 	}
 }
