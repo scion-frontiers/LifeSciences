@@ -1176,7 +1176,7 @@ def test_title_double_quotes_sanitized() -> None:
 
     try:
         cite_module._resolve_epmc = mock_resolve_epmc
-        result = _resolve_citation(citation, 0.85, 0.60)
+        _resolve_citation(citation, 0.85, 0.60)
     finally:
         cite_module._resolve_epmc = original_resolve_epmc
 
@@ -1187,9 +1187,7 @@ def test_title_double_quotes_sanitized() -> None:
     # The query must not contain unescaped internal double quotes
     # that would break the ePMC query parser
     inner = query.split('TITLE:"', 1)[1].rsplit('"', 1)[0]
-    assert '"' not in inner, (
-        f"Double quotes in title were not sanitized: {query!r}"
-    )
+    assert '"' not in inner, f"Double quotes in title were not sanitized: {query!r}"
     print("  PASS: title double quotes sanitized (#179)")
 
 

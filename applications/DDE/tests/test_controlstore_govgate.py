@@ -232,9 +232,7 @@ def test_concept_loader_returns_highest_revision():
         assert result["termination_authority"] == "human", (
             f"expected 'human' (r3), got {result['termination_authority']!r}"
         )
-        assert result["revision"] == 3, (
-            f"expected revision 3, got {result['revision']}"
-        )
+        assert result["revision"] == 3, f"expected revision 3, got {result['revision']}"
 
 
 _check(
@@ -275,9 +273,7 @@ def test_stale_unversioned_does_not_bypass_human_approval():
                 "the human-approval gate"
             )
         except Refusal as exc:
-            assert exc.exit_code == 9, (
-                f"expected exit code 9, got {exc.exit_code}"
-            )
+            assert exc.exit_code == 9, f"expected exit code 9, got {exc.exit_code}"
             assert "human approval" in exc.message.lower(), exc.message
 
 

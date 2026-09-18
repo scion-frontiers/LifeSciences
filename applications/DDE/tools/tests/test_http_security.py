@@ -29,10 +29,10 @@ from dde.core import http
 from dde.core.errors import EndpointError, EndpointUnavailable
 from dde.core.http import _sanitize_text, _sanitize_url
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_response(
     *,
@@ -100,8 +100,7 @@ class TestStreamingRetry(unittest.TestCase):
                 iter_content_side_effect=_exploding_iter,
             )
 
-        with patch.object(http, "requests") as mock_lib, \
-             patch("time.sleep"):
+        with patch.object(http, "requests") as mock_lib, patch("time.sleep"):
             mock_lib.request.side_effect = _make_exploding_response
             with self.assertRaises(EndpointUnavailable) as ctx:
                 http.request(
@@ -131,14 +130,14 @@ class TestStreamingRetry(unittest.TestCase):
                 # First attempt: response OK, but streaming fails.
                 def _exploding(*_a2, **_kw2):
                     raise ConnectionError("stream reset")
+
                 return _make_response(
                     iter_content_side_effect=_exploding,
                 )
             # Second attempt: normal response.
             return _make_response(content=b"hello")
 
-        with patch.object(http, "requests") as mock_lib, \
-             patch("time.sleep"):
+        with patch.object(http, "requests") as mock_lib, patch("time.sleep"):
             mock_lib.request.side_effect = _request_side_effect
             result = http.request(
                 "GET", "https://api.example.com/data", qps=0, max_attempts=3
@@ -158,17 +157,15 @@ class TestStreamingRetry(unittest.TestCase):
         def _request_side_effect(*_a, **_kw):
             def _exploding(*_a2, **_kw2):
                 raise OSError("read timeout")
+
             resp = _make_response(iter_content_side_effect=_exploding)
             responses.append(resp)
             return resp
 
-        with patch.object(http, "requests") as mock_lib, \
-             patch("time.sleep"):
+        with patch.object(http, "requests") as mock_lib, patch("time.sleep"):
             mock_lib.request.side_effect = _request_side_effect
             with self.assertRaises(EndpointUnavailable):
-                http.request(
-                    "GET", "https://api.example.com/r", qps=0, max_attempts=2
-                )
+                http.request("GET", "https://api.example.com/r", qps=0, max_attempts=2)
 
         # Every failed response must have had .close() called.
         for resp in responses:
@@ -186,8 +183,10 @@ class TestStreamingRetry(unittest.TestCase):
             nonlocal call_count
             call_count += 1
             if call_count <= 2:
+
                 def _exploding(*_a2, **_kw2):
                     raise ConnectionError("drain failed")
+
                 return _make_response(
                     status_code=500,
                     iter_content_side_effect=_exploding,
@@ -195,8 +194,7 @@ class TestStreamingRetry(unittest.TestCase):
             # Third attempt: clean 200
             return _make_response(content=b"ok")
 
-        with patch.object(http, "requests") as mock_lib, \
-             patch("time.sleep"):
+        with patch.object(http, "requests") as mock_lib, patch("time.sleep"):
             mock_lib.request.side_effect = _request_side_effect
             result = http.request(
                 "GET", "https://api.example.com/r", qps=0, max_attempts=3
@@ -312,7 +310,7 @@ class TestSanitizeText(unittest.TestCase):
     # 14. Embedded URL with authority creds in error body
     # ------------------------------------------------------------------
     def test_embedded_url_authority_redacted(self):
-        body = 'Error connecting to https://admin:s3cret@db.internal:5432/main'
+        body = "Error connecting to https://admin:s3cret@db.internal:5432/main"
         result = _sanitize_text(body)
         self.assertNotIn("admin", result)
         self.assertNotIn("s3cret", result)
@@ -340,7 +338,9 @@ class TestErrorBodySanitization(unittest.TestCase):
     def test_non_retryable_error_body_sanitized(self):
         """When a 403 response body echoes credentials, the detail
         attached to EndpointError must have them redacted."""
-        error_body = b'{"error":"bad token","url":"https://x.com/a?access_token=LEAKED"}'
+        error_body = (
+            b'{"error":"bad token","url":"https://x.com/a?access_token=LEAKED"}'
+        )
         resp = _make_response(
             status_code=403,
             content=error_body,
@@ -362,7 +362,7 @@ class TestErrorBodySanitization(unittest.TestCase):
     def test_retryable_error_body_sanitized(self):
         """When a 503 response body echoes credentials, the detail
         on the final EndpointUnavailable must have them redacted."""
-        error_body = b'retry: see https://user:pwd@internal/status'
+        error_body = b"retry: see https://user:pwd@internal/status"
         resp = _make_response(
             status_code=503,
             content=error_body,
@@ -370,13 +370,10 @@ class TestErrorBodySanitization(unittest.TestCase):
         resp.iter_content = MagicMock(return_value=iter([error_body]))
         resp.text = error_body.decode()
 
-        with patch.object(http, "requests") as mock_lib, \
-             patch("time.sleep"):
+        with patch.object(http, "requests") as mock_lib, patch("time.sleep"):
             mock_lib.request.return_value = resp
             with self.assertRaises(EndpointUnavailable) as ctx:
-                http.request(
-                    "GET", "https://example.com/api", qps=0, max_attempts=1
-                )
+                http.request("GET", "https://example.com/api", qps=0, max_attempts=1)
 
         self.assertNotIn("pwd", ctx.exception.detail or "")
         self.assertNotIn("user:", ctx.exception.detail or "")

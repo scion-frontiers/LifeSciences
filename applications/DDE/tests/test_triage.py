@@ -1958,8 +1958,6 @@ def test_structure_screening_envelope_unpacked():
         ],
     }
     # Apply the same logic that run_structure_screening_workstream uses
-    import json as _json
-
     output = envelope
     if isinstance(output, dict):
         ws.assessments.extend(output.get("assessments", [output]))

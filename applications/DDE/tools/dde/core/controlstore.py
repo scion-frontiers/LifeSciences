@@ -505,9 +505,7 @@ def _default_concept_loader(project_root: Path):
         # if no revisioned record exists.
         import re as _re
 
-        revision_re = _re.compile(
-            r"^" + _re.escape(concept_id) + r"-r(\d+)\.json$"
-        )
+        revision_re = _re.compile(r"^" + _re.escape(concept_id) + r"-r(\d+)\.json$")
         best: tuple[int, Path] | None = None
         for p in concepts_dir.iterdir():
             m = revision_re.match(p.name)

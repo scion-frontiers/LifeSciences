@@ -152,7 +152,9 @@ def _sanitize_url(url: str) -> str:
             host = parts.hostname or ""
             if parts.port:
                 host = f"{host}:{parts.port}"
-            url = urlunsplit((parts.scheme, host, parts.path, parts.query, parts.fragment))
+            url = urlunsplit(
+                (parts.scheme, host, parts.path, parts.query, parts.fragment)
+            )
     except ValueError:
         pass  # Malformed URL — fall through to param redaction.
     # Redact sensitive query-string parameters.
@@ -386,9 +388,7 @@ def request(
             _drain_limited(response)
             body = _sanitize_text((response.text or "")[:500])
             last_status = response.status_code
-            last_detail = _sanitize_text(
-                f"HTTP {response.status_code}: {body}"
-            )
+            last_detail = _sanitize_text(f"HTTP {response.status_code}: {body}")
 
         except (EndpointError, EndpointUnavailable):
             raise

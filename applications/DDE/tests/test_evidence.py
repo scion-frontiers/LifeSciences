@@ -543,8 +543,7 @@ def test_invalid_authority_with_approval_succeeds():
         )
         errors = validate_decision(record, concept_loader=loader)
         assert errors == [], (
-            f"term_auth={bad_auth!r} with approval should succeed, "
-            f"got errors: {errors}"
+            f"term_auth={bad_auth!r} with approval should succeed, got errors: {errors}"
         )
 
 

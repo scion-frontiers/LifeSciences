@@ -300,9 +300,7 @@ def run_manufacturing_workstream(
                 output = _extract_json_object(cli_result.output)
 
             if isinstance(output, dict):
-                full = _read_output_artifact(
-                    output, "manufacturing-assessment"
-                )
+                full = _read_output_artifact(output, "manufacturing-assessment")
                 result.assessments.append(full if full else output)
             elif output is None:
                 result.errors.append(
@@ -406,13 +404,10 @@ def run_structure_screening_workstream(
         elif isinstance(output, dict):
             # The structure-screen command may wrap assessments
             # in an envelope dict with an 'assessments' key.
-            result.assessments.extend(
-                output.get("assessments", [output])
-            )
+            result.assessments.extend(output.get("assessments", [output]))
         elif output is None:
             result.errors.append(
-                f"Structure screening output not parseable: "
-                f"{cli_result.output[:200]}"
+                f"Structure screening output not parseable: {cli_result.output[:200]}"
             )
     else:
         result.errors.append(
@@ -483,7 +478,10 @@ def run_differentiation_workstream(
             # path in outputs.assessment.  Convert it to
             # evidence-assessment records for persistence.
             diff_record = _read_output_artifact(output, "assessment")
-            if diff_record and diff_record.get("schema") == "dde.competitive-differentiation.v1":
+            if (
+                diff_record
+                and diff_record.get("schema") == "dde.competitive-differentiation.v1"
+            ):
                 from dde.commands.differentiation import (
                     build_assessment_records,
                 )
@@ -501,8 +499,7 @@ def run_differentiation_workstream(
                 result.assessments.append(output)
         elif output is None:
             result.errors.append(
-                f"Differentiation output not parseable: "
-                f"{cli_result.output[:200]}"
+                f"Differentiation output not parseable: {cli_result.output[:200]}"
             )
     else:
         result.errors.append(
