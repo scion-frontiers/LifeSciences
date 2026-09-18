@@ -721,6 +721,20 @@ def transition_cmd(
             remedy=f"use `dde validate check {id}` instead",
         )
 
+    # Guard: proposed → committed requires running the full commit
+    # validation and context-snapshot logic via `dde workorder commit`.
+    # Allowing it here would bypass artifact path checks, liability
+    # gates, context size limits, and snapshot creation.
+    if current_state == "proposed" and target_state == "committed":
+        raise Refusal(
+            "cannot transition directly from 'proposed' to 'committed'",
+            detail=(
+                "committing a work order requires content validation, "
+                "liability checks, and context snapshotting"
+            ),
+            remedy=f"use `dde workorder commit {id}` instead",
+        )
+
     # Validate the transition.
     validate_transition("workorder", current_state, target_state)
 
@@ -898,19 +912,53 @@ def override_cmd(
             ),
         )
 
-    # Check for path-confinement violations in the named checks' detail.
-    # A check whose failure includes path_confinement_failures represents
-    # a security boundary and is never overridable regardless of the
-    # allow-list.
+    # Block if any failed check is non-overridable — even if the
+    # operator only named overridable checks, the presence of a
+    # non-overridable failure means the work order cannot be overridden
+    # until that structural/security issue is resolved.
+    non_overridable_in_failed = [
+        c for c in checks_failed if c in NON_OVERRIDABLE_CHECKS
+    ]
+    if non_overridable_in_failed:
+        raise Refusal(
+            f"cannot override: non-overridable check(s) also failed: "
+            f"{', '.join(non_overridable_in_failed)}",
+            detail=(
+                f"{', '.join(non_overridable_in_failed)} represent structural "
+                "defects or security boundaries that must be resolved before "
+                "any override is permitted"
+            ),
+            remedy=(
+                "fix the non-overridable check failures first, then retry "
+                "the override for the remaining overridable checks"
+            ),
+        )
+
+    # Block if not all failed checks are covered — partial overrides
+    # would leave unaddressed failures, effectively bypassing validation
+    # for the uncovered checks.
+    uncovered = set(checks_failed) - set(check_names)
+    if uncovered:
+        raise Refusal(
+            f"override must cover all failed checks; uncovered: "
+            f"{', '.join(sorted(uncovered))}",
+            detail="partial overrides leave unaddressed failures that would bypass validation",
+            remedy=f"add {', '.join(sorted(uncovered))} to --checks, or fix them first",
+        )
+
+    # Check for path-confinement violations in ALL failed checks' detail,
+    # not just the ones named in --checks.  A check whose failure includes
+    # path_confinement_failures represents a security boundary and is never
+    # overridable regardless of the allow-list.
     checks_by_name = {c["name"]: c for c in val_checks}
-    for check_name in check_names:
-        check_data = checks_by_name.get(check_name, {})
+    for failed_check_name in checks_failed:
+        check_data = checks_by_name.get(failed_check_name, {})
         detail = check_data.get("detail", {})
         if isinstance(detail, dict):
             pcf = detail.get("path_confinement_failures")
             if pcf and isinstance(pcf, list) and len(pcf) > 0:
                 raise Refusal(
-                    f"cannot override {check_name}: failure includes "
+                    f"cannot override: check {failed_check_name!r} has "
                     "path-confinement violations",
                     detail=(
                         "path-confinement violations represent security "
@@ -918,7 +966,7 @@ def override_cmd(
                     ),
                     remedy=(
                         "resolve the path-confinement issue before "
-                        "overriding, or remove this check from --checks"
+                        "attempting any override"
                     ),
                 )
 

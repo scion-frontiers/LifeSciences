@@ -292,6 +292,14 @@ def validate_concept(data: dict[str, Any]) -> list[str]:
                 f"or null, got {ta!r}"
             )
 
+    # charter_ref type validation: when present and non-null, must be a string.
+    if "charter_ref" in data and data["charter_ref"] is not None:
+        if not isinstance(data["charter_ref"], str):
+            errors.append(
+                f"charter_ref must be a string or null, "
+                f"got {type(data['charter_ref']).__name__}"
+            )
+
     # ---------------------------------------------------------------
     # Charter-linkage gate (Refusal, not SchemaError).
     #
@@ -324,13 +332,12 @@ def check_charter_linkage(data: dict[str, Any], target_state: str) -> str | None
     """Return an error message if the charter-linkage gate blocks transition.
 
     A concept cannot transition to ``"active"`` without ``charter_ref``
-    being set.  Returns ``None`` when the transition is permitted.
+    being set to a valid charter decision identifier string.
+    Returns ``None`` when the transition is permitted.
     """
     if target_state == "active":
         charter_ref = data.get("charter_ref")
-        if charter_ref is None or (
-            isinstance(charter_ref, str) and not charter_ref.strip()
-        ):
+        if not isinstance(charter_ref, str) or not charter_ref.strip():
             return (
                 "concept cannot transition to 'active' without charter_ref; "
                 "set charter_ref to the originating charter decision "
