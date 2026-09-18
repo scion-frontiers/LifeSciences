@@ -133,6 +133,12 @@ def _validate_panel(doc: dict) -> list[str]:
     else:
         problems.extend(_validate_target(doc["primary_target"], "primary_target"))
 
+    if "panel_complete" in doc and not isinstance(doc["panel_complete"], bool):
+        problems.append(
+            f"panel_complete must be a boolean, got {type(doc['panel_complete']).__name__} "
+            f"({doc['panel_complete']!r})"
+        )
+
     if "off_targets" not in doc:
         problems.append("missing required field: off_targets")
     elif not isinstance(doc["off_targets"], list):
@@ -446,8 +452,10 @@ def analyze(
         seen_codes.add(code)
 
     # --- Defect-triggered relay: panel_incomplete ---
-    # Fires when panel_complete is not true.
-    if not panel_complete:
+    # Fires when panel_complete is not exactly boolean True.  Using
+    # ``is not True`` instead of ``not panel_complete`` prevents a
+    # non-empty string like "false" from suppressing the relay.
+    if panel_complete is not True:
         code = "selectivity.panel_incomplete"
         off_target_names = [r["off_target"] for r in ratios]
         if code not in seen_codes:

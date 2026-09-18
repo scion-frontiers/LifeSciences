@@ -1566,14 +1566,35 @@ def analyze_cmd(
         # --- collect upstream relays from all phase-1 sidecars ---
         relays: list[dict[str, str]] = []
         seen_codes: set[str] = set()
+
+        # The prepare sidecar is named {receptor_id}.prepare.meta.json
+        # (keyed on the structure stem), NOT {ligand}_{receptor_id}.  Use
+        # the receptor_id stored in the docking result to look it up
+        # correctly.  The docking sidecar IS named {stem}.docking.meta.json
+        # (same composite stem as the result file).
+        receptor_id = result_doc.get("receptor_id", "")
+        sidecar_stems = {
+            "prepare": receptor_id or stem,
+            "docking": stem,
+        }
         for suffix in ("prepare", "docking"):
-            meta_candidate = from_dir_path / f"{stem}.{suffix}.meta.json"
+            lookup_stem = sidecar_stems[suffix]
+            meta_candidate = from_dir_path / f"{lookup_stem}.{suffix}.meta.json"
             if meta_candidate.is_file():
                 meta = provenance.read_json(meta_candidate, f"{suffix} sidecar")
                 for r in meta.get("mandatory_relays", []) or []:
                     if r["code"] not in seen_codes:
                         relays.append(r)
                         seen_codes.add(r["code"])
+            elif suffix == "prepare":
+                import logging
+
+                logging.getLogger("dde.docking").warning(
+                    "prepare sidecar not found at %s — upstream relays "
+                    "(pocket quality alerts, conformation dependence, "
+                    "peptide occlusion) will be missing from the analysis",
+                    meta_candidate,
+                )
 
         # --- conditional relay: score_is_not_affinity ---
         # Fires when any pose is in the strong or moderate band — the over-
