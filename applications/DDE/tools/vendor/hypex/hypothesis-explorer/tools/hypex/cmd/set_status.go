@@ -71,7 +71,10 @@ func runSetStatus(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid status %q: must be one of proposed, reviewed, active, merged, retired, quarantined", targetStatus)
 	}
 
-	runDir := datastore.RunPath(flagRunDir, flagRunID)
+	runDir, err := datastore.RunPath(flagRunDir, flagRunID)
+	if err != nil {
+		return fmt.Errorf("invalid run ID: %w", err)
+	}
 	hypoPath := filepath.Join(runDir, "hypotheses", hypothesisID+".json")
 	quarPath := filepath.Join(runDir, "quarantine", hypothesisID+".json")
 

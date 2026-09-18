@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // RunSubdirs is the list of subdirectories created inside each run.
@@ -36,14 +37,37 @@ var RunSubdirs = []string{
 	"citations",
 }
 
+// ConfinePath validates that the joined path of baseDir and untrusted
+// stays within baseDir. Returns the cleaned absolute path or an error
+// if the path escapes.
+func ConfinePath(baseDir, untrusted string) (string, error) {
+	// Reject absolute untrusted paths outright — a run ID should never be
+	// an absolute path regardless of how filepath.Join would handle it.
+	if filepath.IsAbs(untrusted) {
+		return "", fmt.Errorf("path %q escapes base directory %q", untrusted, baseDir)
+	}
+	base := filepath.Clean(baseDir)
+	joined := filepath.Join(base, untrusted)
+	cleaned := filepath.Clean(joined)
+	// Ensure cleaned path is within base directory.
+	// Add separator to avoid prefix false positives (e.g., /tmp/runs vs /tmp/runs-evil).
+	if cleaned != base && !strings.HasPrefix(cleaned+string(os.PathSeparator), base+string(os.PathSeparator)) {
+		return "", fmt.Errorf("path %q escapes base directory %q", untrusted, baseDir)
+	}
+	return cleaned, nil
+}
+
 // RunPath returns the full path to a run directory.
-func RunPath(baseDir, runID string) string {
-	return filepath.Join(baseDir, runID)
+func RunPath(baseDir, runID string) (string, error) {
+	return ConfinePath(baseDir, runID)
 }
 
 // InitRun creates the run directory structure and writes run.yaml.
 func InitRun(baseDir, runID, runYAML string) error {
-	runDir := RunPath(baseDir, runID)
+	runDir, err := RunPath(baseDir, runID)
+	if err != nil {
+		return fmt.Errorf("invalid run ID: %w", err)
+	}
 
 	if _, err := os.Stat(runDir); err == nil {
 		return fmt.Errorf("run directory already exists: %s", runDir)
