@@ -45,6 +45,7 @@ if str(TOOLS_DIR) not in sys.path:
 from dde.commands.cite import (
     _classify,
     _extract_citations,
+    _resolve_citation,
     _slug,
     _title_similarity,
 )
@@ -1143,6 +1144,56 @@ def test_slug() -> None:
 
 
 # ---------------------------------------------------------------------------
+# 13. Regression: #179 — Title query injection / double-quote sanitization
+# ---------------------------------------------------------------------------
+
+
+def test_title_double_quotes_sanitized() -> None:
+    """Double quotes in a title must be sanitized before querying ePMC.
+
+    Before the fix, internal double quotes in a title were passed
+    unescaped to Europe PMC's query parser, causing HTTP 400 errors
+    that were misclassified as network_error/timeout.
+    """
+    citation = {
+        "kind": "title",
+        "normalised": 'Study on "target" binding and efficacy',
+        "raw_id": 'Study on "target" binding and efficacy',
+        "claimed_title": 'Study on "target" binding and efficacy',
+    }
+
+    # Mock _resolve_epmc to capture the query string
+    captured_queries: list[str] = []
+    original_resolve_epmc = None
+
+    import dde.commands.cite as cite_module
+
+    original_resolve_epmc = cite_module._resolve_epmc
+
+    def mock_resolve_epmc(query: str, source_label: str) -> dict[str, Any]:
+        captured_queries.append(query)
+        return {"found": False, "source": "epmc"}
+
+    try:
+        cite_module._resolve_epmc = mock_resolve_epmc
+        result = _resolve_citation(citation, 0.85, 0.60)
+    finally:
+        cite_module._resolve_epmc = original_resolve_epmc
+
+    assert len(captured_queries) == 1, (
+        f"Expected exactly one ePMC query, got {len(captured_queries)}"
+    )
+    query = captured_queries[0]
+    # The query must not contain unescaped internal double quotes
+    # that would break the ePMC query parser
+    inner = query.split('TITLE:"', 1)[1].rsplit('"', 1)[0]
+    assert '"' not in inner, (
+        f"Double quotes in title were not sanitized: {query!r}"
+    )
+    print("  PASS: title double quotes sanitized (#179)")
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
@@ -1202,6 +1253,11 @@ def main() -> None:
         ("test_manifest_schema", test_manifest_schema),
         # Slug
         ("test_slug", test_slug),
+        # Regression: #179 — title query injection
+        (
+            "test_title_double_quotes_sanitized",
+            test_title_double_quotes_sanitized,
+        ),
     ]
 
     passed = 0

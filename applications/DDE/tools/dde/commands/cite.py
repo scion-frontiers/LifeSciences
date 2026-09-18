@@ -360,7 +360,10 @@ def _resolve_citation(
     elif kind == "nct":
         result = _resolve_ctgov(value)
     elif kind == "title":
-        result = _resolve_epmc(f'TITLE:"{value}"', "title")
+        # Sanitize double quotes to prevent query injection and
+        # malformed Europe PMC queries (HTTP 400 → false network_error).
+        sanitized = value.replace('"', " ")
+        result = _resolve_epmc(f'TITLE:"{sanitized}"', "title")
     else:
         result = {"found": False, "source": "unknown"}
 

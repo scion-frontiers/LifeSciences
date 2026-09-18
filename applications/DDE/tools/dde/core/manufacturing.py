@@ -427,6 +427,20 @@ def assess_stage0(
             }
         )
         overall_status = "not_yet_applicable"
+    elif platform_info is None:
+        # Entity exists but modality is unrecognized — cannot assess
+        findings.append(
+            {
+                "aspect": "entity_manufacturing_assessment",
+                "status": "not_assessed",
+                "detail": (
+                    f"Modality {modality!r} is not recognized.  "
+                    "Entity-level manufacturing assessment cannot be "
+                    "performed without a known production platform."
+                ),
+            }
+        )
+        # overall_status stays "not_assessed" — do NOT override
     else:
         if modality in SA_SCORE_MODALITIES:
             # Small-molecule-like: SA-score + complexity heuristics
