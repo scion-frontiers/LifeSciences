@@ -345,6 +345,15 @@ def compute_cmd(
     # --- count MSA sequences ---
     n_sequences = _count_msa_sequences(msa_path)
 
+    # --- compute canonical sequence length ---
+    # canonical_length is the full length of the reference sequence, which
+    # may be larger than len(residues) when some positions are gap-only in
+    # the MSA and therefore unscored by rate4site.  We derive it from the
+    # maximum position index reported by rate4site.
+    canonical_length = (
+        max(res["position"] for res in residues) if residues else len(residues)
+    )
+
     # --- write conservation JSON ---
     record: dict[str, Any] = {
         "tool": "conservation",
@@ -353,6 +362,7 @@ def compute_cmd(
         "msa_file": msa_path.name,
         "n_sequences": n_sequences,
         "n_positions": len(residues),
+        "canonical_length": canonical_length,
         "model": model,
         "method": method,
         "residues": residues,
@@ -654,16 +664,21 @@ def analyze_cmd(
 
     # --- coverage computation ---
     # Determine how many positions were actually scored vs total positions
-    # in the MSA.  total_positions comes from the conservation record's
-    # n_positions (which counts only scored residues from rate4site output),
-    # but the MSA may have more columns if some were gap-only and thus
-    # unscored.  We use the msa_coverage field on each residue when present.
-    total_positions = record.get("n_positions", n_positions)
-    # Residues in the record ARE the scored positions (rate4site only emits
-    # rows for positions it scored).  Unscored positions are those NOT in
-    # the record.  If the record has a broader total from the MSA reference
-    # sequence, use that.
-    canonical_length = record.get("canonical_length", total_positions)
+    # in the canonical sequence.  canonical_length is the full reference
+    # sequence length (derived from the max position index), which may be
+    # larger than len(residues) when some positions are gap-only in the MSA
+    # and therefore unscored by rate4site.
+    #
+    # When canonical_length is present in the record (compute_cmd now writes
+    # it), use it directly.  For older records that lack it, derive it from
+    # the max position index in residues — NOT from len(residues), which
+    # would make coverage always 1.0 and suppress the low_coverage relay.
+    if "canonical_length" in record:
+        canonical_length = record["canonical_length"]
+    elif residues:
+        canonical_length = max(res["position"] for res in residues)
+    else:
+        canonical_length = n_positions
     if canonical_length < n_positions:
         canonical_length = n_positions
 
