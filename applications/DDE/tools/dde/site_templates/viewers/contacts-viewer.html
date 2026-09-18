@@ -50,6 +50,12 @@
       document.getElementById('error').textContent = msg;
     }
 
+    function escapeHtml(str) {
+      var div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
     /* Shipped matrix fallback: convert contact list to 2D matrix */
     function contactListToMatrix(contacts) {
       var maxRes = 0;
@@ -177,8 +183,8 @@
       /* Show inter-chain binding info */
       var infoDiv = document.getElementById('binding-info');
       infoDiv.style.display = 'block';
-      var infoText = residues.length + ' pocket residues | ' +
-        chainKeys.length + ' chain(s): ' + chainKeys.join(', ');
+      var infoText = escapeHtml(String(residues.length)) + ' pocket residues | ' +
+        escapeHtml(String(chainKeys.length)) + ' chain(s): ' + chainKeys.map(function(k) { return escapeHtml(String(k)); }).join(', ');
       if (isInterChain) {
         infoText += ' | ';
         infoDiv.innerHTML = infoText +

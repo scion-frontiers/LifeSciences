@@ -177,11 +177,11 @@
         else if (ranking === 3) rankCls += ' rank-3';
 
         html += '<tr class="data-row' + (isTop ? ' top-idea' : '') + '" data-idea-id="' + escapeHtml(String(idea.id || '')) + '">';
-        html += '<td class="' + rankCls + '">' + ranking + '</td>';
+        html += '<td class="' + rankCls + '">' + escapeHtml(String(ranking)) + '</td>';
         html += '<td class="idea-title"><span class="expand-icon">&#9654;</span>' + escapeHtml(idea.title || '') + '</td>';
-        html += '<td><span class="elo-badge ' + eloClass(elo, highestElo) + '">' + Math.round(elo) + '</span></td>';
-        html += '<td>' + won + '-' + lost + '</td>';
-        html += '<td><span class="win-rate ' + winRateClass(winRate) + '">' + (winRate * 100).toFixed(1) + '%</span></td>';
+        html += '<td><span class="elo-badge ' + eloClass(elo, highestElo) + '">' + escapeHtml(String(Math.round(elo))) + '</span></td>';
+        html += '<td>' + escapeHtml(String(won)) + '-' + escapeHtml(String(lost)) + '</td>';
+        html += '<td><span class="win-rate ' + winRateClass(winRate) + '">' + escapeHtml(String((winRate * 100).toFixed(1))) + '%</span></td>';
         html += '<td>' + escapeHtml(gene) + '</td>';
         html += '</tr>';
 
@@ -191,7 +191,7 @@
         html += '<tr class="detail-row" data-detail-for="' + escapeHtml(String(idea.id || '')) + '"><td colspan="6"><div class="detail-content">';
         if (category) html += '<span class="category">' + escapeHtml(category) + '</span>';
         if (summary) html += '<h4>Summary</h4><p>' + escapeHtml(summary) + '</p>';
-        if (idea.n_reviews) html += '<h4>Reviews</h4><p>' + idea.n_reviews + ' expert reviews completed</p>';
+        if (idea.n_reviews) html += '<h4>Reviews</h4><p>' + escapeHtml(String(idea.n_reviews)) + ' expert reviews completed</p>';
         html += '</div></td></tr>';
       });
 
@@ -313,9 +313,9 @@
               const metaItems = [];
               if (t.stage) metaItems.push('<span class="meta-item"><strong>Stage:</strong> ' + escapeHtml(String(t.stage)) + '</span>');
               if (t.state) metaItems.push('<span class="meta-item"><strong>Status:</strong> ' + escapeHtml(String(t.state)) + '</span>');
-              if (stats.n_ideas_generated) metaItems.push('<span class="meta-item"><strong>Ideas Generated:</strong> ' + stats.n_ideas_generated + '</span>');
-              if (stats.highest_elo) metaItems.push('<span class="meta-item"><strong>Highest ELO:</strong> ' + Math.round(stats.highest_elo) + '</span>');
-              if (t.created) metaItems.push('<span class="meta-item"><strong>Date:</strong> ' + new Date(t.created).toLocaleDateString() + '</span>');
+              if (stats.n_ideas_generated) metaItems.push('<span class="meta-item"><strong>Ideas Generated:</strong> ' + escapeHtml(String(stats.n_ideas_generated)) + '</span>');
+              if (stats.highest_elo) metaItems.push('<span class="meta-item"><strong>Highest ELO:</strong> ' + escapeHtml(String(Math.round(stats.highest_elo))) + '</span>');
+              if (t.created) metaItems.push('<span class="meta-item"><strong>Date:</strong> ' + escapeHtml(String(new Date(t.created).toLocaleDateString())) + '</span>');
 
               document.getElementById('tournament-meta').innerHTML = metaItems.join('');
             }

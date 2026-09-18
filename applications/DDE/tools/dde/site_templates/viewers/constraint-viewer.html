@@ -67,6 +67,12 @@
       document.getElementById('error').textContent = msg;
     }
 
+    function escapeHtml(str) {
+      var div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
     function classify(metric, value) {
       if (typeof value !== 'number' || isNaN(value)) return '';
       switch (metric) {
@@ -198,15 +204,15 @@
             var displayVal = (m.value !== undefined && m.value !== null && !isNaN(m.value))
               ? m.format(m.value) : '—';
             var ciStr = m.ci
-              ? '<span style="font-size:12px;color:#94a3b8;margin-left:6px;">' + m.ci + '</span>'
+              ? '<span style="font-size:12px;color:#94a3b8;margin-left:6px;">' + escapeHtml(m.ci) + '</span>'
               : '';
 
             return '<div class="metric-card ' + cls + '">' +
-              '<div class="metric-value">' + displayVal + ciStr + '</div>' +
+              '<div class="metric-value">' + escapeHtml(String(displayVal)) + ciStr + '</div>' +
               '<div class="metric-label">' + m.label + '</div>' +
               '<div class="metric-desc">' + m.desc + '</div>' +
               (m.threshold ? '<div class="metric-counts">' + m.threshold + '</div>' : '') +
-              (m.counts ? '<div class="metric-counts">' + m.counts + '</div>' : '') +
+              (m.counts ? '<div class="metric-counts">' + escapeHtml(m.counts) + '</div>' : '') +
             '</div>';
           }).join('');
 
