@@ -756,12 +756,14 @@ def _endpoint_pass_fail(endpoints: dict[str, Any]) -> dict[str, str]:
 @admet.command("predict-batch")
 @click.argument("input_file", type=click.Path())
 @out_option
+@_overwrite_option
 @output_options
 @pass_state
 def predict_batch_cmd(
     state: AppState,
     input_file: str,
     out: str | None,
+    overwrite: bool,
     as_json: bool,
     quiet: bool,
 ) -> None:
@@ -840,11 +842,19 @@ def predict_batch_cmd(
 
             # Write individual prediction JSON
             record_path = target_dir / f"{slug}.predict.json"
-            record_path.write_text(
-                json.dumps(record, indent=2, allow_nan=False) + "\n",
-                encoding="utf-8",
-            )
+            content = json.dumps(record, indent=2, allow_nan=False) + "\n"
+            _safe_write_artifact(record_path, content, overwrite=overwrite)
             sidecar.add_output(record_path)
+
+            # Per-compound provenance sidecar
+            fragment_notes = record.get("fragment_notes", {})
+            compound_sidecar = _build_sidecar(
+                "predict", smiles_input, canonical, fragment_notes
+            )
+            if name:
+                compound_sidecar.note("compound_name", name)
+            compound_sidecar.add_output(record_path)
+            compound_sidecar.write(target_dir / f"{slug}.predict.meta.json")
 
             # Build summary row
             flags = _endpoint_pass_fail(record["endpoints"])
@@ -920,10 +930,8 @@ def predict_batch_cmd(
     }
 
     batch_path = target_dir / "batch.admet-batch.json"
-    batch_path.write_text(
-        json.dumps(batch_record, indent=2, allow_nan=False) + "\n",
-        encoding="utf-8",
-    )
+    batch_content = json.dumps(batch_record, indent=2, allow_nan=False) + "\n"
+    _safe_write_artifact(batch_path, batch_content, overwrite=overwrite)
     sidecar.add_output(batch_path)
     meta_path = sidecar.write(target_dir / "batch.admet-batch.meta.json")
 

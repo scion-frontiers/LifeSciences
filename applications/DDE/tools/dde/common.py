@@ -78,7 +78,12 @@ def is_phase_two(name: str) -> bool:
     left them unguarded, which is the same defect the guard was written
     to remove: a rule that holds for the commands someone remembered.
     """
-    return name == ANALYZE or name.startswith(f"{ANALYZE}-")
+    return (
+        name == ANALYZE
+        or name.startswith(f"{ANALYZE}-")
+        or name == "assess"
+        or name.startswith("assess-")
+    )
 
 
 #: Injected into every phase-2 command by the root walk, rather than
