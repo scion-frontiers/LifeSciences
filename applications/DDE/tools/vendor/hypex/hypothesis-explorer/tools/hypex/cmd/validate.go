@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/scion-frontiers/hypex/hypothesis-explorer/tools/hypex/internal/datastore"
 	"github.com/scion-frontiers/hypex/hypothesis-explorer/tools/hypex/internal/schema"
 	"github.com/spf13/cobra"
 )
@@ -49,7 +50,10 @@ func runValidate(_ *cobra.Command, args []string) error {
 		files = args
 	} else if flagRunID != "" {
 		// Validate all artifacts in the run.
-		runDir := filepath.Join(flagRunDir, flagRunID)
+		runDir, err := datastore.RunPath(flagRunDir, flagRunID)
+		if err != nil {
+			return fmt.Errorf("invalid run ID: %w", err)
+		}
 		found, err := findArtifactFiles(runDir)
 		if err != nil {
 			return fmt.Errorf("scanning run directory: %w", err)
