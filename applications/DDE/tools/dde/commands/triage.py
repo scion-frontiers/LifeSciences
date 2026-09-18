@@ -37,6 +37,7 @@ from ..common import (
     output_options,
     pass_state,
 )
+from ..core.errors import ProjectRootError, SchemaError
 from ..core.output import Emitter
 from ..core.triage import (
     TriageBudget,
@@ -186,7 +187,7 @@ def run_cmd(
     project_root: str | None = None
     try:
         project_root = str(state.project().root)
-    except Exception:
+    except ProjectRootError:
         # No project context available (no --project, no $DDE_PROJECT,
         # no .dde/ walk-up discovery).  Triage can still run without
         # one, but records will not be persisted to the control store.
@@ -260,7 +261,7 @@ def run_cmd(
     else:
         try:
             target = state.project().artifact_dir("triage", None)
-        except Exception:
+        except (ProjectRootError, SchemaError):
             target = None
 
     if target is not None:

@@ -53,6 +53,7 @@ from click.testing import CliRunner
 from dde.cli import cli
 from dde.common import AppState
 from dde.core.controlstore import CONTROL_DIR, ensure_control_dirs, read_record
+from dde.core.errors import ProjectRootError
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -124,6 +125,9 @@ def test_project_root_resolved_without_project_flag():
     project_root when state.project_override was truthy (i.e. --project
     was passed).  After the fix, state.project().root is called directly,
     which checks $DDE_PROJECT and .dde/ walk-up.
+
+    This test exercises the production code path: AppState.project()
+    calls resolve_project(), which checks $DDE_PROJECT.
     """
     with tempfile.TemporaryDirectory() as td:
         project = _make_project(Path(td))
@@ -134,31 +138,18 @@ def test_project_root_resolved_without_project_flag():
 
             state = AppState(project_override=None)
 
-            # The old code:
-            #   if state.project_override:     # <-- None, so skipped
-            #       project_root = str(state.project().root)
-            # Result: project_root stays None.
-            #
-            # The new code:
-            #   try:
-            #       project_root = str(state.project().root)
-            #   except Exception:
-            #       pass
-            # Result: project_root is resolved from $DDE_PROJECT.
+            # Exercise the production code path directly.
+            # state.project() calls resolve_project() which checks
+            # $DDE_PROJECT — the same path run_cmd uses.
+            resolved_root = state.project().root
 
-            project_root: str | None = None
-            try:
-                project_root = str(state.project().root)
-            except Exception:
-                project_root = None
-
-            assert project_root is not None, (
-                "project_root should be resolved from $DDE_PROJECT when "
+            assert resolved_root is not None, (
+                "state.project().root should resolve from $DDE_PROJECT when "
                 "project_override is None"
             )
-            assert project_root == str(project.resolve()), (
-                f"project_root should match the $DDE_PROJECT directory: "
-                f"expected {project.resolve()!s}, got {project_root!r}"
+            assert str(resolved_root) == str(project.resolve()), (
+                f"state.project().root should match the $DDE_PROJECT directory: "
+                f"expected {project.resolve()!s}, got {resolved_root!s}"
             )
         finally:
             if old_env is None:
@@ -168,36 +159,39 @@ def test_project_root_resolved_without_project_flag():
 
 
 def test_project_root_none_when_no_project_available():
-    """project_root is None when no project is available at all.
+    """state.project() raises ProjectRootError when no project is available.
 
     When there is no --project, no $DDE_PROJECT, and no .dde/ walk-up
-    discovery, the code should gracefully fall through to project_root=None
-    and triage should still run without crashing.
+    discovery, state.project() should raise ProjectRootError.  The
+    production code in run_cmd catches this specific exception and
+    gracefully falls through to project_root=None.
     """
     old_env = os.environ.get("DDE_PROJECT")
+    old_cwd = os.getcwd()
     try:
         os.environ.pop("DDE_PROJECT", None)
 
-        state = AppState(project_override=None)
+        # Move to a temp dir that has no .dde/ to prevent walk-up
+        # discovery from finding one.
+        with tempfile.TemporaryDirectory() as td:
+            os.chdir(td)
 
-        # With no project context at all, state.project() raises
-        # ProjectRootError.  The fix catches this and leaves
-        # project_root = None.
-        project_root: str | None = None
-        try:
-            project_root = str(state.project().root)
-        except Exception:
-            pass
+            state = AppState(project_override=None)
 
-        # The critical invariant: the code did NOT crash.  In an
-        # environment with no .dde/ walk-up (the common case for the
-        # test runner), project_root should be None.  If CWD happens
-        # to be inside a .dde/ project, it may resolve — both outcomes
-        # are correct; the bug was only the crash/skip path.
-        assert project_root is None or isinstance(project_root, str), (
-            "project_root must be None or a string path"
-        )
+            # Exercise the production code path: state.project() should
+            # raise ProjectRootError when no project context exists.
+            raised = False
+            try:
+                state.project()
+            except ProjectRootError:
+                raised = True
+
+            assert raised, (
+                "state.project() should raise ProjectRootError when no "
+                "--project, no $DDE_PROJECT, and no .dde/ walk-up is available"
+            )
     finally:
+        os.chdir(old_cwd)
         if old_env is None:
             os.environ.pop("DDE_PROJECT", None)
         else:
@@ -244,28 +238,27 @@ def test_triage_persists_records_with_dde_project_env():
                 ],
             )
 
-            assert result.exit_code in (0, 2), (
-                f"CLI triage with $DDE_PROJECT exited {result.exit_code}: "
-                f"{result.output[:500]}"
+            assert result.exit_code == 0, (
+                f"CLI triage with $DDE_PROJECT should exit 0, "
+                f"got {result.exit_code}: {result.output[:500]}"
             )
 
-            if result.exit_code == 0:
-                # Budget exhaustion should produce a persisted decision
-                decisions_dir = project / CONTROL_DIR / "decisions"
-                decision_files = list(decisions_dir.glob("DR-*.json"))
-                assert len(decision_files) >= 1, (
-                    "Expected at least one persisted decision record when "
-                    "running CLI with $DDE_PROJECT env var and budget "
-                    "exhaustion.  Before the fix, project_root was None "
-                    "and no records were written."
-                )
+            # Budget exhaustion should produce a persisted decision
+            decisions_dir = project / CONTROL_DIR / "decisions"
+            decision_files = list(decisions_dir.glob("DR-*.json"))
+            assert len(decision_files) >= 1, (
+                "Expected at least one persisted decision record when "
+                "running CLI with $DDE_PROJECT env var and budget "
+                "exhaustion.  Before the fix, project_root was None "
+                "and no records were written."
+            )
 
-                # Read it back through the control-store API
-                dr = read_record(project, "decision", decision_files[0].stem)
-                assert dr["action"] == "investigate", (
-                    f"Budget-exhausted decision should use 'investigate', "
-                    f"got {dr['action']!r}"
-                )
+            # Read it back through the control-store API
+            dr = read_record(project, "decision", decision_files[0].stem)
+            assert dr["action"] == "investigate", (
+                f"Budget-exhausted decision should use 'investigate', "
+                f"got {dr['action']!r}"
+            )
         finally:
             if old_env is None:
                 os.environ.pop("DDE_PROJECT", None)
