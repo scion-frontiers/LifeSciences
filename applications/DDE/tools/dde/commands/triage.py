@@ -184,8 +184,13 @@ def run_cmd(
 
     # --- Resolve project root (optional — triage can run without one) ---
     project_root: str | None = None
-    if state.project_override:
+    try:
         project_root = str(state.project().root)
+    except Exception:
+        # No project context available (no --project, no $DDE_PROJECT,
+        # no .dde/ walk-up discovery).  Triage can still run without
+        # one, but records will not be persisted to the control store.
+        pass
 
     # --- Run triage ---
     from click.testing import CliRunner
