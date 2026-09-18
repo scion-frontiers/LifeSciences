@@ -952,6 +952,57 @@ def _validate_af3_input(payload: dict) -> None:
         seen.add(entry["id"])
 
 
+# ---------------------------------------------------------------------------
+# Lock helpers — used by ``predict`` for single-flight serialisation.
+# ---------------------------------------------------------------------------
+
+_LOCK_POLL_INTERVAL = 0.5  # seconds between non-blocking lock attempts
+
+
+def _resolve_lock_path() -> Path:
+    """Return a user-private lock-file path for AF3 prediction serialisation.
+
+    Respects ``DDE_AF3_LOCK`` when set explicitly; otherwise defaults to
+    ``~/.cache/dde/af3.lock`` and creates the parent directory (mode 0o700)
+    if it does not yet exist.
+    """
+    env = os.environ.get("DDE_AF3_LOCK", "")
+    if env:
+        return Path(env)
+    lock_dir = Path.home() / ".cache" / "dde"
+    lock_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    return lock_dir / "af3.lock"
+
+
+def _acquire_lock_bounded(fd: int, deadline_mono: float) -> None:
+    """Acquire an exclusive flock on *fd*, raising if *deadline_mono* elapses.
+
+    Uses non-blocking attempts with a short polling interval so that the
+    ``--deadline`` timer is respected even while waiting for the lock.
+
+    Raises :class:`EndpointUnavailable` on timeout.
+    """
+    import fcntl
+
+    while True:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return  # lock acquired
+        except OSError:
+            # EWOULDBLOCK / EAGAIN — lock is held by another process
+            pass
+        if time.monotonic() >= deadline_mono:
+            raise EndpointUnavailable(
+                "timed out waiting for the AF3 lock file — another "
+                "prediction is likely running on this host",
+                remedy="wait for the other prediction to finish, "
+                "raise --deadline, or remove the stale lock file",
+            )
+        # Sleep for the poll interval, but not past the deadline.
+        remaining = deadline_mono - time.monotonic()
+        time.sleep(min(_LOCK_POLL_INTERVAL, max(remaining, 0)))
+
+
 @alphafold.command()
 @click.option(
     "--input",
@@ -1079,16 +1130,20 @@ def predict(
     )
 
     body = json.dumps({"instances": [payload]}).encode("utf-8")
-    lock_path = Path(os.environ.get("DDE_AF3_LOCK", "/tmp/dde-af3.lock"))
+    lock_path = _resolve_lock_path()
     started = time.time()
     limit = time.monotonic() + deadline
     attempts = 0
 
     import fcntl
 
-    fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o644)
+    fd = os.open(
+        str(lock_path),
+        os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW,
+        0o600,
+    )
     try:
-        fcntl.flock(fd, fcntl.LOCK_EX)
+        _acquire_lock_bounded(fd, limit)
         while True:
             attempts += 1
             if time.monotonic() > limit:
