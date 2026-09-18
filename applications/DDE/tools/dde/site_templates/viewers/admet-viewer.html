@@ -90,9 +90,12 @@
     }
 
     function escapeHtml(str) {
-      var div = document.createElement('div');
-      div.textContent = str;
-      return div.innerHTML;
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;');
     }
 
     /* Detect if data is in the domain-specific ADMET format */
@@ -114,10 +117,10 @@
       verdictHtml += '<span style="font-weight: 600; font-size: 0.9rem; margin-right: 0.5rem;">Assessment:</span>';
       verdictHtml += '<span class="verdict-badge ' + verdictClass(verdict) + '">' + escapeHtml(verdict) + '</span>';
       if (metrics.n_liabilities != null) {
-        verdictHtml += '<span style="margin-left: 1rem; font-size: 0.85rem; color: #555;">Liabilities: ' + metrics.n_liabilities + '</span>';
+        verdictHtml += '<span style="margin-left: 1rem; font-size: 0.85rem; color: #555;">Liabilities: ' + escapeHtml(String(metrics.n_liabilities)) + '</span>';
       }
       if (metrics.n_marginals != null) {
-        verdictHtml += '<span style="margin-left: 0.75rem; font-size: 0.85rem; color: #555;">Marginals: ' + metrics.n_marginals + '</span>';
+        verdictHtml += '<span style="margin-left: 0.75rem; font-size: 0.85rem; color: #555;">Marginals: ' + escapeHtml(String(metrics.n_marginals)) + '</span>';
       }
       verdictHtml += '</div>';
 
@@ -142,7 +145,7 @@
       var hoverTexts = ENDPOINTS.map(function(ep) {
         var result = endpointResults[ep];
         if (!result) return ENDPOINT_LABELS[ep] + ': no data';
-        return ENDPOINT_LABELS[ep] + ': ' + result.status + ' (' + (STATUS_SCORE[result.status] || 0) + ')';
+        return ENDPOINT_LABELS[ep] + ': ' + escapeHtml(result.status) + ' (' + (STATUS_SCORE[result.status] || 0) + ')';
       });
 
       /* Close the radar polygon */

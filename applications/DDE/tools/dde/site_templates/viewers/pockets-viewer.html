@@ -67,6 +67,15 @@
       document.getElementById('error').textContent = msg;
     }
 
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;');
+    }
+
     var COLUMNS = [
       { key: 'rank', label: 'Rank', format: function(v) { return v; } },
       { key: 'score', label: 'Score', format: function(v) { return v.toFixed(3); }, badge: true },
@@ -121,13 +130,14 @@
             val = (pocket.polar_sasa && pocket.total_sasa) ? pocket.polar_sasa / pocket.total_sasa : undefined;
           }
           var formatted = (val !== undefined && val !== null) ? col.format(val) : '—';
+          var safeFormatted = escapeHtml(String(formatted));
 
           // Add color badge for score columns
           if (col.badge) {
             var numVal = typeof val === 'number' ? val : 0;
-            formatted = '<span class="score-badge ' + scoreColor(numVal) + '">' + formatted + '</span>';
+            safeFormatted = '<span class="score-badge ' + scoreColor(numVal) + '">' + safeFormatted + '</span>';
           }
-          html += '<td>' + formatted + '</td>';
+          html += '<td>' + safeFormatted + '</td>';
         });
         html += '</tr>';
       });

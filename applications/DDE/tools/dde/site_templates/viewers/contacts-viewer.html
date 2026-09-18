@@ -50,6 +50,15 @@
       document.getElementById('error').textContent = msg;
     }
 
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;');
+    }
+
     /* Shipped matrix fallback: convert contact list to 2D matrix */
     function contactListToMatrix(contacts) {
       var maxRes = 0;
@@ -126,8 +135,8 @@
       residues.forEach(function(res) {
         zRow.push(res.min_distance);
         hoverRow.push(
-          '<b>' + name + '</b><br>' +
-          res.res_name + ' ' + res.res_num + ' (chain ' + res.chain + ')<br>' +
+          '<b>' + escapeHtml(name) + '</b><br>' +
+          escapeHtml(res.res_name) + ' ' + escapeHtml(String(res.res_num)) + ' (chain ' + escapeHtml(res.chain) + ')<br>' +
           'Distance: ' + res.min_distance.toFixed(2) + ' Å'
         );
         chainsContacted[res.chain] = true;
@@ -177,8 +186,8 @@
       /* Show inter-chain binding info */
       var infoDiv = document.getElementById('binding-info');
       infoDiv.style.display = 'block';
-      var infoText = residues.length + ' pocket residues | ' +
-        chainKeys.length + ' chain(s): ' + chainKeys.join(', ');
+      var infoText = escapeHtml(String(residues.length)) + ' pocket residues | ' +
+        escapeHtml(String(chainKeys.length)) + ' chain(s): ' + chainKeys.map(function(k) { return escapeHtml(String(k)); }).join(', ');
       if (isInterChain) {
         infoText += ' | ';
         infoDiv.innerHTML = infoText +
@@ -208,7 +217,7 @@
           len: 0.8
         }
       }], {
-        title: { text: 'Per-Residue Docking Contacts — ' + name },
+        title: { text: 'Per-Residue Docking Contacts — ' + escapeHtml(name) },
         xaxis: {
           title: { text: 'Pocket Residues', standoff: 50 },
           tickangle: -45,
