@@ -93,7 +93,10 @@ func runAddReview(_ *cobra.Command, args []string) error {
 	review["hypothesis_id"] = flagReviewFor
 
 	// Allocate the next review ID scoped to the target hypothesis.
-	runDir := datastore.RunPath(flagRunDir, flagRunID)
+	runDir, err := datastore.RunPath(flagRunDir, flagRunID)
+	if err != nil {
+		return fmt.Errorf("invalid run ID: %w", err)
+	}
 	id, _, err := datastore.NextReviewID(runDir, flagReviewFor)
 	if err != nil {
 		return fmt.Errorf("allocating review ID: %w", err)

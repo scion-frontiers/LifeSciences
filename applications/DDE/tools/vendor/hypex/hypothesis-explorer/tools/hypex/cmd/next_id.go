@@ -59,7 +59,10 @@ func runNextID(_ *cobra.Command, args []string) error {
 		return err
 	}
 
-	runDir := datastore.RunPath(flagRunDir, flagRunID)
+	runDir, err := datastore.RunPath(flagRunDir, flagRunID)
+	if err != nil {
+		return fmt.Errorf("invalid run ID: %w", err)
+	}
 
 	if at == datastore.ArtifactReview {
 		if flagFor == "" {

@@ -42,6 +42,7 @@ from ..core.manufacturing import (
     assess_stage0,
 )
 from ..core.output import Emitter
+from ..core.paths import sanitize_slug
 
 
 @click.group()
@@ -103,7 +104,7 @@ def assess_stage0_cmd(
     assessment = assess_stage0(concept_data, sa_score_data)
 
     # Write output
-    concept_id = concept_data.get("id", "IC-UNKNOWN")
+    concept_id = sanitize_slug(concept_data.get("id", "IC-UNKNOWN"))
     if out:
         target_dir = Path(out)
     else:

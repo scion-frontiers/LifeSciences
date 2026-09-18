@@ -189,7 +189,11 @@ func runInitRun(cmd *cobra.Command, args []string) error {
 
 	// Create retro/ subdirectory only when retrospective mode is enabled.
 	if retroMode {
-		retroDir := filepath.Join(flagRunDir, runID, "retro")
+		runDir, err := datastore.RunPath(flagRunDir, runID)
+		if err != nil {
+			return fmt.Errorf("invalid run ID: %w", err)
+		}
+		retroDir := filepath.Join(runDir, "retro")
 		if err := os.MkdirAll(retroDir, 0o755); err != nil {
 			return fmt.Errorf("creating retro subdirectory: %w", err)
 		}

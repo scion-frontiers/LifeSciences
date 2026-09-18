@@ -55,6 +55,7 @@ from ..common import (
 from ..core import provenance
 from ..core.errors import ArtifactError, SchemaError, ThresholdError
 from ..core.output import Emitter
+from ..core.paths import is_safe_to_open
 
 TOOL = "hypex"
 ARTIFACT_CLASS = "hypotheses"
@@ -333,7 +334,7 @@ def _build_hypex_record(
         # Check for citation manifests in citations/ directory
         citations_dir = run_dir / "citations"
         cite_manifest_path = citations_dir / f"{h_id}.json"
-        if cite_manifest_path.is_file():
+        if cite_manifest_path.is_file() and is_safe_to_open(cite_manifest_path):
             manifest_present = True
             try:
                 manifest = _read_json_file(cite_manifest_path, "citation manifest")
@@ -590,7 +591,9 @@ def ingest(
             [
                 f
                 for f in ratings_dir.iterdir()
-                if f.name.startswith("epoch-") and f.suffix == ".json"
+                if f.name.startswith("epoch-")
+                and f.suffix == ".json"
+                and is_safe_to_open(f)
             ],
             key=lambda f: f.name,
         )
@@ -609,7 +612,7 @@ def ingest(
     # run.yaml
     run_yaml: dict | None = None
     run_yaml_path = run_path / "run.yaml"
-    if run_yaml_path.is_file():
+    if run_yaml_path.is_file() and is_safe_to_open(run_yaml_path):
         try:
             import yaml
 
@@ -624,7 +627,7 @@ def ingest(
         "declared": False,
     }
     term_path = run_path / "meta" / "termination.json"
-    if term_path.is_file():
+    if term_path.is_file() and is_safe_to_open(term_path):
         try:
             term_data = _read_json_file(term_path, "termination")
             if isinstance(term_data, dict):
@@ -639,7 +642,7 @@ def ingest(
     # meta/roster.ndjson
     roster: list[dict] = []
     roster_path = run_path / "meta" / "roster.ndjson"
-    if roster_path.is_file():
+    if roster_path.is_file() and is_safe_to_open(roster_path):
         try:
             for line in roster_path.read_text(encoding="utf-8").splitlines():
                 line = line.strip()
@@ -651,7 +654,7 @@ def ingest(
     # meta/progress.json
     progress: dict | None = None
     progress_path = run_path / "meta" / "progress.json"
-    if progress_path.is_file():
+    if progress_path.is_file() and is_safe_to_open(progress_path):
         try:
             progress = _read_json_file(progress_path, "progress")
         except SchemaError:
@@ -660,7 +663,7 @@ def ingest(
     # meta/pacing.json — read but not used in ingest, carried into the record
     pacing: dict | None = None
     pacing_path = run_path / "meta" / "pacing.json"
-    if pacing_path.is_file():
+    if pacing_path.is_file() and is_safe_to_open(pacing_path):
         try:
             pacing = _read_json_file(pacing_path, "pacing")
         except SchemaError:

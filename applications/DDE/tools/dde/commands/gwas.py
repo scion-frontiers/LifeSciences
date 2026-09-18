@@ -66,6 +66,7 @@ from ..core.errors import (
     Refusal,
     SchemaError,
 )
+from ..core.paths import sanitize_slug
 from ..core.qps import qps_for_host
 
 TOOL = "gwas"
@@ -739,7 +740,7 @@ def search_cmd(
     """Search for GWAS / disease associations for GENE."""
     emit = emitter(as_json, quiet)
     target_dir = state.project().artifact_dir(ARTIFACT_CLASS, out)
-    slug = gene.lower()
+    slug = sanitize_slug(gene.lower())
 
     if source == "opentargets":
         endpoint = OPENTARGETS_API
@@ -830,7 +831,7 @@ def search_disease_cmd(
     """
     emit = emitter(as_json, quiet)
     target_dir = state.project().artifact_dir(ARTIFACT_CLASS, out)
-    slug = re.sub(r"[^a-z0-9._-]+", "-", disease.lower()).strip("-")[:80] or "disease"
+    slug = sanitize_slug(disease.lower()) if disease.strip() else "disease"
 
     if source == "opentargets":
         endpoint = OPENTARGETS_API
@@ -941,7 +942,7 @@ def analyze_cmd(
     source_dir = state.project().artifact_dir(ARTIFACT_CLASS, from_dir)
     target_dir = state.project().artifact_dir(ARTIFACT_CLASS, out)
 
-    slug = gene.lower()
+    slug = sanitize_slug(gene.lower())
     artifact_path = source_dir / f"{slug}.gwas-{source}.artifact.json"
     if not artifact_path.is_file():
         raise ArtifactError(

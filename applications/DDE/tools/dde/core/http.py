@@ -48,6 +48,7 @@ from .errors import (
     PhaseContractError,
     Refusal,
 )
+from .paths import is_safe_to_open
 
 try:  # requests is the one hard HTTP dependency
     import requests
@@ -204,6 +205,11 @@ def _pace(url: str, qps: float) -> None:
 def _pace_disk(host: str, interval: float) -> None:
     """Disk-based pacing with flock for cross-invocation coordination."""
     pace_file = _PACE_DIR / host.replace(":", "_")
+
+    # Refuse to open symlinks — fall back to memory pacing.
+    if not is_safe_to_open(pace_file):
+        _pace_memory(host, interval)
+        return
 
     with open(pace_file, "a+") as f:
         fcntl.flock(f, fcntl.LOCK_EX)

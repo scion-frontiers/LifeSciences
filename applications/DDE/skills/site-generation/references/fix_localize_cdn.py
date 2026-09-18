@@ -90,7 +90,12 @@ def _url_to_vendor_path(url: str) -> str:
     """
     parsed = urlparse(url)
     domain = parsed.hostname or "unknown"
+    # Sanitize domain to prevent traversal via crafted hostnames.
+    domain = re.sub(r"[^a-zA-Z0-9._-]", "_", domain)
     path = parsed.path.lstrip("/")
+    # Remove ".." segments to prevent directory traversal.
+    segments = [s for s in path.split("/") if s and s != ".."]
+    path = "/".join(segments)
 
     if parsed.query:
         qhash = hashlib.sha256(parsed.query.encode()).hexdigest()[:12]
@@ -158,6 +163,10 @@ def _localize_css_urls(
 
         rel_vendor = _url_to_vendor_path(url)
         dest = site_dir / rel_vendor
+        # Verify the destination stays within site_dir.
+        resolved_dest = dest.resolve()
+        if not resolved_dest.is_relative_to(site_dir.resolve()):
+            return m.group(0)  # skip — path escapes site_dir
         if _download(url, dest):
             manifest[url] = rel_vendor
             # Relative path from the CSS file to the downloaded resource.
@@ -208,6 +217,10 @@ def _localize_html(
 
         rel_vendor = _url_to_vendor_path(url)
         dest = site_dir / rel_vendor
+        # Verify the destination stays within site_dir.
+        resolved_dest = dest.resolve()
+        if not resolved_dest.is_relative_to(site_dir.resolve()):
+            return m.group(0)  # skip — path escapes site_dir
         if not _download(url, dest):
             return m.group(0)  # keep original on failure
 

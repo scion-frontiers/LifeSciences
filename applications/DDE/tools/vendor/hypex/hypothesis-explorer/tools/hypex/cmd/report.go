@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/scion-frontiers/hypex/hypothesis-explorer/tools/hypex/internal/datastore"
 	"github.com/spf13/cobra"
 )
 
@@ -41,7 +42,10 @@ func runReport(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("--run flag is required")
 	}
 
-	runDir := filepath.Join(flagRunDir, flagRunID)
+	runDir, err := datastore.RunPath(flagRunDir, flagRunID)
+	if err != nil {
+		return fmt.Errorf("invalid run ID: %w", err)
+	}
 	reportDir := filepath.Join(runDir, "report")
 
 	if _, err := os.Stat(reportDir); err != nil {

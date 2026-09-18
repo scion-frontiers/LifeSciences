@@ -54,6 +54,7 @@ from ..common import (
 from ..core import provenance
 from ..core.errors import ArtifactError, DependencyError
 from ..core.output import Emitter
+from ..core.paths import sanitize_slug
 
 ARTIFACT_CLASS = "genomics"
 
@@ -276,7 +277,7 @@ def compute_cmd(
             remedy="provide a non-empty FASTA-format multiple sequence alignment",
         )
 
-    query_name = name or msa_path.stem
+    query_name = sanitize_slug(name or msa_path.stem)
 
     # --- check rate4site binary ---
     r4s_path = _require_rate4site()
@@ -546,7 +547,7 @@ def align_cmd(
             remedy="provide a non-empty FASTA file",
         )
 
-    query_name = name or fasta_path.stem
+    query_name = sanitize_slug(name or fasta_path.stem)
 
     # Find aligner
     aligner_path, aligner_name = _find_aligner(aligner)
@@ -619,7 +620,7 @@ def analyze_cmd(
     emit = Emitter(as_json=as_json, quiet=quiet)
     source_dir = state.project().artifact_dir(ARTIFACT_CLASS, from_dir)
 
-    query_name = symbol_or_name
+    query_name = sanitize_slug(symbol_or_name)
     source = source_dir / f"{query_name}.conservation.json"
     if not source.is_file():
         raise ArtifactError(

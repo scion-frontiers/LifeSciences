@@ -51,6 +51,7 @@ from ..common import (
 from ..core import http, provenance
 from ..core.errors import ArtifactError, EndpointError, Refusal, UsageError
 from ..core.output import Emitter
+from ..core.paths import sanitize_slug
 from ..core.qps import qps_for_host
 
 TOOL = "homology-search"
@@ -1044,6 +1045,7 @@ def fetch_structure(
     recording the download endpoint and SHA-256 hash.
     """
     pdb_id, raw_input = _parse_pdb_entity_id(pdb_entity_id)
+    pdb_id = sanitize_slug(pdb_id)
 
     project = state.project()
     target_dir = project.artifact_dir(ARTIFACT_CLASS, out)
