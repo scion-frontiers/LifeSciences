@@ -45,6 +45,7 @@ from ..common import (
 )
 from ..core.context import ARTIFACT_DIRS
 from ..core.errors import ArtifactError, Refusal
+from ..core.paths import is_safe_to_open
 from ..core.provenance import Sidecar
 
 
@@ -110,6 +111,14 @@ def register_cmd(
 
         # Determine the sidecar path.
         sidecar_path = file_path.parent / f"{file_path.name}.meta.json"
+
+        # Refuse to write through a symlink.
+        if not is_safe_to_open(sidecar_path):
+            raise Refusal(
+                f"sidecar path is a symlink: {sidecar_path.name}",
+                detail="writing through symlinks is not allowed",
+                remedy="remove the symlink and try again",
+            )
 
         # Refuse to overwrite an existing sidecar.
         if sidecar_path.exists():

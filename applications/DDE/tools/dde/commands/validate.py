@@ -46,6 +46,7 @@ from ..core.context import ARTIFACT_DIRS, normalize_artifact_class
 from ..core.controlstore import normalize_deliverables
 from ..core.env import CLI_VERSION
 from ..core.errors import ArtifactError, Refusal, SchemaError
+from ..core.paths import confine_path, is_safe_to_open
 from ..core.provenance import read_json, sha256_file
 from ..core.statemachine import validate_transition
 
@@ -127,24 +128,6 @@ def _check_deliverables_schema(
     return None
 
 
-def _confine_path(project_root: Path, path: Path) -> Path | None:
-    """Resolve and confine a path to the project root.
-
-    Returns the resolved path if it is within the project root,
-    or None if the path escapes or is invalid (embedded null byte,
-    symlink loop, etc.).
-    """
-    try:
-        resolved = (project_root / path).resolve()
-    except (ValueError, RuntimeError):
-        # ValueError: embedded null byte in path string.
-        # RuntimeError: symlink loop detected during resolution.
-        return None
-    if not resolved.is_relative_to(project_root.resolve()):
-        return None
-    return resolved
-
-
 def _is_sidecar(name: str) -> bool:
     """Recognise sidecar filenames: *.meta.json and *.sc-meta.json."""
     return name.endswith(".meta.json") or name.endswith(".sc-meta.json")
@@ -203,15 +186,16 @@ def _find_layer0_artifacts(
     art_dir = project_root / rel_dir
     if not art_dir.is_dir():
         return []
-    root_resolved = project_root.resolve()
     artifacts: list[Path] = []
     for child in sorted(art_dir.iterdir()):
         if not child.is_file():
             continue
-        if _is_sidecar(child.name) or _is_analysis(child.name, child):
+        # Reject symlinks and paths outside the project root FIRST.
+        if not is_safe_to_open(child):
             continue
-        # Reject symlinks that resolve outside the project root.
-        if not child.resolve().is_relative_to(root_resolved):
+        if confine_path(project_root, child) is None:
+            continue
+        if _is_sidecar(child.name) or _is_analysis(child.name, child):
             continue
         artifacts.append(child)
     return artifacts
@@ -314,7 +298,7 @@ def _check_deliverables_exist(
     layer_1 = deliverables.get("layer_1", [])
     if isinstance(layer_1, list):
         for rel_path in layer_1:
-            resolved = _confine_path(project_root, Path(rel_path))
+            resolved = confine_path(project_root, Path(rel_path))
             if resolved is None:
                 confined_failures.append(str(rel_path))
                 continue
@@ -679,7 +663,7 @@ def _check_report_headings(
     missing_headings: list[str] = []  # fail cases
 
     for rel_path in layer_1:
-        resolved = _confine_path(project_root, Path(rel_path))
+        resolved = confine_path(project_root, Path(rel_path))
         if resolved is None or not resolved.is_file():
             continue  # deliverables_exist already flags these
         content = resolved.read_text(encoding="utf-8", errors="replace")
@@ -823,7 +807,7 @@ def _check_paths_resolve(
         }
 
     for rel_path in layer_1:
-        resolved_file = _confine_path(project_root, Path(rel_path))
+        resolved_file = confine_path(project_root, Path(rel_path))
         if resolved_file is None or not resolved_file.is_file():
             continue
         content = resolved_file.read_text(encoding="utf-8", errors="replace")
@@ -1092,7 +1076,13 @@ def _check_analysis_citations(
         if not art_dir.is_dir():
             continue
         for child in sorted(art_dir.iterdir()):
-            if not child.is_file() or not _is_analysis(child.name, child):
+            if not child.is_file():
+                continue
+            if not is_safe_to_open(child):
+                continue
+            if confine_path(project_root, child) is None:
+                continue
+            if not _is_analysis(child.name, child):
                 continue
             # WO scoping: read the record early to check work_order_id.
             # Skip analysis files tagged with a different work order.
@@ -1142,7 +1132,7 @@ def _check_analysis_citations(
             # Verify source reference resolves within the project root.
             source = data.get("source")
             if isinstance(source, str) and source:
-                source_path = _confine_path(project_root, Path(source))
+                source_path = confine_path(project_root, Path(source))
                 if source_path is None:
                     issues.append(
                         {
@@ -1212,6 +1202,10 @@ def _collect_relay_codes(
             continue
         for child in sorted(art_dir.iterdir()):
             if not child.is_file():
+                continue
+            if not is_safe_to_open(child):
+                continue
+            if confine_path(project_root, child) is None:
                 continue
             if not (_is_sidecar(child.name) or _is_analysis(child.name, child)):
                 continue
@@ -1288,7 +1282,7 @@ def _check_relay_coverage(
     findings_text = ""
     if isinstance(layer_1, list):
         for rel_path in layer_1:
-            resolved = _confine_path(project_root, Path(rel_path))
+            resolved = confine_path(project_root, Path(rel_path))
             if resolved is not None and resolved.is_file():
                 findings_text += resolved.read_text(encoding="utf-8", errors="replace")
 
@@ -1475,19 +1469,20 @@ def _check_unrecognized_json(
             wo_id=wo_id,
         )
 
-        root_resolved = project_root.resolve()
         for child in sorted(art_dir.iterdir()):
             if not child.is_file():
                 continue
             if not child.name.endswith(".json"):
                 continue
+            # Reject symlinks and paths outside project root FIRST.
+            if not is_safe_to_open(child):
+                continue
+            if confine_path(project_root, child) is None:
+                continue
             # Skip recognised record types.
             if _is_sidecar(child.name):
                 continue
             if _is_analysis(child.name, child):
-                continue
-            # Reject symlinks outside project root.
-            if not child.resolve().is_relative_to(root_resolved):
                 continue
             # Check whether a sidecar covers this file.
             actual_sha = sha256_file(child)
@@ -1631,7 +1626,7 @@ def _check_source_tags_resolve(
     sub_findings: list[dict[str, Any]] = []
 
     for rel_path in layer_1:
-        resolved_file = _confine_path(project_root, Path(rel_path))
+        resolved_file = confine_path(project_root, Path(rel_path))
         if resolved_file is None or not resolved_file.is_file():
             continue  # deliverables_exist already flags these
 
@@ -1747,7 +1742,7 @@ def _evaluate_scalar_tag(
     base = {"tag": tag_text, "file": finding_file, "line": line_no}
 
     # Step 3: resolve path.
-    resolved = _confine_path(project_root, Path(tag_path_str))
+    resolved = confine_path(project_root, Path(tag_path_str))
     if resolved is None:
         return {
             **base,
@@ -1825,7 +1820,7 @@ def _evaluate_table_tag(
     """Evaluate a single {source-table: ...} tag and return a sub-finding."""
     base = {"tag": tag_text, "file": finding_file, "line": line_no}
 
-    resolved = _confine_path(project_root, Path(tag_path_str))
+    resolved = confine_path(project_root, Path(tag_path_str))
     if resolved is None:
         return {
             **base,

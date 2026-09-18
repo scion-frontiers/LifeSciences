@@ -50,6 +50,7 @@ from ..core.context import ARTIFACT_DIRS, normalize_artifact_class
 from ..core.controlstore import normalize_deliverables
 from ..core.env import CLI_VERSION
 from ..core.errors import ArtifactError, Refusal, UsageError
+from ..core.paths import confine_path
 
 # ---------------------------------------------------------------------------
 # Viewer mapping — file extension to viewer HTML file
@@ -96,23 +97,6 @@ def viewer_url_for(
         if lower.endswith(suffix):
             return f"viewers/{viewer}?file={prefix}/{artifact_dir}/{filename}"
     return None
-
-
-# ---------------------------------------------------------------------------
-# Helpers — path confinement (mirrors validate.py)
-# ---------------------------------------------------------------------------
-
-
-def _confine_path(project_root: Path, path: Path) -> Path | None:
-    """Resolve and confine a path to the project root.
-
-    Returns the resolved path if it is within the project root,
-    or None if the path escapes.
-    """
-    resolved = (project_root / path).resolve()
-    if not resolved.is_relative_to(project_root.resolve()):
-        return None
-    return resolved
 
 
 _MARKDOWN_LINK_RE = re.compile(r"!?\[(?:[^\]]*)\]\(([^)]+)\)")
@@ -188,7 +172,7 @@ def _collect_findings(
                 continue
             seen_paths.add(rel_path)
 
-            resolved = _confine_path(project_root, Path(rel_path))
+            resolved = confine_path(project_root, Path(rel_path))
             if resolved is None or not resolved.is_file():
                 continue
 
@@ -347,7 +331,7 @@ def _collect_executive(project_root: Path) -> dict[str, Any] | None:
     Reads ``executive/program-summary.md`` if it exists.  Returns a dict
     with ``content`` and ``title``, or *None* if the file is absent.
     """
-    resolved = _confine_path(project_root, Path("executive/program-summary.md"))
+    resolved = confine_path(project_root, Path("executive/program-summary.md"))
     if resolved is None or not resolved.is_file():
         return None
 
@@ -498,7 +482,7 @@ def _validate_links(
             continue
 
         for rel_path in sorted(layer_1):
-            resolved = _confine_path(project_root, Path(rel_path))
+            resolved = confine_path(project_root, Path(rel_path))
             if resolved is None:
                 issues.append(
                     {
@@ -1548,6 +1532,7 @@ def build_cmd(
             shutil.copytree(
                 raw_src,
                 raw_dst,
+                symlinks=True,
                 ignore=shutil.ignore_patterns(
                     ".*",
                     "__pycache__",
