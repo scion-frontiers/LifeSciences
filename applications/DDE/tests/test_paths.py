@@ -138,6 +138,21 @@ class TestSanitizeSlug:
         assert result == "abc"
         assert not result.endswith("-")
 
+    def test_dot_only_raises(self) -> None:
+        """A single dot is a filesystem-special name and must be rejected."""
+        with pytest.raises(ValueError, match="filesystem-special"):
+            sanitize_slug(".")
+
+    def test_dotdot_raises(self) -> None:
+        """Double-dot is a filesystem-special name and must be rejected."""
+        with pytest.raises(ValueError, match="filesystem-special"):
+            sanitize_slug("..")
+
+    def test_disguised_dotdot_raises(self) -> None:
+        """Input that collapses to '..' after sanitization must be rejected."""
+        with pytest.raises(ValueError, match="filesystem-special"):
+            sanitize_slug("-..-")
+
 
 # ---------------------------------------------------------------------------
 # is_safe_to_open

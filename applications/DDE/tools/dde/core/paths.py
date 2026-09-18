@@ -60,7 +60,8 @@ def sanitize_slug(text: str, *, max_length: int = 80) -> str:
     collapses consecutive hyphens, strips leading/trailing hyphens, and
     truncates to *max_length*.
 
-    Raises :class:`ValueError` if the result is empty after sanitization.
+    Raises :class:`ValueError` if the result is empty or resolves to a
+    filesystem-special name (``.`` or ``..``) after sanitization.
     """
     slug = re.sub(r"[^a-zA-Z0-9._-]", "-", text)
     slug = re.sub(r"-{2,}", "-", slug)
@@ -69,6 +70,11 @@ def sanitize_slug(text: str, *, max_length: int = 80) -> str:
         slug = slug[:max_length].rstrip("-")
     if not slug:
         raise ValueError(f"slug is empty after sanitizing {text!r}")
+    if slug in (".", ".."):
+        raise ValueError(
+            f"slug resolves to filesystem-special name {slug!r} "
+            f"after sanitizing {text!r}"
+        )
     return slug
 
 
