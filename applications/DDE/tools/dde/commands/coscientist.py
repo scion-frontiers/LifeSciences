@@ -65,6 +65,7 @@ from ..common import (
 from ..core import provenance
 from ..core.errors import ArtifactError, SchemaError, UsageError
 from ..core.output import Emitter
+from ..core.paths import sanitize_slug
 from ..core.thresholds import COSCIENTIST_CLAIM_DENOMINATOR
 
 TOOL = "co-scientist"
@@ -440,7 +441,7 @@ def ingest(
 
     session = record["tournament"].get("session_id")
     name = (
-        f"cs-{session}"
+        f"cs-{sanitize_slug(session)}"
         if session
         else f"cs-{_slug(record['tournament'].get('title'), 'tournament')}"
     )

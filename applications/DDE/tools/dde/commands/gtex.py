@@ -88,6 +88,7 @@ from ..common import (
 )
 from ..core import http, provenance
 from ..core.errors import ArtifactError, Refusal, SchemaError
+from ..core.paths import confine_path, sanitize_slug
 from ..core.qps import qps_for_host
 
 GTEX_BASE = "https://gtexportal.org"
@@ -105,6 +106,7 @@ GENOME_BUILD = "GRCh38/hg38"
 TISSUE_ID = "Whole_Blood"
 
 ENSG_RE = re.compile(r"^ENSG\d{11}$")
+VERSIONED_ENSG_RE = re.compile(r"^ENSG\d{11}(\.\d+)?$")
 
 
 # ---------------------------------------------------------------------------
@@ -260,6 +262,7 @@ def fetch_cmd(
     target_dir = state.project().artifact_dir("gtex", out)
 
     gencode_id, symbol, how = _resolve_gene(gene)
+    gencode_id = sanitize_slug(gencode_id)
 
     sidecar = provenance.Sidecar(
         tool="gtex",
@@ -342,6 +345,7 @@ def analyze_cmd(
     target_dir = state.project().artifact_dir("gtex", out)
 
     expression_path, gencode_id = _locate(state, gene, source_dir)
+    gencode_id = sanitize_slug(gencode_id)
     expression_data = provenance.read_json(expression_path, "GTEx expression record")
 
     if not isinstance(expression_data, dict) or "data" not in expression_data:
@@ -482,7 +486,7 @@ def _locate(state: AppState, gene: str, target_dir: Path) -> tuple[Path, str]:
     searching sidecars, same pattern as expression.py's _locate.
     """
     # Versioned gencodeId first — its dot would trick Path.suffix.
-    if gene.upper().startswith("ENSG") and "." in gene:
+    if VERSIONED_ENSG_RE.match(gene.upper()):
         gencode_id = gene
         expression_path = target_dir / f"{gencode_id}.gtex.json"
         if not expression_path.is_file():
@@ -497,6 +501,14 @@ def _locate(state: AppState, gene: str, target_dir: Path) -> tuple[Path, str]:
         expression_path = (
             candidate if candidate.is_absolute() else state.project().root / candidate
         )
+        # Confine to project root to prevent path traversal.
+        confined = confine_path(state.project().root, expression_path)
+        if confined is None:
+            raise ArtifactError(
+                f"path {gene!r} escapes project root",
+                remedy="provide a path within the project directory",
+            )
+        expression_path = confined
         if not expression_path.is_file():
             raise ArtifactError(f"GTEx expression file not found: {expression_path}")
         gencode_id = expression_path.name.replace(".gtex.json", "")
