@@ -492,31 +492,22 @@ def _default_concept_loader(project_root: Path):
 
     def _load(concept_id: str) -> dict[str, Any] | None:
         # Defense-in-depth: validate concept_id format before touching
-        # the filesystem.  Upstream entity_ref validation should already
-        # block malformed input, but this guard prevents path traversal
-        # from unexpected callers.
+        # the filesystem.
         if not re.match(r"^IC-\d{3,}$", concept_id):
             return None
 
-        # concept records may be stored as IC-NNN.json or IC-NNN-rN.json;
-        # try the bare ID first, then scan for the latest revision.
         concepts_dir = project_root / CONTROL_DIR / "concepts"
         if not concepts_dir.is_dir():
             return None
 
-        # Direct lookup by ID
-        direct = concepts_dir / f"{concept_id}.json"
-        if direct.is_file():
-            try:
-                return json.loads(direct.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError):
-                return None
-
-        # Scan for revisions (IC-NNN-r1.json, IC-NNN-r2.json, ...)
-        # and return the latest.
+        # Scan for versioned revisions (IC-NNN-r1.json, IC-NNN-r2.json, ...)
+        # and return the latest.  Only fall back to the unversioned filename
+        # if no revisioned record exists.
         import re as _re
 
-        revision_re = _re.compile(r"^" + _re.escape(concept_id) + r"-r(\d+)\.json$")
+        revision_re = _re.compile(
+            r"^" + _re.escape(concept_id) + r"-r(\d+)\.json$"
+        )
         best: tuple[int, Path] | None = None
         for p in concepts_dir.iterdir():
             m = revision_re.match(p.name)
@@ -529,7 +520,17 @@ def _default_concept_loader(project_root: Path):
             try:
                 return json.loads(best[1].read_text(encoding="utf-8"))
             except (json.JSONDecodeError, OSError):
-                pass
+                return None  # fail-closed: gate treats None as requiring human approval
+
+        # Fallback: unversioned file (IC-NNN.json) — only when no
+        # versioned records exist.
+        direct = concepts_dir / f"{concept_id}.json"
+        if direct.is_file():
+            try:
+                return json.loads(direct.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                return None
+
         return None
 
     return _load
