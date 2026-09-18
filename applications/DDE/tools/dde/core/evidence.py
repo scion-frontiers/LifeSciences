@@ -121,6 +121,11 @@ _ENTITY_REF_PATTERNS: dict[str, re.Pattern[str]] = {
 
 _ENTITY_TYPES = set(_ENTITY_REF_PATTERNS.keys())
 
+# Authorities that may bypass human approval for concept termination.
+# Everything not in this set — including None, unrecognized strings,
+# empty strings, and invalid types — requires human approval (fail-closed).
+_AUTONOMOUS_AUTHORITIES: frozenset[str] = frozenset({"program_lead"})
+
 # ---------------------------------------------------------------------------
 # Assessment record validation  (design SS2.2, Appendix A.2)
 # ---------------------------------------------------------------------------
@@ -375,8 +380,6 @@ def validate_decision(
             # termination.  Everything not in the allowlist —
             # including None, unrecognized strings, empty strings,
             # and invalid types — requires human approval.
-            _AUTONOMOUS_AUTHORITIES = frozenset({"program_lead"})
-
             if term_auth not in _AUTONOMOUS_AUTHORITIES and approval is None:
                 detail_ref = eref or "(unknown)"
                 raise Refusal(

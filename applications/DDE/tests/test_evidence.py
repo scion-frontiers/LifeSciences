@@ -554,6 +554,41 @@ _check(
 )
 
 
+def test_case_variant_program_lead_requires_approval():
+    """Issue #176: the allowlist is case-sensitive.  Case variants of
+    'program_lead' such as 'Program_Lead', 'PROGRAM_LEAD', and
+    'Program_lead' must NOT bypass the human-approval gate."""
+    case_variants = ["Program_Lead", "PROGRAM_LEAD", "Program_lead"]
+    for bad_auth in case_variants:
+
+        def loader(concept_id: str, _auth=bad_auth) -> dict[str, Any] | None:
+            if concept_id == "IC-001":
+                return {"termination_authority": _auth}
+            return None
+
+        record = _valid_decision(
+            action="terminate",
+            affected_entity={"entity_type": "concept", "entity_ref": "IC-001"},
+            human_approval=None,
+        )
+        try:
+            validate_decision(record, concept_loader=loader)
+            raise AssertionError(
+                f"expected Refusal for termination_authority={bad_auth!r}, "
+                f"but no exception was raised"
+            )
+        except Refusal as exc:
+            assert exc.exit_code == 9, (
+                f"term_auth={bad_auth!r}: expected exit_code 9, got {exc.exit_code}"
+            )
+
+
+_check(
+    "validate_decision: case-variant program_lead => Refusal(9) [#176]",
+    test_case_variant_program_lead_requires_approval,
+)
+
+
 def test_none_authority_no_loader_requires_approval():
     """When no concept_loader is provided, term_auth stays None, which
     is not in the allowlist — must require approval (safe default)."""
