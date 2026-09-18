@@ -80,6 +80,7 @@ from ..core.errors import (
     Refusal,
     SchemaError,
 )
+from ..core.paths import sanitize_slug
 from ..core.qps import qps_for_host
 
 TOOL = "dice"
@@ -270,7 +271,7 @@ def search_cmd(
     """
     emit = emitter(as_json, quiet)
     target_dir = state.project().artifact_dir(ARTIFACT_CLASS, out)
-    slug = gene.upper()
+    slug = sanitize_slug(gene.upper())
 
     raw, _content_type = _fetch_dice(gene)
     expression = _parse_csv(raw, gene)
@@ -345,7 +346,7 @@ def analyze_cmd(
     source_dir = state.project().artifact_dir(ARTIFACT_CLASS, from_dir)
     target_dir = state.project().artifact_dir(ARTIFACT_CLASS, out)
 
-    slug = gene.upper()
+    slug = sanitize_slug(gene.upper())
     artifact_path = source_dir / f"{slug}.dice-expression.artifact.json"
     if not artifact_path.is_file():
         raise ArtifactError(

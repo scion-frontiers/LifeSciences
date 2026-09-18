@@ -56,6 +56,7 @@ from ..common import (
 )
 from ..core import http, provenance
 from ..core.errors import SchemaError
+from ..core.paths import sanitize_slug
 from ..core.qps import qps_for_host
 
 TOOL = "pubchem"
@@ -599,7 +600,7 @@ def fetch_cmd(
     target_dir = state.project().artifact_dir(ARTIFACT_CLASS, out)
 
     for cid in cids:
-        slug = slug_override if slug_override else str(cid)
+        slug = sanitize_slug(slug_override) if slug_override else str(cid)
 
         # --- Try the property endpoint first ---
         prop_url, props = _fetch_properties(cid)
