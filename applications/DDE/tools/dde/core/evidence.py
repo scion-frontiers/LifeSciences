@@ -369,23 +369,25 @@ def validate_decision(
                 if concept is not None:
                     term_auth = concept.get("termination_authority")
 
-            # 2. Safe-failure default: unknown authority => "human".
-            # Design principle #4 requires that the system never enable
-            # autonomous termination.  If we cannot look up the concept
-            # (no loader, concept not found, field absent), the safe
-            # default is to require approval.
-            if term_auth is None:
-                term_auth = "human"
+            # 2. Fail-closed allowlist: only explicitly authorized
+            # roles may bypass human approval.  Design principle #4
+            # requires that the system never enable autonomous
+            # termination.  Everything not in the allowlist —
+            # including None, unrecognized strings, empty strings,
+            # and invalid types — requires human approval.
+            _AUTONOMOUS_AUTHORITIES = frozenset({"program_lead"})
 
-            if term_auth == "human" and approval is None:
+            if term_auth not in _AUTONOMOUS_AUTHORITIES and approval is None:
                 detail_ref = eref or "(unknown)"
                 raise Refusal(
                     "cannot terminate: human approval is required",
                     detail=(
                         f"concept {detail_ref!r} has "
-                        "termination_authority 'human' (or authority could not "
-                        "be determined — safe default is 'human'); the decision "
-                        "record must include a populated human_approval field"
+                        f"termination_authority {term_auth!r} which is not in "
+                        f"the set of authorities that may bypass human "
+                        f"approval {sorted(_AUTONOMOUS_AUTHORITIES)}; the "
+                        f"decision record must include a populated "
+                        f"human_approval field"
                     ),
                     remedy=(
                         "obtain human approval for this termination and populate "

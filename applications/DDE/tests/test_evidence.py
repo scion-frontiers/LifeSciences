@@ -453,6 +453,128 @@ _check(
 )
 
 
+# --- Fail-open regression tests (issue #176 S1 fix) ---
+
+print("\n--- Fail-open authorization regression (issue #176) ---")
+
+
+def test_fail_open_unrecognized_authority_requires_approval():
+    """Issue #176 PoC: unrecognized termination_authority values like
+    'autonomous', 'auto', 'agent', '', 0, False must NOT bypass the
+    human-approval gate.  Before the fix, the gate only checked for
+    term_auth == 'human', so any other non-None value silently
+    passed through — a classic fail-open."""
+    invalid_authorities = ["autonomous", "auto", "agent", "", 0, False]
+    for bad_auth in invalid_authorities:
+
+        def loader(concept_id: str, _auth=bad_auth) -> dict[str, Any] | None:
+            if concept_id == "IC-001":
+                return {"termination_authority": _auth}
+            return None
+
+        record = _valid_decision(
+            action="terminate",
+            affected_entity={"entity_type": "concept", "entity_ref": "IC-001"},
+            human_approval=None,
+        )
+        try:
+            validate_decision(record, concept_loader=loader)
+            raise AssertionError(
+                f"expected Refusal for termination_authority={bad_auth!r}, "
+                f"but no exception was raised"
+            )
+        except Refusal as exc:
+            assert exc.exit_code == 9, (
+                f"term_auth={bad_auth!r}: expected exit_code 9, got {exc.exit_code}"
+            )
+
+
+_check(
+    "validate_decision: unrecognized authority values => Refusal(9) [#176]",
+    test_fail_open_unrecognized_authority_requires_approval,
+)
+
+
+def test_program_lead_bypasses_approval():
+    """program_lead is the only authority that legitimately bypasses
+    human approval for concept termination."""
+
+    def loader(concept_id: str) -> dict[str, Any] | None:
+        if concept_id == "IC-001":
+            return {"termination_authority": "program_lead"}
+        return None
+
+    record = _valid_decision(
+        action="terminate",
+        affected_entity={"entity_type": "concept", "entity_ref": "IC-001"},
+        human_approval=None,
+    )
+    errors = validate_decision(record, concept_loader=loader)
+    assert errors == [], f"unexpected errors for program_lead: {errors}"
+
+
+_check(
+    "validate_decision: program_lead bypasses approval => success [#176]",
+    test_program_lead_bypasses_approval,
+)
+
+
+def test_invalid_authority_with_approval_succeeds():
+    """Even with an unrecognized authority value, providing valid
+    human_approval must succeed — the gate only blocks when approval
+    is missing."""
+    invalid_authorities = ["autonomous", "auto", "agent", "", 0, False, None]
+    for bad_auth in invalid_authorities:
+
+        def loader(concept_id: str, _auth=bad_auth) -> dict[str, Any] | None:
+            if concept_id == "IC-001":
+                return {"termination_authority": _auth}
+            return None
+
+        record = _valid_decision(
+            action="terminate",
+            affected_entity={"entity_type": "concept", "entity_ref": "IC-001"},
+            human_approval={
+                "approver": "Dr. Smith",
+                "approved_at": _NOW,
+                "approval_method": "charter_authority",
+                "evidence": "Meeting notes 2026-09-08",
+            },
+        )
+        errors = validate_decision(record, concept_loader=loader)
+        assert errors == [], (
+            f"term_auth={bad_auth!r} with approval should succeed, "
+            f"got errors: {errors}"
+        )
+
+
+_check(
+    "validate_decision: invalid authority + approval => success [#176]",
+    test_invalid_authority_with_approval_succeeds,
+)
+
+
+def test_none_authority_no_loader_requires_approval():
+    """When no concept_loader is provided, term_auth stays None, which
+    is not in the allowlist — must require approval (safe default)."""
+    record = _valid_decision(
+        action="terminate",
+        affected_entity={"entity_type": "concept", "entity_ref": "IC-001"},
+        human_approval=None,
+    )
+    try:
+        validate_decision(record)
+        raise AssertionError("expected Refusal for None authority (no loader)")
+    except Refusal as exc:
+        assert exc.exit_code == 9
+
+
+_check(
+    "validate_decision: None authority (no loader) => Refusal(9) [#176]",
+    test_none_authority_no_loader_requires_approval,
+)
+
+
 # --- Program termination gate (security audit fix) ---
 
 print("\n--- Program termination gate ---")
