@@ -39,7 +39,7 @@ import re
 import time
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlsplit, urlunsplit
 
 from .errors import (
     DependencyError,
@@ -127,19 +127,53 @@ _last_call: dict[str, float] = {}
 # Query-string parameter names that must never appear in error messages,
 # log lines, or exception detail.  Checked case-insensitively.
 _SENSITIVE_PARAMS = re.compile(
-    r"([?&])(api_key|apikey|key|token|secret)=[^&]*",
+    r"([?&])(client_secret|access_token|auth_token|session_token"
+    r"|refresh_token|api_key|api-key|apikey|password|passwd"
+    r"|key|token|secret)=[^&]*",
     re.IGNORECASE,
 )
 
 
 def _sanitize_url(url: str) -> str:
-    """Strip credential-bearing query parameters from *url*.
+    """Strip credential-bearing query parameters and authority credentials.
 
-    Used in every error message that includes a URL so that an API key
-    passed as a query parameter cannot leak through exception text,
-    stderr, or sidecar records.
+    Handles two leak vectors:
+    1. Query-string parameters matching ``_SENSITIVE_PARAMS``.
+    2. URL authority credentials (``https://user:pass@host/...``).
+
+    Used in every error message that includes a URL so that credentials
+    cannot leak through exception text, stderr, or sidecar records.
     """
+    # Redact authority credentials (user:password@host).
+    try:
+        parts = urlsplit(url)
+        if parts.username or parts.password:
+            # Rebuild netloc without credentials.
+            host = parts.hostname or ""
+            if parts.port:
+                host = f"{host}:{parts.port}"
+            url = urlunsplit((parts.scheme, host, parts.path, parts.query, parts.fragment))
+    except ValueError:
+        pass  # Malformed URL — fall through to param redaction.
+    # Redact sensitive query-string parameters.
     return _SENSITIVE_PARAMS.sub(r"\1\2=<REDACTED>", url)
+
+
+def _sanitize_text(text: str) -> str:
+    """Redact credentials that may appear in error response bodies.
+
+    Applies ``_sanitize_url`` to any URL-like substrings and scrubs
+    ``_SENSITIVE_PARAMS`` patterns even when they appear outside a URL
+    context (e.g. a server echoing ``access_token=...`` in a JSON error).
+    """
+    # Redact any embedded URLs with authority credentials.
+    text = re.sub(
+        r"https?://[^\s\"'<>]+",
+        lambda m: _sanitize_url(m.group(0)),
+        text,
+    )
+    # Redact bare sensitive-param patterns (server echo).
+    return _SENSITIVE_PARAMS.sub(r"\1\2=<REDACTED>", text)
 
 
 def _require_requests():
@@ -305,9 +339,62 @@ def request(
 
     for attempt in range(1, max_attempts + 1):
         _pace(url, qps)
+        response = None
         try:
             response = lib.request(method, url, timeout=timeout, **kwargs)
-        except Exception as exc:  # transport-level
+
+            if (
+                response.status_code == expect_status
+                or response.status_code in tolerate_status
+            ):
+                # Layer 1: Content-Length pre-check
+                content_length = response.headers.get("Content-Length")
+                if content_length is not None:
+                    try:
+                        cl = int(content_length)
+                    except ValueError:
+                        cl = -1
+                    if cl > max_response_bytes:
+                        response.close()
+                        raise EndpointError(
+                            f"response from {_sanitize_url(url)} exceeds size limit "
+                            f"({max_response_bytes} bytes)",
+                            detail=f"Content-Length: {content_length}",
+                            remedy="if this endpoint legitimately returns large "
+                            "responses, pass a higher max_response_bytes",
+                        )
+
+                # Layer 2: Streaming read with byte cap
+                chunks = []
+                total = 0
+                for chunk in response.iter_content(chunk_size=DEFAULT_CHUNK_SIZE):
+                    total += len(chunk)
+                    if total > max_response_bytes:
+                        response.close()
+                        raise EndpointError(
+                            f"response from {_sanitize_url(url)} exceeds size limit "
+                            f"({max_response_bytes} bytes)",
+                            detail="size exceeded during streaming read",
+                            remedy="if this endpoint legitimately returns large "
+                            "responses, pass a higher max_response_bytes",
+                        )
+                    chunks.append(chunk)
+                response._content = b"".join(chunks)
+                return response
+
+            # Read limited error body from streamed response.
+            _drain_limited(response)
+            body = _sanitize_text((response.text or "")[:500])
+            last_status = response.status_code
+            last_detail = _sanitize_text(
+                f"HTTP {response.status_code}: {body}"
+            )
+
+        except (EndpointError, EndpointUnavailable):
+            raise
+        except Exception as exc:  # transport-level (connect or stream)
+            if response is not None:
+                response.close()
             last_detail = _sanitize_url(f"{type(exc).__name__}: {exc}")
             last_status = None
             if attempt == max_attempts:
@@ -318,51 +405,6 @@ def request(
                 ) from exc
             time.sleep(backoff**attempt)
             continue
-
-        if (
-            response.status_code == expect_status
-            or response.status_code in tolerate_status
-        ):
-            # Layer 1: Content-Length pre-check
-            content_length = response.headers.get("Content-Length")
-            if content_length is not None:
-                try:
-                    cl = int(content_length)
-                except ValueError:
-                    cl = -1
-                if cl > max_response_bytes:
-                    response.close()
-                    raise EndpointError(
-                        f"response from {_sanitize_url(url)} exceeds size limit "
-                        f"({max_response_bytes} bytes)",
-                        detail=f"Content-Length: {content_length}",
-                        remedy="if this endpoint legitimately returns large "
-                        "responses, pass a higher max_response_bytes",
-                    )
-
-            # Layer 2: Streaming read with byte cap
-            chunks = []
-            total = 0
-            for chunk in response.iter_content(chunk_size=DEFAULT_CHUNK_SIZE):
-                total += len(chunk)
-                if total > max_response_bytes:
-                    response.close()
-                    raise EndpointError(
-                        f"response from {_sanitize_url(url)} exceeds size limit "
-                        f"({max_response_bytes} bytes)",
-                        detail="size exceeded during streaming read",
-                        remedy="if this endpoint legitimately returns large "
-                        "responses, pass a higher max_response_bytes",
-                    )
-                chunks.append(chunk)
-            response._content = b"".join(chunks)
-            return response
-
-        # Read limited error body from streamed response.
-        _drain_limited(response)
-        body = (response.text or "")[:500]
-        last_status = response.status_code
-        last_detail = f"HTTP {response.status_code}: {body}"
 
         if response.status_code in _RETRY_STATUS:
             retry_after = response.headers.get("Retry-After")
