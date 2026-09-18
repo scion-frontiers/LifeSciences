@@ -461,6 +461,16 @@ def analyze_cmd(
         found = extractor(provenance.read_json(path, f"{registry} response"))
         matches.extend(found)
 
+    # Validate that at least one registry was actually queried.
+    # If ALL response files are missing, we have no data to base a
+    # conclusion on — reporting "not_found" would certify absence
+    # when no database was actually consulted.
+    if not sources_queried:
+        raise ArtifactError(
+            f"no registry response files found for {identifier!r}",
+            remedy=f"run 'dde compreg resolve {identifier}' first",
+        )
+
     n_matches = len(matches)
 
     if n_matches == 0:

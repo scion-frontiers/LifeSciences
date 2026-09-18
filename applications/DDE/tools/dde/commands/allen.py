@@ -543,16 +543,18 @@ def analyze_cmd(
     top_products = product_counts.most_common(15)
 
     relays: list[dict[str, str]] = []
-    if datasets:
-        relays.append(
-            provenance.relay(
-                "allen.brain_region_expression_only",
-                f"Allen Brain Atlas expression data covers brain regions only. "
-                f"Expression in peripheral tissues (skin, DRG, etc.) is not "
-                f"represented. {len(datasets)} dataset(s) returned for "
-                f"{query_meta.get('gene', query)!r} are all brain-region scoped.",
-            )
+    # Mandatory relay: Allen Brain Atlas covers brain regions only.
+    # Must always be present regardless of whether datasets were returned,
+    # to prevent false negative inferences about peripheral tissue expression.
+    relays.append(
+        provenance.relay(
+            "allen.brain_region_expression_only",
+            f"Allen Brain Atlas expression data covers brain regions only. "
+            f"Expression in peripheral tissues (skin, DRG, etc.) is not "
+            f"represented. {len(datasets)} dataset(s) returned for "
+            f"{query_meta.get('gene', query)!r} are all brain-region scoped.",
         )
+    )
 
     assessment: dict[str, Any] = {
         "outcome": "datasets_found" if datasets else "no_datasets",
