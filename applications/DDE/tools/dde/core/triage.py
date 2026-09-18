@@ -180,6 +180,69 @@ class TriageOutcome:
 # ---------------------------------------------------------------------------
 
 
+def _extract_json_object(text: str) -> dict[str, Any] | None:
+    """Extract the first complete JSON object from text with trailing noise.
+
+    CliRunner captures both Emitter JSON and trailing warnings in
+    one string.  ``json.loads`` fails when non-JSON text follows
+    the object, so we find the boundary ourselves.
+    """
+    import json as _json
+
+    text = text.strip()
+    if not text.startswith("{"):
+        return None
+    # Walk from the end to find the last '}' that closes the top-level object
+    depth = 0
+    in_str = False
+    escape = False
+    for i, ch in enumerate(text):
+        if escape:
+            escape = False
+            continue
+        if ch == "\\":
+            escape = True
+            continue
+        if ch == '"' and not escape:
+            in_str = not in_str
+            continue
+        if in_str:
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                try:
+                    return _json.loads(text[: i + 1])
+                except _json.JSONDecodeError:
+                    return None
+    return None
+
+
+def _read_output_artifact(
+    emitter_output: dict[str, Any],
+    role: str,
+) -> dict[str, Any] | None:
+    """Read a full artifact from a path advertised in Emitter output.
+
+    The CLI commands write full records to disk and advertise their
+    paths under ``outputs.<role>`` in the Emitter JSON payload.  This
+    helper reads that file and returns the parsed JSON, or ``None`` if
+    the path is missing or unreadable.
+    """
+    import json as _json
+    from pathlib import Path
+
+    path_str = (emitter_output.get("outputs") or {}).get(role)
+    if not path_str:
+        return None
+    try:
+        return _json.loads(Path(path_str).read_text(encoding="utf-8"))
+    except (OSError, _json.JSONDecodeError, ValueError):
+        return None
+
+
 def run_manufacturing_workstream(
     concept: dict[str, Any],
     concept_ref: str,
@@ -224,27 +287,28 @@ def run_manufacturing_workstream(
         cli_result = runner.invoke(cli, args)
 
         if cli_result.exit_code == 0:
-            # Parse output — the command writes to stdout in JSON mode
+            # Parse output — the command writes to stdout in JSON mode.
+            # The CLI emits a lightweight summary via Emitter; the full
+            # dde.evidence-assessment.v1 record is written to the path
+            # advertised in outputs.manufacturing-assessment.
+            #
+            # CliRunner may capture trailing warnings after the JSON,
+            # so fall back to _extract_json_object when json.loads fails.
             try:
                 output = json.loads(cli_result.output)
-                if isinstance(output, dict):
-                    result.assessments.append(output)
             except json.JSONDecodeError:
-                # Try to find JSON in the output
-                for line in cli_result.output.strip().split("\n"):
-                    line = line.strip()
-                    if line.startswith("{"):
-                        try:
-                            output = json.loads(line)
-                            result.assessments.append(output)
-                            break
-                        except json.JSONDecodeError:
-                            continue
-                if not result.assessments:
-                    result.errors.append(
-                        f"Manufacturing output not parseable as JSON: "
-                        f"{cli_result.output[:200]}"
-                    )
+                output = _extract_json_object(cli_result.output)
+
+            if isinstance(output, dict):
+                full = _read_output_artifact(
+                    output, "manufacturing-assessment"
+                )
+                result.assessments.append(full if full else output)
+            elif output is None:
+                result.errors.append(
+                    f"Manufacturing output not parseable as JSON: "
+                    f"{cli_result.output[:200]}"
+                )
         else:
             result.errors.append(
                 f"Manufacturing assess-stage0 exited {cli_result.exit_code}: "
@@ -334,28 +398,22 @@ def run_structure_screening_workstream(
     if cli_result.exit_code == 0:
         try:
             output = json.loads(cli_result.output)
-            if isinstance(output, list):
-                result.assessments.extend(output)
-            elif isinstance(output, dict):
-                result.assessments.append(output)
         except json.JSONDecodeError:
-            for line in cli_result.output.strip().split("\n"):
-                line = line.strip()
-                if line.startswith("{") or line.startswith("["):
-                    try:
-                        parsed = json.loads(line)
-                        if isinstance(parsed, list):
-                            result.assessments.extend(parsed)
-                        elif isinstance(parsed, dict):
-                            result.assessments.append(parsed)
-                        break
-                    except json.JSONDecodeError:
-                        continue
-            if not result.assessments:
-                result.errors.append(
-                    f"Structure screening output not parseable: "
-                    f"{cli_result.output[:200]}"
-                )
+            output = _extract_json_object(cli_result.output)
+
+        if isinstance(output, list):
+            result.assessments.extend(output)
+        elif isinstance(output, dict):
+            # The structure-screen command may wrap assessments
+            # in an envelope dict with an 'assessments' key.
+            result.assessments.extend(
+                output.get("assessments", [output])
+            )
+        elif output is None:
+            result.errors.append(
+                f"Structure screening output not parseable: "
+                f"{cli_result.output[:200]}"
+            )
     else:
         result.errors.append(
             f"Structure-screen run exited {cli_result.exit_code}: "
@@ -416,27 +474,36 @@ def run_differentiation_workstream(
     if cli_result.exit_code == 0:
         try:
             output = json.loads(cli_result.output)
-            if isinstance(output, dict):
-                # The differentiation command outputs a differentiation
-                # record; we need assessment records
-                if output.get("schema") == "dde.competitive-differentiation.v1":
-                    result.assessments.append(output)
-                else:
-                    result.assessments.append(output)
         except json.JSONDecodeError:
-            for line in cli_result.output.strip().split("\n"):
-                line = line.strip()
-                if line.startswith("{"):
-                    try:
-                        parsed = json.loads(line)
-                        result.assessments.append(parsed)
-                        break
-                    except json.JSONDecodeError:
-                        continue
-            if not result.assessments:
-                result.errors.append(
-                    f"Differentiation output not parseable: {cli_result.output[:200]}"
+            output = _extract_json_object(cli_result.output)
+
+        if isinstance(output, dict):
+            # The CLI emits a summary via Emitter; the full
+            # competitive-differentiation record is written to the
+            # path in outputs.assessment.  Convert it to
+            # evidence-assessment records for persistence.
+            diff_record = _read_output_artifact(output, "assessment")
+            if diff_record and diff_record.get("schema") == "dde.competitive-differentiation.v1":
+                from dde.commands.differentiation import (
+                    build_assessment_records,
                 )
+
+                result.assessments.extend(
+                    build_assessment_records(
+                        diff_record,
+                        concept_ref,
+                        assessed_by="stage0-triage",
+                    )
+                )
+            elif diff_record:
+                result.assessments.append(diff_record)
+            else:
+                result.assessments.append(output)
+        elif output is None:
+            result.errors.append(
+                f"Differentiation output not parseable: "
+                f"{cli_result.output[:200]}"
+            )
     else:
         result.errors.append(
             f"Differentiation assess exited {cli_result.exit_code}: "

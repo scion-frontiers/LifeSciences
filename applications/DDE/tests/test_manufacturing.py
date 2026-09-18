@@ -1194,6 +1194,131 @@ _check(
 
 
 # ===========================================================================
+# Regression: #221 — Unrecognized modality must NOT be falsely certified
+# ===========================================================================
+
+
+def test_unrecognized_modality_with_entity_not_supported():
+    """An unknown modality + entity_ref must NOT produce 'supported'.
+
+    Before the fix, an unrecognized modality with a non-null entity_ref
+    fell through to the biologic-like else branch and was falsely
+    certified as having a supported manufacturing path.
+    """
+    concept = {
+        "schema": "dde.intervention-concept.v1",
+        "id": "IC-099",
+        "revision": 1,
+        "state": "active",
+        "disease_context": {"indication": "solid_tumors"},
+        "target_pathway": {
+            "gene": "TEST",
+            "protein": "TEST",
+            "pathway": "Test",
+            "mechanism_hypothesis": "Test hypothesis",
+        },
+        "modality": "novel_unmapped_modality",
+        "entity_ref": "CHEMBL123",
+        "delivery_assumptions": None,
+        "charter_ref": None,
+        "termination_authority": "human",
+        "created_at": _NOW,
+    }
+    assessment = assess_stage0(concept)
+    assert assessment["evidence_status"] != "supported", (
+        f"Unrecognized modality must NOT be certified as 'supported', "
+        f"got {assessment['evidence_status']!r}"
+    )
+    assert assessment["evidence_status"] == "not_assessed", (
+        f"Expected 'not_assessed' for unrecognized modality, "
+        f"got {assessment['evidence_status']!r}"
+    )
+    # Ensure no biologic_manufacturing_qualitative finding exists
+    aspects = [f["aspect"] for f in assessment.get("findings", [])]
+    assert "biologic_manufacturing_qualitative" not in aspects, (
+        "Unrecognized modality must NOT produce a biologic qualitative finding"
+    )
+
+
+_check(
+    "unrecognized_modality_with_entity_not_supported (#221)",
+    test_unrecognized_modality_with_entity_not_supported,
+)
+
+
+def test_unrecognized_modality_null_entity_not_supported():
+    """An unknown modality + null entity_ref must NOT be 'supported'."""
+    concept = {
+        "schema": "dde.intervention-concept.v1",
+        "id": "IC-100",
+        "revision": 1,
+        "state": "active",
+        "disease_context": {"indication": "solid_tumors"},
+        "target_pathway": {
+            "gene": "TEST",
+            "protein": "TEST",
+            "pathway": "Test",
+            "mechanism_hypothesis": "Test hypothesis",
+        },
+        "modality": "completely_fake_modality",
+        "entity_ref": None,
+        "delivery_assumptions": None,
+        "charter_ref": None,
+        "termination_authority": "human",
+        "created_at": _NOW,
+    }
+    assessment = assess_stage0(concept)
+    assert assessment["evidence_status"] != "supported", (
+        f"Unrecognized modality (no entity) must NOT be 'supported', "
+        f"got {assessment['evidence_status']!r}"
+    )
+
+
+_check(
+    "unrecognized_modality_null_entity_not_supported (#221)",
+    test_unrecognized_modality_null_entity_not_supported,
+)
+
+
+def test_known_biologic_modality_still_works():
+    """A known biologic modality with entity_ref should still work."""
+    concept = {
+        "schema": "dde.intervention-concept.v1",
+        "id": "IC-101",
+        "revision": 1,
+        "state": "active",
+        "disease_context": {"indication": "nsclc"},
+        "target_pathway": {
+            "gene": "PD-L1",
+            "protein": "PD-L1",
+            "pathway": "PD-1/PD-L1",
+            "mechanism_hypothesis": "PD-L1 blockade",
+        },
+        "modality": "antibody",
+        "entity_ref": "anti-PD-L1-mAb",
+        "delivery_assumptions": None,
+        "charter_ref": None,
+        "termination_authority": "human",
+        "created_at": _NOW,
+    }
+    assessment = assess_stage0(concept)
+    assert assessment["evidence_status"] == "supported", (
+        f"Known biologic modality with entity should be 'supported', "
+        f"got {assessment['evidence_status']!r}"
+    )
+    aspects = [f["aspect"] for f in assessment.get("findings", [])]
+    assert "biologic_manufacturing_qualitative" in aspects, (
+        "Known biologic modality must produce a biologic qualitative finding"
+    )
+
+
+_check(
+    "known_biologic_modality_still_works (#221 non-regression)",
+    test_known_biologic_modality_still_works,
+)
+
+
+# ===========================================================================
 # Summary
 # ===========================================================================
 
