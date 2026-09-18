@@ -520,7 +520,7 @@ def _default_concept_loader(project_root: Path):
             try:
                 return json.loads(best[1].read_text(encoding="utf-8"))
             except (json.JSONDecodeError, OSError):
-                pass
+                return None  # fail-closed: gate treats None as requiring human approval
 
         # Fallback: unversioned file (IC-NNN.json) — only when no
         # versioned records exist.

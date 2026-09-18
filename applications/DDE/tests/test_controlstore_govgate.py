@@ -336,6 +336,37 @@ _check(
 )
 
 
+# ---------------------------------------------------------------------------
+# 7. Corrupted versioned file does not fall back to unversioned
+# ---------------------------------------------------------------------------
+
+
+def test_corrupted_versioned_file_does_not_fall_back_to_unversioned():
+    """When a versioned file exists but is corrupted, the loader must
+    return None (fail-closed), not fall back to a stale unversioned file."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = _make_project(Path(tmp))
+        # Write a valid unversioned file with program_lead
+        _write_concept_file(project, "IC-001", "program_lead")
+        # Write a corrupted versioned file
+        concepts_dir = project / CONTROL_DIR / "concepts"
+        corrupted = concepts_dir / "IC-001-r2.json"
+        corrupted.write_text("NOT VALID JSON {{{", encoding="utf-8")
+
+        loader = _default_concept_loader(project)
+        result = loader("IC-001")
+        # Must return None (fail-closed), not the stale unversioned record
+        assert result is None, (
+            f"expected None for corrupted versioned file, got {result}"
+        )
+
+
+_check(
+    "corrupted versioned file does not fall back to unversioned",
+    test_corrupted_versioned_file_does_not_fall_back_to_unversioned,
+)
+
+
 # ===========================================================================
 # Summary
 # ===========================================================================
