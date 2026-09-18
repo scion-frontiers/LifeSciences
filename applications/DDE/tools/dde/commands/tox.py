@@ -1784,20 +1784,47 @@ def margins_cmd(
     if margin_notes:
         sidecar.note("margin_notes", margin_notes)
 
-    # --- 6. Forward upstream relays from PK sidecar ---
-    pk_meta_path = pk_path.parent / pk_path.name.replace(
-        ".pk-nca.json", ".pk-nca.meta.json"
-    )
-    if pk_meta_path.exists():
-        try:
-            pk_meta = json.loads(pk_meta_path.read_text(encoding="utf-8"))
-            for r in pk_meta.get("mandatory_relays", []):
-                code = r.get("code", "")
-                message = r.get("message", "")
-                if code and message:
-                    sidecar.warn(message, code=code)
-        except (json.JSONDecodeError, OSError):
-            pass
+    # --- 6. Forward upstream relays from PK sidecars (animal + clinical) ---
+    def _resolve_pk_sidecar(pk: Path) -> Path:
+        """Resolve PK sidecar path using Path.with_suffix for robustness."""
+        # Standard sidecar: replace the final .json with .meta.json
+        # e.g. study.pk-nca.json → study.pk-nca.meta.json
+        return pk.with_suffix(".meta.json")
+
+    def _forward_pk_relays(pk: Path, label: str) -> None:
+        """Read mandatory_relays from a PK sidecar and forward them."""
+        meta = _resolve_pk_sidecar(pk)
+        if meta.exists():
+            try:
+                pk_meta = json.loads(meta.read_text(encoding="utf-8"))
+                for r in pk_meta.get("mandatory_relays", []):
+                    code = r.get("code", "")
+                    message = r.get("message", "")
+                    if code and message:
+                        sidecar.warn(message, code=code)
+            except (json.JSONDecodeError, OSError):
+                import logging
+
+                logging.getLogger("dde.tox").warning(
+                    "%s PK sidecar at %s exists but could not be read — "
+                    "upstream relays may be missing",
+                    label,
+                    meta,
+                )
+        else:
+            import logging
+
+            logging.getLogger("dde.tox").warning(
+                "%s PK sidecar not found at %s — upstream relays from "
+                "%s PK will be missing from the margins sidecar",
+                label,
+                meta,
+                label.lower(),
+            )
+
+    _forward_pk_relays(pk_path, "Animal")
+    if clinical_pk_path is not None:
+        _forward_pk_relays(clinical_pk_path, "Clinical")
 
     sidecar.add_output(artifact_path)
     meta_path = sidecar.write(target_dir / f"{study_id}.tox-margins.meta.json")

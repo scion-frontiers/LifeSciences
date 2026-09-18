@@ -412,6 +412,16 @@ def analyze_cmd(
         matches.extend(found)
         totals[role] = total
 
+    if not totals:
+        raise ArtifactError(
+            f"no response files found for {slug!r} — run 'dde litref resolve' first",
+            detail=(
+                f"expected at least one of: {slug}.trials.json, "
+                f"{slug}.literature.json in {source_dir}"
+            ),
+            remedy="run 'dde litref resolve' to fetch response files before analyzing",
+        )
+
     total_hits = sum(totals.values())
     truncated = total_hits > len(matches)
 
