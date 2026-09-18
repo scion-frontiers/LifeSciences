@@ -741,6 +741,15 @@ def _build_export(
 
                     rel_path = str(f.relative_to(project_root))
                     wo_id = artifact.get("work_order_id", work_order_id)
+
+                    # Skip artifacts belonging to a different work order.
+                    if (
+                        work_order_id is not None
+                        and artifact.get("work_order_id") is not None
+                        and artifact.get("work_order_id") != work_order_id
+                    ):
+                        continue
+
                     row = _extract_fields(
                         artifact,
                         subsection["fields"],

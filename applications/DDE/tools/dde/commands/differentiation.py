@@ -877,11 +877,12 @@ def assess_cmd(
         )
     )
 
-    # Write assessment.
+    # Write analysis record first — it checks _may_write() internally
+    # and raises Refusal if a differing analysis already exists. Writing
+    # the primary assessment AFTER this check prevents inconsistent state
+    # where the .differentiation.json is overwritten but the analysis
+    # record is refused.
     out_path = target_dir / f"{slug}.differentiation.json"
-    out_path.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-
-    # Write analysis record.
     analysis_path = provenance.write_analysis(
         target_dir / f"{slug}.differentiation.analysis.json",
         source=state.project().relative(artifact_path),
@@ -913,6 +914,9 @@ def assess_cmd(
         mandatory_relays=relays,
         suppress_warnings=as_json,
     )
+
+    # Write assessment — only reached if provenance check passed.
+    out_path.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
 
     # Emit output.
     dims = result["dimensions"]
