@@ -90,9 +90,12 @@
     }
 
     function escapeHtml(str) {
-      var div = document.createElement('div');
-      div.textContent = str;
-      return div.innerHTML;
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;');
     }
 
     /* Detect if data is in the domain-specific ADMET format */
@@ -142,7 +145,7 @@
       var hoverTexts = ENDPOINTS.map(function(ep) {
         var result = endpointResults[ep];
         if (!result) return ENDPOINT_LABELS[ep] + ': no data';
-        return ENDPOINT_LABELS[ep] + ': ' + result.status + ' (' + (STATUS_SCORE[result.status] || 0) + ')';
+        return ENDPOINT_LABELS[ep] + ': ' + escapeHtml(result.status) + ' (' + (STATUS_SCORE[result.status] || 0) + ')';
       });
 
       /* Close the radar polygon */
