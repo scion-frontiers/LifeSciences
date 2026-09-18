@@ -335,9 +335,9 @@ def _build_hypex_record(
         citations_dir = run_dir / "citations"
         cite_manifest_path = citations_dir / f"{h_id}.json"
         if cite_manifest_path.is_file() and is_safe_to_open(cite_manifest_path):
-            manifest_present = True
             try:
                 manifest = _read_json_file(cite_manifest_path, "citation manifest")
+                manifest_present = True  # Only after successful parse
                 summary = manifest.get("summary", {})
                 total_citations = summary.get("total", 0)
                 verified_count = max(verified_count, summary.get("verified", 0))
@@ -345,7 +345,7 @@ def _build_hypex_record(
                 suspect_count = summary.get("suspect", 0) if "suspect" in summary else 0
                 unverified_count = summary.get("unverified", 0)
             except SchemaError:
-                pass
+                pass  # manifest_present stays False — relay fires
 
         # Lineage
         lineage = h.get("lineage", {})
