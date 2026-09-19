@@ -907,8 +907,7 @@ _A_TAG_RE = re.compile(r"<a\s+([^>]*)>", re.IGNORECASE)
 # Extract href="..." from an a tag
 _A_HREF_RE = re.compile(r'href="([^"]*)"', re.IGNORECASE)
 
-_EXTERNAL_URL_PREFIXES = ("http://", "https://", "//")
-_DANGEROUS_SCHEMES = ("javascript:", "data:", "vbscript:")
+_DANGEROUS_SCHEMES = ("javascript:", "data:", "vbscript:", "blob:")
 
 
 def _is_external_url(url: str) -> bool:
