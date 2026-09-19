@@ -91,6 +91,7 @@ from ..common import (
 from ..core import http, provenance
 from ..core.errors import ArtifactError, Refusal, SchemaError, UsageError
 from ..core.gene import resolve_gene
+from ..core.paths import confine_path, sanitize_slug
 from ..core.qps import qps_for_host
 
 HPA_BASE = "https://www.proteinatlas.org"
@@ -954,13 +955,19 @@ def _locate(state: AppState, gene: str, target_dir: Path) -> tuple[Path, Path, s
         profile_path = (
             candidate if candidate.is_absolute() else state.project().root / candidate
         )
+        confined = confine_path(state.project().root, profile_path)
+        if confined is None:
+            raise ArtifactError(
+                f"tissue profile path escapes project root: {profile_path}"
+            )
+        profile_path = confined
         if not profile_path.is_file():
             raise ArtifactError(f"tissue profile not found: {profile_path}")
-        ensembl = profile_path.name.split(".")[0]
+        ensembl = sanitize_slug(profile_path.name.split(".")[0])
         return profile_path, profile_path.with_name(f"{ensembl}.hpa.json"), ensembl
 
     if ENSG_RE.match(gene.upper()):
-        ensembl = gene.upper()
+        ensembl = sanitize_slug(gene.upper())
     else:
         # A symbol was fetched under its Ensembl ID; recover it from the
         # sidecars rather than by asking the network, which `analyze`
@@ -984,7 +991,7 @@ def _locate(state: AppState, gene: str, target_dir: Path) -> tuple[Path, Path, s
                 detail=", ".join(m.name for m in matches),
                 remedy="pass the Ensembl gene ID you mean",
             )
-        ensembl = matches[0].name.split(".")[0]
+        ensembl = sanitize_slug(matches[0].name.split(".")[0])
 
     profile_path = target_dir / f"{ensembl}.tissue.json"
     if not profile_path.is_file():
