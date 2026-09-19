@@ -51,7 +51,7 @@ from ..common import (
 from ..core import http, provenance
 from ..core.errors import ArtifactError, EndpointError, Refusal, UsageError
 from ..core.output import Emitter
-from ..core.paths import sanitize_slug
+from ..core.paths import confine_path, sanitize_slug
 from ..core.qps import qps_for_host
 
 TOOL = "homology-search"
@@ -829,6 +829,12 @@ def analyze(
         manifest_path = (
             candidate if candidate.is_absolute() else project.root / candidate
         )
+        confined = confine_path(project.root, manifest_path)
+        if confined is None:
+            raise ArtifactError(
+                f"manifest path escapes project root: {manifest_path}"
+            )
+        manifest_path = confined
     else:
         # Treat as a UniProt accession — search for the manifest
         accession = uniprot_id_or_path.strip().upper()
