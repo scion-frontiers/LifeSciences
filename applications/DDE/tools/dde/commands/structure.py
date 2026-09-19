@@ -53,6 +53,7 @@ from ..core import http, provenance
 from ..core import thresholds as thresholds_mod
 from ..core.errors import ArtifactError, SchemaError, UsageError
 from ..core.output import Emitter
+from ..core.paths import sanitize_slug
 from ..core.qps import qps_for_host
 from ..core.structures import detect_structure_format
 
@@ -1105,7 +1106,7 @@ def annotate_topology(
     project = state.project()
     target_dir = project.artifact_dir(ARTIFACT_CLASS, out)
 
-    stem = gene_label.lower()
+    stem = sanitize_slug(gene_label.lower())
     record = {
         "tool": TOOL_TOPOLOGY,
         "identifier": identifier,
