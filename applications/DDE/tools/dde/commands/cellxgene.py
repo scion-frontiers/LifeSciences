@@ -429,19 +429,18 @@ def analyze_cmd(
     top_assays = assay_counts.most_common(10)
 
     relays: list[dict[str, str]] = []
-    if total_datasets > 0:
-        relays.append(
-            provenance.relay(
-                "cellxgene.search_is_metadata_only",
-                f"CELLxGENE search returned metadata for {total_datasets} "
-                f"dataset(s) across {len(collections)} collection(s); these "
-                "are dataset annotations (tissue, cell type, disease), not "
-                "gene expression values. A dataset containing the queried "
-                "tissue does not confirm expression of any specific gene. "
-                "Confirming expression requires downloading the H5AD file "
-                "or using the Census API.",
-            )
+    relays.append(
+        provenance.relay(
+            "cellxgene.search_is_metadata_only",
+            f"CELLxGENE search returned metadata for {total_datasets} "
+            f"dataset(s) across {len(collections)} collection(s); these "
+            "are dataset annotations (tissue, cell type, disease), not "
+            "gene expression values. A dataset containing the queried "
+            "tissue does not confirm expression of any specific gene. "
+            "Confirming expression requires downloading the H5AD file "
+            "or using the Census API.",
         )
+    )
 
     assessment = {
         "outcome": "datasets_found" if total_datasets else "no_datasets",

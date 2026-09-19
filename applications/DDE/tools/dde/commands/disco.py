@@ -378,17 +378,16 @@ def analyze_cmd(
     n = len(samples)
 
     relays: list[dict[str, str]] = []
-    if n > 0:
-        relays.append(
-            provenance.relay(
-                "disco.search_is_sample_metadata",
-                f"DISCO search returned metadata for {n} sample(s); "
-                "these are sample-level descriptors (tissue, disease, cell count). "
-                "Expression values and cell type markers are not included in search "
-                "results. Confirming gene expression or cell type enrichment requires "
-                "downloading the expression data (H5 files) from DISCO.",
-            )
+    relays.append(
+        provenance.relay(
+            "disco.search_is_sample_metadata",
+            f"DISCO search returned metadata for {n} sample(s); "
+            "these are sample-level descriptors (tissue, disease, cell count). "
+            "Expression values and cell type markers are not included in search "
+            "results. Confirming gene expression or cell type enrichment requires "
+            "downloading the expression data (H5 files) from DISCO.",
         )
+    )
 
     assessment: dict[str, Any] = {
         "outcome": "samples_found" if n else "no_samples",

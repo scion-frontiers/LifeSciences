@@ -287,16 +287,15 @@ def analyze_cmd(
     total_cells = sum(s["cell_count"] for s in studies_with_cells)
 
     relays: list[dict[str, str]] = []
-    if outcome == "results_found":
-        relays.append(
-            provenance.relay(
-                "scp.search_is_study_metadata",
-                f"SCP search for {query!r} returned {len(results)} study "
-                "records; these are study-level metadata, not gene expression "
-                "data. A matching study does not confirm expression of any "
-                "specific gene",
-            )
+    relays.append(
+        provenance.relay(
+            "scp.search_is_study_metadata",
+            f"SCP search for {query!r} returned {len(results)} study "
+            "records; these are study-level metadata, not gene expression "
+            "data. A matching study does not confirm expression of any "
+            "specific gene",
         )
+    )
 
     assessment: dict[str, Any] = {
         "outcome": outcome,
