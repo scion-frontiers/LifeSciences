@@ -304,9 +304,43 @@ def test_285_valid_dict_justification_accepted() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_288_override_blocked_when_issues_contain_path_escape() -> None:
-    """Override must be blocked when detail['issues'] contains a path-escape
-    violation, even though detail['path_confinement_failures'] is absent."""
+def test_288_override_blocked_when_issues_contain_path_escape_dict() -> None:
+    """Override must be blocked when detail['issues'] contains a dict-format
+    path-escape violation (the format _check_analysis_citations produces)."""
+    project = _make_project()
+
+    record = _make_wo_record(state="validation_failed")
+    _write_wo(project, record)
+
+    checks = [
+        _make_check(
+            "report_headings",
+            "fail",
+            detail={
+                "issues": [
+                    {
+                        "file": "raw/docking/result.json",
+                        "issue": "source path escapes project root: ../../../etc/passwd",
+                    },
+                ]
+            },
+        ),
+    ]
+    _write_validation_record(project, "WO-001", 1, checks)
+
+    result = _invoke_override(project, "WO-001", "report_headings")
+    assert result.exit_code != 0, (
+        f"expected non-zero exit for dict path-escape in issues, "
+        f"got {result.exit_code}: {result.output}"
+    )
+    assert "path-confinement" in result.output.lower(), (
+        f"expected 'path-confinement' in output: {result.output}"
+    )
+
+
+def test_288_override_blocked_when_issues_contain_path_escape_str() -> None:
+    """Override must be blocked when detail['issues'] contains a plain-string
+    path-escape violation (defense-in-depth for alternate issue formats)."""
     project = _make_project()
 
     record = _make_wo_record(state="validation_failed")
@@ -327,7 +361,7 @@ def test_288_override_blocked_when_issues_contain_path_escape() -> None:
 
     result = _invoke_override(project, "WO-001", "report_headings")
     assert result.exit_code != 0, (
-        f"expected non-zero exit for path-escape in issues, "
+        f"expected non-zero exit for string path-escape in issues, "
         f"got {result.exit_code}: {result.output}"
     )
     assert "path-confinement" in result.output.lower(), (
@@ -337,7 +371,7 @@ def test_288_override_blocked_when_issues_contain_path_escape() -> None:
 
 def test_288_override_allowed_when_issues_have_no_path_escape() -> None:
     """Override should succeed when detail['issues'] exists but contains
-    no path-escape violations."""
+    no path-escape violations (using dict format matching validate.py output)."""
     project = _make_project()
 
     record = _make_wo_record(state="validation_failed")
@@ -349,8 +383,8 @@ def test_288_override_allowed_when_issues_have_no_path_escape() -> None:
             "fail",
             detail={
                 "issues": [
-                    "heading level mismatch: expected H2, got H3",
-                    "missing required section: Methods",
+                    {"file": "report.html", "issue": "heading level mismatch"},
+                    {"file": "report.html", "issue": "missing required section: Methods"},
                 ]
             },
         ),
@@ -390,8 +424,12 @@ def main() -> int:
         ),
         # Issue #288: Path-escape in detail["issues"]
         (
-            "#288: override blocked when issues contain path escape",
-            test_288_override_blocked_when_issues_contain_path_escape,
+            "#288: override blocked when issues contain path escape (dict)",
+            test_288_override_blocked_when_issues_contain_path_escape_dict,
+        ),
+        (
+            "#288: override blocked when issues contain path escape (str)",
+            test_288_override_blocked_when_issues_contain_path_escape_str,
         ),
         (
             "#288: override allowed when issues have no path escape",
