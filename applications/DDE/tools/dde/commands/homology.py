@@ -594,7 +594,7 @@ def orthologs(
     # Build FASTA output
     fasta_text = _format_fasta(ortholog_list)
 
-    stem = f"ORTHOLOGS-{query_accession}-{query_gene}"
+    stem = f"ORTHOLOGS-{sanitize_slug(query_accession)}-{sanitize_slug(query_gene)}"
 
     # Write FASTA
     fasta_path = target_dir / f"{stem}.fasta"
