@@ -35,6 +35,7 @@ import json
 import re
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 from urllib.parse import quote_plus
 
@@ -50,6 +51,7 @@ from ..common import (
 )
 from ..core import http, provenance
 from ..core.errors import ArtifactError, SchemaError, UsageError
+from ..core.paths import confine_path, sanitize_slug
 from ..core.qps import qps_for_host
 
 TOOL = "preprint"
@@ -574,11 +576,16 @@ def analyze_cmd(
     source_dir = state.project().artifact_dir(ARTIFACT_CLASS, from_dir)
     target_dir = state.project().artifact_dir(ARTIFACT_CLASS, out)
 
-    # Locate the structured artifact
-    artifact_path = source_dir / artifact
+    # Locate the structured artifact — confine to source_dir.
+    artifact_path = confine_path(source_dir, Path(artifact))
+    if artifact_path is None:
+        raise UsageError(
+            f"artifact path escapes source directory: {artifact}",
+            remedy="provide a filename within the artifact directory",
+        )
     if not artifact_path.is_file():
         # Try with .preprint-search.json suffix
-        slug = _slugify(artifact)
+        slug = sanitize_slug(_slugify(artifact))
         artifact_path = source_dir / f"{slug}.preprint-search.json"
     if not artifact_path.is_file():
         raise ArtifactError(
