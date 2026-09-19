@@ -40,6 +40,10 @@ def load_hypotheses(run_dir: Path) -> list[dict[str, Any]]:
 
     hypotheses: list[dict[str, Any]] = []
     for path in sorted(hyp_dir.glob("H-*.json")):
+        # Skip symlinks to prevent symlink exploitation (issue #307).
+        if path.is_symlink():
+            log.warning("Skipping symlink hypothesis file %s", path.name)
+            continue
         try:
             with open(path) as fh:
                 hypotheses.append(json.load(fh))

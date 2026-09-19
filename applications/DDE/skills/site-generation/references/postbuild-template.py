@@ -62,6 +62,9 @@ def fix_tables(site_dir: Path) -> str:
     """
     changed = 0
     for html_file in site_dir.rglob("*.html"):
+        # Skip symlinks to prevent symlink exploitation (issue #247).
+        if html_file.is_symlink():
+            continue
         text = html_file.read_text(encoding="utf-8")
 
         # --- detection guard ---
@@ -94,6 +97,9 @@ def fix_duplicate_h1(site_dir: Path) -> str:
     """
     changed = 0
     for html_file in site_dir.rglob("*.html"):
+        # Skip symlinks to prevent symlink exploitation (issue #247).
+        if html_file.is_symlink():
+            continue
         text = html_file.read_text(encoding="utf-8")
         h1s = re.findall(r"<h1[^>]*>(.*?)</h1>", text, re.DOTALL)
 
@@ -130,6 +136,9 @@ def fix_md_links(site_dir: Path) -> str:
     md_href = re.compile(r'href="([^"]*\.md)((?:[#?][^"]*)?)"')
 
     for html_file in site_dir.rglob("*.html"):
+        # Skip symlinks to prevent symlink exploitation (issue #247).
+        if html_file.is_symlink():
+            continue
         text = html_file.read_text(encoding="utf-8")
 
         # --- detection guard ---

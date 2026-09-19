@@ -366,6 +366,9 @@ def fix_add_themes(site_dir: Path) -> str:
     skipped = 0
 
     for html_file in sorted(site_dir.rglob("*.html")):
+        # Skip symlinks to prevent symlink exploitation (issue #246).
+        if html_file.is_symlink():
+            continue
         text = html_file.read_text(encoding="utf-8")
 
         # --- detection guard ---

@@ -104,6 +104,10 @@ func findArtifactFiles(runDir string) ([]string, error) {
 			return nil, err
 		}
 		for _, e := range entries {
+			// Skip symlinks to prevent symlink exploitation (issue #306).
+			if e.Type()&os.ModeSymlink != 0 {
+				continue
+			}
 			if !e.IsDir() && strings.HasSuffix(e.Name(), ".json") {
 				files = append(files, filepath.Join(dir, e.Name()))
 			}
