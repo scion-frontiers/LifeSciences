@@ -88,6 +88,7 @@ from ..core.errors import (
     SchemaError,
 )
 from ..core.gene import resolve_gene
+from ..core.paths import sanitize_slug
 from ..core.qps import qps_for_host
 
 GNOMAD_API = "https://gnomad.broadinstitute.org/api"
@@ -356,7 +357,7 @@ def analyze_cmd(
     source_dir = state.project().artifact_dir("genomics", from_dir)
     target_dir = state.project().artifact_dir("genomics", out)
 
-    resolved = symbol.upper()
+    resolved = sanitize_slug(symbol.upper())
     path = source_dir / f"{resolved}.gnomad-constraint.json"
     if not path.is_file():
         raise ArtifactError(
