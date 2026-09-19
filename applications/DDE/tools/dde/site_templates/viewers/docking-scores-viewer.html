@@ -66,6 +66,15 @@
       return '#94a3b8';                     /* Weak: gray */
     }
 
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;');
+    }
+
     if (!filePath) {
       showError('No file specified. Use ?file=path/to/file.docking_result.json');
     } else {
@@ -101,7 +110,7 @@
 
           /* Extract fields */
           var labels = poses.map(function(p, i) {
-            return p.pose_id || p.id || p.mode || ('Pose ' + (i + 1));
+            return escapeHtml(p.pose_id || p.id || p.mode || ('Pose ' + (i + 1)));
           });
           var affinities = poses.map(function(p) {
             var a = p.affinity || p.binding_affinity || p.score || p.energy || 0;

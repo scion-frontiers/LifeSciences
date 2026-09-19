@@ -48,6 +48,7 @@ const VIEWER_FILES = [
   'pae-viewer.html',
   'plddt-viewer.html',
   'expression-viewer.html',
+  'docking-scores-viewer.html',
 ];
 
 /**
@@ -484,6 +485,58 @@ test('expression-viewer: does NOT contain unescaped geneName in Plotly title', (
   assert.ok(
     contextSlice.includes('escapeHtml(geneName)'),
     'Plotly title uses unescaped geneName: ' + contextSlice
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 4c. Plotly XSS — docking-scores-viewer (#310)
+// ---------------------------------------------------------------------------
+
+console.log('\n=== Plotly XSS — docking-scores-viewer (#310) ===');
+
+test('docking-scores-viewer: contains escapeHtml definition', () => {
+  const src = fs.readFileSync(path.join(VIEWERS_DIR, 'docking-scores-viewer.html'), 'utf8');
+  assert.ok(
+    /function escapeHtml\(str\)/.test(src),
+    'escapeHtml function not found in docking-scores-viewer.html'
+  );
+});
+
+test('docking-scores-viewer: pose labels use escapeHtml', () => {
+  const src = fs.readFileSync(path.join(VIEWERS_DIR, 'docking-scores-viewer.html'), 'utf8');
+  assert.ok(
+    src.includes("escapeHtml(p.pose_id"),
+    'pose labels are not escaped with escapeHtml'
+  );
+});
+
+test('docking-scores-viewer: does NOT contain unescaped pose label pattern', () => {
+  const src = fs.readFileSync(path.join(VIEWERS_DIR, 'docking-scores-viewer.html'), 'utf8');
+  assert.ok(
+    !src.includes("return p.pose_id || p.id || p.mode || ('Pose ' + (i + 1));"),
+    'Unsafe unescaped pose label pattern still present'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 4d. Plotly XSS — admet-viewer renderGeneric (#311)
+// ---------------------------------------------------------------------------
+
+console.log('\n=== Plotly XSS — admet-viewer renderGeneric (#311) ===');
+
+test('admet-viewer: renderGeneric escapes property names', () => {
+  const src = fs.readFileSync(path.join(VIEWERS_DIR, 'admet-viewer.html'), 'utf8');
+  assert.ok(
+    src.includes("escapeHtml(e.property"),
+    'renderGeneric does not escape property names'
+  );
+});
+
+test('admet-viewer: does NOT contain unescaped property name pattern in renderGeneric', () => {
+  const src = fs.readFileSync(path.join(VIEWERS_DIR, 'admet-viewer.html'), 'utf8');
+  assert.ok(
+    !src.includes("return e.property || e.name || e.endpoint || '';"),
+    'Unsafe unescaped property name pattern still present in renderGeneric'
   );
 });
 
