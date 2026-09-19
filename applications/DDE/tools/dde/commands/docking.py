@@ -62,6 +62,7 @@ from ..common import (
 from ..core import provenance
 from ..core.errors import ArtifactError, DependencyError, UsageError
 from ..core.output import Emitter
+from ..core.paths import confine_path, sanitize_slug
 from ..core.structures import detect_structure_format
 
 ARTIFACT_CLASS = "docking"
@@ -1573,13 +1574,23 @@ def analyze_cmd(
         # correctly.  The docking sidecar IS named {stem}.docking.meta.json
         # (same composite stem as the result file).
         receptor_id = result_doc.get("receptor_id", "")
+        safe_receptor_id = sanitize_slug(receptor_id) if receptor_id else ""
+        safe_stem = sanitize_slug(stem) if stem else ""
         sidecar_stems = {
-            "prepare": receptor_id or stem,
-            "docking": stem,
+            "prepare": safe_receptor_id or safe_stem,
+            "docking": safe_stem,
         }
         for suffix in ("prepare", "docking"):
             lookup_stem = sidecar_stems[suffix]
             meta_candidate = from_dir_path / f"{lookup_stem}.{suffix}.meta.json"
+            if (
+                confine_path(from_dir_path, Path(f"{lookup_stem}.{suffix}.meta.json"))
+                is None
+            ):
+                raise ArtifactError(
+                    f"sidecar path escapes base directory: {meta_candidate}",
+                    remedy="check receptor_id in the docking result document",
+                )
             if meta_candidate.is_file():
                 meta = provenance.read_json(meta_candidate, f"{suffix} sidecar")
                 for r in meta.get("mandatory_relays", []) or []:
