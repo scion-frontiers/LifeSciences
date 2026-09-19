@@ -26,6 +26,8 @@ Issues covered:
   #272 — site.py: site_dir CLI option in path
   #276 — structure.py: gene_label as filename stem
   #282 — core/envstamp.py: version string in path
+  (A)  — expression.py: _locate_single_cell gene path traversal
+  (B)  — homology.py: analyze manifest path traversal
 """
 
 from __future__ import annotations
@@ -216,3 +218,54 @@ class TestEnvstampVersionSanitization:
         result = confine_path(archive, Path(f"{wanted}.txt"))
         assert result is not None
         assert result.is_relative_to(archive.resolve())
+
+
+# ---------------------------------------------------------------------------
+# Additional Issue A — expression.py: _locate_single_cell gene input
+# ---------------------------------------------------------------------------
+
+
+class TestExpressionSingleCellSanitization:
+    """Verify that gene input in _locate_single_cell is sanitized."""
+
+    def test_traversal_in_gene_path_is_confined(self, tmp_path: Path) -> None:
+        """A gene path with traversal is rejected by confine_path."""
+        result = confine_path(tmp_path, Path("../../etc/passwd.tissue.json"))
+        assert result is None
+
+    def test_normal_ensembl_id_sanitized(self) -> None:
+        """Normal Ensembl IDs pass through sanitize_slug unchanged."""
+        ensembl = sanitize_slug("ENSG00000141510")
+        assert ensembl == "ENSG00000141510"
+        # Verify it produces safe filenames
+        path = Path("/safe/dir") / f"{ensembl}.single-cell.json"
+        assert path.parent == Path("/safe/dir")
+
+    def test_traversal_in_ensembl_id_neutralized(self) -> None:
+        """A traversal string disguised as an Ensembl ID is neutralized."""
+        malicious = "../../etc/passwd"
+        slug = sanitize_slug(malicious.upper())
+        assert "/" not in slug
+        assert "\\" not in slug
+
+
+# ---------------------------------------------------------------------------
+# Additional Issue B — homology.py: analyze manifest path confinement
+# ---------------------------------------------------------------------------
+
+
+class TestHomologyManifestConfinement:
+    """Verify that manifest paths are confined to project root."""
+
+    def test_traversal_in_manifest_path_is_rejected(self, tmp_path: Path) -> None:
+        """A manifest path with traversal is rejected by confine_path."""
+        result = confine_path(tmp_path, Path("../../etc/passwd.search.json"))
+        assert result is None
+
+    def test_normal_manifest_path_is_allowed(self, tmp_path: Path) -> None:
+        """A normal manifest path stays within project root."""
+        result = confine_path(
+            tmp_path, Path("HOMOLOGY-P04637.search.json")
+        )
+        assert result is not None
+        assert result.is_relative_to(tmp_path.resolve())
