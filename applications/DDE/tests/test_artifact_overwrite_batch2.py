@@ -34,8 +34,11 @@ TOOLS_DIR = Path(__file__).resolve().parent.parent / "tools"
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
+from dde.commands.compound import _guard_sdf_no_clobber
+from dde.commands.screen import _guard_input_output_alias
 from dde.core.errors import Refusal
 from dde.core.paths import sanitize_slug
+from dde.core.provenance import _may_write
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -56,7 +59,7 @@ def _make_project(base: Path) -> Path:
 
 
 def test_compound_prepare_3d_refuses_overwrite() -> None:
-    """#251: prepare_3d_cmd must raise Refusal when the 3D SDF already exists."""
+    """#251: _guard_sdf_no_clobber must raise Refusal when the 3D SDF already exists."""
     with tempfile.TemporaryDirectory() as tmp:
         target_dir = Path(tmp)
         slug = "test-compound"
@@ -66,14 +69,14 @@ def test_compound_prepare_3d_refuses_overwrite() -> None:
         sdf_path.write_text("existing 3d sdf content\n", encoding="utf-8")
         assert sdf_path.exists()
 
-        # The guard code from compound.py: check before writing.
-        if sdf_path.exists():
-            with pytest.raises(Refusal):
-                raise Refusal(f"artifact already exists: {sdf_path}")
+        # Call the production guard — it must raise Refusal with a remedy.
+        with pytest.raises(Refusal, match="artifact already exists") as exc_info:
+            _guard_sdf_no_clobber(sdf_path)
+        assert exc_info.value.remedy is not None
 
 
 def test_compound_prepare_3d_allows_new_file() -> None:
-    """#251: prepare_3d_cmd writes normally when the file does not exist."""
+    """#251: _guard_sdf_no_clobber passes when the file does not exist."""
     with tempfile.TemporaryDirectory() as tmp:
         target_dir = Path(tmp)
         slug = "new-compound"
@@ -81,41 +84,44 @@ def test_compound_prepare_3d_allows_new_file() -> None:
 
         # No pre-existing file — the guard should not trigger.
         assert not sdf_path.exists()
-        # Simulate write (no Refusal should be raised).
-        sdf_path.write_text("new 3d sdf content\n", encoding="utf-8")
-        assert sdf_path.exists()
+        # Must not raise.
+        _guard_sdf_no_clobber(sdf_path)
 
 
 # ===========================================================================
-# Issue #253 — coscientist.py: Missing Overwrite Protection on Analysis
+# Issue #253 — coscientist.py: Overwrite Protection via _may_write()
 # ===========================================================================
 
 
 def test_coscientist_analysis_refuses_overwrite() -> None:
-    """#253: coscientist analyze must raise Refusal when analysis already exists."""
+    """#253: provenance._may_write refuses when an existing analysis differs."""
     with tempfile.TemporaryDirectory() as tmp:
-        target_dir = Path(tmp)
-        analysis_path = target_dir / "test.analysis.json"
+        analysis_path = Path(tmp) / "test.analysis.json"
 
-        # Pre-create the analysis artifact.
-        analysis_path.write_text('{"verdict": "pass"}\n', encoding="utf-8")
+        # Write an existing analysis record.
+        import json
+
+        existing = {"record_type": "analysis", "assessment": {"verdict": "old"}}
+        analysis_path.write_text(
+            json.dumps(existing, indent=2) + "\n", encoding="utf-8"
+        )
         assert analysis_path.exists()
 
-        # The guard code from coscientist.py: check before writing.
-        if analysis_path.exists():
-            with pytest.raises(Refusal):
-                raise Refusal(f"artifact already exists: {analysis_path}")
+        # A new record with a different verdict must be refused.
+        new_record = {"record_type": "analysis", "assessment": {"verdict": "new"}}
+        with pytest.raises(Refusal, match="already holds a different analysis"):
+            _may_write(analysis_path, new_record)
 
 
 def test_coscientist_analysis_allows_new_file() -> None:
-    """#253: coscientist analyze writes normally when the file does not exist."""
+    """#253: provenance._may_write allows writing when no file exists."""
     with tempfile.TemporaryDirectory() as tmp:
-        target_dir = Path(tmp)
-        analysis_path = target_dir / "new-test.analysis.json"
+        analysis_path = Path(tmp) / "new-test.analysis.json"
 
         assert not analysis_path.exists()
-        analysis_path.write_text('{"verdict": "pass"}\n', encoding="utf-8")
-        assert analysis_path.exists()
+        record = {"record_type": "analysis", "assessment": {"verdict": "pass"}}
+        # Must return True (write allowed).
+        assert _may_write(analysis_path, record) is True
 
 
 # ===========================================================================
@@ -247,7 +253,7 @@ def test_pubchem_multi_cid_artifact_paths_distinct() -> None:
 
 
 def test_screen_input_output_aliasing_detected() -> None:
-    """#269: Input path inside output directory must be detected and rejected."""
+    """#269: _guard_input_output_alias raises Refusal when input is inside output dir."""
     with tempfile.TemporaryDirectory() as tmp:
         target_dir = Path(tmp) / "raw" / "screening"
         target_dir.mkdir(parents=True, exist_ok=True)
@@ -256,16 +262,13 @@ def test_screen_input_output_aliasing_detected() -> None:
         library_path = target_dir / "compounds.sdf"
         library_path.write_text("dummy sdf\n", encoding="utf-8")
 
-        # The guard logic from screen.py:
-        if library_path.resolve().is_relative_to(target_dir.resolve()):
-            with pytest.raises(Refusal):
-                raise Refusal(
-                    "input library path aliases output directory — would clobber input"
-                )
+        # Call the production guard — must raise Refusal.
+        with pytest.raises(Refusal, match="aliases output directory"):
+            _guard_input_output_alias(library_path, target_dir, "library")
 
 
 def test_screen_input_output_no_aliasing() -> None:
-    """#269: Separate input and output paths do not trigger the guard."""
+    """#269: _guard_input_output_alias passes when paths are separate."""
     with tempfile.TemporaryDirectory() as tmp:
         input_dir = Path(tmp) / "input"
         input_dir.mkdir(parents=True, exist_ok=True)
@@ -275,23 +278,19 @@ def test_screen_input_output_no_aliasing() -> None:
         library_path = input_dir / "compounds.sdf"
         library_path.write_text("dummy sdf\n", encoding="utf-8")
 
-        # These should NOT be aliased.
-        assert not library_path.resolve().is_relative_to(output_dir.resolve())
+        # Must not raise — paths are separate.
+        _guard_input_output_alias(library_path, output_dir, "library")
 
 
 def test_screen_exact_path_aliasing_detected() -> None:
-    """#269: When output dir IS the input file's parent, detect the alias."""
+    """#269: _guard_input_output_alias detects when output dir IS the input's parent."""
     with tempfile.TemporaryDirectory() as tmp:
         shared_dir = Path(tmp) / "data"
         shared_dir.mkdir(parents=True, exist_ok=True)
 
         library_path = shared_dir / "lib.sdf"
         library_path.write_text("dummy\n", encoding="utf-8")
-        target_dir = shared_dir
 
-        # Library is in the target dir — should be detected.
-        assert library_path.resolve().is_relative_to(target_dir.resolve())
-        with pytest.raises(Refusal):
-            raise Refusal(
-                "input library path aliases output directory — would clobber input"
-            )
+        # Library is in the target dir — production guard must raise Refusal.
+        with pytest.raises(Refusal, match="aliases output directory"):
+            _guard_input_output_alias(library_path, shared_dir, "library")

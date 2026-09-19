@@ -63,7 +63,7 @@ from ..common import (
     resolve_artifact,
 )
 from ..core import provenance
-from ..core.errors import ArtifactError, Refusal, SchemaError, UsageError
+from ..core.errors import ArtifactError, SchemaError, UsageError
 from ..core.output import Emitter
 from ..core.paths import sanitize_slug
 from ..core.thresholds import COSCIENTIST_CLAIM_DENOMINATOR
@@ -767,8 +767,6 @@ def analyze(
     analysis_path = beside_or_out(
         state, path, path.name.replace(".tournament.json", ".analysis.json"), out
     )
-    if analysis_path.exists():
-        raise Refusal(f"artifact already exists: {analysis_path}")
     provenance.write_analysis(
         analysis_path,
         source=path,

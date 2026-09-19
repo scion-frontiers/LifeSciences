@@ -62,6 +62,23 @@ ARTIFACT_CLASS = "screening"
 TOOL = "screen"
 
 
+def _guard_input_output_alias(
+    input_path: Path, target_dir: Path, label: str
+) -> None:
+    """Raise :class:`Refusal` if *input_path* lives inside *target_dir*.
+
+    Prevents the screening pipeline from clobbering its own inputs when
+    the input file resides inside (or *is*) the output directory.
+    """
+    if input_path.resolve() == target_dir.resolve() or (
+        input_path.resolve().is_relative_to(target_dir.resolve())
+    ):
+        raise Refusal(
+            f"input {label} path aliases output directory — would clobber input",
+            remedy="use --out to write output to a different directory",
+        )
+
+
 # ---------------------------------------------------------------------------
 # RDKit lazy import
 # ---------------------------------------------------------------------------
@@ -315,13 +332,7 @@ def run_cmd(
         (receptor_path, "receptor"),
         (gridbox_path, "gridbox"),
     ]:
-        if input_path.resolve() == target_dir.resolve() or (
-            input_path.resolve().is_relative_to(target_dir.resolve())
-        ):
-            raise Refusal(
-                f"input {label} path aliases output directory — would clobber input",
-                remedy="use --out to write output to a different directory",
-            )
+        _guard_input_output_alias(input_path, target_dir, label)
 
     # --- screen name ---
     if screen_name is None:
