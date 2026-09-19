@@ -57,6 +57,15 @@
       document.getElementById('error').textContent = msg;
     }
 
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;');
+    }
+
     function plddtColor(score) {
       if (score > 90) return '#0d47a1';
       if (score > 70) return '#00bcd4';
@@ -118,8 +127,8 @@
                   type: 'scatter',
                   mode: 'lines',
                   line: { width: 1.5, color: CHAIN_COLORS[ci % CHAIN_COLORS.length] },
-                  name: 'Chain ' + chain,
-                  hovertemplate: 'Chain ' + chain + ' residue %{x}<br>pLDDT: %{y:.1f}<extra></extra>'
+                  name: 'Chain ' + escapeHtml(chain),
+                  hovertemplate: 'Chain ' + escapeHtml(chain) + ' residue %{x}<br>pLDDT: %{y:.1f}<extra></extra>'
                 });
                 offset += scores.length;
               });

@@ -45,6 +45,8 @@ const VIEWER_FILES = [
   'admet-viewer.html',
   'tournament-viewer.html',
   'pockets-viewer.html',
+  'pae-viewer.html',
+  'plddt-viewer.html',
 ];
 
 /**
@@ -315,7 +317,115 @@ for (const file of VIEWER_FILES) {
 }
 
 // ---------------------------------------------------------------------------
-// 4.  Summary
+// 4.  Plotly XSS — verify escapeHtml usage on user-controlled chart fields
+//     (Issues #303, #304, #305)
+// ---------------------------------------------------------------------------
+
+console.log('\n=== Plotly XSS — contacts-viewer (#303) ===');
+
+test('contacts-viewer: xLabels construction uses escapeHtml', () => {
+  const src = fs.readFileSync(path.join(VIEWERS_DIR, 'contacts-viewer.html'), 'utf8');
+  // The xLabels map callback should escape res_name, res_num, and chain
+  assert.ok(
+    src.includes("escapeHtml(r.res_name)"),
+    'xLabels does not escape r.res_name'
+  );
+  assert.ok(
+    src.includes("escapeHtml(String(r.res_num))"),
+    'xLabels does not escape r.res_num'
+  );
+  assert.ok(
+    src.includes("escapeHtml(r.chain)"),
+    'xLabels does not escape r.chain'
+  );
+});
+
+test('contacts-viewer: yLabel uses escapeHtml', () => {
+  const src = fs.readFileSync(path.join(VIEWERS_DIR, 'contacts-viewer.html'), 'utf8');
+  assert.ok(
+    src.includes('var yLabel = escapeHtml(name)'),
+    'yLabel is not escaped with escapeHtml'
+  );
+});
+
+test('contacts-viewer: does NOT contain unescaped xLabels pattern', () => {
+  const src = fs.readFileSync(path.join(VIEWERS_DIR, 'contacts-viewer.html'), 'utf8');
+  // The old unsafe pattern should be absent
+  assert.ok(
+    !src.includes("r.res_name + r.res_num + ' (' + r.chain + ')'"),
+    'Unsafe unescaped xLabels pattern still present'
+  );
+});
+
+console.log('\n=== Plotly XSS — pae-viewer (#304) ===');
+
+test('pae-viewer: contains escapeHtml definition', () => {
+  const src = fs.readFileSync(path.join(VIEWERS_DIR, 'pae-viewer.html'), 'utf8');
+  assert.ok(
+    /function escapeHtml\(str\)/.test(src),
+    'escapeHtml function not found in pae-viewer.html'
+  );
+});
+
+test('pae-viewer: baseName in Plotly title uses escapeHtml', () => {
+  const src = fs.readFileSync(path.join(VIEWERS_DIR, 'pae-viewer.html'), 'utf8');
+  assert.ok(
+    src.includes("escapeHtml(baseName)"),
+    'baseName in Plotly title is not escaped'
+  );
+  // The unsafe pattern should be absent
+  assert.ok(
+    !src.includes("'Predicted Aligned Error — ' + baseName"),
+    'Unsafe unescaped baseName in title still present'
+  );
+});
+
+test('pae-viewer: document.title uses escapeHtml for baseName', () => {
+  const src = fs.readFileSync(path.join(VIEWERS_DIR, 'pae-viewer.html'), 'utf8');
+  assert.ok(
+    src.includes("document.title = 'PAE: ' + escapeHtml(baseName)"),
+    'document.title does not escape baseName'
+  );
+});
+
+console.log('\n=== Plotly XSS — plddt-viewer (#305) ===');
+
+test('plddt-viewer: contains escapeHtml definition', () => {
+  const src = fs.readFileSync(path.join(VIEWERS_DIR, 'plddt-viewer.html'), 'utf8');
+  assert.ok(
+    /function escapeHtml\(str\)/.test(src),
+    'escapeHtml function not found in plddt-viewer.html'
+  );
+});
+
+test('plddt-viewer: chain in trace name uses escapeHtml', () => {
+  const src = fs.readFileSync(path.join(VIEWERS_DIR, 'plddt-viewer.html'), 'utf8');
+  assert.ok(
+    src.includes("name: 'Chain ' + escapeHtml(chain)"),
+    'chain in trace name is not escaped'
+  );
+  // The unsafe pattern should be absent
+  assert.ok(
+    !src.includes("name: 'Chain ' + chain,"),
+    'Unsafe unescaped chain in trace name still present'
+  );
+});
+
+test('plddt-viewer: chain in hovertemplate uses escapeHtml', () => {
+  const src = fs.readFileSync(path.join(VIEWERS_DIR, 'plddt-viewer.html'), 'utf8');
+  assert.ok(
+    src.includes("hovertemplate: 'Chain ' + escapeHtml(chain)"),
+    'chain in hovertemplate is not escaped'
+  );
+  // The unsafe pattern should be absent
+  assert.ok(
+    !src.includes("hovertemplate: 'Chain ' + chain + ' residue"),
+    'Unsafe unescaped chain in hovertemplate still present'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 5.  Summary
 // ---------------------------------------------------------------------------
 
 console.log(`\n${'='.repeat(50)}`);
