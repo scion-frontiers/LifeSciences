@@ -39,7 +39,7 @@ from ..common import emitter, output_options
 from ..core import envstamp
 from ..core.env import tools_home
 from ..core.errors import ArtifactError
-from ..core.paths import is_safe_to_open
+from ..core.paths import is_safe_to_open, sanitize_slug
 
 #: Diff lines shown on the human path. The rest go to the JSON payload
 #: and the archived manifests; a wall of package versions in an agent's
@@ -279,7 +279,8 @@ def diff(before: str, after: str, as_json: bool, quiet: bool) -> None:
     def resolve(token: str) -> str:
         if token == "current":
             return state.live
-        text = envstamp.archived(home, token)
+        safe_token = sanitize_slug(token)
+        text = envstamp.archived(home, safe_token)
         if text is None:
             raise ArtifactError(
                 f"no archived manifest for {token!r}",
