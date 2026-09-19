@@ -124,13 +124,16 @@ def validate_biomarker(entry: dict[str, Any], index: int) -> list[str]:
         # Rationale required when status != "known".
         if entry["status"] in ("unknown", "not_applicable"):
             rationale = entry.get("rationale")
-            if rationale is None or (
-                isinstance(rationale, str) and not rationale.strip()
-            ):
+            if not isinstance(rationale, str) or not rationale.strip():
                 errors.append(
                     f"{prefix}: rationale is required when status is "
                     f"{entry['status']!r}"
                 )
+
+    # Type validation: rationale, when present and non-null, must be a string.
+    rationale = entry.get("rationale")
+    if rationale is not None and not isinstance(rationale, str):
+        errors.append(f"{prefix}.rationale: must be a string or null")
 
     return errors
 
