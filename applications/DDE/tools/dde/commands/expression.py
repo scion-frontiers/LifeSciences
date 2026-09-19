@@ -1011,13 +1011,19 @@ def _locate_single_cell(
         profile_path = (
             candidate if candidate.is_absolute() else state.project().root / candidate
         )
+        confined = confine_path(state.project().root, profile_path)
+        if confined is None:
+            raise ArtifactError(
+                f"single-cell profile path escapes project root: {profile_path}"
+            )
+        profile_path = confined
         if not profile_path.is_file():
             raise ArtifactError(f"single-cell profile not found: {profile_path}")
-        ensembl = profile_path.name.split(".")[0]
+        ensembl = sanitize_slug(profile_path.name.split(".")[0])
         return profile_path, profile_path.with_name(f"{ensembl}.hpa.json"), ensembl
 
     if ENSG_RE.match(gene.upper()):
-        ensembl = gene.upper()
+        ensembl = sanitize_slug(gene.upper())
     else:
         matches = [
             meta
@@ -1038,7 +1044,7 @@ def _locate_single_cell(
                 detail=", ".join(m.name for m in matches),
                 remedy="pass the Ensembl gene ID you mean",
             )
-        ensembl = matches[0].name.split(".")[0]
+        ensembl = sanitize_slug(matches[0].name.split(".")[0])
 
     profile_path = target_dir / f"{ensembl}.single-cell.json"
     if not profile_path.is_file():
