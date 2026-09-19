@@ -232,6 +232,20 @@ def _overwrite_option(func):
     )(func)
 
 
+def _guard_sdf_no_clobber(path: Path) -> None:
+    """Raise :class:`Refusal` if *path* already exists.
+
+    Used by ``prepare-3d`` where the output is written via RDKit's
+    ``SDWriter`` and :func:`_safe_write_artifact` (which expects text
+    content for SHA-256 comparison) does not apply.
+    """
+    if path.exists():
+        raise Refusal(
+            f"artifact already exists: {path}",
+            remedy="use --out to write to a different location",
+        )
+
+
 def _safe_write_artifact(path: Path, content: str, *, overwrite: bool) -> bool:
     """Write artifact content with overwrite protection.
 
@@ -630,8 +644,7 @@ def prepare_3d_cmd(
 
     # Write SDF with 3D coordinates.
     sdf_path = target_dir / f"{slug}.3d.sdf"
-    if sdf_path.exists():
-        raise Refusal(f"artifact already exists: {sdf_path}")
+    _guard_sdf_no_clobber(sdf_path)
     writer = Chem.SDWriter(str(sdf_path))
     try:
         writer.write(mol_h)
