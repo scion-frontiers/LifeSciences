@@ -226,7 +226,7 @@
 
     /* Render generic ADMET view (shipped fallback) */
     function renderGeneric(entries) {
-      var names = entries.map(function(e) { return e.property || e.name || e.endpoint || ''; });
+      var names = entries.map(function(e) { return escapeHtml(e.property || e.name || e.endpoint || ''); });
       var values = entries.map(function(e) {
         var v = e.value || e.score || e.prediction || 0;
         return typeof v === 'number' ? v : parseFloat(v) || 0;
