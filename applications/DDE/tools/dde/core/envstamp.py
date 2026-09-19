@@ -49,6 +49,8 @@ from datetime import datetime, timezone
 from importlib import metadata
 from pathlib import Path
 
+from .paths import confine_path, sanitize_slug
+
 #: The document whose hash is ENV_VERSION.
 MANIFEST = "env-manifest.txt"
 #: The stamp itself, read by core.env.env_version().
@@ -591,8 +593,10 @@ def archived(home: Path, version: str) -> str | None:
     archive = home / ARCHIVE
     if not archive.is_dir():
         return None
-    wanted = version.replace(":", "-")
-    exact = archive / f"{wanted}.txt"
+    wanted = sanitize_slug(version.replace(":", "-"))
+    exact = confine_path(archive, Path(f"{wanted}.txt"))
+    if exact is None:
+        return None
     if exact.is_file():
         return exact.read_text(encoding="utf-8")
     matches = sorted(p for p in archive.glob("*.txt") if p.stem.startswith(wanted))
