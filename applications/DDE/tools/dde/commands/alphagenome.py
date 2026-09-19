@@ -77,6 +77,7 @@ from ..core.errors import (
     UsageError,
 )
 from ..core.output import Emitter
+from ..core.paths import sanitize_slug
 from ..core.thresholds import MANDATORY_ADVISORIES
 
 TOOL = "alphagenome-vertex"
@@ -817,7 +818,7 @@ def score_variant(
     interval = _centred_interval(chrom, pos, snapped, strand_enum)
     centred = interval.pop("centred")
 
-    stem = f"{chrom}-{pos}-{ref}-{alt}"
+    stem = sanitize_slug(f"{chrom}-{pos}-{ref}-{alt}")
     request_data: dict[str, Any] = {
         "variant": {
             "chromosome": chrom,
