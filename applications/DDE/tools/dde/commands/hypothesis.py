@@ -538,7 +538,7 @@ def analyze(
     analysis_name = path.name
     for suffix in (".adopted.json", ".charter.json"):
         if analysis_name.endswith(suffix):
-            analysis_name = analysis_name.replace(suffix, ".analysis.json")
+            analysis_name = analysis_name.removesuffix(suffix) + ".analysis.json"
             break
 
     analysis_path = beside_or_out(state, path, analysis_name, out)

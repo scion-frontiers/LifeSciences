@@ -630,6 +630,8 @@ def prepare_3d_cmd(
 
     # Write SDF with 3D coordinates.
     sdf_path = target_dir / f"{slug}.3d.sdf"
+    if sdf_path.exists():
+        raise Refusal(f"artifact already exists: {sdf_path}")
     writer = Chem.SDWriter(str(sdf_path))
     try:
         writer.write(mol_h)
