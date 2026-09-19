@@ -228,17 +228,32 @@ _HUMAN_APPROVAL_REQUIRED_FIELDS = [
 
 
 def _validate_human_approval(approval: dict[str, Any]) -> list[str]:
-    """Validate the human_approval sub-schema."""
+    """Validate the human_approval sub-schema.
+
+    Fail-closed: every required field must be present, must be a string,
+    and must contain at least one non-whitespace character.  Empty or
+    whitespace-only strings are rejected (issue #245).
+    """
     errors: list[str] = []
     missing = [f for f in _HUMAN_APPROVAL_REQUIRED_FIELDS if f not in approval]
     if missing:
         errors.append(f"human_approval missing required fields: {', '.join(missing)}")
     for field in _HUMAN_APPROVAL_REQUIRED_FIELDS:
-        if field in approval and not isinstance(approval[field], str):
-            errors.append(
-                f"human_approval.{field} must be a string, "
-                f"got {type(approval[field]).__name__}"
-            )
+        if field in approval:
+            value = approval[field]
+            if not isinstance(value, str):
+                errors.append(
+                    f"human_approval.{field} must be a string, "
+                    f"got {type(value).__name__}"
+                )
+            elif not value.strip():
+                # Issue #245: reject empty/whitespace-only strings.
+                # An autonomous agent must not bypass the gate by
+                # supplying blank approval fields.
+                errors.append(
+                    f"human_approval.{field} must not be empty or "
+                    f"whitespace-only"
+                )
     return errors
 
 
@@ -292,8 +307,15 @@ def validate_decision(
         )
 
     # affected_entity validation
+    #
+    # Issue #286: the guard must be key-presence, not is-not-None.
+    # When affected_entity is explicitly set to None, the old
+    # ``if entity is not None:`` skipped ALL validation, letting
+    # the terminate gate resolve etype to None and bypass both
+    # the concept and program termination gates.  Fail-closed:
+    # if the key is present, it MUST be a dict.
     entity = data.get("affected_entity")
-    if entity is not None:
+    if "affected_entity" in data:
         if not isinstance(entity, dict):
             errors.append("affected_entity must be a dict")
         else:

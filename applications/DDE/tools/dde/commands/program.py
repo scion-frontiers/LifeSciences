@@ -429,8 +429,8 @@ def _build_markdown_record(
         "state": str(frontmatter["state"]),
         "decision_question": str(frontmatter["decision_question"]),
         "requested_role": str(frontmatter["requested_role"]),
-        "stage": frontmatter["stage"],
-        "cycle": frontmatter["cycle"],
+        "stage": str(frontmatter["stage"]),
+        "cycle": str(frontmatter["cycle"]),
         "context": context,
         "dependencies": frontmatter.get("dependencies", []),
         "capabilities": frontmatter.get("capabilities", []),
@@ -725,6 +725,23 @@ def resume_cmd(
             remedy="remove the duplicate from either the JSON or markdown source",
         )
 
+    # 1c-ii. Guard against duplicate IDs within markdown files (#295).
+    md_id_list = [data.get("id", "") for _, data in md_records]
+    md_id_list_filtered = [i for i in md_id_list if i]
+    if len(md_id_list_filtered) != len(set(md_id_list_filtered)):
+        seen: set[str] = set()
+        dupes: set[str] = set()
+        for i in md_id_list_filtered:
+            if i in seen:
+                dupes.add(i)
+            seen.add(i)
+        raise Refusal(
+            f"duplicate work-order IDs within markdown sources: "
+            f"{', '.join(sorted(dupes))}",
+            detail="each markdown work order must have a unique ID",
+            remedy="remove or rename the duplicate markdown work-order files",
+        )
+
     # 1d. Check for prior imports of non-canonical markdown WOs.
     #     This must run BEFORE reconciliation, because reconciliation
     #     assigns a fresh WO-NNN on every invocation, making the
@@ -814,6 +831,24 @@ def resume_cmd(
     for ident, data in import_validations:
         all_imports.append(("validation", ident, data))
 
+    # 4a. Check for duplicate identifiers within the import batch (#295).
+    seen_imports: set[tuple[str, str]] = set()
+    batch_dupes: list[str] = []
+    for record_type, ident, _ in all_imports:
+        key = (record_type, ident)
+        if key in seen_imports:
+            batch_dupes.append(f"{record_type} {ident}")
+        seen_imports.add(key)
+    if batch_dupes:
+        raise Refusal(
+            f"duplicate identifiers within import batch: "
+            f"{', '.join(sorted(batch_dupes))}",
+            detail="each record must have a unique (record_type, identifier) "
+            "pair within the import batch",
+            remedy="remove duplicate records from the source",
+        )
+
+    # 4b. Check for ID conflicts against existing records on disk.
     for record_type, ident, _ in all_imports:
         if _conflict_exists(dest_root, record_type, ident):
             raise Refusal(
@@ -831,6 +866,23 @@ def resume_cmd(
     # ------------------------------------------------------------------
     validation_errors: list[str] = []
     for record_type, ident, data in all_imports:
+        # 5a. Validate identifier against _SAFE_IDENTIFIER_RE (#298).
+        if not controlstore._SAFE_IDENTIFIER_RE.match(ident):
+            validation_errors.append(
+                f"{record_type} {ident}: invalid identifier — "
+                "identifiers must contain only alphanumeric characters, "
+                "hyphens, and underscores"
+            )
+
+        # 5b. Validate JSON serializability (#298).
+        try:
+            json.dumps(data)
+        except (TypeError, ValueError, OverflowError) as exc:
+            validation_errors.append(
+                f"{record_type} {ident}: data is not JSON-serializable — {exc}"
+            )
+
+        # 5c. Schema validation.
         validator = controlstore._VALIDATORS.get(record_type)
         if validator is not None:
             errors = validator(data)
