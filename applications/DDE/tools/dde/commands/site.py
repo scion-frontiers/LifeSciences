@@ -1462,6 +1462,23 @@ def build_cmd(
             detail=f"resolved to {out_resolved}",
             remedy="use a path within the project directory",
         )
+    # Guard: output dir must not BE the project root itself (#271).
+    # confine_path passes because a path is relative to itself, but
+    # the atomic-swap logic would rename the entire project root away.
+    if out_resolved == project_resolved:
+        raise Refusal(
+            "--output-dir must not be the project root itself",
+            detail=f"resolved output directory {out_resolved} equals project root",
+            remedy="use a subdirectory such as '_site'",
+        )
+    # Guard: output dir must not be a parent of .dde/ (the control store).
+    dde_dir = (project_resolved / ".dde").resolve()
+    if dde_dir.is_relative_to(out_resolved) and out_resolved != project_resolved:
+        raise Refusal(
+            "--output-dir must not contain the .dde control directory",
+            detail=f"resolved output directory {out_resolved} is a parent of {dde_dir}",
+            remedy="use a subdirectory that does not contain .dde/",
+        )
 
     # 5. Atomic write: render to temp dir, then move into place
     parent_dir = out_path.parent

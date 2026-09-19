@@ -66,6 +66,7 @@ from ..core.errors import (
     Refusal,
     SchemaError,
 )
+from ..core.ncbi import api_key_suffix
 from ..core.paths import sanitize_slug
 from ..core.qps import qps_for_host
 
@@ -76,7 +77,9 @@ OPENTARGETS_API = "https://api.platform.opentargets.org/api/v4/graphql"
 
 GWAS_CATALOG_API = "https://www.ebi.ac.uk/gwas/rest/api"
 
-# NCBI E-utilities for ClinVar (public, unauthenticated).
+# NCBI E-utilities for ClinVar.  When NCBI_API_KEY is set,
+# api_key_suffix() appends it and qps_for_host returns 10 req/s;
+# without the key the rate falls to 3 req/s (see core/ncbi.py).
 CLINVAR_ESEARCH = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
 CLINVAR_ESUMMARY = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
 # Maximum variants to retrieve per gene. NCBI esearch default retmax is
@@ -510,6 +513,7 @@ def _fetch_clinvar(symbol: str) -> tuple[bytes, dict[str, Any]]:
         f"{CLINVAR_ESEARCH}?db=clinvar"
         f"&term={quote(gene, safe='')}[gene]"
         f"&retmode=json&retmax={CLINVAR_RETMAX}"
+        + api_key_suffix()
     )
     search_response = http.request(
         "GET",
@@ -537,7 +541,10 @@ def _fetch_clinvar(symbol: str) -> tuple[bytes, dict[str, Any]]:
 
     # Step 2: Batch fetch summaries — one HTTP call for all UIDs.
     ids_param = ",".join(id_list)
-    summary_url = f"{CLINVAR_ESUMMARY}?db=clinvar&id={ids_param}&retmode=json"
+    summary_url = (
+        f"{CLINVAR_ESUMMARY}?db=clinvar&id={ids_param}&retmode=json"
+        + api_key_suffix()
+    )
     summary_response = http.request(
         "GET",
         summary_url,
