@@ -926,6 +926,7 @@ def assess_cmd(
     emit.data("fto_risk", dims["freedom_to_operate"]["risk_level"])
     emit.data("dimensions_are_independent", True)
     emit.data("fto_disclaimer", FTO_DISCLAIMER)
+    emit.data("relays", relays)
 
     if not as_json:
         emit.line(f"Competitive differentiation assessment for {query_term!r}")
