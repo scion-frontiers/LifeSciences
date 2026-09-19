@@ -876,6 +876,27 @@ def _rewrite_md_links(html: str) -> str:
 # External URL sanitization (#170) — defense-in-depth Layer 1
 # ---------------------------------------------------------------------------
 
+# WHATWG URL Standard §4.2 — characters to strip for safe URL comparison.
+# Step 1: leading C0 control characters (U+0000-U+001F) and space (U+0020).
+_WHATWG_C0_SPACE_RE = re.compile(r"^[\x00-\x20]+")
+# Step 3: embedded tab (\t), newline (\n), and carriage return (\r).
+_WHATWG_TAB_NL_RE = re.compile(r"[\x09\x0a\x0d]")
+
+
+def _whatwg_normalize_url(url: str) -> str:
+    """Normalize a URL per WHATWG URL Standard §4.2 for safe comparison.
+
+    Step 1: Strip leading C0 control characters (U+0000-U+001F) and space.
+    Step 3: Remove embedded tab (``\\t``), newline (``\\n``), and CR (``\\r``).
+
+    This prevents bypasses where browsers strip these characters but Python's
+    ``str.lstrip()`` / ``str.strip()`` only strip whitespace.
+    """
+    cleaned = _WHATWG_C0_SPACE_RE.sub("", url)
+    cleaned = _WHATWG_TAB_NL_RE.sub("", cleaned)
+    return cleaned
+
+
 # Match <img ...> tags
 _IMG_TAG_RE = re.compile(r"<img\s+[^>]*>", re.IGNORECASE)
 # Extract src="..." from an img tag
@@ -891,9 +912,22 @@ _DANGEROUS_SCHEMES = ("javascript:", "data:", "vbscript:")
 
 
 def _is_external_url(url: str) -> bool:
-    """Return True if url is external (has a scheme or is protocol-relative)."""
-    lower = url.lower().strip()
-    return "://" in lower or lower.startswith("//")
+    """Return True if *url* is external (has a scheme or is protocol-relative).
+
+    Uses WHATWG normalization (C0 control char stripping) and
+    ``urllib.parse.urlsplit`` for robust scheme detection.
+    """
+    from urllib.parse import urlsplit
+
+    normalized = _whatwg_normalize_url(url)
+    # Normalize backslashes → forward slashes (WHATWG URL Standard §4.2).
+    normalized = normalized.replace("\\", "/")
+    # Protocol-relative URLs: //host/…
+    if normalized.startswith("//"):
+        return True
+    parsed = urlsplit(normalized)
+    # Any non-empty scheme means the URL is absolute / external.
+    return bool(parsed.scheme)
 
 
 # Module-level state for security warning aggregation across render calls.
@@ -934,7 +968,7 @@ def _sanitize_external_urls(html: str) -> tuple[str, list[str]]:
                 f'title="External image blocked: {safe_url}">'
                 f"[external image removed — {safe_url}]</span>"
             )
-        if url.lower().startswith(("data:",)):
+        if _whatwg_normalize_url(url.lower()).startswith(("data:",)):
             warnings.append(f"blocked data URI image: {url[:80]}")
             return '<span class="blocked-image">[data URI image removed]</span>'
         return tag  # relative/internal images are fine
@@ -945,7 +979,7 @@ def _sanitize_external_urls(html: str) -> tuple[str, list[str]]:
         if not href_match:
             return match.group(0)
         url = href_match.group(1)
-        if url.lower().lstrip().startswith(_DANGEROUS_SCHEMES):
+        if _whatwg_normalize_url(url.lower()).startswith(_DANGEROUS_SCHEMES):
             warnings.append(f"blocked dangerous link scheme: {url[:80]}")
             new_attrs = _A_HREF_RE.sub('href="#"', attrs)
             return f'<a {new_attrs} class="blocked-link">'
