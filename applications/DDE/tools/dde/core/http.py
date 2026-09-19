@@ -227,7 +227,7 @@ def _pace(url: str, qps: float) -> None:
             remedy="set DDE_PACE_DIR to a shared path or ensure "
             "/scion-volumes/scratchpad is mounted",
         )
-    host = urlparse(url).netloc
+    host = urlparse(url).hostname or ""
     interval = 1.0 / qps
     if _PACE_TIER == "memory":
         _pace_memory(host, interval)
@@ -247,7 +247,11 @@ def _pace_disk(host: str, interval: float) -> None:
         _pace_memory(host, interval)
         return
 
-    with open(pace_file, "a+") as f:
+    # Open atomically with O_NOFOLLOW to prevent TOCTOU symlink attacks.
+    # This collapses the symlink check and open into one kernel operation,
+    # complementing the is_safe_to_open belt-and-suspenders pre-check above.
+    fd = os.open(str(pace_file), os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o644)
+    with os.fdopen(fd, "r+") as f:
         fcntl.flock(f, fcntl.LOCK_EX)
         try:
             f.seek(0)
