@@ -887,13 +887,32 @@ _A_TAG_RE = re.compile(r"<a\s+([^>]*)>", re.IGNORECASE)
 _A_HREF_RE = re.compile(r'href="([^"]*)"', re.IGNORECASE)
 
 _EXTERNAL_URL_PREFIXES = ("http://", "https://", "//")
-_DANGEROUS_SCHEMES = ("javascript:", "data:", "vbscript:")
+_DANGEROUS_SCHEMES = ("javascript:", "data:", "vbscript:", "blob:")
 
 
 def _is_external_url(url: str) -> bool:
-    """Return True if url is external (has a scheme or is protocol-relative)."""
-    lower = url.lower().strip()
-    return "://" in lower or lower.startswith("//")
+    """Return True if *url* is external (has a scheme or is protocol-relative).
+
+    Uses :func:`urllib.parse.urlsplit` with a backslash → forward-slash
+    normalization pass so that WHATWG-style ``\\`` separators (treated as
+    ``/`` by browsers) cannot slip past the check.  This replaces the
+    previous substring heuristic that missed single-slash schemes
+    (``https:/…``), backslash variants (``https:\\…``), and non-hierarchical
+    schemes (``blob:``, ``mailto:``, ``urn:``).
+
+    Fix for #275 (bypass of #170/#208 round-1 fix).
+    """
+    from urllib.parse import urlsplit
+
+    stripped = url.strip()
+    # Normalize backslashes → forward slashes (WHATWG URL Standard §4.2).
+    normalized = stripped.replace("\\", "/")
+    # Protocol-relative URLs: //host/…
+    if normalized.startswith("//"):
+        return True
+    parsed = urlsplit(normalized)
+    # Any non-empty scheme means the URL is absolute / external.
+    return bool(parsed.scheme)
 
 
 # Module-level state for security warning aggregation across render calls.
@@ -926,6 +945,11 @@ def _sanitize_external_urls(html: str) -> tuple[str, list[str]]:
         if not src_match:
             return tag
         url = src_match.group(1)
+        # Check data: URIs first (more specific warning message).
+        # .lstrip() defends against whitespace-prefixed bypasses (#275).
+        if url.lower().lstrip().startswith(("data:",)):
+            warnings.append(f"blocked data URI image: {url[:80]}")
+            return '<span class="blocked-image">[data URI image removed]</span>'
         if _is_external_url(url):
             safe_url = html_escape(url, quote=True)
             warnings.append(f"blocked external image: {url}")
@@ -934,9 +958,6 @@ def _sanitize_external_urls(html: str) -> tuple[str, list[str]]:
                 f'title="External image blocked: {safe_url}">'
                 f"[external image removed — {safe_url}]</span>"
             )
-        if url.lower().startswith(("data:",)):
-            warnings.append(f"blocked data URI image: {url[:80]}")
-            return '<span class="blocked-image">[data URI image removed]</span>'
         return tag  # relative/internal images are fine
 
     def _replace_a(match: re.Match) -> str:  # type: ignore[type-arg]
