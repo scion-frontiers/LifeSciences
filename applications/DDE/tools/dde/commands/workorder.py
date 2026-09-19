@@ -991,8 +991,12 @@ def override_cmd(
                 path_escapes = [
                     i
                     for i in issues
-                    if isinstance(i, str)
-                    and "escapes project root" in i.lower()
+                    if (isinstance(i, str) and "escapes project root" in i.lower())
+                    or (
+                        isinstance(i, dict)
+                        and isinstance(i.get("issue"), str)
+                        and "escapes project root" in i["issue"].lower()
+                    )
                 ]
                 if path_escapes:
                     raise Refusal(
