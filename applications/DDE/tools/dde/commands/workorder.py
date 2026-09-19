@@ -500,17 +500,31 @@ def _perform_commit(
                     '    L-2: "This cohort validates the contradicted claims"'
                 ),
             )
-        if isinstance(justification, dict):
-            unjustified = [
-                lid for lid in critical_liabilities if lid not in justification
-            ]
-            if unjustified:
-                raise Refusal(
-                    f"liability_justification does not cover all active Critical "
-                    f"liabilities: {', '.join(unjustified)}",
-                    detail=f"Active Critical liabilities: {', '.join(critical_liabilities)}",
-                    remedy="add a justification entry for each listed liability",
+        if not isinstance(justification, dict):
+            raise SchemaError(
+                f"liability_justification must be a dict mapping liability IDs "
+                f"to justification strings, got {type(justification).__name__}",
+                detail="each Critical liability must have a string justification",
+            )
+        # Validate that each value is a non-empty, non-whitespace string.
+        for lid, val in justification.items():
+            if not isinstance(val, str) or not val.strip():
+                raise SchemaError(
+                    f"liability_justification[{lid!r}] must be a non-empty "
+                    f"string, got {type(val).__name__}"
+                    + (": ''" if isinstance(val, str) else ""),
+                    detail="each Critical liability must have a string justification",
                 )
+        unjustified = [
+            lid for lid in critical_liabilities if lid not in justification
+        ]
+        if unjustified:
+            raise Refusal(
+                f"liability_justification does not cover all active Critical "
+                f"liabilities: {', '.join(unjustified)}",
+                detail=f"Active Critical liabilities: {', '.join(critical_liabilities)}",
+                remedy="add a justification entry for each listed liability",
+            )
 
     # Build context snapshot.
     # 256 KB default cap (design §4 Q2); configurable via program.yaml
@@ -969,6 +983,30 @@ def override_cmd(
                         "attempting any override"
                     ),
                 )
+            # Also check detail["issues"] for path-escape violations
+            # (_check_analysis_citations stores them here instead of
+            # path_confinement_failures).
+            issues = detail.get("issues")
+            if issues and isinstance(issues, list):
+                path_escapes = [
+                    i
+                    for i in issues
+                    if isinstance(i, str)
+                    and "escapes project root" in i.lower()
+                ]
+                if path_escapes:
+                    raise Refusal(
+                        f"cannot override: check {failed_check_name!r} has "
+                        "path-confinement violations",
+                        detail=(
+                            "path-confinement violations represent security "
+                            "boundaries that cannot be overridden"
+                        ),
+                        remedy=(
+                            "resolve the path-confinement issue before "
+                            "attempting any override"
+                        ),
+                    )
 
     # All validation passed — perform the override.
     target_state = "mechanically_validated"
