@@ -35,8 +35,9 @@ from pathlib import Path
 from typing import Any
 
 from .concepts import validate_concept
-from .errors import ArtifactError, SchemaError
+from .errors import ArtifactError, Refusal, SchemaError
 from .evidence import validate_assessment, validate_decision
+from .paths import is_safe_to_open
 from .statemachine import RUN_STATES, WORK_ORDER_STATES
 
 # ---------------------------------------------------------------------------
@@ -515,6 +516,8 @@ def _default_concept_loader(project_root: Path):
                     best = (rev, p)
 
         if best is not None:
+            if not is_safe_to_open(best[1]):
+                return None  # fail-closed: symlink exploitation guard
             try:
                 return json.loads(best[1].read_text(encoding="utf-8"))
             except (json.JSONDecodeError, OSError):
@@ -600,6 +603,11 @@ def write_record(
 
     path = _record_path(root, record_type, identifier)
     path.parent.mkdir(parents=True, exist_ok=True)
+    if not is_safe_to_open(path):
+        raise Refusal(
+            f"refusing to write through symlink: {path}",
+            detail="symlink exploitation guard",
+        )
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     return path
 

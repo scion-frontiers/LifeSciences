@@ -32,6 +32,8 @@ import platform
 import sys
 from pathlib import Path
 
+from .paths import is_safe_to_open
+
 CLI_VERSION = "0.3.0"
 
 DEFAULT_TOOLS_HOME = "/scion-volumes/tools"
@@ -59,7 +61,7 @@ def env_version() -> str:
       "unpinned-dev:unknown"  — developer env, no requirements file found
     """
     marker = tools_home() / "ENV_VERSION"
-    if marker.is_file():
+    if marker.is_file() and is_safe_to_open(marker):
         value = marker.read_text(encoding="utf-8").strip()
         if value:
             return value

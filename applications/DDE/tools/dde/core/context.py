@@ -34,6 +34,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .errors import ProjectRootError, SchemaError
+from .paths import is_safe_to_open
 
 # Marker placed at the root of the dde *source repo*. Its presence
 # means "this directory is the toolchain, not a drug program".
@@ -222,6 +223,11 @@ def _write_if_missing(path: Path, content: str) -> None:
     """Write *content* to *path* only if the file does not already exist."""
     if path.is_dir():
         raise ProjectRootError(f"expected a file but found a directory: {path}")
+    if not is_safe_to_open(path):
+        raise ProjectRootError(
+            f"refusing to write through symlink: {path}",
+            detail="symlink exploitation guard",
+        )
     if not path.exists():
         path.write_text(content, encoding="utf-8")
 

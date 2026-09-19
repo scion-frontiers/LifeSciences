@@ -48,6 +48,7 @@ from typing import Any
 
 from . import env, output
 from .errors import ArtifactError, Refusal
+from .paths import is_safe_to_open
 from .toolchain import check_integrity
 
 
@@ -1103,6 +1104,11 @@ class Sidecar:
     def write(self, path: Path) -> Path:
         """Write the sidecar. `path` is the full .meta.json path."""
         path = Path(path)
+        if not is_safe_to_open(path):
+            raise Refusal(
+                f"refusing to write sidecar through symlink: {path}",
+                detail="symlink exploitation guard",
+            )
         path.write_text(json.dumps(self.to_dict(), indent=2) + "\n", encoding="utf-8")
         return path
 

@@ -43,6 +43,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from .errors import SchemaError
+from .paths import is_safe_to_open
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -553,6 +554,12 @@ def load_program_config(project_root: Any) -> dict[str, Any]:
             detail=f"{path} exists but yaml is not importable",
             remedy="install PyYAML into the tools environment",
         ) from e
+
+    if not is_safe_to_open(path):
+        raise SchemaError(
+            f"refusing to read through symlink: {path}",
+            detail="symlink exploitation guard",
+        )
 
     try:
         data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}

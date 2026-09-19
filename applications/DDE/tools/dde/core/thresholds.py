@@ -53,6 +53,7 @@ from pathlib import Path
 from typing import Any
 
 from .errors import ThresholdError
+from .paths import is_safe_to_open
 
 # Sentinel for a threshold that has no defensible default yet.
 UNRESOLVED = object()
@@ -1267,6 +1268,11 @@ def _load_program_file(project_root: Path) -> dict[str, Any]:
             detail=f"{path} exists but yaml is not importable",
             remedy="install PyYAML into the tools environment",
         ) from e
+    if not is_safe_to_open(path):
+        raise ThresholdError(
+            f"refusing to read through symlink: {path}",
+            detail="symlink exploitation guard",
+        )
     try:
         data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     except Exception as exc:
