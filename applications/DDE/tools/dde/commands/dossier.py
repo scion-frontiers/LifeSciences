@@ -39,6 +39,8 @@ from ..common import (
     pass_state,
 )
 from ..core import provenance
+from ..core.errors import Refusal
+from ..core.paths import is_safe_to_open
 
 # ---------------------------------------------------------------------------
 # IND Module 4 checklist — small-molecule FDA IND default
@@ -658,6 +660,8 @@ def _collect_relays_from_artifact(
         )
 
     if meta_path.is_file():
+        if not is_safe_to_open(meta_path):
+            raise Refusal(f"Refusing to read through symlink: {meta_path}")
         meta = _read_artifact(meta_path)
         if meta and isinstance(meta.get("mandatory_relays"), list):
             for r in meta["mandatory_relays"]:
@@ -1004,6 +1008,8 @@ def check_cmd(state: AppState, as_json: bool, quiet: bool) -> None:
     gates_dir.mkdir(parents=True, exist_ok=True)
 
     output_path = gates_dir / "dossier-check.json"
+    if not is_safe_to_open(output_path):
+        raise Refusal(f"Refusing to write through symlink: {output_path}")
     output_path.write_text(
         json.dumps(report, indent=2) + "\n",
         encoding="utf-8",
@@ -1018,6 +1024,8 @@ def check_cmd(state: AppState, as_json: bool, quiet: bool) -> None:
     sidecar.add_output(output_path)
     sidecar.note("scope_caveat", SCOPE_CAVEAT)
     sidecar_path = gates_dir / "dossier-check.meta.json"
+    if not is_safe_to_open(sidecar_path):
+        raise Refusal(f"Refusing to write through symlink: {sidecar_path}")
     sidecar.write(sidecar_path)
 
     # -- stdout output ------------------------------------------------------

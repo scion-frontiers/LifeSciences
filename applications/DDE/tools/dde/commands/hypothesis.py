@@ -52,6 +52,7 @@ from ..common import (
 from ..core import provenance
 from ..core.errors import ArtifactError, SchemaError, UsageError
 from ..core.output import Emitter
+from ..core.paths import is_safe_to_open
 
 TOOL = "hypothesis"
 ARTIFACT_CLASS = "hypotheses"
@@ -364,10 +365,14 @@ def adopt(
     # -- Write verbatim copy (preserve original extension) --
     ext = source.suffix or ".json"
     verbatim = target_dir / f"{slug}.{infix}.source{ext}"
+    if not is_safe_to_open(verbatim):
+        raise ArtifactError(f"Refusing to write through symlink: {verbatim}")
     verbatim.write_bytes(raw_bytes)
 
     # -- Write normalised artifact --
     normalised_path = target_dir / f"{slug}.{infix}.json"
+    if not is_safe_to_open(normalised_path):
+        raise ArtifactError(f"Refusing to write through symlink: {normalised_path}")
     normalised_path.write_text(
         json.dumps(normalised_record, indent=2) + "\n", encoding="utf-8"
     )

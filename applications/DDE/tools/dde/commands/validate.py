@@ -1403,7 +1403,9 @@ def _check_findings_integrity(
 
     misplaced: list[str] = []
     for child in sorted(findings_dir.rglob("*")):
-        if not child.is_file() or child.is_symlink():
+        if not child.is_file():
+            continue
+        if not is_safe_to_open(child):
             continue
         if _is_sidecar(child.name) or _is_analysis(child.name, child):
             misplaced.append(str(child.relative_to(project_root)))

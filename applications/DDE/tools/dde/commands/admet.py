@@ -58,6 +58,7 @@ from ..common import (
 from ..core import provenance
 from ..core.errors import ArtifactError, DependencyError, Refusal
 from ..core.output import Emitter, warn
+from ..core.paths import is_safe_to_open
 
 ARTIFACT_CLASS = "admet"
 
@@ -192,6 +193,8 @@ def _safe_write_artifact(path: Path, content: str, *, overwrite: bool) -> bool:
     and *overwrite* is False.
     """
     path = Path(path)
+    if not is_safe_to_open(path):
+        raise Refusal(f"Refusing to write through symlink: {path}")
     if not path.exists():
         path.write_text(content, encoding="utf-8")
         return True

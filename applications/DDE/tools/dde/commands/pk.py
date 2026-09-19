@@ -69,6 +69,7 @@ from ..common import (
 from ..core import provenance
 from ..core.errors import Refusal, SchemaError
 from ..core.output import Emitter
+from ..core.paths import is_safe_to_open
 from ..core.schema_registry import suggest_match
 
 ARTIFACT_CLASS = "pk"
@@ -823,6 +824,8 @@ def _get_body_weight(nca_doc: dict[str, Any], nca_path: Path) -> float:
     study_id = _sanitize_id(raw_study_id) if raw_study_id else ""
     study_path = nca_path.parent / f"{study_id}.pk-study.json"
     if study_path.exists():
+        if not is_safe_to_open(study_path):
+            raise Refusal(f"Refusing to read through symlink: {study_path}")
         try:
             study_doc = json.loads(study_path.read_text(encoding="utf-8"))
             bw = study_doc.get("body_weight_kg")

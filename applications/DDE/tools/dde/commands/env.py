@@ -39,6 +39,7 @@ from ..common import emitter, output_options
 from ..core import envstamp
 from ..core.env import tools_home
 from ..core.errors import ArtifactError
+from ..core.paths import is_safe_to_open
 
 #: Diff lines shown on the human path. The rest go to the JSON payload
 #: and the archived manifests; a wall of package versions in an agent's
@@ -239,6 +240,8 @@ def stamp(note: str | None, as_json: bool, quiet: bool) -> None:
     an old sidecar mean something a year from now.
     """
     home = tools_home()
+    if not is_safe_to_open(home):
+        raise ArtifactError(f"Refusing to stamp through symlink: {home}")
     result = envstamp.stamp(home, note=note)
     e = emitter(as_json, quiet)
     for key, value in result.items():
