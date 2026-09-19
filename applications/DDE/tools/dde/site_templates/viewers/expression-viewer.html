@@ -42,6 +42,15 @@
       document.getElementById('error').textContent = msg;
     }
 
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;');
+    }
+
     function barColor(v) {
       if (v > 10) return '#dc2626';  // High expression - red
       if (v > 2)  return '#d97706';  // Moderate - amber
@@ -79,7 +88,7 @@
           // Extract gene name
           var fileName = filePath.split('/').pop();
           var geneName = entry['Gene'] || entry['gene'] || fileName.replace(/\.tissue\.json$/i, '');
-          document.title = 'Expression: ' + geneName;
+          document.title = 'Expression: ' + escapeHtml(geneName);
 
           // Parse HPA tissue-key format: "Tissue RNA - <name> [nTPM]"
           var tissues = [];
@@ -129,7 +138,7 @@
             .sort(function(a, b) { return b.value - a.value; });
 
           // Reverse for Plotly horizontal bar (bottom-to-top for highest at top)
-          var plotTissues = sorted.map(function(s) { return s.tissue; }).reverse();
+          var plotTissues = sorted.map(function(s) { return escapeHtml(s.tissue); }).reverse();
           var plotValues = sorted.map(function(s) { return s.value; }).reverse();
           var plotColors = sorted.map(function(s) { return barColor(s.value); }).reverse();
 
@@ -143,7 +152,7 @@
             marker: { color: plotColors },
             hovertemplate: '%{y}: %{x:.1f} nTPM<extra></extra>'
           }], {
-            title: { text: 'Tissue Expression — ' + geneName, font: { size: 16 } },
+            title: { text: 'Tissue Expression — ' + escapeHtml(geneName), font: { size: 16 } },
             xaxis: { title: { text: 'nTPM' } },
             yaxis: { automargin: true },
             height: chartHeight,

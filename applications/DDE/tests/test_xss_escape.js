@@ -47,6 +47,7 @@ const VIEWER_FILES = [
   'pockets-viewer.html',
   'pae-viewer.html',
   'plddt-viewer.html',
+  'expression-viewer.html',
 ];
 
 /**
@@ -421,6 +422,68 @@ test('plddt-viewer: chain in hovertemplate uses escapeHtml', () => {
   assert.ok(
     !src.includes("hovertemplate: 'Chain ' + chain + ' residue"),
     'Unsafe unescaped chain in hovertemplate still present'
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 4b. Plotly XSS — expression-viewer
+// ---------------------------------------------------------------------------
+
+console.log('\n=== Plotly XSS — expression-viewer ===');
+
+test('expression-viewer: contains escapeHtml definition', () => {
+  const src = fs.readFileSync(path.join(VIEWERS_DIR, 'expression-viewer.html'), 'utf8');
+  assert.ok(
+    /function escapeHtml\(str\)/.test(src),
+    'escapeHtml function not found in expression-viewer.html'
+  );
+});
+
+test('expression-viewer: geneName in Plotly title uses escapeHtml', () => {
+  const src = fs.readFileSync(path.join(VIEWERS_DIR, 'expression-viewer.html'), 'utf8');
+  assert.ok(
+    src.includes("escapeHtml(geneName)"),
+    'geneName in Plotly title is not escaped'
+  );
+  // The unsafe pattern should be absent
+  assert.ok(
+    !src.includes("'Tissue Expression — ' + geneName,"),
+    'Unsafe unescaped geneName in title still present'
+  );
+});
+
+test('expression-viewer: document.title uses escapeHtml for geneName', () => {
+  const src = fs.readFileSync(path.join(VIEWERS_DIR, 'expression-viewer.html'), 'utf8');
+  assert.ok(
+    src.includes("document.title = 'Expression: ' + escapeHtml(geneName)"),
+    'document.title does not escape geneName'
+  );
+});
+
+test('expression-viewer: plotTissues (y-axis labels) use escapeHtml', () => {
+  const src = fs.readFileSync(path.join(VIEWERS_DIR, 'expression-viewer.html'), 'utf8');
+  assert.ok(
+    src.includes('escapeHtml(s.tissue)'),
+    'tissue names in plotTissues are not escaped'
+  );
+  // The unsafe pattern should be absent
+  assert.ok(
+    !src.includes('return s.tissue; }).reverse()'),
+    'Unsafe unescaped tissue names in plotTissues still present'
+  );
+});
+
+test('expression-viewer: does NOT contain unescaped geneName in Plotly title', () => {
+  const src = fs.readFileSync(path.join(VIEWERS_DIR, 'expression-viewer.html'), 'utf8');
+  // Check there are no unescaped uses of geneName in Plotly config
+  const titleMatch = src.match(/title:\s*\{\s*text:\s*'Tissue Expression — '\s*\+\s*(\w+)/);
+  assert.ok(titleMatch, 'Could not find title text pattern');
+  // The captured group should not be bare geneName without escapeHtml wrapper
+  const contextIdx = src.indexOf("'Tissue Expression");
+  const contextSlice = src.substring(contextIdx, contextIdx + 80);
+  assert.ok(
+    contextSlice.includes('escapeHtml(geneName)'),
+    'Plotly title uses unescaped geneName: ' + contextSlice
   );
 });
 
