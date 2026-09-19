@@ -1712,7 +1712,12 @@ def export_cmd(state: AppState, output: str | None, site_dir: str) -> None:
     """
     project = state.project()
     project_root = project.root
-    site_path = project_root / site_dir
+    site_path = confine_path(project_root, Path(site_dir))
+    if site_path is None:
+        raise UsageError(
+            f"site directory escapes project root: {site_dir}",
+            remedy="provide a site directory within the project root",
+        )
 
     if not site_path.is_dir():
         raise UsageError(
