@@ -384,8 +384,17 @@ def match_assessment_to_requirement(
     evidence = assessment.get("evidence", {}) or {}
 
     # Rule 1: evidence_type must match exactly.
+    # Issue #297: null or empty evidence_type on either side is a
+    # non-match — fail-closed to prevent false-positive gate decisions.
     req_evidence_type = requirement.get("evidence_type")
     assessment_evidence_type = evidence.get("evidence_type")
+    if (
+        not isinstance(req_evidence_type, str)
+        or not req_evidence_type.strip()
+        or not isinstance(assessment_evidence_type, str)
+        or not assessment_evidence_type.strip()
+    ):
+        return result  # matches=False
     if req_evidence_type != assessment_evidence_type:
         return result
 
