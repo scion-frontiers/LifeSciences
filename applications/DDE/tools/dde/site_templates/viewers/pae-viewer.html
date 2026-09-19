@@ -42,13 +42,22 @@
       document.getElementById('error').textContent = msg;
     }
 
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;');
+    }
+
     if (!filePath) {
       showError('No file specified. Use ?file=path/to/file.pae.json');
     } else {
       var fileName = filePath.split('/').pop();
       var baseName = fileName.replace(/\.pae\.json$/i, '');
       document.getElementById('filename').textContent = fileName;
-      document.title = 'PAE: ' + baseName;
+      document.title = 'PAE: ' + escapeHtml(baseName);
 
       fetch(filePath)
         .then(function(r) {
@@ -111,7 +120,7 @@
               ticksuffix: ' Å'
             }
           }], {
-            title: { text: 'Predicted Aligned Error — ' + baseName, font: { size: 16 } },
+            title: { text: 'Predicted Aligned Error — ' + escapeHtml(baseName), font: { size: 16 } },
             xaxis: {
               title: { text: 'Scored Residue' },
               constrain: 'domain'

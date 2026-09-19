@@ -124,7 +124,7 @@
 
       /* Build X-axis labels */
       var xLabels = residues.map(function(r) {
-        return r.res_name + r.res_num + ' (' + r.chain + ')';
+        return escapeHtml(r.res_name) + escapeHtml(String(r.res_num)) + ' (' + escapeHtml(r.chain) + ')';
       });
 
       /* Build Z row (distances) and hover text */
@@ -181,7 +181,7 @@
       var zMax = validDists.length > 0 ? Math.ceil(Math.max.apply(null, validDists) * 10) / 10 : 5;
 
       /* Build compound label */
-      var yLabel = name;
+      var yLabel = escapeHtml(name);
 
       /* Show inter-chain binding info */
       var infoDiv = document.getElementById('binding-info');
