@@ -61,6 +61,7 @@ from ..core.errors import (
     Refusal,
     SchemaError,
 )
+from ..core.paths import sanitize_slug
 from ..core.qps import qps_for_host
 
 logger = logging.getLogger(__name__)
@@ -274,7 +275,7 @@ def search_cmd(
     """Search for protein-protein interactions for GENE via STRING."""
     emit = emitter(as_json, quiet)
     target_dir = state.project().artifact_dir(ARTIFACT_CLASS, out)
-    slug = gene.lower()
+    slug = sanitize_slug(gene.lower())
 
     # Step 1: resolve the gene name to a STRING ID.
     string_id = _resolve_string_id(gene, species)
@@ -373,7 +374,7 @@ def analyze_cmd(
     source_dir = state.project().artifact_dir(ARTIFACT_CLASS, from_dir)
     target_dir = state.project().artifact_dir(ARTIFACT_CLASS, out)
 
-    slug = gene.lower()
+    slug = sanitize_slug(gene.lower())
     artifact_path = source_dir / f"{slug}.ppi-string.artifact.json"
     if not artifact_path.is_file():
         raise ArtifactError(
