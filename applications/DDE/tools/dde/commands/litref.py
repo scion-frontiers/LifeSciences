@@ -74,6 +74,7 @@ from ..common import (
 )
 from ..core import http, provenance
 from ..core.errors import ArtifactError, Refusal, SchemaError, UsageError
+from ..core.paths import confine_path, sanitize_slug
 from ..core.qps import qps_for_host
 
 EPMC_SEARCH = "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
@@ -543,12 +544,16 @@ def _locate_meta(state: AppState, citation: str, target_dir: Path) -> tuple[Path
         path = (
             candidate if candidate.is_absolute() else state.project().root / candidate
         )
+        confined = confine_path(state.project().root, path)
+        if confined is None:
+            raise ArtifactError(f"litref sidecar path escapes project root: {path}")
+        path = confined
         if not path.is_file():
             raise ArtifactError(f"litref sidecar not found: {path}")
         return path, path.name[: -len(".meta.json")]
 
     kind, value = _classify(citation)
-    slug = _slug(kind, value)
+    slug = sanitize_slug(_slug(kind, value))
     path = target_dir / f"{slug}.meta.json"
     if not path.is_file():
         raise ArtifactError(
