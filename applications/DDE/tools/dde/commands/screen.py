@@ -48,7 +48,7 @@ from ..common import (
     pass_state,
 )
 from ..core import provenance
-from ..core.errors import DependencyError
+from ..core.errors import DependencyError, Refusal
 from ..core.output import Emitter
 from ..core.pipeline import (
     name_slug,
@@ -308,6 +308,20 @@ def run_cmd(
     gridbox_path = Path(gridbox)
     if not gridbox_path.is_absolute():
         gridbox_path = state.project().root / gridbox_path
+
+    # --- guard against input/output path aliasing ---
+    for input_path, label in [
+        (library_path, "library"),
+        (receptor_path, "receptor"),
+        (gridbox_path, "gridbox"),
+    ]:
+        if input_path.resolve() == target_dir.resolve() or (
+            input_path.resolve().is_relative_to(target_dir.resolve())
+        ):
+            raise Refusal(
+                f"input {label} path aliases output directory — would clobber input",
+                remedy="use --out to write output to a different directory",
+            )
 
     # --- screen name ---
     if screen_name is None:

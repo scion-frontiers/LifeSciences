@@ -600,7 +600,7 @@ def fetch_cmd(
     target_dir = state.project().artifact_dir(ARTIFACT_CLASS, out)
 
     for cid in cids:
-        slug = sanitize_slug(slug_override) if slug_override else str(cid)
+        slug = f"{sanitize_slug(slug_override)}-{cid}" if slug_override else str(cid)
 
         # --- Try the property endpoint first ---
         prop_url, props = _fetch_properties(cid)
