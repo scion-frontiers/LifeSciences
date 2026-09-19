@@ -527,6 +527,8 @@ def _default_concept_loader(project_root: Path):
         # versioned records exist.
         direct = concepts_dir / f"{concept_id}.json"
         if direct.is_file():
+            if not is_safe_to_open(direct):
+                return None  # fail-closed: symlink exploitation guard
             try:
                 return json.loads(direct.read_text(encoding="utf-8"))
             except (json.JSONDecodeError, OSError):

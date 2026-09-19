@@ -116,6 +116,28 @@ class TestControlstoreConceptReadSymlink:
         result = loader("IC-001")
         assert result is None
 
+    def test_symlink_unversioned_concept_returns_none(self, tmp_path: Path) -> None:
+        """A symlinked unversioned concept (IC-NNN.json) must return None."""
+        from dde.core.controlstore import _default_concept_loader
+
+        project_root = tmp_path / "project"
+        concepts_dir = project_root / ".dde" / "control" / "concepts"
+        concepts_dir.mkdir(parents=True)
+
+        # Create real target outside project.
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        target = outside / "secret.json"
+        target.write_text('{"concept_id": "IC-003", "status": "approved"}')
+
+        # Symlink the unversioned concept file (no -rN suffix).
+        link = concepts_dir / "IC-003.json"
+        link.symlink_to(target)
+
+        loader = _default_concept_loader(project_root)
+        result = loader("IC-003")
+        assert result is None
+
     def test_regular_concept_json_accepted(self, tmp_path: Path) -> None:
         """A regular concept JSON file is read normally."""
         from dde.core.controlstore import _default_concept_loader
