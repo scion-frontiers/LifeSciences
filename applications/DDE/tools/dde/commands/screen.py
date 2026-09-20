@@ -62,9 +62,7 @@ ARTIFACT_CLASS = "screening"
 TOOL = "screen"
 
 
-def _guard_input_output_alias(
-    input_path: Path, target_dir: Path, label: str
-) -> None:
+def _guard_input_output_alias(input_path: Path, target_dir: Path, label: str) -> None:
     """Raise :class:`Refusal` if *input_path* lives inside *target_dir*.
 
     Prevents the screening pipeline from clobbering its own inputs when

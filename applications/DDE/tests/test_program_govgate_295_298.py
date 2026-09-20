@@ -26,7 +26,6 @@ Exit 0 = all tests passed, exit 1 = at least one failure.
 
 from __future__ import annotations
 
-import datetime
 import json
 import shutil
 import sys
@@ -43,14 +42,11 @@ sys.path.insert(0, str(REPO_ROOT / "tools"))
 
 from click.testing import CliRunner
 from dde.cli import cli
-from dde.core import controlstore
 from dde.core.controlstore import (
     CONTROL_DIR,
-    _SAFE_IDENTIFIER_RE,
     ensure_control_dirs,
     write_record,
 )
-from dde.core.errors import Refusal, SchemaError
 
 # ---------------------------------------------------------------------------
 # Fixture helpers (same pattern as test_program_resume.py)
@@ -320,9 +316,10 @@ def test_298_invalid_identifier():
         f"expected non-zero exit for invalid identifier, "
         f"got {result.exit_code}; output: {result.output}"
     )
-    assert "invalid identifier" in result.output.lower() or "invalid" in result.output.lower(), (
-        f"output should mention invalid identifier; got: {result.output}"
-    )
+    assert (
+        "invalid identifier" in result.output.lower()
+        or "invalid" in result.output.lower()
+    ), f"output should mention invalid identifier; got: {result.output}"
 
 
 def test_298_non_serializable_data():
@@ -396,8 +393,8 @@ def test_298_non_serializable_data_step5_catch():
     _write_wo(source, "WO-001", 1, "scientifically_accepted")
 
     # Write a context record with a datetime.date value directly to disk.
-    ctx_dir = source / CONTROL_DIR / "contexts"
-    ctx_data = {
+    _ctx_dir = source / CONTROL_DIR / "contexts"
+    _ctx_data = {
         "work_order_id": "WO-001",
         "revision": 1,
         "artifact_links": ["raw/test.json"],
@@ -416,7 +413,11 @@ def test_298_non_serializable_data_step5_catch():
     # fix for stage/cycle instead.
 
     # Test: verify _build_markdown_record casts stage/cycle to str.
-    from dde.commands.program import _build_markdown_record, _parse_frontmatter, _parse_sections
+    from dde.commands.program import (
+        _build_markdown_record,
+        _parse_frontmatter,
+        _parse_sections,
+    )
 
     md_with_yaml_date = """\
 ---
@@ -452,7 +453,7 @@ Test context.
     # After the fix, it should be cast to str.
     result = _build_markdown_record(frontmatter, sections, "test.md")
     assert not isinstance(result, str), f"_build_markdown_record failed: {result}"
-    ident, data = result
+    _ident, data = result
 
     assert isinstance(data["stage"], str), (
         f"stage should be str after fix, got {type(data['stage']).__name__}: {data['stage']}"
@@ -467,7 +468,7 @@ Test context.
     except (TypeError, ValueError) as exc:
         raise AssertionError(
             f"data should be JSON-serializable after fix, but got: {exc}"
-        )
+        ) from exc
 
 
 def test_298_positive_valid_data():
@@ -503,13 +504,21 @@ if __name__ == "__main__":
 
     print("\n--- Issue #295: Duplicate/collision detection ---")
     _check("#295 regression: duplicate markdown WO IDs", test_295_duplicate_md_wo_ids)
-    _check("#295 regression: duplicate batch identifiers", test_295_duplicate_batch_idents)
+    _check(
+        "#295 regression: duplicate batch identifiers", test_295_duplicate_batch_idents
+    )
     _check("#295 positive: unique IDs succeed", test_295_positive_unique_ids)
 
     print("\n--- Issue #298: Step 5 pre-validation ---")
     _check("#298 regression: invalid identifier with dot", test_298_invalid_identifier)
-    _check("#298 regression: non-serializable date (stage cast)", test_298_non_serializable_data)
-    _check("#298 regression: _build_markdown_record date fix", test_298_non_serializable_data_step5_catch)
+    _check(
+        "#298 regression: non-serializable date (stage cast)",
+        test_298_non_serializable_data,
+    )
+    _check(
+        "#298 regression: _build_markdown_record date fix",
+        test_298_non_serializable_data_step5_catch,
+    )
     _check("#298 positive: valid data passes step 5", test_298_positive_valid_data)
 
     print("\n" + "-" * 72)

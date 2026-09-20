@@ -831,9 +831,7 @@ def analyze(
         )
         confined = confine_path(project.root, manifest_path)
         if confined is None:
-            raise ArtifactError(
-                f"manifest path escapes project root: {manifest_path}"
-            )
+            raise ArtifactError(f"manifest path escapes project root: {manifest_path}")
         manifest_path = confined
     else:
         # Treat as a UniProt accession — search for the manifest

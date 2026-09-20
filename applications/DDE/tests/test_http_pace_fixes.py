@@ -45,8 +45,9 @@ class TestCredentialExposureInPaceFilename:
     def test_url_with_credentials_uses_only_hostname(self, tmp_path):
         """A URL like http://user:secret@api.example.com/path must produce
         a pace filename based solely on 'api.example.com'."""
-        with mock.patch("dde.core.http._PACE_DIR", tmp_path), mock.patch(
-            "dde.core.http._PACE_TIER", "shared"
+        with (
+            mock.patch("dde.core.http._PACE_DIR", tmp_path),
+            mock.patch("dde.core.http._PACE_TIER", "shared"),
         ):
             _pace("http://user:secret@api.example.com/path", qps=1.0)
 
@@ -60,8 +61,9 @@ class TestCredentialExposureInPaceFilename:
 
     def test_url_with_credentials_and_port_uses_hostname(self, tmp_path):
         """Credentials AND a port must still resolve to just the hostname."""
-        with mock.patch("dde.core.http._PACE_DIR", tmp_path), mock.patch(
-            "dde.core.http._PACE_TIER", "shared"
+        with (
+            mock.patch("dde.core.http._PACE_DIR", tmp_path),
+            mock.patch("dde.core.http._PACE_TIER", "shared"),
         ):
             _pace("https://admin:p4ss@db.internal:8443/query", qps=1.0)
 
@@ -76,8 +78,9 @@ class TestCredentialExposureInPaceFilename:
 
     def test_url_without_credentials_unchanged(self, tmp_path):
         """A plain URL without credentials should still work correctly."""
-        with mock.patch("dde.core.http._PACE_DIR", tmp_path), mock.patch(
-            "dde.core.http._PACE_TIER", "shared"
+        with (
+            mock.patch("dde.core.http._PACE_DIR", tmp_path),
+            mock.patch("dde.core.http._PACE_TIER", "shared"),
         ):
             _pace("https://api.example.com/data", qps=1.0)
 
@@ -97,17 +100,16 @@ class TestTOCTOURaceInPaceDisk:
 
     def test_pace_disk_uses_o_nofollow(self, tmp_path):
         """os.open must be called with O_NOFOLLOW in its flags."""
-        with mock.patch("dde.core.http._PACE_DIR", tmp_path), mock.patch(
-            "dde.core.http.os.open", wraps=os.open
-        ) as mock_os_open:
+        with (
+            mock.patch("dde.core.http._PACE_DIR", tmp_path),
+            mock.patch("dde.core.http.os.open", wraps=os.open) as mock_os_open,
+        ):
             _pace_disk("safe.example.com", 1.0)
 
         mock_os_open.assert_called_once()
         call_args = mock_os_open.call_args
         flags = call_args[0][1]  # second positional arg is flags
-        assert flags & os.O_NOFOLLOW, (
-            f"O_NOFOLLOW not set in flags: {flags:#x}"
-        )
+        assert flags & os.O_NOFOLLOW, f"O_NOFOLLOW not set in flags: {flags:#x}"
         assert flags & os.O_CREAT, f"O_CREAT not set in flags: {flags:#x}"
         assert flags & os.O_RDWR, f"O_RDWR not set in flags: {flags:#x}"
 

@@ -100,9 +100,7 @@ def test_297_same_nonempty_evidence_type_matches() -> None:
     req = {"evidence_type": "genetic_constraint"}
     assessment = {"evidence": {"evidence_type": "genetic_constraint"}}
     result = match_assessment_to_requirement(req, assessment)
-    assert result["matches"] is True, (
-        f"expected matches=True, got {result['matches']}"
-    )
+    assert result["matches"] is True, f"expected matches=True, got {result['matches']}"
 
 
 def test_297_different_nonempty_evidence_type_no_match() -> None:

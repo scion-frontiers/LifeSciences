@@ -173,9 +173,7 @@ def _write_validation_record(
     write_record(project, "validation", identifier, val_record)
 
 
-def _make_check(
-    name: str, result: str = "fail", detail: Any = None
-) -> dict[str, Any]:
+def _make_check(name: str, result: str = "fail", detail: Any = None) -> dict[str, Any]:
     """Build a check entry for a validation record."""
     check: dict[str, Any] = {"name": name, "result": result}
     if detail is not None:
@@ -384,7 +382,10 @@ def test_288_override_allowed_when_issues_have_no_path_escape() -> None:
             detail={
                 "issues": [
                     {"file": "report.html", "issue": "heading level mismatch"},
-                    {"file": "report.html", "issue": "missing required section: Methods"},
+                    {
+                        "file": "report.html",
+                        "issue": "missing required section: Methods",
+                    },
                 ]
             },
         ),

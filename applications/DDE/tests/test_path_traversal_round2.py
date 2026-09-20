@@ -35,8 +35,6 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import pytest
-
 # Ensure the tools package is importable.
 TOOLS_DIR = Path(__file__).resolve().parent.parent / "tools"
 if str(TOOLS_DIR) not in sys.path:
@@ -200,9 +198,7 @@ class TestEnvstampVersionSanitization:
         assert "/" not in wanted
         assert wanted == "sha256-abc123"
 
-    def test_confine_path_rejects_escaped_archive_path(
-        self, tmp_path: Path
-    ) -> None:
+    def test_confine_path_rejects_escaped_archive_path(self, tmp_path: Path) -> None:
         """confine_path rejects a constructed path that escapes archive dir."""
         archive = tmp_path / "manifests"
         archive.mkdir()
@@ -264,8 +260,6 @@ class TestHomologyManifestConfinement:
 
     def test_normal_manifest_path_is_allowed(self, tmp_path: Path) -> None:
         """A normal manifest path stays within project root."""
-        result = confine_path(
-            tmp_path, Path("HOMOLOGY-P04637.search.json")
-        )
+        result = confine_path(tmp_path, Path("HOMOLOGY-P04637.search.json"))
         assert result is not None
         assert result.is_relative_to(tmp_path.resolve())

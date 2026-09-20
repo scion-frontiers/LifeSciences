@@ -512,8 +512,7 @@ def _fetch_clinvar(symbol: str) -> tuple[bytes, dict[str, Any]]:
     search_url = (
         f"{CLINVAR_ESEARCH}?db=clinvar"
         f"&term={quote(gene, safe='')}[gene]"
-        f"&retmode=json&retmax={CLINVAR_RETMAX}"
-        + api_key_suffix()
+        f"&retmode=json&retmax={CLINVAR_RETMAX}" + api_key_suffix()
     )
     search_response = http.request(
         "GET",
@@ -542,8 +541,7 @@ def _fetch_clinvar(symbol: str) -> tuple[bytes, dict[str, Any]]:
     # Step 2: Batch fetch summaries — one HTTP call for all UIDs.
     ids_param = ",".join(id_list)
     summary_url = (
-        f"{CLINVAR_ESUMMARY}?db=clinvar&id={ids_param}&retmode=json"
-        + api_key_suffix()
+        f"{CLINVAR_ESUMMARY}?db=clinvar&id={ids_param}&retmode=json" + api_key_suffix()
     )
     summary_response = http.request(
         "GET",

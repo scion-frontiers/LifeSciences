@@ -236,9 +236,7 @@ def test_pubchem_multi_cid_artifact_paths_distinct() -> None:
         paths = []
         for cid in cids:
             slug = (
-                f"{sanitize_slug(slug_override)}-{cid}"
-                if slug_override
-                else str(cid)
+                f"{sanitize_slug(slug_override)}-{cid}" if slug_override else str(cid)
             )
             artifact_path = target_dir / f"{slug}.pubchem-compound.artifact.json"
             paths.append(artifact_path)

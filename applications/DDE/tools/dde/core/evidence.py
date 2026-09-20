@@ -251,8 +251,7 @@ def _validate_human_approval(approval: dict[str, Any]) -> list[str]:
                 # An autonomous agent must not bypass the gate by
                 # supplying blank approval fields.
                 errors.append(
-                    f"human_approval.{field} must not be empty or "
-                    f"whitespace-only"
+                    f"human_approval.{field} must not be empty or whitespace-only"
                 )
     return errors
 

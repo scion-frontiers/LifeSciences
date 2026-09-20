@@ -43,7 +43,13 @@ from fix_add_themes import fix_add_themes
 # postbuild-template.py has a hyphen in the filename, so we use importlib.
 _postbuild_spec = importlib.util.spec_from_file_location(
     "postbuild_template",
-    str(REPO_ROOT / "skills" / "site-generation" / "references" / "postbuild-template.py"),
+    str(
+        REPO_ROOT
+        / "skills"
+        / "site-generation"
+        / "references"
+        / "postbuild-template.py"
+    ),
 )
 _postbuild_mod = importlib.util.module_from_spec(_postbuild_spec)
 _postbuild_spec.loader.exec_module(_postbuild_mod)
@@ -116,7 +122,9 @@ class TestFixAddThemesSymlink:
 class TestPostbuildTemplateSymlink:
     """Verify postbuild fix functions skip symlinked HTML files."""
 
-    def _make_site_with_symlink(self, tmp_path: Path, content: str) -> tuple[Path, Path]:
+    def _make_site_with_symlink(
+        self, tmp_path: Path, content: str
+    ) -> tuple[Path, Path]:
         """Create a site dir with a symlinked HTML file containing *content*."""
         site_dir = tmp_path / "site"
         site_dir.mkdir()
@@ -177,9 +185,7 @@ def _import_embed_load_hypotheses():
     mock_scipy.sparse = ModuleType("scipy.sparse")
     mock_sklearn = ModuleType("sklearn")
     mock_sklearn.feature_extraction = ModuleType("sklearn.feature_extraction")
-    mock_sklearn.feature_extraction.text = ModuleType(
-        "sklearn.feature_extraction.text"
-    )
+    mock_sklearn.feature_extraction.text = ModuleType("sklearn.feature_extraction.text")
     mock_sklearn.feature_extraction.text.TfidfVectorizer = mock.MagicMock()
 
     # Mock prox._io which the module imports at top level.

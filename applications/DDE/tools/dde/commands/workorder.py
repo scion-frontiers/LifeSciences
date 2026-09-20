@@ -515,9 +515,7 @@ def _perform_commit(
                     + (": ''" if isinstance(val, str) else ""),
                     detail="each Critical liability must have a string justification",
                 )
-        unjustified = [
-            lid for lid in critical_liabilities if lid not in justification
-        ]
+        unjustified = [lid for lid in critical_liabilities if lid not in justification]
         if unjustified:
             raise Refusal(
                 f"liability_justification does not cover all active Critical "
