@@ -115,7 +115,11 @@ if [ "$BINARIES_ONLY" = false ]; then
     # the UPGRADE, ensuring the pip version used for all subsequent installs is
     # known and verified. The venv-bootstrap pip is accepted as a
     # platform-provided trust root, same as the Python interpreter itself.
-    log "Upgrading pip (hash-verified)"
+    #
+    # setuptools is also upgraded here (from the venv-bundled 66.x to >=70.1)
+    # so the editable install below can use --no-build-isolation with the
+    # integrated bdist_wheel command.
+    log "Upgrading pip and setuptools (hash-verified)"
     pip install --require-hashes -r "${SCRIPT_DIR}/requirements-pip.txt" --quiet
 fi
 
@@ -642,27 +646,22 @@ fi
 # Editable install of the local dde package
 # ---------------------------------------------------------------------------
 #
-# ACCEPTED RISK (finding: UnverifiedPackageInstall-SHELL-PIP-PHASE2,
-# issue #313, finding 5 of 5):
+# SCANNER EXEMPTION (UnverifiedPackageInstall-SHELL-PIP-PHASE2, #313):
 #
 # pip does not support --require-hashes with editable (-e) installs.
-# This line installs the repo's own local source code — not a third-party
-# download — so the threat model the finding addresses (supply-chain
-# substitution during download) does not apply: the code is already on
-# disk, checked out from a verified git ref, and --no-deps ensures no
-# transitive network fetch occurs. The editable mode is deliberate — it
-# allows agents sharing a workspace to pick up CLI changes from a git
-# pull without re-running install.sh, which the surrounding comments
-# document as a design requirement.
+# The scanner exempts local/editable installs when --no-deps AND
+# --no-index are both passed (without --find-links), since this
+# combination ensures no network fetch occurs. --no-build-isolation
+# prevents pip from creating an isolated build environment that would
+# need index access to fetch setuptools; the venv's own setuptools
+# (upgraded to >=70.1 by requirements-pip.txt) is used instead.
 #
-# Alternative considered: building a wheel and hash-verifying it. This
-# changes the install model from editable to frozen, breaking the
-# shared-workspace pickup behavior. The risk of local-source editable
-# install is accepted as lower than the cost of losing that property.
+# The editable mode is deliberate — it allows agents sharing a workspace
+# to pick up CLI changes from a git pull without re-running install.sh.
 
 if [ "$BINARIES_ONLY" = false ]; then
     log "Installing dde package (editable, console_scripts entry point)"
-    pip install --no-deps -e "${SCRIPT_DIR}" --quiet \
+    pip install --no-deps --no-index --no-build-isolation -e "${SCRIPT_DIR}" --quiet \
         || err "Editable install of dde package failed."
 fi
 
