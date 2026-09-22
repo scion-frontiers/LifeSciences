@@ -109,8 +109,14 @@ source "${VENV_DIR}/bin/activate"
 # explainable partition into two entangled ones, and the pip half is the
 # one nobody meant to change.
 if [ "$BINARIES_ONLY" = false ]; then
-    log "Upgrading pip"
-    pip install --upgrade pip --quiet
+    # pip is bootstrapped from whatever version the venv ships with — which is
+    # necessarily unverified (it is what processes --require-hashes, so it
+    # cannot verify itself on first use). This manifest pins and hash-verifies
+    # the UPGRADE, ensuring the pip version used for all subsequent installs is
+    # known and verified. The venv-bootstrap pip is accepted as a
+    # platform-provided trust root, same as the Python interpreter itself.
+    log "Upgrading pip (hash-verified)"
+    pip install --require-hashes -r "${SCRIPT_DIR}/requirements-pip.txt" --quiet
 fi
 
 # The requirement files are installed in separate transactions on purpose.
@@ -123,7 +129,7 @@ fi
 CORE_STATUS="skipped"
 if [ "$BINARIES_ONLY" = false ]; then
     log "Installing core CLI dependencies from requirements.txt"
-    pip install -r "${SCRIPT_DIR}/requirements.txt" --quiet \
+    pip install --require-hashes -r "${SCRIPT_DIR}/requirements.txt" --quiet \
         || err "Core dependencies failed to install; the CLI will not run."
     CORE_STATUS="installed"
 fi
@@ -131,7 +137,7 @@ fi
 HYPEX_PYTHON_STATUS="skipped"
 if [ "$CORE_ONLY" = false ] && [ "$BINARIES_ONLY" = false ]; then
     log "Installing Hypex prox dependencies from requirements-hypex.txt"
-    if pip install -r "${SCRIPT_DIR}/requirements-hypex.txt" --quiet; then
+    if pip install --require-hashes -r "${SCRIPT_DIR}/requirements-hypex.txt" --quiet; then
         HYPEX_PYTHON_STATUS="installed"
     else
         HYPEX_PYTHON_STATUS="failed"
@@ -143,7 +149,7 @@ fi
 SCIENCE_STATUS="skipped"
 if [ "$CORE_ONLY" = false ] && [ "$BINARIES_ONLY" = false ]; then
     log "Installing science stack from requirements-science.txt"
-    if pip install -r "${SCRIPT_DIR}/requirements-science.txt" --quiet; then
+    if pip install --require-hashes -r "${SCRIPT_DIR}/requirements-science.txt" --quiet; then
         SCIENCE_STATUS="installed"
     else
         SCIENCE_STATUS="failed"
@@ -631,6 +637,28 @@ fi
 # Guarded by BINARIES_ONLY: that flag means "touch no Python package",
 # and on a previously provisioned venv the entry point is already set
 # up from the initial install.
+
+# ---------------------------------------------------------------------------
+# Editable install of the local dde package
+# ---------------------------------------------------------------------------
+#
+# ACCEPTED RISK (finding: UnverifiedPackageInstall-SHELL-PIP-PHASE2,
+# issue #313, finding 5 of 5):
+#
+# pip does not support --require-hashes with editable (-e) installs.
+# This line installs the repo's own local source code — not a third-party
+# download — so the threat model the finding addresses (supply-chain
+# substitution during download) does not apply: the code is already on
+# disk, checked out from a verified git ref, and --no-deps ensures no
+# transitive network fetch occurs. The editable mode is deliberate — it
+# allows agents sharing a workspace to pick up CLI changes from a git
+# pull without re-running install.sh, which the surrounding comments
+# document as a design requirement.
+#
+# Alternative considered: building a wheel and hash-verifying it. This
+# changes the install model from editable to frozen, breaking the
+# shared-workspace pickup behavior. The risk of local-source editable
+# install is accepted as lower than the cost of losing that property.
 
 if [ "$BINARIES_ONLY" = false ]; then
     log "Installing dde package (editable, console_scripts entry point)"
