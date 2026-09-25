@@ -118,7 +118,7 @@ class TestManufacturingConceptId:
 
     def test_traversal_in_concept_id(self):
         """A concept_id with ../ must be sanitized."""
-        concept_id = "../../../tmp/backdoor"
+        concept_id = "../../../tmp/external"
         slug = sanitize_slug(concept_id)
         # No path separators — the slug is a single filename component.
         assert "/" not in slug
@@ -265,7 +265,7 @@ class TestCdnPathInjection:
     def test_traversal_deep(self):
         """Multiple levels of traversal must all be stripped."""
         result = self.cdn._url_to_vendor_path(
-            "https://cdn.example.com/a/../../b/../../../etc/cron.d/backdoor"
+            "https://cdn.example.com/a/../../b/../../../etc/cron.d/external"
         )
         assert result.startswith("vendor/")
         assert ".." not in result
