@@ -128,33 +128,17 @@ Scroll back up to **Configuration** and select the **Auth & Security** tab:
 
 ![Configuration - Auth & Security Assign Service Account](docs/images/07-auth-security-assign-service-account.png)
 
-#### 7. Configure Project Environment Variables
-
-In the **Resources** section, select the **Environment Variables** tab and click **+ Add Variable**:
-
-![Resources - Environment Variables](docs/images/08-resources-environment-variables.png)
-
-Add the following two variables:
-
-1. **`GOOGLE_CLOUD_PROJECT`**: Set **Key** to `GOOGLE_CLOUD_PROJECT`, set **Value** to your GCP project ID, and click **Create**:
-
-![Add Environment Variable - GOOGLE_CLOUD_PROJECT](docs/images/09-env-var-google-cloud-project.png)
-
-2. **`GOOGLE_CLOUD_LOCATION`**: Click **+ Add Variable** again, set **Key** to `GOOGLE_CLOUD_LOCATION`, set **Value** to `global`, and click **Create**:
-
-![Add Environment Variable - GOOGLE_CLOUD_LOCATION](docs/images/10-env-var-google-cloud-location.png)
-
-#### 8. Add the `tools` Shared Directory
+#### 7. Add the `tools` Shared Directory
 
 In the **Resources** section, select the **Shared Directories** tab and click **+ Add Directory**:
 
-![Resources - Shared Directories](docs/images/11-resources-shared-directories.png)
+![Resources - Shared Directories](docs/images/08-resources-shared-directories.png)
 
 In the **Add Shared Directory** dialog, set **Name** to `tools` (leave **Read-only** and **Mount in workspace** unchecked so it mounts read-write at `/scion-volumes/tools`) and click **Create**:
 
-![Add Shared Directory - tools](docs/images/12-shared-directory-tools.png)
+![Add Shared Directory - tools](docs/images/09-shared-directory-tools.png)
 
-#### 9. Import Agent Templates
+#### 8. Import Agent Templates
 
 In the **Resources** section, select the **Templates** tab:
 1. Select **Import from URL**.
@@ -165,21 +149,21 @@ In the **Resources** section, select the **Templates** tab:
 
 3. Click **Import Templates**:
 
-![Resources - Import Templates from URL](docs/images/13-resources-templates-import-url.png)
+![Resources - Import Templates from URL](docs/images/10-resources-templates-import-url.png)
 
 4. In the **Select Templates to Import** dialog, check **Select All** (`22 of 22 selected`) and click **Import Selected (22)**:
 
-![Select Templates to Import](docs/images/14-select-templates-to-import.png)
+![Select Templates to Import](docs/images/11-select-templates-to-import.png)
 
-#### 10. Create and Start the `controller` Agent
+#### 9. Create and Start the `controller` Agent
 
 1. In the left navigation sidebar under **MANAGEMENT**, select **Agents**:
 
-![Sidebar - Select Agents](docs/images/15-sidebar-select-agents.png)
+![Sidebar - Select Agents](docs/images/12-sidebar-select-agents.png)
 
 2. Click **+ Create Agent**:
 
-![Agents - Create Agent](docs/images/16-agents-create-agent.png)
+![Agents - Create Agent](docs/images/13-agents-create-agent.png)
 
 3. In the **Create Agent** form:
    - Set **Agent Name** to `controller`.
@@ -188,21 +172,21 @@ In the **Resources** section, select the **Templates** tab:
    - Uncheck **Notify me on important agent state changes**.
    - Click **Start**:
 
-![Create Agent - controller](docs/images/17-create-agent-controller.png)
+![Create Agent - controller](docs/images/14-create-agent-controller.png)
 
-#### 11. Open Chat and Set `controller` as the Thread Default Agent
+#### 10. Open Chat and Set `controller` as the Thread Default Agent
 
 1. Once the `controller` agent is running, click **Chat** in the top navigation bar:
 
-![Agent Running - Select Chat](docs/images/18-agent-running-select-chat.png)
+![Agent Running - Select Chat](docs/images/15-agent-running-select-chat.png)
 
-2. In the **Projects** panel on the left, expand **DRUG-DESIGN-ENGINE**, click the three dots (`⋮`) menu, and select **+ NEW THREAD**:
+2. In the **Projects** panel on the left, expand **DRUG-DESIGN-ENGINE**, click the three dots (`⋮`) menu, select **+ NEW THREAD**, and name the thread `operations`:
 
-![Scion Chat - New Thread](docs/images/19-chat-new-thread.png)
+![Scion Chat - New Thread](docs/images/16-chat-new-thread.png)
 
 3. At the bottom-left of the chat panel (above the message input box), click **`no agent`** and select **`controller`** as the thread default agent:
 
-![Scion Chat - Set Thread Default Agent to controller](docs/images/20-chat-thread-default-agent.png)
+![Scion Chat - Set Thread Default Agent to controller](docs/images/17-chat-thread-default-agent.png)
 
 You can now message the `controller` directly in this thread with a program directive to bootstrap the tools environment and launch the Science Program Lead (see [`docs/quickstart-pilot.md`](docs/quickstart-pilot.md)).
 
